@@ -63,9 +63,11 @@ func TestTheComposerSendsATemplatesPrompt(t *testing.T) {
 		}
 		return names
 	})
-	if strings.Join(got, ",") != "//review,//"+prompttmpl.MakerName {
-		t.Fatalf("listed %v, want only the template for Claude, and the built-in", got)
+	if strings.Join(got, ",") != "//"+prompttmpl.PluginMakerName+",//review,//"+prompttmpl.MakerName {
+		t.Fatalf("listed %v, want only the template for Claude, and the built-ins", got)
 	}
+	p.Text("rev")
+	p.Frame()
 	p.Type(ggui.Mods{}, ggui.KeyTab)
 	p.Frame()
 	if d := ggui.Peek(state.draft); d != "//review " {

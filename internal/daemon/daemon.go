@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/agentui"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/decision"
@@ -25,6 +27,7 @@ import (
 	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/plugin/store"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/skills"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -230,6 +233,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.log.Info("daemon listening", "socket", socket, "node", d.cfg.NodeID, "name", d.cfg.Name)
 	close(d.ready)
 
+	go d.syncBuiltinSkills()
 	go d.warmContextServers(ctx)
 
 	var wg sync.WaitGroup
@@ -515,4 +519,24 @@ func isClosed(err error) bool {
 		errors.Is(err, syscall.EPIPE) ||
 		errors.Is(err, syscall.ECONNRESET) ||
 		errors.Is(err, network.ErrReset)
+}
+
+// syncBuiltinSkills registers Mako's built-in authoring skills (mako-template,
+// mako-plugin) into the skill directories of agents already configured or
+// isolated on this node so slash commands and skill loaders find them at once.
+func (d *Daemon) syncBuiltinSkills() {
+	agentsMap := d.agents()
+	isolate := d.isolateHome()
+	for _, name := range []string{"agy", "claude", "codex", "pi", "opencode"} {
+		env := agentspec.IsolatedHomeEnvForAgent(name, isolate, agentsMap)
+		for _, dir := range skills.AgentSkillsDirs(name, env) {
+			parent := filepath.Dir(dir)
+			if _, err := os.Stat(parent); err != nil {
+				continue // skip agents not initialized on this machine
+			}
+			if err := skills.SyncToDir(dir); err != nil {
+				d.log.Warn("failed to sync mako built-in skills", "agent", name, "dir", dir, "err", err)
+			}
+		}
+	}
 }

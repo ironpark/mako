@@ -9,8 +9,8 @@ import (
 	"github.com/ironpark/mako/internal/prompttmpl"
 )
 
-// //template is offered to the agents that get the mako MCP server, whose
-// save_template it asks them to call, and to no other.
+// Built-in maker templates (//template and //plugin) are offered to the agents
+// that get the mako MCP server, and to no other.
 func TestMakerIsForAgentsWithMCP(t *testing.T) {
 	var want []string
 	for _, d := range agents.All() {
@@ -18,10 +18,12 @@ func TestMakerIsForAgentsWithMCP(t *testing.T) {
 			want = append(want, d.Info().Name)
 		}
 	}
-	got := slices.Clone(prompttmpl.BuiltinTemplate(prompttmpl.MakerName).Agents)
 	slices.Sort(want)
-	slices.Sort(got)
-	if !slices.Equal(got, want) {
-		t.Fatalf("//%s is for %v; the agents with MCP servers are %v", prompttmpl.MakerName, got, want)
+	for _, name := range []string{prompttmpl.MakerName, prompttmpl.PluginMakerName} {
+		got := slices.Clone(prompttmpl.BuiltinTemplate(name).Agents)
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Fatalf("//%s is for %v; the agents with MCP servers are %v", name, got, want)
+		}
 	}
 }

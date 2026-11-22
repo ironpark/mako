@@ -202,7 +202,7 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 				}
 				btns = append(btns, b)
 			}
-			return widget.Box(widget.Scroll(widget.Row(btns...).Gap(4).Align(widget.AlignCenter)).Horizontal().Shrink().Bar(color.Transparent)).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(3)
+			return widget.Box(looseHeight{widget.Scroll(widget.Row(btns...).Gap(4).Align(widget.AlignCenter)).Horizontal().Shrink().Bar(color.Transparent)}).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(3)
 		})
 	case "markdown":
 		host := pluginPage{pageHost: pageHost{m: v.m}}
@@ -223,6 +223,22 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 		return chartNode(n)
 	}
 	return widget.Box() // the daemon sends no other kind
+}
+
+// looseHeight passes MaxH=Unbounded to its child so horizontal ScrollWidgets
+// shrink vertically to their content's natural height instead of expanding to a
+// bounded parent's full height (such as inside a fill:true root column).
+type looseHeight struct{ child ggui.Widget }
+
+func (w looseHeight) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	inner := c
+	inner.MinH = 0
+	inner.MaxH = ggui.Unbounded
+	return c.Constrain(w.child.Layout(inner, env))
+}
+
+func (w looseHeight) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(w.child, r)
 }
 
 // tappable makes a node that sends a tap answer one.
@@ -669,10 +685,11 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 			body = widget.Column(kids...).Gap(gap).Stretch()
 		}
 		sc := widget.Scroll(body).Shrink().Bar(skin.Surface3)
+		var out ggui.Widget = sc
 		if horiz {
 			sc = sc.Horizontal()
+			out = looseHeight{sc}
 		}
-		var out ggui.Widget = sc
 		if h := n.GetMaxHeight(); h > 0 {
 			out = widget.Box(out).MaxHeight(h)
 		}

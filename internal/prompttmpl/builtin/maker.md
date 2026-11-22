@@ -8,42 +8,59 @@ args:
     rest: true
     description: What the template is for, in your words
 ---
-Write a new mako prompt template from the description below, and save it
-with the `save_template` tool of the `mako` MCP server.
+Write a high-signal, reusable mako prompt template from the description below,
+and save it with the `save_template` tool of the `mako` MCP server.
+
+If the `mako-template` skill is available in your environment, consult it for
+additional patterns and pitfalls.
 
 The description:
 
 {{text}}
 
-How to go about it:
+Design principles:
 
-- Ask nothing; decide from the description. Make one focused template
-  that does what it describes, and no more.
-- Name it with a few lowercase words joined by hyphens, as `review-go`:
-  it is called as `//review-go`. A name is letters, digits, `.`, `_` and
-  `-`, beginning with a letter or digit, at most 64 characters.
-- Give it a one-line `description`, shown beside its name in Chat's list.
-- Make what changes from one call to the next its arguments, few, each
-  with a `description` and the type that fits: `select` (or `choice`)
-  for a set of values, `integer`, `number` or `boolean` where they apply. Make
-  `required` what the prompt cannot do without, and give the rest a
-  sensible `default`. What the agent can find out for itself is no
-  argument. When the last argument is free text, give it `rest: true`,
-  so that it is called without quotes.
-- Leave `agents` out unless the description says which agents it is for.
-- Write the prompt as instructions to an agent, in the language the
-  description is written in, using the built-in variables where they
-  help, and blocks and JavaScript only where the arguments call for them.
-- Call `save_template` with its `name` and the whole file as `content`,
-  front matter and prompt. It checks the template as mako reads it; when
-  it returns an error, fix what the error says and call it again. Set
-  `replace` only when the description asks to change a template of the
-  user's that has the name.
-- The user sees the template and decides whether it is saved. Once it
-  is, say how to call it: `//` and its name, then its arguments. If they
-  decline, say so and ask what to change. With no `save_template` tool,
-  show the file in your reply instead, and ask the user to add it in
-  Settings ▸ Templates.
+- **Decide without asking**: make one focused, well-scoped template that nails
+  the description without bloating it with unrelated options.
+- **Name & description**:
+  - Use 1–3 lowercase words joined by hyphens (e.g. `review-go`, `release-notes`),
+    called as `//name` (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`).
+  - Write a crisp one-line `description` shown beside its name in Chat's `//` menu.
+- **Minimal, well-typed arguments**:
+  - Only turn things that genuinely vary per call into arguments; omit anything
+    the agent can inspect from the repository or environment.
+  - Prefer `select` (with clear `options` and a sensible `default`) over free-form
+    `string` for modes, depths, formats, or tones. Use `integer`, `number`, or
+    `boolean` where appropriate.
+  - Mark only indispensable inputs `required: true`, give optional ones a
+    sensible `default`, and write a clear `description` for every argument.
+  - When the last argument accepts free-form text, set `rest: true` so the user
+    can type it naturally without quotes.
+  - Leave `agents` out unless the description specifically targets certain agents
+    or profiles.
+- **Strong prompt body**:
+  - Match the language of the description (e.g. Korean description → Korean
+    prompt instructions).
+  - Structure the prompt clearly: objective, concrete steps or constraints, and
+    expected output format.
+  - Use the built-in variables (`project`, `branch`, `repo`, `agent`, `model`,
+    `profile`, `date`) only where they add real context.
+  - Prefer plain variable interpolation and conditional/`match` blocks over
+    JavaScript blocks unless data transformation or `mako.ask`/`mako.spawn`/
+    `mako.decide` orchestration is genuinely required.
+  - Remember JavaScript scoping in `js run` blocks: synchronous blocks share
+    `var`/`function`; blocks using `await` or `return` must export via
+    `globalThis.name = ...`.
+- **Validate and save**:
+  - Call `save_template` with `name` and the complete file (`content`, YAML front
+    matter + body). Set `replace: true` only when the description explicitly asks
+    to update an existing template or override a built-in.
+  - If `save_template` returns a syntax or validation error, fix the exact error
+    and call `save_template` again automatically.
+  - Once saved, reply with the exact invocation syntax (`//name ...`). If the
+    user declines, acknowledge and ask what to adjust. If `save_template` is
+    unavailable, print the complete template file and instruct the user to add it
+    in Settings ▸ Templates.
 
 ## The template language
 

@@ -19,12 +19,17 @@ import (
 // save_template: //template.
 const MakerName = "template"
 
+// PluginMakerName is the built-in template that has the agent build a Mako
+// plugin from a description into the node's plugins directory: //plugin.
+const PluginMakerName = "plugin"
+
 //go:embed builtin
 var builtinFiles embed.FS
 
 // builtinSources are the built-in templates' files, by name.
 var builtinSources = map[string]string{
-	MakerName: "builtin/maker.md",
+	MakerName:       "builtin/maker.md",
+	PluginMakerName: "builtin/plugin.md",
 }
 
 // builtins are the built-in templates read, by name in order. One that

@@ -28,6 +28,10 @@ func TestBuiltinsRead(t *testing.T) {
 	if m == nil || len(m.Args) != 1 || m.Args[0].Name != "text" || m.Args[0].Type != Text || !m.Args[0].Required || !m.Args[0].Rest {
 		t.Fatalf("//%s takes %+v", MakerName, m)
 	}
+	pm := BuiltinTemplate(PluginMakerName)
+	if pm == nil || len(pm.Args) != 1 || pm.Args[0].Name != "text" || pm.Args[0].Type != Text || !pm.Args[0].Required || !pm.Args[0].Rest {
+		t.Fatalf("//%s takes %+v", PluginMakerName, pm)
+	}
 }
 
 // //template, given a description as Chat gives it, unquoted, makes a
@@ -50,6 +54,26 @@ func TestMakerExpands(t *testing.T) {
 	}
 	if _, err := m.Bind(""); err == nil {
 		t.Fatal("//template took no description")
+	}
+}
+
+func TestPluginMakerExpands(t *testing.T) {
+	m := BuiltinTemplate(PluginMakerName)
+	desc := `build a project-scoped bookmark manager plugin with Korean i18n`
+	got, err := m.Expand(t.Context(), desc, map[string]string{"agent": "claude"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"mako-plugin", "list_blocks", "\n" + desc + "\n", "mako.i18n.register", "fill: true", "[contributes.tool.params]"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the //plugin prompt has no %.60q", want)
+		}
+	}
+	if strings.Contains(got, "{{text}}") || strings.HasSuffix(got, "{/raw}") {
+		t.Errorf("the //plugin prompt was not filled in:\n%s", got[len(got)-200:])
+	}
+	if _, err := m.Bind(""); err == nil {
+		t.Fatal("//plugin took no description")
 	}
 }
 
@@ -103,7 +127,7 @@ func TestUserFileOverridesBuiltin(t *testing.T) {
 	}
 	_ = os.WriteFile(filepath.Join(dir, "a.md"), []byte("A"), 0o600)
 	got, _ := LoadAll(dir)
-	if strings.Join(names(got), " ") != "a "+MakerName+"*" {
+	if strings.Join(names(got), " ") != "a "+PluginMakerName+"* "+MakerName+"*" {
 		t.Fatalf("listed %v", names(got))
 	}
 	if f, err := Find(dir, MakerName); err != nil || !f.Builtin {
@@ -115,7 +139,7 @@ func TestUserFileOverridesBuiltin(t *testing.T) {
 
 	_ = os.WriteFile(filepath.Join(dir, MakerName+".md"), []byte("Mine: {{nope}}"), 0o600)
 	got, broken := LoadAll(dir)
-	if strings.Join(names(got), " ") != "a" || len(broken) != 1 {
+	if strings.Join(names(got), " ") != "a "+PluginMakerName+"*" || len(broken) != 1 {
 		t.Fatalf("with a broken copy: %v %v", names(got), broken)
 	}
 	if _, err := Find(dir, MakerName); err == nil {
@@ -124,7 +148,7 @@ func TestUserFileOverridesBuiltin(t *testing.T) {
 
 	_ = os.WriteFile(filepath.Join(dir, MakerName+".md"), []byte("Mine"), 0o600)
 	got, _ = LoadAll(dir)
-	if strings.Join(names(got), " ") != "a "+MakerName {
+	if strings.Join(names(got), " ") != "a "+PluginMakerName+"* "+MakerName {
 		t.Fatalf("with a copy: %v", names(got))
 	}
 	if f, err := Find(dir, MakerName); err != nil || f.Builtin || f.Body != "Mine" {

@@ -633,3 +633,81 @@ func TestPluginScopedSettingsUI(t *testing.T) {
 		t.Errorf("project:beta view leaked alpha override:\n%s", sem)
 	}
 }
+
+// Regression test: horizontal ScrollWidgets inside ui.tabs and horizontal
+// ui.scroll must stay at their intrinsic height inside a fill:true root column
+// instead of expanding to the full panel height and hiding the scrolling body.
+func TestPluginTabsAndHorizontalScrollInsideFillRootKeepCompactHeight(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	i18n.Set("en")
+	m := newModel(config.Default(), "")
+	tree := &protocol.UiNode{
+		Id:   "",
+		Kind: "column",
+		Fill: true,
+		Gap:  8,
+		Children: []*protocol.UiNode{
+			{
+				Id:   "/topbar",
+				Kind: "row",
+				Gap:  6,
+				Children: []*protocol.UiNode{
+					{
+						Id:      "/topbar/tabs",
+						Kind:    "tabs",
+						Value:   "Browse",
+						Options: []string{"Browse", "Tree", "Graph", "Health"},
+						Change:  true,
+					},
+					{Id: "/topbar/summary", Kind: "text", Text: "7 docs", Grow: 1},
+					{Id: "/topbar/new", Kind: "button", Text: "New", Size: "small", Variant: "ghost", Tap: true},
+				},
+			},
+			{
+				Id:        "/hstrip",
+				Kind:      "scroll",
+				Direction: "horizontal",
+				Children: []*protocol.UiNode{
+					{Id: "/hstrip/c1", Kind: "chip", Text: "#okf"},
+					{Id: "/hstrip/c2", Kind: "chip", Text: "#arch"},
+				},
+			},
+			{
+				Id:   "/body",
+				Kind: "scroll",
+				Grow: 1,
+				Children: []*protocol.UiNode{
+					{Id: "/body/item", Kind: "text", Text: "Scrollable Body Content"},
+				},
+			},
+		},
+	}
+	u := &protocol.BlockUpdate{
+		Block: "plugin:okf/vault",
+		Title: "OKF Knowledge",
+		State: protocol.PluginRunning,
+		Tree:  tree,
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return pluginFrame(m, "plugin:okf/vault", "okf", "OKF Knowledge", u)
+	}, ggui.Sz(480, 700))
+	defer p.Close()
+	for range 3 {
+		p.Frame()
+	}
+
+	browseBtn, ok := p.Semantics().Find(ggui.RoleButton, "Browse")
+	if !ok {
+		t.Fatalf("missing Browse tab button:\n%s", p.Semantics().String())
+	}
+	bodyText, ok := p.Semantics().Find(ggui.RoleText, "Scrollable Body Content")
+	if !ok {
+		t.Fatalf("missing Scrollable Body Content:\n%s", p.Semantics().String())
+	}
+	if browseBtn.Rect.Size.H > 60 {
+		t.Fatalf("Browse tab stretched vertically to %.1fpx (rect=%v)", browseBtn.Rect.Size.H, browseBtn.Rect)
+	}
+	if bodyText.Rect.Size.H <= 0 || bodyText.Rect.Origin.Y > 220 {
+		t.Fatalf("body content pushed down or hidden by topbar/hscroll: body=%v browse=%v", bodyText.Rect, browseBtn.Rect)
+	}
+}

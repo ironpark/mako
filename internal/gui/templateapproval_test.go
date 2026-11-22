@@ -53,7 +53,7 @@ func templatesListed(m *model, state *chatState) string {
 // wrote it.
 func TestAWindowSavesAnAgentsTemplate(t *testing.T) {
 	m, state, dir := templateModel(t)
-	if got := templatesListed(m, state); got != "//"+prompttmpl.MakerName {
+	if got := templatesListed(m, state); got != "//"+prompttmpl.PluginMakerName+" //"+prompttmpl.MakerName {
 		t.Fatalf("listed %q before", got)
 	}
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Approval: templateApproval("lint", agentTemplate, false)}})
@@ -63,7 +63,7 @@ func TestAWindowSavesAnAgentsTemplate(t *testing.T) {
 	if err != nil || string(data) != agentTemplate {
 		t.Fatalf("saved %q, %v", data, err)
 	}
-	if got := templatesListed(m, state); got != "//lint //"+prompttmpl.MakerName {
+	if got := templatesListed(m, state); got != "//lint //"+prompttmpl.PluginMakerName+" //"+prompttmpl.MakerName {
 		t.Fatalf("listed %q after", got)
 	}
 	if ans := m.answerTemplate(templateApproval("lint", agentTemplate, true)); ans.GetDecision() != protocol.DecisionAllow || ans.GetOption() != protocol.TemplateSaved {

@@ -28,7 +28,7 @@ func TestTemplateSettingsBuiltins(t *testing.T) {
 		}
 		return out
 	}
-	if got := shown(); len(got) != 1 || got[0] != prompttmpl.MakerName {
+	if got := shown(); strings.Join(got, ",") != prompttmpl.PluginMakerName+","+prompttmpl.MakerName {
 		t.Fatalf("built-ins listed: %v", got)
 	}
 	if err := pg.add(prompttmpl.MakerName); err == nil {
@@ -36,7 +36,7 @@ func TestTemplateSettingsBuiltins(t *testing.T) {
 	}
 
 	pg.copyBuiltin(prompttmpl.BuiltinTemplate(prompttmpl.MakerName))
-	if got := shown(); len(got) != 0 {
+	if got := shown(); strings.Join(got, ",") != prompttmpl.PluginMakerName {
 		t.Fatalf("a copy left the built-in listed: %v", got)
 	}
 	id := ggui.Peek(pg.open)
@@ -54,7 +54,7 @@ func TestTemplateSettingsBuiltins(t *testing.T) {
 
 	// Read again, the file stands in for the built-in still.
 	pg.reload()
-	if got := shown(); len(got) != 0 {
+	if got := shown(); strings.Join(got, ",") != prompttmpl.PluginMakerName {
 		t.Fatalf("after a reload: %v", got)
 	}
 	id = ggui.Peek(pg.drafts)[0].ID
@@ -62,7 +62,7 @@ func TestTemplateSettingsBuiltins(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, prompttmpl.MakerName+".md")); !os.IsNotExist(err) {
 		t.Fatal("the copy's file stayed")
 	}
-	if got := shown(); len(got) != 1 {
+	if got := shown(); strings.Join(got, ",") != prompttmpl.PluginMakerName+","+prompttmpl.MakerName {
 		t.Fatalf("deleting the copy did not give the built-in back: %v", got)
 	}
 }
@@ -74,6 +74,8 @@ func TestTemplateSettingsShowsABuiltin(t *testing.T) {
 	p := ggui.ProbeBuilder(func() ggui.Widget { return settingsContent(m, "templates") }, ggui.Sz(1200, 1400))
 	defer p.Close()
 	m.post = p.Post // the file's highlighting comes back through it
+	p.Frame()
+	p.Tap(Tf("%s template", prompttmpl.MakerName))
 	p.Frame()
 	sem := p.Semantics().String()
 	for _, want := range []string{"//" + prompttmpl.MakerName, T("Built in"), T("Copy to edit"), "save_template"} {

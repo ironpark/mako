@@ -21,6 +21,7 @@ import (
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/skills"
 	"github.com/ironpark/mako/internal/transcript"
 	"github.com/ironpark/mako/pkg/fsutil"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -450,6 +451,9 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	d.withLive(ctx, &launch.Launch, req.GetAgent(), id)
 	if d.clipTools != "" {
 		launch.SetEnv("PATH", d.clipTools+string(os.PathListSeparator)+cmp.Or(launch.Env["PATH"], os.Getenv("PATH")))
+	}
+	if err := skills.EnsureAgentSkills(req.GetAgent(), launch.Env); err != nil {
+		d.log.Warn("failed to sync mako built-in skills", "agent", req.GetAgent(), "err", err)
 	}
 	var codexBridge *codexBridge
 	if req.GetAgent() == "codex" {

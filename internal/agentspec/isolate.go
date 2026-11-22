@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/skills"
 )
 
 // IsolatedHomeBase returns the base directory for isolated agent homes:
@@ -160,6 +161,7 @@ func EnsureAgyIsolatedHome(isolatedDir string) error {
 			return err
 		}
 	}
+	_ = skills.EnsureAgentSkills("agy", map[string]string{"HOME": isolatedDir})
 	return nil
 }
 
@@ -192,7 +194,9 @@ func IsolatedHomeEnv(name string, existing map[string]string) (map[string]string
 	if err := os.MkdirAll(iso, 0o700); err != nil {
 		return nil, err
 	}
-	return map[string]string{key: iso}, nil
+	env := map[string]string{key: iso}
+	_ = skills.EnsureAgentSkills(name, env)
+	return env, nil
 }
 
 // ApplyIsolatedHome injects the isolated home environment variable into l for
