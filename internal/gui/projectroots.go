@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -34,18 +35,36 @@ type panelRoots struct {
 // multi reports whether there are several to show.
 func (p panelRoots) multi() bool { return len(p.Roots) > 1 }
 
+// rootFolder is the folder a project root shows when own was placed in it:
+// the deepest location of r on own's node that holds own (so a session
+// started in a subfolder still browses the root whose name it bears), or
+// own itself when own sits outside r's locations (such as a git worktree).
+func rootFolder(r projectRoot, own fileRoot) fileRoot {
+	best, depth := own, -1
+	for _, l := range r.Locations {
+		if l.Node == own.Node && pathscope.Within(own.Path, l.Path) && len(l.Path) > depth {
+			best, depth = l, len(l.Path)
+		}
+	}
+	return best
+}
+
 // projectRoots are the folders of the project own is in, as pl places it:
-// one for each of its roots, own itself for its own and, for the others,
-// their folder on own's node, else on one of reachable; own alone outside a
-// project of several.
+// one for each of its roots, own's root folder (or own itself for an external
+// worktree) and, for the others, their folder on own's node, else on one of
+// reachable; own alone outside a project of several.
 func projectRoots(defs []project, nodes []*protocol.Node, own fileRoot, pl placement, reachable func(string) bool) panelRoots {
 	if own.Path == "" {
 		return panelRoots{}
 	}
-	if pl.At < 0 || len(defs[pl.At].Roots) < 2 {
+	if pl.At < 0 {
 		return panelRoots{Roots: []panelRoot{{fileRoot: own}}}
 	}
 	p := defs[pl.At]
+	own = rootFolder(p.Roots[pl.Root], own)
+	if len(p.Roots) < 2 {
+		return panelRoots{Roots: []panelRoot{{fileRoot: own}}}
+	}
 	out := panelRoots{Name: projectLabel(defs, p.ID)}
 	for i, r := range p.Roots {
 		if i == pl.Root {
@@ -85,7 +104,8 @@ func (m *model) panelRoots() panelRoots {
 	// The selected session places the folder only when the folder is its:
 	// a scope's folder, or a tab's, is placed by where it is, or it would
 	// take the session's root and show twice.
-	if s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get()); ok && s.GetNodeId() == own.Node && s.GetProject() == own.Path {
+	if s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get()); ok && s.GetNodeId() == own.Node &&
+		(s.GetProject() == own.Path || sessionProjectRoot(s) == own.Path) {
 		pl = placeSession(defs, s) // its repository places a worktree
 	} else {
 		pl = placeIn(defs, own.Node, own.Path, "", "")

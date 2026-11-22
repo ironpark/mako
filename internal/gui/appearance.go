@@ -16,7 +16,7 @@ import (
 )
 
 // Settings ▸ Appearance: the theme, the user's own themes and their
-// colours, and the background images.
+// colours, terminal typography and cursor, panes, and background images.
 
 func appearanceSettings(m *model) ggui.Widget {
 	theme := ui.Select(prefField(m, func(p *prefs) *string { return &p.Theme })).
@@ -27,13 +27,22 @@ func appearanceSettings(m *model) ggui.Widget {
 	usageMode := ui.Select(prefField(m, func(p *prefs) *string { return &p.UsageDisplay })).
 		Options(usageDisplays).Format(func(s string) string { return T(usageDisplayLabels[s]) }).Name(T("Limit display")).
 		BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return !p.UsageOverlay }))
+	size := prefField(m, func(p *prefs) *float64 { return &p.FontSize })
+	lineHeight := prefField(m, func(p *prefs) *float64 { return &p.LineHeight })
+	scrollback := ggui.Bind(
+		func() float64 { return float64(m.Prefs.Get().Scrollback) },
+		func(v float64) { m.Prefs.Update(func(p prefs) prefs { p.Scrollback = int(v); return p.normalized() }) },
+	)
+	cursor := ui.Select(prefField(m, func(p *prefs) *string { return &p.CursorStyle })).
+		Options([]string{"block", "bar", "underline"}).
+		Format(func(s string) string { return T(cursorLabels[s]) }).Name(T("Cursor style"))
 	actions := widget.Row(
 		ui.Button(T("Duplicate"), m.duplicateTheme).Outline(),
 		ui.Button(T("Delete"), m.deleteTheme).Outline().BindDisabled(ggui.Map(m.Prefs, func(p prefs) bool { return skin.IsBuiltin(p.Theme) })),
 		ui.Button(T("Open folder"), openFolder(themesDir)).Ghost(),
 		ui.Button(T("Reload"), m.reloadThemes).Ghost(),
 	).Gap(6)
-	return widePage(T("Appearance"), T("The window's colours, after Paseo's palettes, or your own."),
+	return widePage(T("Appearance"), T("The window's theme, terminal, panes and background images."),
 		section(T("Theme"),
 			card(
 				row(T("Theme"), T("System follows the desktop's light or dark appearance."), widget.Box(theme).Width(200)),
@@ -54,6 +63,27 @@ func appearanceSettings(m *model) ggui.Widget {
 						ui.Switch(prefField(m, func(p *prefs) *bool { return &p.UsageOverlay }), "").Name(T("Show usage overlay"))),
 					row(T("Overlay position"), T("The corner of the session the overlay sits in."), widget.Box(corner).Width(160)),
 					row(T("Limit display"), T("Show account limits as percentage used or remaining."), widget.Box(usageMode).Width(160)),
+				),
+			),
+		),
+		section(T("Terminal"),
+			responsiveGrid(settingsTwoCol, 2, settingsColumnGap, sectionGap,
+				card(
+					row(T("Font size"), T("In points, for every terminal."),
+						widget.Box(ui.NumberInput(size).Range(minFontSize, maxFontSize).Step(1).Name(T("Font size"))).Width(120)),
+					row(T("Line height"), T("Space between rows, as a multiple of the font size."),
+						widget.Row(
+							widget.Box(ui.Slider(lineHeight, minLineHeight, maxLineHeight).Step(0.05).Name(T("Line height"))).Width(160),
+							widget.Box(widget.Textf("%.2f×", lineHeight).Size(12.5).Color(skin.Muted)).Width(44),
+						).Gap(10)),
+					row(T("Scrollback"), T("Lines each terminal keeps above the screen."),
+						widget.Box(ui.NumberInput(scrollback).Range(minScrollback, maxScrollback).Step(1000).Name(T("Scrollback"))).Width(140)),
+				),
+				card(
+					row(T("Cursor style"), T("The shape shown until a program asks for its own."), widget.Box(cursor).Width(160)),
+					row(T("Cursor blink"), "", ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CursorBlink }), "").Name(T("Cursor blink"))),
+					row(T("Copy on select"), T("Put selected text on the clipboard as soon as the drag ends."),
+						ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CopyOnSelect }), "").Name(T("Copy on select"))),
 				),
 			),
 		),

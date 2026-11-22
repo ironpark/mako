@@ -816,7 +816,7 @@ func (m *model) reloadThemes() {
 // openSettings shows the settings page, at a section when one is named.
 func (m *model) openSettings(section string) {
 	if section != "" {
-		m.Section.Set(section)
+		m.Section.Set(canonicalSettingsSection(section))
 	}
 	m.Host.Set(draftFrom(m.cfg))
 	m.HostNote.Set("")

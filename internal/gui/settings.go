@@ -38,28 +38,38 @@ var settingsNav = []settingsGroup{
 		{"general", "General", "settings"},
 		{"appearance", "Appearance", "palette"},
 		{"spaces", "Spaces", "layout-grid"},
-		{"terminal", "Terminal", "square-terminal"},
 		{"shortcuts", "Shortcuts", "keyboard"},
-		{"templates", "Templates", "file-text"},
-		{"teams", "Teams", "users"},
-		{"extensions", "Extensions", "layers"},
+		{"about", "About", "info"},
 	}},
-	{title: "This node", sections: []settingsSection{
-		{"daemon", "Daemon", "server"},
-		{"host", "Host", "server-cog"},
-		{"discovery", "Discovery", "radar"},
+	{title: "Agents & extensions", sections: []settingsSection{
 		{"agents", "Agents", "bot"},
 		{"apikeys", "API keys", "key-round"},
-		{"shell", "Shell", "square-terminal"},
+		{"teams", "Teams", "users"},
+		{"templates", "Templates", "file-text"},
+		{"extensions", "Extensions", "layers"},
 	}},
-	{title: "Mesh", sections: []settingsSection{
+	{title: "Node & mesh", sections: []settingsSection{
+		{"daemon", "Daemon", "server"},
+		{"shell", "Shell", "square-terminal"},
 		{"nodes", "Nodes", "network"},
-		{"access", "Access", "key-round"},
-		{"about", "About", "info"},
+		{"access", "Access", "lock"},
 	}},
 	{title: "Developer", bottom: true, sections: []settingsSection{
 		{"developer", "Developer", "code-xml"},
 	}},
+}
+
+// canonicalSettingsSection maps legacy section IDs that were merged into
+// another section onto their current destination.
+func canonicalSettingsSection(id string) string {
+	switch id {
+	case "terminal":
+		return "appearance"
+	case "host", "discovery":
+		return "daemon"
+	default:
+		return id
+	}
 }
 
 // The choices of the settings' toggles, by value, in English for T.
@@ -122,6 +132,7 @@ func settingsSidebar(m *model) ggui.Widget {
 // settingsNavList is the settings' sections, the one shown marked.
 func settingsNavList(m *model, groups []settingsGroup) ggui.Widget {
 	return ggui.View(m.Section, func(current string) ggui.Widget {
+		current = canonicalSettingsSection(current)
 		var rows []ggui.Widget
 		for _, g := range groups {
 			rows = append(rows, widget.Box(widget.Text(T(g.title)).Size(11.5).Color(skin.ExtraMuted)).Pad(14, 10, 4, 10))
@@ -137,6 +148,7 @@ func settingsNavList(m *model, groups []settingsGroup) ggui.Widget {
 // sidebar, separated from the scrollable groups above.
 func settingsNavFooter(m *model, sections []settingsSection) ggui.Widget {
 	return ggui.View(m.Section, func(current string) ggui.Widget {
+		current = canonicalSettingsSection(current)
 		rows := make([]ggui.Widget, 0, len(sections))
 		for _, s := range sections {
 			rows = append(rows, settingsNavItem(m, s, current))
@@ -165,13 +177,11 @@ func settingsNavItem(m *model, s settingsSection, current string) ggui.Widget {
 }
 
 func settingsContent(m *model, id string) ggui.Widget {
-	switch id {
+	switch canonicalSettingsSection(id) {
 	case "appearance":
 		return appearanceSettings(m)
 	case "spaces":
 		return spacesSettings(m)
-	case "terminal":
-		return terminalSettings(m)
 	case "shortcuts":
 		return shortcutsSettings(m)
 	case "templates":
@@ -182,10 +192,6 @@ func settingsContent(m *model, id string) ggui.Widget {
 		return extensionSettings(m)
 	case "daemon":
 		return daemonSettings(m)
-	case "host":
-		return hostSettings(m)
-	case "discovery":
-		return discoverySettings(m)
 	case "agents":
 		return agentSettings(m)
 	case "apikeys":
@@ -361,49 +367,7 @@ func generalSettings(m *model) ggui.Widget {
 	)
 }
 
-func terminalSettings(m *model) ggui.Widget {
-	size := prefField(m, func(p *prefs) *float64 { return &p.FontSize })
-	lineHeight := prefField(m, func(p *prefs) *float64 { return &p.LineHeight })
-	scrollback := ggui.Bind(
-		func() float64 { return float64(m.Prefs.Get().Scrollback) },
-		func(v float64) { m.Prefs.Update(func(p prefs) prefs { p.Scrollback = int(v); return p.normalized() }) },
-	)
-	cursor := ui.Select(prefField(m, func(p *prefs) *string { return &p.CursorStyle })).
-		Options([]string{"block", "bar", "underline"}).
-		Format(func(s string) string { return T(cursorLabels[s]) }).Name(T("Cursor style"))
-
-	return widePage(T("Terminal"), T("How session terminals look and behave in this window."),
-		responsiveGrid(settingsTwoCol, 2, settingsColumnGap, pageGap,
-			section(T("Text"),
-				card(
-					row(T("Font size"), T("In points, for every terminal."),
-						widget.Box(ui.NumberInput(size).Range(minFontSize, maxFontSize).Step(1).Name(T("Font size"))).Width(120)),
-					row(T("Line height"), T("Space between rows, as a multiple of the font size."),
-						widget.Row(
-							widget.Box(ui.Slider(lineHeight, minLineHeight, maxLineHeight).Step(0.05).Name(T("Line height"))).Width(160),
-							widget.Box(widget.Textf("%.2f×", lineHeight).Size(12.5).Color(skin.Muted)).Width(44),
-						).Gap(10)),
-				),
-			),
-			section(T("Cursor"),
-				card(
-					row(T("Style"), T("The shape shown until a program asks for its own."), widget.Box(cursor).Width(160)),
-					row(T("Blink"), "", ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CursorBlink }), "").Name(T("Cursor blink"))),
-				),
-			),
-			section(T("Behaviour"),
-				card(
-					row(T("Scrollback"), T("Lines each terminal keeps above the screen."),
-						widget.Box(ui.NumberInput(scrollback).Range(minScrollback, maxScrollback).Step(1000).Name(T("Scrollback"))).Width(140)),
-					row(T("Copy on select"), T("Put selected text on the clipboard as soon as the drag ends."),
-						ui.Switch(prefField(m, func(p *prefs) *bool { return &p.CopyOnSelect }), "").Name(T("Copy on select"))),
-				),
-			),
-		),
-	)
-}
-
-// This node -------------------------------------------------------------------
+// Node & mesh -----------------------------------------------------------------
 
 func hostField(m *model, f func(*hostDraft) *string) ggui.Binding[string] { return m.Host.Field(f) }
 
@@ -432,7 +396,9 @@ func saveBar(m *model) ggui.Widget {
 	).Gap(8)
 }
 
-// daemonSettings chooses where the daemon runs and shows how it is doing.
+// daemonSettings brings together how this node's daemon runs, how it presents
+// itself on the mesh (identity, listen address, libp2p), and how it discovers
+// peers, plus the embedded daemon log.
 func daemonSettings(m *model) ggui.Widget {
 	mode := ui.ToggleGroup(ggui.Bind(
 		func() string { return m.Prefs.Get().DaemonMode },
@@ -483,34 +449,6 @@ func daemonSettings(m *model) ggui.Widget {
 		return widget.Box(widget.Row(widget.Expanded(widget.Column(text...).Gap(4).Stretch()), actions).Gap(16)).Pad(14, 16)
 	})
 
-	logs := ggui.View(m.DaemonLog, func(lines []string) ggui.Widget {
-		if len(lines) == 0 {
-			return muted(widget.Text(T("Nothing logged yet.")).Size(12))
-		}
-		mono := ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 11.5}
-		return widget.Text(strings.Join(lines, "\n")).Style(mono).Color(skin.Muted).Selectable()
-	})
-	inApp := ggui.Map(m.DaemonState, func(s daemonState) bool { return s.Mode == "embedded" })
-
-	return widePage(T("Daemon"), T("Where this machine's daemon runs. The app can run it itself, so nothing else needs installing."),
-		responsiveGrid(settingsTwoCol, 2, settingsColumnGap, pageGap,
-			section(T("Mode"),
-				card(
-					row(T("Run the daemon"), T("Auto uses a makod that is already running and otherwise starts one in the app."), mode),
-				),
-			),
-			section(T("Status"), card(status)),
-		),
-		ggui.If(inApp, func() ggui.Widget {
-			return section(T("Log"),
-				widget.Box(widget.Scroll(widget.Padding(logs, 12, 14)).FollowEnd().Bar(skin.Surface3)).
-					Height(320).Fill(skin.Surface1).Border(1, skin.Border).Radius(10),
-			)
-		}),
-	)
-}
-
-func hostSettings(m *model) ggui.Widget {
 	identity := section(T("Identity"),
 		card(
 			row(T("Node name"), T("How this machine appears to the others."),
@@ -543,37 +481,55 @@ func hostSettings(m *model) ggui.Widget {
 				})),
 		),
 	)
-	return widePage(T("Host"), T("This machine's daemon: how it is named and where it listens."),
+
+	mdns := m.Host.Field(func(d *hostDraft) *bool { return &d.MDNS })
+	tailscale := m.Host.Field(func(d *hostDraft) *bool { return &d.Tailscale })
+	discovery := section(T("Discovery"),
+		responsiveGrid(settingsTwoCol, 2, settingsColumnGap, sectionGap,
+			card(
+				row(T("Bonjour (mDNS)"), T("Find daemons on the same local network."), ui.Switch(mdns, "").Name(T("Bonjour"))),
+				row(T("Tailscale"), T("Probe the machines on your tailnet by their MagicDNS names."), ui.Switch(tailscale, "").Name(T("Tailscale"))),
+				stackedRow(T("Tailnet hosts"), T("MagicDNS names to probe, one per line. Empty asks the tailscale CLI."),
+					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.TailnetHosts })).Multiline().Lines(3).Name(T("Tailnet hosts"))),
+			),
+			card(
+				stackedRow(T("Peers"), T("Addresses always dialed, one per line: host, host:port, or a libp2p address ending in /p2p/ and its ID."),
+					ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Peers })).Multiline().Lines(5).Name(T("Peers"))),
+			),
+		),
+	)
+
+	logs := ggui.View(m.DaemonLog, func(lines []string) ggui.Widget {
+		if len(lines) == 0 {
+			return muted(widget.Text(T("Nothing logged yet.")).Size(12))
+		}
+		mono := ggui.TextStyle{Font: ggui.DefaultMonoFont(), Size: 11.5}
+		return widget.Text(strings.Join(lines, "\n")).Style(mono).Color(skin.Muted).Selectable()
+	})
+	inApp := ggui.Map(m.DaemonState, func(s daemonState) bool { return s.Mode == "embedded" })
+
+	return widePage(T("Daemon"), T("Where this node's daemon runs, how it is identified on the mesh, and how it finds other nodes."),
+		responsiveGrid(settingsTwoCol, 2, settingsColumnGap, pageGap,
+			section(T("Mode"),
+				card(
+					row(T("Run the daemon"), T("Auto uses a makod that is already running and otherwise starts one in the app."), mode),
+				),
+			),
+			section(T("Status"), card(status)),
+		),
 		twoColumns(
 			[]ggui.Widget{identity, network, libp2p},
 			[]int{0, 1},
 			[]int{2},
 		),
+		discovery,
 		saveBar(m),
-	)
-}
-
-func discoverySettings(m *model) ggui.Widget {
-	mdns := m.Host.Field(func(d *hostDraft) *bool { return &d.MDNS })
-	tailscale := m.Host.Field(func(d *hostDraft) *bool { return &d.Tailscale })
-	return widePage(T("Discovery"), T("How this daemon finds the others. A node that lets this one in tells it of the nodes it knows, too."),
-		responsiveGrid(settingsTwoCol, 2, settingsColumnGap, pageGap,
-			section(T("Automatic"),
-				card(
-					row(T("Bonjour (mDNS)"), T("Find daemons on the same local network."), ui.Switch(mdns, "").Name(T("Bonjour"))),
-					row(T("Tailscale"), T("Probe the machines on your tailnet by their MagicDNS names."), ui.Switch(tailscale, "").Name(T("Tailscale"))),
-					stackedRow(T("Tailnet hosts"), T("MagicDNS names to probe, one per line. Empty asks the tailscale CLI."),
-						ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.TailnetHosts })).Multiline().Lines(3).Name(T("Tailnet hosts"))),
-				),
-			),
-			section(T("Static"),
-				card(
-					stackedRow(T("Peers"), T("Addresses always dialed, one per line: host, host:port, or a libp2p address ending in /p2p/ and its ID."),
-						ui.TextField(hostField(m, func(d *hostDraft) *string { return &d.Peers })).Multiline().Lines(5).Name(T("Peers"))),
-				),
-			),
-		),
-		saveBar(m),
+		ggui.If(inApp, func() ggui.Widget {
+			return section(T("Log"),
+				widget.Box(widget.Scroll(widget.Padding(logs, 12, 14)).FollowEnd().Bar(skin.Surface3)).
+					Height(320).Fill(skin.Surface1).Border(1, skin.Border).Radius(10),
+			)
+		}),
 	)
 }
 

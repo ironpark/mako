@@ -26,8 +26,8 @@ import (
 // pluginsSection is the settings' section of the plugins.
 var pluginsSection = settingsSection{"plugins", "Plugins", "package"}
 
-// settingsGroups are the settings' sections, Plugins among this node's
-// while there are any.
+// settingsGroups are the settings' sections, with Plugins placed in
+// Agents & extensions while there are any (or a store to install from).
 func settingsGroups(hasPlugins bool) []settingsGroup {
 	if !hasPlugins {
 		return settingsNav
@@ -35,8 +35,20 @@ func settingsGroups(hasPlugins bool) []settingsGroup {
 	out := make([]settingsGroup, len(settingsNav))
 	copy(out, settingsNav)
 	for i, g := range out {
-		if g.title == "This node" {
-			out[i].sections = append(append([]settingsSection(nil), g.sections...), pluginsSection)
+		if g.title == "Agents & extensions" {
+			secs := make([]settingsSection, 0, len(g.sections)+1)
+			inserted := false
+			for _, s := range g.sections {
+				if s.id == "extensions" {
+					secs = append(secs, pluginsSection)
+					inserted = true
+				}
+				secs = append(secs, s)
+			}
+			if !inserted {
+				secs = append(secs, pluginsSection)
+			}
+			out[i].sections = secs
 		}
 	}
 	return out

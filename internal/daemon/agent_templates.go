@@ -148,6 +148,13 @@ func checkTemplate(in saveTemplateArgs) (*prompttmpl.Template, error) {
 	return t, nil
 }
 
+// templateWindowOpen reports whether a mako window is connected to show and
+// save a template. Any local window watching layouts counts even when
+// "Approve in the window" is off for terminal tool hooks.
+func (d *Daemon) templateWindowOpen() bool {
+	return d.approvals.watching() || d.layouts.watched()
+}
+
 // saveTemplate asks the user to save the template the agent of session s
 // wrote, as an approval on its session, and waits for a window to save it
 // or the user to decline it.
@@ -156,7 +163,7 @@ func (d *Daemon) saveTemplate(ctx context.Context, s *session.Session, in saveTe
 	if err != nil {
 		return saveTemplateResult{}, err
 	}
-	if !d.approvals.watching() {
+	if !d.templateWindowOpen() {
 		return saveTemplateResult{}, errTemplateNoWindow
 	}
 	id := approvalID()
@@ -190,7 +197,7 @@ func (d *Daemon) saveTemplate(ctx context.Context, s *session.Session, in saveTe
 			}
 			return saveTemplateResult{}, errTemplateDeclined
 		case <-tick.C:
-			if !d.approvals.watching() {
+			if !d.templateWindowOpen() {
 				return saveTemplateResult{}, errTemplateNoWindow
 			}
 		case <-give:

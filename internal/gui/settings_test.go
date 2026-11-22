@@ -219,7 +219,8 @@ func TestSettingsWideScreenLayout(t *testing.T) {
 			langNarrow.Rect.Origin.Y, defAgentNarrow.Rect.Origin.Y)
 	}
 
-	// Switch back to wide and verify Appearance, Terminal, Host, Discovery, and Shell use two columns.
+	// Switch back to wide and verify Appearance (with merged Terminal),
+	// Daemon (with merged Host + Discovery), and Shell use two columns.
 	p.Resize(ggui.Sz(1680, 960))
 
 	m.Section.Set("appearance")
@@ -236,50 +237,70 @@ func TestSettingsWideScreenLayout(t *testing.T) {
 		t.Fatalf("wide Appearance should place Agent usage (x=%.1f) beside Panes (right=%.1f)",
 			usageOverlay.Rect.Origin.X, paneGlow.Rect.Origin.X+paneGlow.Rect.Size.W)
 	}
-
-	m.Section.Set("terminal")
-	step()
 	cursorStyle, ok := p.Semantics().Find(ggui.RoleSelect, T("Cursor style"))
 	if !ok {
-		t.Fatalf("Cursor style missing:\n%s", p.Semantics().String())
+		t.Fatalf("Cursor style missing in merged Appearance:\n%s", p.Semantics().String())
 	}
 	lineHeight, ok := p.Semantics().Find(ggui.RoleSlider, T("Line height"))
 	if !ok {
-		t.Fatalf("Line height missing:\n%s", p.Semantics().String())
+		t.Fatalf("Line height missing in merged Appearance:\n%s", p.Semantics().String())
 	}
 	if cursorStyle.Rect.Origin.X <= lineHeight.Rect.Origin.X+lineHeight.Rect.Size.W {
-		t.Fatalf("wide Terminal should place Cursor (x=%.1f) beside Text (right=%.1f)",
+		t.Fatalf("wide Appearance should place Cursor style (x=%.1f) beside Line height (right=%.1f)",
 			cursorStyle.Rect.Origin.X, lineHeight.Rect.Origin.X+lineHeight.Rect.Size.W)
 	}
 
-	m.Section.Set("host")
+	m.Section.Set("daemon")
 	step()
 	nodeName, ok := p.Semantics().Find(ggui.RoleTextField, T("Node name"))
 	if !ok {
-		t.Fatalf("Node name missing:\n%s", p.Semantics().String())
+		t.Fatalf("Node name missing in merged Daemon:\n%s", p.Semantics().String())
 	}
 	p2pSwitch, ok := p.Semantics().Find(ggui.RoleSwitch, T("Link over libp2p"))
 	if !ok {
-		t.Fatalf("Link over libp2p missing:\n%s", p.Semantics().String())
+		t.Fatalf("Link over libp2p missing in merged Daemon:\n%s", p.Semantics().String())
 	}
 	if p2pSwitch.Rect.Origin.X <= nodeName.Rect.Origin.X+nodeName.Rect.Size.W {
-		t.Fatalf("wide Host should place libp2p (x=%.1f) beside Identity (right=%.1f)",
+		t.Fatalf("wide Daemon should place libp2p (x=%.1f) beside Identity (right=%.1f)",
 			p2pSwitch.Rect.Origin.X, nodeName.Rect.Origin.X+nodeName.Rect.Size.W)
 	}
-
-	m.Section.Set("discovery")
-	step()
 	bonjour, ok := p.Semantics().Find(ggui.RoleSwitch, T("Bonjour"))
 	if !ok {
-		t.Fatalf("Bonjour missing:\n%s", p.Semantics().String())
+		t.Fatalf("Bonjour missing in merged Daemon:\n%s", p.Semantics().String())
 	}
 	peers, ok := p.Semantics().Find(ggui.RoleTextField, T("Peers"))
 	if !ok {
-		t.Fatalf("Peers missing:\n%s", p.Semantics().String())
+		t.Fatalf("Peers missing in merged Daemon:\n%s", p.Semantics().String())
 	}
 	if peers.Rect.Origin.X <= bonjour.Rect.Origin.X+bonjour.Rect.Size.W {
-		t.Fatalf("wide Discovery should place Static (x=%.1f) beside Automatic (right=%.1f)",
+		t.Fatalf("wide Daemon should place Peers (x=%.1f) beside Bonjour (right=%.1f)",
 			peers.Rect.Origin.X, bonjour.Rect.Origin.X+bonjour.Rect.Size.W)
+	}
+
+	// Legacy merged section IDs still resolve cleanly to their new homes.
+	for legacy, want := range map[string]string{
+		"terminal":  "appearance",
+		"host":      "daemon",
+		"discovery": "daemon",
+	} {
+		if got := canonicalSettingsSection(legacy); got != want {
+			t.Fatalf("canonicalSettingsSection(%q) = %q, want %q", legacy, got, want)
+		}
+	}
+
+	// Verify Agents, API keys, Teams, Templates, Plugins (when present), and Extensions
+	// live together under "Agents & extensions".
+	var agentIDs []string
+	for _, g := range settingsGroups(true) {
+		if g.title == "Agents & extensions" {
+			for _, s := range g.sections {
+				agentIDs = append(agentIDs, s.id)
+			}
+		}
+	}
+	wantAgentIDs := []string{"agents", "apikeys", "teams", "templates", "plugins", "extensions"}
+	if !slices.Equal(agentIDs, wantAgentIDs) {
+		t.Fatalf("Agents & extensions sections = %v, want %v", agentIDs, wantAgentIDs)
 	}
 
 	m.Section.Set("shell")

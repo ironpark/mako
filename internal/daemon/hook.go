@@ -307,12 +307,14 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 				case agent.Waiting:
 					s.ReportToolStatus(protocol.AgentWaiting, msg.Seq)
 				case agent.Prompted:
-					s.ReportStatus(protocol.AgentWorking, msg.Seq)
+					// Periodic statusLine heartbeats while a tool runs must not
+					// clear an active in-app approval (e.g. save_template, layout).
+					s.ReportToolStatus(protocol.AgentWorking, msg.Seq)
 				case agent.Idle:
-					// Clear waiting state once a confirmation finishes, but never
-					// overwrite AgentDone (unread finished turn) back to idle.
+					// Clear waiting state once a terminal confirmation finishes,
+					// without clobbering an active in-app approval or AgentDone.
 					if s.Info().GetStatus() == protocol.AgentWaiting {
-						s.ReportStatus(protocol.AgentIdle, msg.Seq)
+						s.ReportToolStatus(protocol.AgentIdle, msg.Seq)
 					}
 				}
 			}

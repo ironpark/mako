@@ -4,12 +4,15 @@ package daemon
 
 import (
 	"encoding/json"
+	"io"
+	"net"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ironpark/mako/internal/prompttmpl"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
 )
 
 // templateDaemon is a daemon with an agent session whose MCP server the
@@ -155,5 +158,101 @@ func TestSaveTemplateWithNoWindow(t *testing.T) {
 	l.d.approvals.mu.Unlock()
 	if _, why := result(t, done); why != errTemplateNoWindow.Error() {
 		t.Fatalf("the window gone: %q", why)
+	}
+}
+
+// A window with "Approve in the window" turned off still watches layouts and
+// can show and save templates, which have no terminal fallback.
+func TestSaveTemplateWorksWithLayoutWatchOnly(t *testing.T) {
+	l, window := templateDaemon(t)
+	window()
+	l.d.approvals.mu.Lock()
+	l.d.approvals.watched, l.d.approvals.here = time.Time{}, time.Time{}
+	l.d.approvals.mu.Unlock()
+	defer l.d.layouts.hold()()
+
+	done := l.callLater(t, toolSaveTemplate, saveTemplateArgs{Name: "review", Content: goodTemplate})
+	a := waitTemplate(t, l)
+	if err := l.d.templateAsks.answer(a.GetId(), templateAnswer{decision: protocol.DecisionAllow, option: protocol.TemplateSaved}); err != nil {
+		t.Fatal(err)
+	}
+	if out, why := result(t, done); why != "" || out["name"] != "review" {
+		t.Fatalf("saved with layout watch only: %v %s", out, why)
+	}
+}
+
+// Periodic statusLine updates (such as agy reporting agent_state="tool_use"
+// while save_template runs) must not clear the pending template approval card.
+func TestSaveTemplateSurvivesStatusLineHeartbeats(t *testing.T) {
+	d := meshDaemon(t, "agy-template-statusline")
+	s, err := session.Start(session.Spec{
+		ID: "agy-save", NodeID: d.cfg.NodeID, Agent: "agy", Project: t.TempDir(),
+		Command: []string{"/bin/sh", "-c", "sleep 30"},
+		Cols:    80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	d.sessions.add(s)
+	defer d.layouts.hold()()
+
+	type saveRes struct {
+		out saveTemplateResult
+		err error
+	}
+	done := make(chan saveRes, 1)
+	go func() {
+		out, err := d.saveTemplate(t.Context(), s, saveTemplateArgs{Name: "review", Content: goodTemplate})
+		done <- saveRes{out: out, err: err}
+	}()
+
+	var a *protocol.Approval
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if cur := s.Info().GetApproval(); cur.GetKind() == protocol.ToolTemplate {
+			a = cur
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if a == nil {
+		t.Fatal("saveTemplate never posted an approval on the session")
+	}
+
+	sendStatus := func(seq int64, payload string) {
+		t.Helper()
+		client, server := net.Pipe()
+		srvDone := make(chan struct{})
+		go func() {
+			defer close(srvDone)
+			d.serveHook(t.Context(), server)
+		}()
+		if err := json.NewEncoder(client).Encode(hookMessage{Kind: statusArg, Session: s.ID(), Seq: seq, Input: json.RawMessage(payload)}); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, client)
+		_ = client.Close()
+		<-srvDone
+	}
+
+	// Simulate agy statusLine heartbeats arriving with newer seqs while save_template blocks.
+	now := time.Now().UnixNano() + int64(time.Second)
+	sendStatus(now, `{"agent_state":"tool_use"}`)
+	sendStatus(now+1, `{"agent_state":"idle"}`)
+
+	if got := s.Info().GetApproval(); got == nil || got.GetId() != a.GetId() {
+		t.Fatalf("approval was cleared by agy statusLine heartbeat: got %v", got)
+	}
+	if err := d.templateAsks.answer(a.GetId(), templateAnswer{decision: protocol.DecisionAllow, option: protocol.TemplateSaved}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case res := <-done:
+		if res.err != nil || res.out.Name != "review" {
+			t.Fatalf("saved after heartbeat: %+v, err=%v", res.out, res.err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("saveTemplate timed out after answer")
 	}
 }

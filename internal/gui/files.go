@@ -138,6 +138,18 @@ func (m *model) remoteID(node string) string {
 	return node
 }
 
+// sessionProjectRoot is the project folder a session's panels browse: the
+// repository's main work tree when the session runs inside a subfolder of it,
+// else its own working directory (such as a standalone folder or an external
+// git worktree).
+func sessionProjectRoot(s *protocol.SessionInfo) string {
+	dir, repo := s.GetProject(), s.GetRepo()
+	if repo != "" && pathscope.Within(dir, repo) {
+		return repo
+	}
+	return dir
+}
+
 // filesRoot is the selected session's project, or the one the selected
 // file or diff was opened from. If no session is selected or the selected
 // session is from another project, it falls back to the sidebar's selected
@@ -153,14 +165,14 @@ func (m *model) filesRoot() fileRoot {
 	defs := m.Spaces.Get().Projects
 	if s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get()); ok {
 		if curScope.Section == "" || curScope.holds(sessionScope(defs, s)) {
-			return fileRoot{Node: s.GetNodeId(), Path: s.GetProject()}
+			return fileRoot{Node: s.GetNodeId(), Path: sessionProjectRoot(s)}
 		}
 	}
 	if node, dir, ok := m.scopeLocation(); ok && dir != "" {
 		return fileRoot{Node: node, Path: dir}
 	}
 	if s, ok := sessionIn(m.Sessions.Get(), m.Selected.Get()); ok {
-		return fileRoot{Node: s.GetNodeId(), Path: s.GetProject()}
+		return fileRoot{Node: s.GetNodeId(), Path: sessionProjectRoot(s)}
 	}
 	return fileRoot{}
 }
