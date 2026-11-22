@@ -616,6 +616,7 @@ func captureColor(name string, pal skin.Palette) color.Color {
 func (m *model) wake() {
 	if w := m.window; w != nil {
 		w.Repaint()
+		m.repaintSecondaryWindows()
 		return
 	}
 	if post := m.post; post != nil {

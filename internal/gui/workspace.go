@@ -251,6 +251,7 @@ func (m *model) showLayout(key string) {
 	m.ws.layouts[m.ws.layoutKey] = ggui.Peek(m.Layout)
 	m.ws.layoutKey = key
 	m.setLayout(m.takeLayout(key))
+	m.bumpWorkspaceRev()
 }
 
 // setLayout shows root's panes, bringing back what each tab shows, as
@@ -497,6 +498,7 @@ func (m *model) showDoc(doc workspaceDoc) {
 	m.ws.layoutKey = m.shownKey()
 	root := m.takeLayout(m.ws.layoutKey)
 	if m.ws.layoutKey == shownKey && sameLayout(root, shown) {
+		m.bumpWorkspaceRev()
 		return // the panes shown are as they were
 	}
 	// A file with edits not saved stays open, whatever the other node had.

@@ -18,12 +18,34 @@ import (
 )
 
 // layoutView draws the panes. The tree is rebuilt only when its shape
-// changes, a split made or a pane closed; tabs moving and dividers
-// dragging update the panes in place, so terminals keep their state.
+// changes, a split made or a pane closed (or detached/returned to a separate
+// window); tabs moving and dividers dragging update the panes in place, so
+// terminals keep their state.
 func layoutView(m *model) ggui.Widget {
-	shape := ggui.Map(m.Layout, layoutShape)
+	type visibleShape struct {
+		Key   string
+		Shape string
+	}
+	shape := ggui.Derived(func() visibleShape {
+		m.wsRev.Get()
+		key := m.ws.layoutKey
+		vis := visibleLayoutNode(m.Layout.Get(), m.DetachedPanes.Get(), key)
+		if vis == nil {
+			return visibleShape{Key: key, Shape: ""}
+		}
+		return visibleShape{Key: key, Shape: layoutShape(vis)}
+	})
 	return widget.Stack(
-		ggui.Key(shape, func(string) ggui.Widget { return layoutNodeView(m, ggui.Peek(m.Layout)) }),
+		ggui.Key(shape, func(s visibleShape) ggui.Widget {
+			if s.Shape == "" {
+				return detachedPanesPlaceholder(m, s.Key)
+			}
+			vis := visibleLayoutNode(ggui.Peek(m.Layout), ggui.Peek(m.DetachedPanes), s.Key)
+			if vis == nil {
+				return detachedPanesPlaceholder(m, s.Key)
+			}
+			return layoutNodeView(m, vis)
+		}),
 		&dragGhostOverlay{m: m},
 	).Expand()
 }
@@ -417,8 +439,18 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		plus := widget.Box(widget.Column(launchButton(m, nodeID, project, targets, focus, newSession)).Justify(widget.JustifyCenter)).
 			Height(tabBarHeight).Pad(0, 4)
 
-		// Beside the tabs: the +.
+		// Beside the tabs: the +, and when the pane has tabs, a pop-out button.
+		var popout ggui.Widget
+		if len(g.Tabs) > 0 {
+			ref := paneRef{Key: m.ws.layoutKey, GroupID: id}
+			popout = widget.Box(widget.Column(
+				iconButton("external-link", T("Open pane in new window"), func() { m.popoutPane(ref) }),
+			).Justify(widget.JustifyCenter)).Height(tabBarHeight).Pad(0, 4, 0, 0)
+		}
 		extra := float64(34)
+		if popout != nil {
+			extra += 32
+		}
 		// The + follows the last tab, as far as the bar's end, where it
 		// stays in sight as the tabs scroll; and when they do, a menu
 		// lists them all, and how many are out of sight.
@@ -430,10 +462,14 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		tabsAndPlus := tabDrop(m, widget.Row(widget.Flexible(counter), plus).Stretch(), id,
 			func(widget.Dropped[tabDrag]) int { return end }).
 			OnHover(func(bool) { m.leaveHint(id) })
-		return widget.Row(
+		row := []ggui.Widget{
 			widget.Expanded(tabsAndPlus),
 			widget.Responsive(need, widget.Box().Size(0, 0), tabList(m, id, g, sessions, titles, docs, diffs)),
-		).Stretch()
+		}
+		if popout != nil {
+			row = append(row, popout)
+		}
+		return widget.Row(row...).Stretch()
 	})
 	return widget.Box(tabs).Height(tabBarHeight)
 }

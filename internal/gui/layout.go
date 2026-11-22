@@ -306,6 +306,7 @@ func (m *model) editLayout(fn func(root *layoutNode) int) {
 	m.FocusGroup.Set(focus)
 	m.Tabs.Set(tabs)
 	m.Selected.Set(root.group(focus).Active)
+	m.bumpWorkspaceRev()
 }
 
 // focusGroup makes a pane current.
@@ -496,4 +497,5 @@ func (m *model) setRatio(node int, r float64) {
 	next := root.clone()
 	next.node(node).Ratio = r
 	m.Layout.Set(next)
+	m.bumpWorkspaceRev()
 }

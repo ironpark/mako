@@ -287,7 +287,9 @@ func spaceSwitcher(m *model) ggui.Widget {
 			}
 			items = append(items, item)
 		}
-		items = append(items, ui.MenuDivider(), ui.MenuItem(T("Edit spaces…"), func() { m.openSettings("spaces") }))
+		items = append(items, ui.MenuDivider(),
+			ui.MenuSub(T("Open in new window"), openSpaceWindowItems(m, p)...),
+			ui.MenuItem(T("Edit spaces…"), func() { m.openSettings("spaces") }))
 		parts := []ggui.Widget{
 			widget.Text(p.spaceName(current)).Size(14).Weight(ggui.WeightSemibold).NoWrap().Ellipsis(),
 			icon("chevron-down").Size(13).Color(skin.Muted),
@@ -701,6 +703,8 @@ func spaceIndex(spaces []space, id string) int {
 func spaceCard(m *model, id string, owners ggui.Readable[[]string], sections ggui.Readable[[]spaceSection]) ggui.Widget {
 	name := spaceField(m, id, func(sp *space) *string { return &sp.Name })
 	grip := widget.ReorderHandle(widget.Box(widget.Center(ui.Icon(icons.Grip).Size(15).Color(skin.Muted))).Size(20, 30)).Name(T("Move space"))
+	openWin := ui.Tooltip(ui.ButtonOf(icon("external-link").Size(14), func() { m.openSpaceWindow(id) }).
+		Ghost().Pad(6).Radius(6).Name(T("Open in new window")), T("Open in new window"))
 	trash := ui.Tooltip(ui.ButtonOf(icon("trash-2").Size(14), func() { m.deleteSpace(spaceIndex(ggui.Peek(m.Spaces).Spaces, id)) }).
 		Ghost().Pad(6).Radius(6).Name(T("Delete space")), T("Delete space"))
 	status := ggui.Reactive(func() ggui.Widget {
@@ -726,6 +730,7 @@ func spaceCard(m *model, id string, owners ggui.Readable[[]string], sections ggu
 		spaceColorPicker(m, id),
 		widget.Expanded(ui.TextField(name).Placeholder(T("Space name")).Name(T("Space name"))),
 		status,
+		openWin,
 		trash,
 	).Gap(6).Align(widget.AlignCenter)
 	return card(

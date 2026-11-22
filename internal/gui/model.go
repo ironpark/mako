@@ -260,6 +260,16 @@ type model struct {
 	redials    map[string]redial // see redialDue
 	sleeps     sleeps            // see sleepIdle
 
+	// Multi-window state: detached split panes (ephemeral view-only; never
+	// persisted into m.Layout or workspace.json) and independent Space windows.
+	DetachedPanes *ggui.StateValue[map[paneRef]bool]
+	SpaceWindows  *ggui.StateValue[map[string]bool]
+	paneWindows   map[paneRef]*ggui.Window
+	spaceWindows  map[string]*spaceWindowState
+	wsRev         *ggui.StateValue[uint64]
+	secWinMu      sync.RWMutex
+	secWins       map[*ggui.Window]struct{}
+
 	// recorder keeps the terminal streams the developer option records.
 	recorder *streamRecorder
 }
@@ -377,6 +387,12 @@ func newModel(cfg *config.Config, addr string) *model {
 		hiddenTabs:    map[int]*ggui.StateValue[int]{},
 		dialing:       map[string]bool{},
 		redials:       map[string]redial{},
+		DetachedPanes: ggui.State(map[paneRef]bool{}).WithEqual(maps.Equal[map[paneRef]bool]),
+		SpaceWindows:  ggui.State(map[string]bool{}).WithEqual(maps.Equal[map[string]bool]),
+		paneWindows:   map[paneRef]*ggui.Window{},
+		spaceWindows:  map[string]*spaceWindowState{},
+		wsRev:         ggui.State(uint64(0)),
+		secWins:       map[*ggui.Window]struct{}{},
 	}
 	m.winStates = m.builtinNodeStates()
 	m.drawWindowDoc(doc)
@@ -503,6 +519,7 @@ func (m *model) attachVisible() {
 			}
 		}
 	}
+	m.attachVisibleMultiWindow()
 }
 
 // A terminal dialed again and again, as its stream fails as soon as it
@@ -579,8 +596,9 @@ func (m *model) attach(id string) {
 			conn, err = dialTerm(context.Background(), c, info, goos, tap, wake, func() { post(m.syncTitles) })
 		}
 		if conn != nil && m.window != nil {
-			// Output repaints the terminal alone, not the window.
-			repaint := m.window.RepaintRect
+			// Output repaints the terminal alone, not the window (plus any
+			// secondary windows that may host detached panes or spaces).
+			repaint := m.repaintTerminalRect
 			conn.repaint.Store(&repaint)
 		}
 		post(func() {
@@ -589,7 +607,7 @@ func (m *model) attach(id string) {
 				m.connErr(err)
 				return
 			}
-			if !slices.Contains(ggui.Peek(m.Tabs), id) {
+			if !slices.Contains(m.allTabs(), id) {
 				conn.close() // the tab closed while dialing
 				return
 			}
@@ -750,16 +768,38 @@ func (m *model) startSession(tab string, f newSession) {
 		m.lastAgent = f.Agent
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
-		targetKey := layoutKey(m.spacesNow().spaceID(m.spacesNow().Space), projectContext(sectionID(m.projectsNow(), info)))
-		if slices.Contains(ggui.Peek(m.Tabs), tab) {
-			if m.ws.layoutKey == targetKey {
-				m.replaceTab(tab, info.GetId())
-			} else {
-				m.closeTab(tab)
-			}
+		inMain := slices.Contains(ggui.Peek(m.Tabs), tab)
+		otherKey := ""
+		if tab != "" && !inMain {
+			otherKey = m.findLayoutOfTab(tab)
 		}
-		delete(m.launches, tab)
-		m.selectSession(info.GetId())
+		if otherKey != "" {
+			// Launched from a secondary Space window or detached pane:
+			// replace the launch tab in-place without hijacking the main window.
+			m.editLayoutForKey(otherKey, func(root *layoutNode) int {
+				g := root.groupOf(tab)
+				if g == nil {
+					return 0
+				}
+				i := slices.Index(g.Tabs, tab)
+				g.Tabs[i] = info.GetId()
+				g.Active = info.GetId()
+				return g.ID
+			})
+			delete(m.launches, tab)
+			m.attach(info.GetId())
+		} else {
+			targetKey := layoutKey(m.spacesNow().spaceID(m.spacesNow().Space), projectContext(sectionID(m.projectsNow(), info)))
+			if inMain {
+				if m.ws.layoutKey == targetKey {
+					m.replaceTab(tab, info.GetId())
+				} else {
+					m.closeTab(tab)
+				}
+			}
+			delete(m.launches, tab)
+			m.selectSession(info.GetId())
+		}
 		if len(team.Members) > 0 {
 			m.startTeam(info.GetId(), team, prompt)
 		}
@@ -827,6 +867,7 @@ func (m *model) openSettings(section string) {
 // shutdown detaches every terminal, hangs up, and stops the app's daemon
 // with the sessions it runs.
 func (m *model) shutdown() {
+	m.closeAllSecondaryWindows()
 	m.embedded.stop()
 	if m.ws.timer != nil {
 		m.ws.timer.Stop()

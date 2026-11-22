@@ -1716,4 +1716,22 @@ var catalogKo = map[string]string{
 	"Graph":    "그래프",
 	"Zoom in":  "확대",
 	"Zoom out": "축소",
+
+	// Multi-window support
+	"Could not open window":             "창을 열 수 없습니다",
+	"Return":                            "돌려놓기",
+	"Return to main window":             "메인 창으로 돌려놓기",
+	"Open pane in new window":           "분할 창을 새 창으로 열기",
+	"Panes opened in separate windows":  "분할 창이 별도 창으로 열려 있습니다",
+	"Pane opened in a separate window":  "분할 창이 별도 창으로 열려 있습니다",
+	"Closing a pane window returns it to its original position here.": "분할 창을 닫으면 원래 위치로 돌아옵니다.",
+	"Pane %d":                          "분할 창 %d",
+	"1 tab":                            "탭 1개",
+	"%d tabs":                          "탭 %d개",
+	"Focus window":                     "창으로 이동",
+	"Return here":                      "여기로 돌려놓기",
+	"Return all panes":                 "모든 분할 창 돌려놓기",
+	"Return all detached panes":        "분리된 분할 창 모두 돌려놓기",
+	"Open in new window":               "새 창으로 열기",
+	"Open current space in new window": "현재 스페이스를 새 창으로 열기",
 }
