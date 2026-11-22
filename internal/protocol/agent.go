@@ -29,7 +29,14 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 43
+const Revision = 44
+
+// RevisionPluginRichUIv2 adds rich layout primitives (wrap, grid, split,
+// collapsible, breadcrumb, tree, tree_item), declarative graph canvases
+// (graph, UiGraphNode, UiGraphEdge), donut/pie charts, interactive markdown
+// links, node variant/columns/ratio/fill fields, and plugin i18n locale fields
+// on WatchBlock, BlockEvent, and PluginAction.
+const RevisionPluginRichUIv2 = 44
 
 // RevisionPluginDB adds sandboxed per-scope SQLite databases (mako.db / ctx.db)
 // and P2P CRDT-synced tables replicated between mutually trusted peers.

@@ -421,7 +421,7 @@ func TestOKFExamplePlugin(t *testing.T) {
 		},
 	})
 	files := map[string]string{}
-	for _, name := range []string{ManifestName, "main.js", "lib/okf.js"} {
+	for _, name := range []string{ManifestName, "main.js", "lib/okf.js", "lib/i18n.js"} {
 		b, err := os.ReadFile(filepath.Join("../../examples/plugins/okf", name))
 		if err != nil {
 			t.Fatal(err)
@@ -439,9 +439,30 @@ func TestOKFExamplePlugin(t *testing.T) {
 
 	// First watch bootstraps starter index.md + concepts/overview.md in Alpha's isolated file vault.
 	wA := r.watchScoped("plugin:okf/vault", scopeA)
-	wA.until("starter OKF vault", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
-		return hasText(n, "2 docs") && hasText(n, "Alpha Overview") && hasText(n, "index.md")
+	starterTree := wA.until("starter OKF vault", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return n.GetFill() && hasText(n, "2 docs") && hasText(n, "Alpha Overview") && hasText(n, "index.md")
 	})
+	// Verify root fill layout with inner scroll container and tag wrap.
+	var hasMainScroll, hasWrap, hasGhostSmallBtn bool
+	var walkStarter func(*protocol.UiNode)
+	walkStarter = func(node *protocol.UiNode) {
+		if node.GetKind() == "scroll" && strings.HasSuffix(node.GetId(), "/main-scroll") && node.GetGrow() > 0 {
+			hasMainScroll = true
+		}
+		if node.GetKind() == "wrap" {
+			hasWrap = true
+		}
+		if node.GetKind() == "button" && node.GetVariant() == "ghost" && node.GetSize() == "small" {
+			hasGhostSmallBtn = true
+		}
+		for _, ch := range node.GetChildren() {
+			walkStarter(ch)
+		}
+	}
+	walkStarter(starterTree)
+	if !hasMainScroll || !hasWrap || !hasGhostSmallBtn {
+		t.Fatalf("expected root scroll (%v), tag wrap (%v), and small ghost button (%v)", hasMainScroll, hasWrap, hasGhostSmallBtn)
+	}
 
 	// Upsert an OKF Decision document linking to concepts/overview and a missing concept.
 	upserted, err := r.m.CallToolScoped(t.Context(), "okf", "upsert_doc", []byte(`{
@@ -458,6 +479,7 @@ func TestOKFExamplePlugin(t *testing.T) {
 	if err != nil || !strings.Contains(upserted, `"saved":true`) {
 		t.Fatalf("upsert_doc: %s, err=%v", upserted, err)
 	}
+	var decisionCardID, tabsID string
 	wA.until("new decision reflected in UI", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		if !hasText(n, "Use Sandboxed Datafs for OKF") || !hasText(n, "3 docs") {
 			return false
@@ -465,19 +487,23 @@ func TestOKFExamplePlugin(t *testing.T) {
 		var hasHealth1 bool
 		var scan func(*protocol.UiNode)
 		scan = func(node *protocol.UiNode) {
-			if node.GetKind() == "tabs" {
+			if node.GetKind() == "tabs" && strings.HasSuffix(node.GetId(), "/main-tabs") {
+				tabsID = node.GetId()
 				for _, opt := range node.GetOptions() {
 					if opt == "Health (1)" {
 						hasHealth1 = true
 					}
 				}
 			}
+			if node.GetKind() == "card" && strings.HasSuffix(node.GetId(), "/doc-decisions_001-storage.md") {
+				decisionCardID = node.GetId()
+			}
 			for _, ch := range node.GetChildren() {
 				scan(ch)
 			}
 		}
 		scan(n)
-		return hasHealth1
+		return hasHealth1 && decisionCardID != "" && tabsID != ""
 	})
 
 	// Backlinks on concepts/overview.md include decisions/001-storage.md.
@@ -497,6 +523,272 @@ func TestOKFExamplePlugin(t *testing.T) {
 	if err != nil || !strings.Contains(linted, `"concepts/sync-plan"`) {
 		t.Fatalf("lint missed broken link: %s, err=%v", linted, err)
 	}
+
+	// Tap the Decision card to open Reader view: verify breadcrumb, collapsible metadata, and clickable wiki-links in markdown.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:okf/vault",
+		Scope: scopeA,
+		Node:  decisionCardID,
+		Kind:  protocol.UiTap,
+	}); err != nil {
+		t.Fatalf("open decision reader: %v", err)
+	}
+	var mdID, breadcrumbID string
+	wA.until("Reader view with breadcrumb, collapsible metadata, and okf: markdown links", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		var hasBreadcrumb, hasCollapsible, hasOkfLink bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			switch node.GetKind() {
+			case "breadcrumb":
+				opts := node.GetOptions()
+				if len(opts) == 3 && opts[0] == "Vault" && opts[1] == "decisions" && opts[2] == "001-storage.md" {
+					hasBreadcrumb = true
+					breadcrumbID = node.GetId()
+				}
+			case "collapsible":
+				if strings.HasSuffix(node.GetId(), "/reader-meta") {
+					hasCollapsible = true
+				}
+			case "markdown":
+				if node.GetChange() && strings.Contains(node.GetText(), "(okf:concepts/overview.md)") && strings.Contains(node.GetText(), "(okf:concepts/sync-plan.md)") {
+					hasOkfLink = true
+					mdID = node.GetId()
+				}
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return hasBreadcrumb && hasCollapsible && hasOkfLink
+	})
+
+	// Click [[concepts/overview]] inside ui.markdown via UiChange onLink: navigates straight to concepts/overview.md!
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:okf/vault",
+		Scope: scopeA,
+		Node:  mdID,
+		Kind:  protocol.UiChange,
+		Value: "okf:concepts/overview.md",
+	}); err != nil {
+		t.Fatalf("markdown onLink navigation: %v", err)
+	}
+	wA.until("navigated to concepts/overview.md via markdown onLink", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		var ok bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			if node.GetKind() == "breadcrumb" {
+				opts := node.GetOptions()
+				if len(opts) == 3 && opts[0] == "Vault" && opts[1] == "concepts" && opts[2] == "overview.md" {
+					ok = true
+					breadcrumbID = node.GetId()
+				}
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return ok && hasText(n, "Alpha Overview")
+	})
+
+	// Click folder segment ("concepts", index "1") in breadcrumb: jumps directly to Tree tab!
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:okf/vault",
+		Scope: scopeA,
+		Node:  breadcrumbID,
+		Kind:  protocol.UiChange,
+		Value: "1",
+	}); err != nil {
+		t.Fatalf("breadcrumb folder click: %v", err)
+	}
+	var conceptsDirID string
+	wA.until("Tree tab rendered with native ui.tree and nested ui.tree_item nodes", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		var hasTree, hasDirItem, hasDocItem bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			if node.GetKind() == "tree" {
+				hasTree = true
+			}
+			if node.GetKind() == "tree_item" && strings.HasSuffix(node.GetId(), "/dir-concepts") && node.GetChecked() && node.GetChange() && node.GetDrop() {
+				hasDirItem = true
+				conceptsDirID = node.GetId()
+			}
+			if node.GetKind() == "tree_item" && node.GetDrag() == "decisions/001-storage.md" && node.GetDragGroup() == "okf-doc" && node.GetTap() {
+				hasDocItem = true
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return hasTree && hasDirItem && hasDocItem && hasText(n, "2 folders · 3 docs")
+	})
+
+	// Collapse concepts folder via ui.tree_item UiChange ("false") and verify checked updates to false.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:okf/vault",
+		Scope: scopeA,
+		Node:  conceptsDirID,
+		Kind:  protocol.UiChange,
+		Value: "false",
+	}); err != nil {
+		t.Fatalf("collapse concepts tree_item: %v", err)
+	}
+	wA.until("concepts tree_item collapsed", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		var collapsed bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			if node.GetKind() == "tree_item" && strings.HasSuffix(node.GetId(), "/dir-concepts") && !node.GetChecked() {
+				collapsed = true
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return collapsed
+	})
+
+	// Switch to Graph tab: verify ui.grid(3), interactive ui.graph (solid + dashed broken edges), donut + bar charts, table, and wrap tags.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:okf/vault",
+		Scope: scopeA,
+		Node:  tabsID,
+		Kind:  protocol.UiChange,
+		Value: "Graph",
+	}); err != nil {
+		t.Fatalf("switch to Graph tab: %v", err)
+	}
+	var graphID string
+	wA.until("Graph tab rendered with grid, interactive graph, donut & bar charts, and centrality table", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		var hasGrid3, hasGraph, hasDashedBrokenEdge, hasResolvedEdge, hasDonut, hasBar, hasTable bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			switch node.GetKind() {
+			case "grid":
+				if node.GetColumns() == 3 {
+					hasGrid3 = true
+				}
+			case "graph":
+				if node.GetMaxHeight() == 340 && node.GetChange() && len(node.GetGraphNodes()) >= 4 {
+					hasGraph = true
+					graphID = node.GetId()
+					for _, e := range node.GetGraphEdges() {
+						if e.GetDashed() && e.GetTone() == "danger" {
+							hasDashedBrokenEdge = true
+						}
+						if !e.GetDashed() {
+							hasResolvedEdge = true
+						}
+					}
+				}
+			case "chart":
+				if node.GetChart() == "donut" {
+					hasDonut = true
+				}
+				if node.GetChart() == "bar" {
+					hasBar = true
+				}
+			case "table":
+				hasTable = true
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return hasGrid3 && hasGraph && hasDashedBrokenEdge && hasResolvedEdge && hasDonut && hasBar && hasTable && hasText(n, "Documents by OKF Type")
+	})
+
+	// Clicking a node in ui.graph focuses it in the inspector card.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:okf/vault",
+		Scope: scopeA,
+		Node:  graphID,
+		Kind:  protocol.UiChange,
+		Value: "decisions/001-storage.md",
+	}); err != nil {
+		t.Fatalf("focus graph node: %v", err)
+	}
+	wA.until("Graph inspector focused on decisions/001-storage.md", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		var ok bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			if node.GetKind() == "graph" && node.GetValue() == "decisions/001-storage.md" {
+				ok = true
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return ok && hasText(n, "Use Sandboxed Datafs for OKF")
+	})
+
+	// Switch to Health tab: verify ui.grid and ui.collapsible broken-links section.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:okf/vault",
+		Scope: scopeA,
+		Node:  tabsID,
+		Kind:  protocol.UiChange,
+		Value: "Health (1)",
+	}); err != nil {
+		t.Fatalf("switch to Health tab: %v", err)
+	}
+	wA.until("Health tab rendered with grid and collapsible broken links", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		var hasGrid3, hasBrokenCollapsible bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			if node.GetKind() == "grid" && node.GetColumns() == 3 {
+				hasGrid3 = true
+			}
+			if node.GetKind() == "collapsible" && strings.HasSuffix(node.GetId(), "/health-broken") {
+				hasBrokenCollapsible = true
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return hasGrid3 && hasBrokenCollapsible && hasText(n, "concepts/sync-plan")
+	})
+
+	// Verify Korean ("ko-KR") i18n rendering on dynamic locale switch.
+	wA.cancel()
+	wKo := r.watchLocale("plugin:okf/vault", scopeA, "ko-KR")
+	wKo.until("Korean localized OKF UI", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		var hasKoTabs bool
+		var scan func(*protocol.UiNode)
+		scan = func(node *protocol.UiNode) {
+			if node.GetKind() == "tabs" {
+				opts := node.GetOptions()
+				if len(opts) >= 4 && opts[0] == "탐색" && opts[1] == "트리" && opts[2] == "그래프" && opts[3] == "진단 (1)" {
+					hasKoTabs = true
+				}
+			}
+			for _, ch := range node.GetChildren() {
+				scan(ch)
+			}
+		}
+		scan(n)
+		return hasKoTabs && hasText(n, "문서 3개") && hasText(n, "깨진 링크 (1)")
+	})
+	// Switch to Korean Graph tab and verify Korean chart caption & graph caption.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block:  "plugin:okf/vault",
+		Scope:  scopeA,
+		Node:   tabsID,
+		Kind:   protocol.UiChange,
+		Value:  "그래프",
+		Locale: "ko-KR",
+	}); err != nil {
+		t.Fatalf("switch to Korean Graph tab: %v", err)
+	}
+	wKo.until("Korean Graph tab rendered", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "OKF 유형별 문서 분포") && hasText(n, "지식 그래프")
+	})
+	wKo.cancel()
 
 	// Move and delete work cleanly and keep Alpha isolated from Beta.
 	if moved, err := r.m.CallToolScoped(t.Context(), "okf", "move_doc", []byte(`{

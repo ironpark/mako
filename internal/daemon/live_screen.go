@@ -27,6 +27,7 @@ type screenLivePoller struct {
 	driver   agent.ScreenLive
 	baseline agent.ScreenLiveBaseline
 	status   agent.ScreenLiveStatus
+	activity agent.ScreenLiveActivity
 	logs     agent.Logs
 	gen      uint64
 
@@ -37,6 +38,7 @@ type screenLivePoller struct {
 	lastLogged      string
 	lastEmitted     string
 	lastStatus      string
+	wasWorking      bool
 	idleOutputs     uint64
 	hasIdleBaseline bool
 	idleText        string
@@ -51,6 +53,7 @@ func screenLivePollerFactory(hub *liveHub, s *session.Session) func(gen uint64) 
 	}
 	baseline, _ := driver.(agent.ScreenLiveBaseline)
 	status, _ := driver.(agent.ScreenLiveStatus)
+	activity, _ := driver.(agent.ScreenLiveActivity)
 	logs, _ := agents.As[agent.Logs](s.Agent())
 	return func(gen uint64) func(size func() int64) (bool, int64) {
 		p := &screenLivePoller{
@@ -59,6 +62,7 @@ func screenLivePollerFactory(hub *liveHub, s *session.Session) func(gen uint64) 
 			driver:   driver,
 			baseline: baseline,
 			status:   status,
+			activity: activity,
 			logs:     logs,
 			gen:      gen,
 		}
@@ -69,31 +73,80 @@ func screenLivePollerFactory(hub *liveHub, s *session.Session) func(gen uint64) 
 // tick inspects the session once per liveTick. When working, it checks the log
 // size and (when PTY outputs or the log changed) extracts the in-flight reply
 // and activity status from the unwrapped terminal screen and updates liveHub.
-// When not working, it promptly clears any previously emitted preview and
+// When running but not foreground-working, it clears any foreground preview,
 // snapshots the idle screen baseline so the next turn cannot briefly flash the
-// previous turn's response. All mutations are fenced by p.gen so a cancelled
-// look-out can never clobber a newer one.
+// previous turn's response, and surfaces any active background Swarm/Agent
+// activity rows via ScreenLiveActivity. All mutations are fenced by p.gen so a
+// cancelled look-out can never clobber a newer one.
 func (p *screenLivePoller) tick(size func() int64) (checked bool, logSize int64) {
 	info := p.s.Info()
-	working := info.GetState() == protocol.StateRunning && info.GetStatus() == protocol.AgentWorking
+	running := info.GetState() == protocol.StateRunning
+	working := running && info.GetStatus() == protocol.AgentWorking
 	if !working {
-		if p.lastEmitted != "" || p.lastStatus != "" {
-			p.clear()
-		}
-		if p.baseline != nil {
-			outputs := p.s.Outputs()
-			if !p.hasIdleBaseline || outputs != p.idleOutputs {
-				if screen, err := p.s.PlainTextUnwrapped(); err == nil {
-					p.idleText = p.baseline.ExtractBaseline(screen)
-					p.idleOutputs = outputs
-					p.hasIdleBaseline = true
-				}
+		if !running {
+			if p.lastEmitted != "" || p.lastStatus != "" {
+				p.clear()
 			}
+			p.wasWorking = false
+			p.lastOutputs = 0
+			p.hadLog = false
+			return false, 0
 		}
+		outputs := p.s.Outputs()
+		needScan := !p.hasIdleBaseline || outputs != p.idleOutputs || p.lastEmitted != "" || p.wasWorking
+		p.wasWorking = false
 		p.lastOutputs = 0
 		p.hadLog = false
+		if !needScan {
+			return false, 0
+		}
+		screen, err := p.s.PlainTextUnwrapped()
+		if err != nil {
+			if p.lastEmitted != "" || p.lastStatus != "" {
+				p.clear()
+			}
+			return false, 0
+		}
+		if p.baseline != nil {
+			p.idleText = p.baseline.ExtractBaseline(screen)
+		}
+		p.idleOutputs = outputs
+		p.hasIdleBaseline = true
+
+		var activity string
+		if p.activity != nil {
+			activity = p.activity.ExtractActivity(screen)
+		}
+		switch {
+		case activity == "":
+			if p.lastEmitted != "" || p.lastStatus != "" {
+				p.clear()
+			}
+		case p.lastEmitted == "" && activity == p.lastStatus:
+			// Unchanged background activity; nothing to post.
+		case p.lastEmitted == "" && p.lastStatus != "":
+			if p.hub.takeForGen(p.gen, livePost{
+				Session: p.s.ID(),
+				Step:    p.step,
+				Pieces:  []livePiece{{Kind: "thinking", Index: 0, Text: activity}},
+			}) {
+				p.lastStatus = activity
+			}
+		default:
+			p.stepSeq++
+			p.step = fmt.Sprintf("screen:%d", p.stepSeq)
+			if p.hub.takeForGen(p.gen, livePost{
+				Session: p.s.ID(),
+				Step:    p.step,
+				Pieces:  []livePiece{{Kind: "thinking", Index: 0, Text: activity}},
+			}) {
+				p.lastEmitted = ""
+				p.lastStatus = activity
+			}
+		}
 		return false, 0
 	}
+	p.wasWorking = true
 
 	outputs := p.s.Outputs()
 	logPath := p.s.TranscriptPath()

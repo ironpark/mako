@@ -111,6 +111,7 @@ type instance struct {
 	key      string        // instanceKey(id, scopeKey)
 	id       string        // block ID from manifest
 	scopeKey string        // canonical scope key: "", "space:<id>", "project:<id>", "session:<id>"
+	locale   string        // active BCP-47 locale for this instance; guarded by plugin.mu
 	tree     *uiblock.Tree // the last render that read; guarded by plugin.mu
 	err      string        // the last call's error; guarded by plugin.mu
 	subs     int           // the streams watching it; guarded by plugin.mu

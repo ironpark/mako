@@ -204,11 +204,17 @@ func hookEntry(hook string) map[string]any {
 // hookInput is what agy hands a hook, with the event the hook's command
 // names, which the hook adds.
 type hookInput struct {
-	Event          string `json:"hook_event_name"`
-	CamelEvent     string `json:"hookEventName"`
-	ConversationID string `json:"conversationId"`
-	TranscriptPath string `json:"transcriptPath"`
-	ToolCall       struct {
+	Event                string `json:"hook_event_name"`
+	CamelEvent           string `json:"hookEventName"`
+	ConversationID       string `json:"conversationId"`
+	TranscriptPath       string `json:"transcriptPath"`
+	AgentID              string `json:"agent_id"`
+	CamelAgentID         string `json:"agentId"`
+	SubagentID           string `json:"subagentId"`
+	ParentConversationID string `json:"parentConversationId"`
+	SnakeParentID        string `json:"parent_conversation_id"`
+	IsSubagent           bool   `json:"isSubagent"`
+	ToolCall             struct {
 		Name string          `json:"name"`
 		Args json.RawMessage `json:"args"`
 	} `json:"toolCall"`
@@ -222,6 +228,34 @@ func (*Agent) Event(input []byte) (agent.Event, bool) {
 	eventName := in.Event
 	if eventName == "" {
 		eventName = in.CamelEvent
+	}
+	// If agy marks the hook payload as belonging to a subagent, only surface
+	// explicit subagent lifecycle events and never let it overwrite parent state.
+	agentID := in.AgentID
+	if agentID == "" {
+		agentID = in.CamelAgentID
+	}
+	if agentID == "" {
+		agentID = in.SubagentID
+	}
+	parentID := in.ParentConversationID
+	if parentID == "" {
+		parentID = in.SnakeParentID
+	}
+	if in.IsSubagent || agentID != "" || (parentID != "" && parentID != in.ConversationID) {
+		if agentID == "" {
+			agentID = in.ConversationID
+		}
+		if parentID == "" {
+			parentID = in.ConversationID
+		}
+		switch eventName {
+		case "SubagentStart":
+			return agent.Event{Kind: agent.ChildStarted, SessionID: parentID, AgentID: agentID}, true
+		case "SubagentStop":
+			return agent.Event{Kind: agent.ChildStopped, SessionID: parentID, AgentID: agentID}, true
+		}
+		return agent.Event{}, false
 	}
 	ev := agent.Event{SessionID: in.ConversationID, Transcript: in.TranscriptPath, Tool: in.ToolCall.Name, Input: in.ToolCall.Args}
 	switch eventName {
@@ -237,6 +271,94 @@ func (*Agent) Event(input []byte) (agent.Event, bool) {
 		return agent.Event{}, false
 	}
 	return ev, true
+}
+
+// IsSubAgent reports whether childID is a subagent or swarm worker spawned by
+// parentID so that its lifecycle hooks never hijack the parent session's bound
+// conversation or working/idle state.
+func (*Agent) IsSubAgent(parentID, parentLog, childID, childLog string) bool {
+	if parentID == "" || childID == "" || childID == parentID {
+		return false
+	}
+	if !agent.ValidID.MatchString(parentID) || !agent.ValidID.MatchString(childID) {
+		return false
+	}
+	brainDir := brainDirFromLog(parentLog)
+	if brainDir == "" {
+		brainDir = brainDirFromLog(childLog)
+	}
+	if brainDir != "" {
+		// 1. Primary signal: agy writes .system_generated/subagents/<childID>.json
+		//    under the parent conversation's brain directory for every subagent
+		//    and swarm worker (including workers inheriting the parent workspace).
+		subMeta := filepath.Join(brainDir, parentID, ".system_generated", "subagents", childID+".json")
+		if _, err := os.Stat(subMeta); err == nil {
+			return true
+		}
+		// 2. Secondary signal: swarm/members.json lists every swarm member's
+		//    conversation_id under the parent conversation.
+		membersPath := filepath.Join(brainDir, parentID, ".system_generated", "swarm", "members.json")
+		if body, err := os.ReadFile(membersPath); err == nil && bytes.Contains(body, []byte(`"`+childID+`"`)) {
+			return true
+		}
+	}
+	// 3. Fallback: a worker/subagent transcript starts with a SYSTEM_MESSAGE
+	//    step delivered by sender=<parentID> rather than a USER_INPUT step.
+	if childLog != "" {
+		if firstLineHasParentSender(childLog, parentID) {
+			return true
+		}
+	}
+	return false
+}
+
+// brainDirFromLog extracts <root>/brain from an agy transcript path of the form
+// <root>/brain/<id>/.system_generated/logs/<file>.
+func brainDirFromLog(logPath string) string {
+	if logPath == "" {
+		return ""
+	}
+	logsDir := filepath.Dir(filepath.Clean(logPath))
+	if filepath.Base(logsDir) != "logs" {
+		return ""
+	}
+	sysDir := filepath.Dir(logsDir)
+	if filepath.Base(sysDir) != ".system_generated" {
+		return ""
+	}
+	convDir := filepath.Dir(sysDir)
+	brainDir := filepath.Dir(convDir)
+	if filepath.Base(brainDir) != "brain" {
+		return ""
+	}
+	return brainDir
+}
+
+func firstLineHasParentSender(path, parentID string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	buf := make([]byte, 8192)
+	n, _ := f.Read(buf)
+	if n == 0 {
+		return false
+	}
+	line := buf[:n]
+	if i := bytes.IndexByte(line, '\n'); i >= 0 {
+		line = line[:i]
+	}
+	var first struct {
+		Source  string `json:"source"`
+		Type    string `json:"type"`
+		Content string `json:"content"`
+	}
+	if json.Unmarshal(line, &first) != nil {
+		return false
+	}
+	return (first.Type == "SYSTEM_MESSAGE" || first.Source == "SYSTEM") &&
+		strings.Contains(first.Content, "sender="+parentID)
 }
 
 // Reply: mako does not hook agy's approvals, so it never answers one.

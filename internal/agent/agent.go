@@ -211,6 +211,21 @@ type ScreenLiveStatus interface {
 	ExtractStatus(screen string) string
 }
 
+// ScreenLiveActivity is optionally implemented alongside ScreenLive to extract
+// active background Swarm/Agent status rows shown in the agent's terminal
+// chrome even while the main prompt is idle (excluding foreground spinners).
+type ScreenLiveActivity interface {
+	ExtractActivity(screen string) string
+}
+
+// SubAgentHooks is optionally implemented by Hooks drivers whose subagents
+// fire lifecycle hooks under their own conversation ID rather than an explicit
+// agent_id field. IsSubAgent reports whether childID belongs to a subagent of
+// parentID so its hooks never hijack the parent session's conversation or state.
+type SubAgentHooks interface {
+	IsSubAgent(parentID, parentLog, childID, childLog string) bool
+}
+
 // Interrupter is an agent whose turn is stopped from its terminal by
 // other than Escape, which stops most: Interrupt is what is typed there to
 // stop the turn it is on, as a person would at its prompt.

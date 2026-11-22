@@ -416,3 +416,104 @@ func TestExtractStatus(t *testing.T) {
 		t.Fatalf("ExtractStatus(reading) = %q, want %q", got, "Reading file…")
 	}
 }
+
+func TestExtractSwarmAndAgentActivity(t *testing.T) {
+	a := New()
+	rule80 := strings.Repeat("─", 80)
+	divider := strings.Repeat("─", 60)
+
+	// Idle coordinator at ">" with active Swarm and two background Agent rows
+	// below the composer box (matching Screenshot 1).
+	idleSwarm := divider + "\n" +
+		"> 여기에 더해 플러그인에서 i18n 지원\n\n" +
+		"● Used PostMessage (Posted #69 to board)\n\n" +
+		"  1단계 완료 알림이 오면 바로 2단계 병렬 작업으로 넘어가겠습니다.\n\n" +
+		rule80 + "\n> \n" + rule80 + "\n" +
+		"● Swarm(Plugin UI rich components & OKF upg...)  coordinator: @u... · 69 posts · alt+s board · alt+x dismiss\n" +
+		"● Agent(worker: Swarm Worker (ui-schema))  For split elements, the code now enforces exactly ... · 6m44s\n" +
+		"● Agent(worker: Swarm Worker (monitor))  Working · 27h53m4s\n"
+
+	wantActivity := strings.Join([]string{
+		"Swarm(Plugin UI rich components & OKF upg...) · coordinator: @u... · 69 posts",
+		"Agent(worker: Swarm Worker (ui-schema)) · For split elements, the code now enforces exactly ... · 6m44s",
+		"Agent(worker: Swarm Worker (monitor)) · Working · 27h53m4s",
+	}, "\n")
+
+	if got := a.ExtractActivity(idleSwarm); got != wantActivity {
+		t.Fatalf("ExtractActivity(idleSwarm) =\n%q\nwant:\n%q", got, wantActivity)
+	}
+	if got := a.ExtractStatus(idleSwarm); got != wantActivity {
+		t.Fatalf("ExtractStatus(idleSwarm) =\n%q\nwant:\n%q", got, wantActivity)
+	}
+	if strings.Contains(wantActivity, "alt+s") || strings.Contains(wantActivity, "alt+x") {
+		t.Fatalf("shortcut chrome leaked: %q", wantActivity)
+	}
+	// ExtractLive must not emit idle screen text or Swarm/Agent chrome.
+	if got := a.ExtractLive(idleSwarm, ""); got != "" {
+		t.Fatalf("ExtractLive(idleSwarm) = %q, want empty", got)
+	}
+	// ExtractBaseline strips Swarm/Agent rows and composer box cleanly.
+	if got := a.ExtractBaseline(idleSwarm); got != "1단계 완료 알림이 오면 바로 2단계 병렬 작업으로 넘어가겠습니다." {
+		t.Fatalf("ExtractBaseline(idleSwarm) = %q", got)
+	}
+
+	// Working coordinator with BOTH braille spinner and active Swarm/Agent rows.
+	workingSwarm := divider + "\n" +
+		"> Check workers\n\n" +
+		"  Streaming coordinator prose.\n" +
+		"⠧  Thinking...\n" +
+		rule80 + "\n>\n" + rule80 + "\n" +
+		"esc to cancel                          auto · Gemini 4 Neon · high\n" +
+		"● Swarm(Plugin UI)  coordinator: active · 12 posts · alt+s board · alt+x dismiss\n" +
+		"● Agent(worker: Swarm Worker (ui-schema))  Working · 1m05s\n"
+
+	wantWorkingAct := "Swarm(Plugin UI) · coordinator: active · 12 posts\nAgent(worker: Swarm Worker (ui-schema)) · Working · 1m05s"
+	if got := a.ExtractActivity(workingSwarm); got != wantWorkingAct {
+		t.Fatalf("ExtractActivity(workingSwarm) = %q, want %q", got, wantWorkingAct)
+	}
+	if got := a.ExtractStatus(workingSwarm); got != "Thinking…\n"+wantWorkingAct {
+		t.Fatalf("ExtractStatus(workingSwarm) = %q, want %q", got, "Thinking…\n"+wantWorkingAct)
+	}
+	if got := a.ExtractLive(workingSwarm, ""); got != "Streaming coordinator prose." {
+		t.Fatalf("ExtractLive(workingSwarm) = %q, want prose only", got)
+	}
+
+	// Finished Swarm ("Done · 67 posts · alt+s board · alt+x dismiss") must not
+	// report active work when idle or add to working spinner status.
+	doneSwarm := divider + "\n" +
+		"> Summary\n\n" +
+		"  All done.\n" +
+		strings.Repeat("─", 56) + " ● Swarm(Plugin scope system (rev 42))\n" +
+		"Done · 67 posts · alt+s board · alt+x dismiss\n" +
+		rule80 + "\n>\n" + rule80 + "\n" +
+		"? for shortcuts                        auto · Gemini 4 Neon · high\n"
+	if got := a.ExtractActivity(doneSwarm); got != "" {
+		t.Fatalf("ExtractActivity(doneSwarm) = %q, want empty", got)
+	}
+	if got := a.ExtractStatus(doneSwarm); got != "" {
+		t.Fatalf("ExtractStatus(doneSwarm) = %q, want empty", got)
+	}
+
+	// Historical "● Agent(...)" in the conversation body above prose must NOT
+	// be mistaken for active bottom chrome.
+	bodyAgent := divider + "\n" +
+		"> Ask helper\n\n" +
+		"● Agent(research: Explorer)\n" +
+		"  ⎿ Done\n\n" +
+		"  Final answer from assistant.\n\n" +
+		rule80 + "\n>\n" + rule80 + "\n" +
+		"? for shortcuts                        auto · Gemini 4 Neon · high\n"
+	if got := a.ExtractActivity(bodyAgent); got != "" {
+		t.Fatalf("ExtractActivity(bodyAgent) = %q, want empty", got)
+	}
+
+	// Permission dialog suppresses Swarm/Agent activity.
+	permWithSwarm := divider + "\n" +
+		"> Run\n\n" +
+		"Requesting permission for:\n   go test ./...\n> 1. Yes\n  2. No\n" +
+		"  ↑/↓ Navigate · tab Amend · ctrl+g edit/expand command\n" +
+		"● Swarm(Plugin UI)  coordinator: active · 12 posts · alt+s board · alt+x dismiss\n"
+	if got := a.ExtractActivity(permWithSwarm); got != "" {
+		t.Fatalf("ExtractActivity(permWithSwarm) = %q, want empty", got)
+	}
+}

@@ -1140,7 +1140,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 35) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 44) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -1359,9 +1359,12 @@ details panel act on the nodes of those IDs.
 ## Plugin blocks
 
 A plugin draws a block, and an agent shows one, as a tree of `UiNode`s, of a fixed vocabulary:
-`column`, `row`, `stack`, `list` (which hold children), `text`, `icon`,
-`pill`, `chip`, `button`, `input`, `toggle`, `select`, `markdown`, `code`,
-`progress`, `divider`, and from revision 33 `chart`. A colour is a token (`tone`: `muted`, `faint`,
+`column`, `row`, `stack`, `card`, `scroll`, `wrap`, `grid`, `split`,
+`collapsible`, `tree`, `tree_item`, `list`, `table` (which hold children),
+`breadcrumb`, `text`, `icon`, `pill`, `chip`, `button`, `input`, `textarea`,
+`toggle`, `select`, `tabs`, `markdown`, `code`, `progress`, `divider`,
+`chart` (revision 33; `donut` and `pie` from revision 44), and `graph`
+(revision 44). A colour is a token (`tone`: `muted`, `faint`,
 `accent`, `success`, `warning`, `danger`), never a value; the front-end
 draws each kind with its own components in its own theme. The daemon reads
 what the plugin's render returned strictly, and refuses a tree with an
@@ -1373,14 +1376,27 @@ Every node has an `id`, its path from the root by its own and its
 ancestors' keys (a child without a key has `#` and its index): `""` for the
 root, `/runs/1234/#0` for the first child of the child keyed `1234` of the
 child keyed `runs`. A node that answers a tap has `tap`; one whose value
-changing is answered, `change`. What it sends is the daemon's to know.
+changing (or a `markdown` link click, `breadcrumb` segment click, `graph`
+node click, or `collapsible`/`tree_item` disclosure toggle) is answered has
+`change`. What it sends is the daemon's to know.
 
-A `chart` node (revision 33) has `chart`, `line`, `bar` or `sparkline`;
-`series`, 1 to 4 `UiSeries` of a `name`, a `tone` and 1 to 200 finite
-`values` (600 in all); and `labels`, the points' names, as many as each
-series's values, or none. Its `text` is a caption. It sends nothing. A
+A `chart` node (revision 33) has `chart`, `line`, `bar`, `sparkline`, or
+(revision 44) `donut` / `pie`; `series`, 1 to 4 `UiSeries` of a `name`, a
+`tone` and 1 to 200 finite `values` (600 in all; for `donut` and `pie`, 1
+series of 1 to 16 non-negative values with matching `labels`); and `labels`,
+the points' or slices' names. Its `text` is a caption. It sends nothing. A
 front-end that does not know a kind draws nothing in its place, so a
-daemon may send a chart to an older window or phone.
+daemon may send newer kinds to an older window or phone.
+
+Revision 44 adds rich layout fields on `UiNode` (`variant` for `button`/`card`,
+`columns` 1..6 for `grid`, `ratio` 0.1..0.9 and `direction` for `split`, and
+`fill` on root `column`/`row`/`split` to skip outer auto-scroll), interactive
+`markdown` links (`change = true` firing `BlockEvent{kind: "change", value: target}`),
+declarative `graph` canvases (`graph_nodes` of `UiGraphNode` up to 120,
+`graph_edges` of `UiGraphEdge` up to 400, optional `max_height` 120..1200,
+`value` focused node ID, `change = true` firing clicked node ID), and optional
+BCP-47 `locale` fields on `WatchBlock` (field 4), `BlockEvent` (field 8), and
+`PluginAction` (field 7) for plugin localization (empty defaults to `"en"`).
 
 `watch_block` answers with a `block_update` holding the `tree`, then one
 whenever the block changes, holding `ops` that make the tree the last

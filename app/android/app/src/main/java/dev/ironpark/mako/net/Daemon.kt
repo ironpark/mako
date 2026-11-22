@@ -21,6 +21,7 @@ import dev.ironpark.mako.v2.ListNodes
 import dev.ironpark.mako.v2.ListSessions
 import dev.ironpark.mako.v2.Node
 import dev.ironpark.mako.v2.OpenSession
+import dev.ironpark.mako.v2.PluginAction
 import dev.ironpark.mako.v2.PluginDone
 import dev.ironpark.mako.v2.ProjectAgents
 import dev.ironpark.mako.v2.ReadProjectAgents
@@ -45,6 +46,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.io.Closeable
 import java.io.IOException
+import java.util.Locale
 
 /**
  * Daemon is the app's link to its node, which relays to the rest of the
@@ -226,17 +228,47 @@ class Daemon(private val socket: () -> String?) {
      * cancelled; a stream that breaks ends it with the error. Nodes from
      * [dev.ironpark.mako.Mesh.REVISION_PEER_BLOCKS] on serve a node they
      * let in; [scope] selects a scoped block instance on nodes from
-     * [dev.ironpark.mako.Mesh.REVISION_PLUGIN_SCOPE] on.
+     * [dev.ironpark.mako.Mesh.REVISION_PLUGIN_SCOPE] on; [locale] carries
+     * the device's BCP-47 language tag on nodes from
+     * [dev.ironpark.mako.Mesh.REVISION_PLUGIN_RICH_UI_V2] on.
      */
-    fun watchBlock(node: String, block: String, scope: String = ""): Flow<BlockUpdate> =
-        watchBlockFlow(open = ::open, send = Stream::send, recv = Stream::recv, node = node, block = block, scope = scope)
+    fun watchBlock(
+        node: String,
+        block: String,
+        scope: String = "",
+        locale: String = currentLocaleTag(),
+    ): Flow<BlockUpdate> =
+        watchBlockFlow(
+            open = ::open,
+            send = Stream::send,
+            recv = Stream::recv,
+            node = node,
+            block = block,
+            scope = scope,
+            locale = locale,
+        )
 
     /**
      * Tells a block of the user acting on its node, on the node ev names:
      * the block's source looks up what to send. The answer's open_url is
      * a link the plugin asked, in answer, to open.
      */
-    suspend fun blockEvent(ev: BlockEvent): PluginDone = call(envelope { blockEvent = ev }).pluginDone
+    suspend fun blockEvent(ev: BlockEvent): PluginDone {
+        val withLocale = if (ev.locale.isNotEmpty()) ev else {
+            val tag = currentLocaleTag()
+            if (tag.isNotEmpty()) ev.toBuilder().setLocale(tag).build() else ev
+        }
+        return call(envelope { blockEvent = withLocale }).pluginDone
+    }
+
+    /** Acts on a plugin, carrying the device's BCP-47 locale tag when unset. */
+    suspend fun pluginAction(req: PluginAction): PluginDone {
+        val withLocale = if (req.locale.isNotEmpty()) req else {
+            val tag = currentLocaleTag()
+            if (tag.isNotEmpty()) req.toBuilder().setLocale(tag).build() else req
+        }
+        return call(envelope { pluginAction = withLocale }).pluginDone
+    }
 
     /** The blocks node's agents show, in the order shown. */
     suspend fun agentBlocks(node: String): List<AgentBlock> =
@@ -256,6 +288,10 @@ class Daemon(private val socket: () -> String?) {
     }
 }
 
+/** Current default BCP-47 language tag (e.g. "en-US", "ko-KR"), or "" if undetermined. */
+internal fun currentLocaleTag(): String =
+    Locale.getDefault().toLanguageTag().takeUnless { it.isBlank() || it == "und" }.orEmpty()
+
 internal fun <S : Closeable> watchBlockFlow(
     open: () -> S,
     send: (S, Envelope) -> Unit,
@@ -263,11 +299,13 @@ internal fun <S : Closeable> watchBlockFlow(
     node: String,
     block: String,
     scope: String = "",
+    locale: String = "",
 ): Flow<BlockUpdate> = readFlow(
     open = {
         open().also {
             val req = WatchBlock.newBuilder().setNodeId(node).setBlock(block)
             if (scope.isNotEmpty()) req.setScope(scope)
+            if (locale.isNotEmpty()) req.setLocale(locale)
             send(it, envelope { watchBlock = req.build() })
         }
     },

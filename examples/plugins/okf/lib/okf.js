@@ -216,6 +216,88 @@ function resolveRelative(fromPath, target) {
   return parts.join("/");
 }
 
+// resolveDocLink resolves a wiki-link or relative markdown target against the
+// vault's documents, matching direct path, relative path, or filename stem.
+export function resolveDocLink(docs, fromPath, rawTarget) {
+  const raw = String(rawTarget || "").trim().replace(/^okf:/i, "").split("#")[0].trim();
+  if (!raw) return null;
+  const byPath = new Map();
+  const byStem = new Map();
+  for (const d of docs || []) {
+    byPath.set(d.path, d);
+    const noExt = d.path.replace(/\.md$/, "");
+    byPath.set(noExt, d);
+    const base = noExt.split("/").pop();
+    if (base && !byStem.has(base)) {
+      byStem.set(base, d);
+    }
+  }
+  const direct = raw.endsWith(".md") ? raw : `${raw}.md`;
+  if (byPath.has(direct)) return byPath.get(direct).path;
+  if (byPath.has(raw)) return byPath.get(raw).path;
+  const rel = resolveRelative(String(fromPath || ""), direct);
+  if (byPath.has(rel)) return byPath.get(rel).path;
+  const stem = raw.replace(/\.md$/, "").split("/").pop();
+  if (stem && byStem.has(stem)) return byStem.get(stem).path;
+  return null;
+}
+
+// rewriteWikiLinksForMarkdown transforms OKF [[target|Label]] syntax into
+// clickable [Label](okf:target.md) Markdown links for the Reader view while
+// keeping fenced code blocks and inline backtick spans untouched.
+export function rewriteWikiLinksForMarkdown(body, fromPath = "", docs = []) {
+  const src = String(body || "");
+  if (!src.includes("[[")) return src;
+  const byPath = new Map((docs || []).map((d) => [d.path, d]));
+  const parts = src.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]+`)/g);
+  return parts
+    .map((part, i) => {
+      if (i % 2 === 1) return part; // fenced or inline code
+      return part.replace(/\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]/g, (_m, target, label) => {
+        const rawTarget = String(target || "").trim();
+        if (!rawTarget) return _m;
+        const resolved = resolveDocLink(docs, fromPath, rawTarget);
+        const resolvedDoc = resolved ? byPath.get(resolved) : null;
+        const hrefPath = resolved || (rawTarget.endsWith(".md") ? rawTarget : `${rawTarget}.md`);
+        const rawLabel = (label || (resolvedDoc && resolvedDoc.title) || rawTarget).trim();
+        const safeLabel = rawLabel.replace(/[[\]]/g, "");
+        return `[${safeLabel || rawTarget}](okf:${encodeURI(hrefPath)})`;
+      });
+    })
+    .join("");
+}
+
+function utf8ByteLength(str) {
+  let bytes = 0;
+  for (const ch of String(str || "")) {
+    const cp = ch.codePointAt(0);
+    if (cp <= 0x7f) bytes += 1;
+    else if (cp <= 0x7ff) bytes += 2;
+    else if (cp <= 0xffff) bytes += 3;
+    else bytes += 4;
+  }
+  return bytes;
+}
+
+// truncateUtf8Bytes truncates str so its UTF-8 encoding never exceeds maxBytes.
+export function truncateUtf8Bytes(str, maxBytes) {
+  const s = String(str || "").replace(/[\r\n\t]+/g, " ").trim();
+  if (maxBytes <= 0) return "";
+  if (utf8ByteLength(s) <= maxBytes) return s;
+  const ellipsisBytes = 3; // "…" U+2026
+  const budget = Math.max(0, maxBytes - ellipsisBytes);
+  let out = "";
+  let used = 0;
+  for (const ch of s) {
+    const cp = ch.codePointAt(0);
+    const b = cp <= 0x7f ? 1 : cp <= 0x7ff ? 2 : cp <= 0xffff ? 3 : 4;
+    if (used + b > budget) break;
+    out += ch;
+    used += b;
+  }
+  return out ? `${out}…` : "";
+}
+
 export function parseDocument(path, content, size = 0, modifiedMs = 0) {
   const { hasFrontmatter, meta, body } = parseFrontmatter(content);
   const fallbackTitle = path.replace(/\.md$/, "").split("/").pop() || path;
@@ -277,7 +359,11 @@ export function buildVaultIndex(docs) {
 
   for (const d of docs) {
     if (!d.hasFrontmatter || !d.title || !d.type) {
-      missingMeta.push({ path: d.path, reason: !d.hasFrontmatter ? "Missing YAML frontmatter" : "Missing title or type" });
+      missingMeta.push({
+        path: d.path,
+        code: !d.hasFrontmatter ? "missing_frontmatter" : "missing_fields",
+        reason: !d.hasFrontmatter ? "Missing YAML frontmatter" : "Missing title or type",
+      });
     }
     if (d.status === "needs_review") {
       needsReview.push({ path: d.path, title: d.title });
@@ -385,7 +471,7 @@ export function starterOverviewMarkdown(projectName) {
       "- `procedures/` — Runbooks, release steps, and troubleshooting guides",
       "",
       "## Next Steps",
-      "- Ask an AI agent to document key architecture decisions via `plugin_okf_upsert_doc`.",
+      "- Ask an AI agent to document key architecture decisions via `mako-plugin call okf upsert_doc`.",
       "- Link related documents with `[[concepts/example]]` to build a navigable graph.",
     ].join("\n"),
   });
@@ -434,4 +520,362 @@ function excerptAround(body, pos, len) {
   const end = Math.min(body.length, pos + len + 80);
   const slice = body.slice(start, end).replace(/\s+/g, " ").trim();
   return (start > 0 ? "…" : "") + slice + (end < body.length ? "…" : "");
+}
+
+// buildFolderTree constructs a sorted hierarchical tree from OKF docs and
+// directory paths (including empty directories created with datafs.mkdir).
+export function buildFolderTree(docs, dirs = []) {
+  const root = { kind: "dir", path: "", name: "/", children: new Map(), docs: [] };
+
+  function ensureDir(dirPath) {
+    const clean = String(dirPath || "").replace(/^\/+|\/+$/g, "");
+    if (!clean) return root;
+    let cur = root;
+    let acc = "";
+    for (const seg of clean.split("/").filter(Boolean)) {
+      acc = acc ? `${acc}/${seg}` : seg;
+      if (!cur.children.has(seg)) {
+        cur.children.set(seg, { kind: "dir", path: acc, name: seg, children: new Map(), docs: [] });
+      }
+      cur = cur.children.get(seg);
+    }
+    return cur;
+  }
+
+  for (const d of dirs || []) {
+    ensureDir(d);
+  }
+  for (const doc of docs || []) {
+    const parts = doc.path.split("/");
+    const fileName = parts.pop();
+    const dirNode = ensureDir(parts.join("/"));
+    dirNode.docs.push({ kind: "doc", path: doc.path, name: fileName, doc });
+  }
+
+  function finalize(node, depth) {
+    const subDirs = [...node.children.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((child) => finalize(child, depth + 1));
+    const files = node.docs
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((f) => ({ ...f, depth: depth + 1 }));
+    const docCount = files.length + subDirs.reduce((sum, d) => sum + d.docCount, 0);
+    return {
+      kind: "dir",
+      path: node.path,
+      name: node.name,
+      depth,
+      docCount,
+      dirs: subDirs,
+      files,
+    };
+  }
+
+  return finalize(root, -1);
+}
+
+// flattenFolderTree returns a flat ordered list of visible tree rows respecting
+// collapsedDirs (object map or array of collapsed directory paths).
+export function flattenFolderTree(tree, collapsedDirs = {}) {
+  const collapsed = Array.isArray(collapsedDirs)
+    ? new Set(collapsedDirs)
+    : new Set(Object.keys(collapsedDirs || {}).filter((k) => collapsedDirs[k]));
+  const rows = [];
+
+  function walk(node) {
+    for (const dir of node.dirs) {
+      const isCollapsed = collapsed.has(dir.path);
+      rows.push({
+        kind: "dir",
+        path: dir.path,
+        name: dir.name,
+        depth: dir.depth,
+        docCount: dir.docCount,
+        collapsed: isCollapsed,
+      });
+      if (!isCollapsed) {
+        walk(dir);
+      }
+    }
+    for (const f of node.files) {
+      rows.push(f);
+    }
+  }
+
+  walk(tree);
+  return rows;
+}
+
+export function allDirPaths(tree) {
+  const out = [];
+  function walk(node) {
+    for (const dir of node.dirs) {
+      out.push(dir.path);
+      walk(dir);
+    }
+  }
+  walk(tree);
+  return out;
+}
+
+function shortChartLabel(s, maxLen = 14) {
+  const str = String(s || "").trim();
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen - 1) + "…";
+}
+
+// buildVaultAnalytics computes chart series, centrality rankings, tag
+// frequencies, and health ratios for the OKF Graph & Analytics view.
+export function buildVaultAnalytics(docs, brokenCount = 0) {
+  const typeOrder = [...DOC_TYPES, "Index"];
+  const typeMap = new Map(typeOrder.map((t) => [t, 0]));
+  const statusCounts = { active: 0, needs_review: 0, deprecated: 0 };
+  const tagMap = new Map();
+  let connectedCount = 0;
+  let totalLinks = 0;
+
+  for (const d of docs || []) {
+    const t = typeMap.has(d.type) ? d.type : "Concept";
+    typeMap.set(t, (typeMap.get(t) || 0) + 1);
+    if (statusCounts[d.status] !== undefined) statusCounts[d.status]++;
+    for (const tag of d.tags || []) {
+      tagMap.set(tag, (tagMap.get(tag) || 0) + 1);
+    }
+    totalLinks += (d.links || []).length;
+    if ((d.links || []).length > 0 || (d.backlinks || []).length > 0) {
+      connectedCount++;
+    }
+  }
+
+  const typeStats = [...typeMap.entries()]
+    .filter(([, count]) => count > 0)
+    .map(([type, count]) => ({ type, label: shortChartLabel(type, 10), count }));
+
+  const rankedHubs = [...(docs || [])]
+    .map((d) => ({
+      doc: d,
+      out: (d.links || []).length,
+      in: (d.backlinks || []).length,
+      degree: (d.links || []).length + (d.backlinks || []).length,
+    }))
+    .sort((a, b) => b.degree - a.degree || b.in - a.in || a.doc.path.localeCompare(b.doc.path));
+
+  const topHubs = rankedHubs.slice(0, 8).map((h) => ({
+    ...h,
+    label: shortChartLabel(h.doc.path.replace(/\.md$/, "").split("/").pop() || h.doc.title, 12),
+  }));
+
+  const tagStats = [...tagMap.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+
+  const totalDocs = (docs || []).length;
+  const activeRatio = totalDocs > 0 ? statusCounts.active / totalDocs : 1;
+  const connectedRatio = totalDocs > 0 ? connectedCount / totalDocs : 1;
+  const linkHealthRatio = totalLinks + brokenCount > 0 ? totalLinks / (totalLinks + brokenCount) : 1;
+
+  return {
+    totalDocs,
+    totalLinks,
+    connectedCount,
+    statusCounts,
+    typeStats,
+    rankedHubs,
+    topHubs,
+    tagStats,
+    activeRatio,
+    connectedRatio,
+    linkHealthRatio,
+  };
+}
+
+// buildKnowledgeGraph builds declarative ui.graph nodes and edges from OKF
+// documents, respecting uiblock bounds (<=120 nodes, <=400 edges) and adding
+// synthetic danger nodes for broken wiki-links so dashed edges resolve cleanly.
+export function buildKnowledgeGraph(docs, opts = {}) {
+  const maxNodes = 120;
+  const maxEdges = 400;
+  const typeTone = opts.typeTone || (() => "muted");
+  const labelType = opts.labelType || ((t) => t);
+  const missingGroup = truncateUtf8Bytes(opts.missingGroup || "Missing", 48);
+  const missingSubtitle = truncateUtf8Bytes(opts.missingSubtitle || "Broken wiki-link target", 120);
+
+  const ranked = [...(docs || [])].sort(
+    (a, b) =>
+      ((b.links?.length || 0) + (b.backlinks?.length || 0)) -
+        ((a.links?.length || 0) + (a.backlinks?.length || 0)) ||
+      a.path.localeCompare(b.path),
+  );
+
+  const nodes = [];
+  const nodeIds = new Set();
+  const includedDocs = [];
+
+  for (const doc of ranked) {
+    if (nodes.length >= maxNodes) break;
+    const id = truncateUtf8Bytes(doc.path, 128);
+    if (!id || nodeIds.has(id)) continue;
+    const outCount = (doc.links || []).length;
+    const inCount = (doc.backlinks || []).length;
+    nodeIds.add(id);
+    includedDocs.push({ doc, id });
+    nodes.push({
+      id,
+      label: truncateUtf8Bytes(doc.title || doc.path, 64) || id,
+      group: truncateUtf8Bytes(labelType(doc.type || "Concept"), 48),
+      tone: typeTone(doc.type),
+      subtitle: truncateUtf8Bytes(`${doc.path} · ↗${outCount} ↙${inCount}`, 120),
+      weight: 1 + outCount + inCount,
+    });
+  }
+
+  const missingByRaw = new Map();
+  const missingByNodeId = new Map();
+  for (const { doc } of includedDocs) {
+    for (const rawTarget of doc.brokenLinks || []) {
+      const clean = String(rawTarget || "").trim();
+      if (!clean) continue;
+      let entry = missingByRaw.get(clean);
+      if (!entry) {
+        const missingId = truncateUtf8Bytes(`missing:${clean}`, 128);
+        if (!missingId || nodeIds.has(missingId) || nodes.length >= maxNodes) continue;
+        nodeIds.add(missingId);
+        nodes.push({
+          id: missingId,
+          label: truncateUtf8Bytes(clean, 64) || clean,
+          group: missingGroup,
+          tone: "danger",
+          subtitle: missingSubtitle,
+          weight: 0.8,
+        });
+        entry = { id: missingId, target: clean, refs: [] };
+        missingByRaw.set(clean, entry);
+        missingByNodeId.set(missingId, entry);
+      }
+      if (!entry.refs.includes(doc.path)) {
+        entry.refs.push(doc.path);
+      }
+    }
+  }
+
+  const edges = [];
+  const edgeKeys = new Set();
+
+  for (const { doc, id: fromId } of includedDocs) {
+    const tone = typeTone(doc.type);
+    for (const targetPath of doc.links || []) {
+      if (edges.length >= maxEdges) break;
+      if (!nodeIds.has(targetPath) || fromId === targetPath) continue;
+      const ek = `${fromId}\0${targetPath}\0ok`;
+      if (edgeKeys.has(ek)) continue;
+      edgeKeys.add(ek);
+      edges.push({ from: fromId, to: targetPath, label: "", tone, dashed: false });
+    }
+    for (const rawTarget of doc.brokenLinks || []) {
+      if (edges.length >= maxEdges) break;
+      const missing = missingByRaw.get(String(rawTarget || "").trim());
+      if (!missing || !nodeIds.has(missing.id)) continue;
+      const ek = `${fromId}\0${missing.id}\0broken`;
+      if (edgeKeys.has(ek)) continue;
+      edgeKeys.add(ek);
+      edges.push({ from: fromId, to: missing.id, label: "", tone: "danger", dashed: true });
+    }
+  }
+
+  return { nodes, edges, nodeIds, missingByNodeId };
+}
+
+// renderAsciiGraph renders either a 2-hop neighborhood map around focusPath or
+// a full-vault adjacency map in clean Unicode tree syntax.
+export function renderAsciiGraph(docs, focusPath = "", mode = "focus") {
+  if (!docs || docs.length === 0) {
+    return "(empty vault)";
+  }
+  const byPath = new Map(docs.map((d) => [d.path, d]));
+
+  if (mode === "full") {
+    const lines = [];
+    const grouped = new Map();
+    for (const d of [...docs].sort((a, b) => a.path.localeCompare(b.path))) {
+      const folder = d.path.includes("/") ? d.path.split("/")[0] : "/";
+      if (!grouped.has(folder)) grouped.set(folder, []);
+      grouped.get(folder).push(d);
+    }
+    for (const [folder, list] of grouped.entries()) {
+      lines.push(`[${folder}]`);
+      list.forEach((d, idx) => {
+        const lastDoc = idx === list.length - 1;
+        const prefix = lastDoc ? "└─" : "├─";
+        const cont = lastDoc ? "   " : "│  ";
+        lines.push(`${prefix} ${d.title} (${d.path})  ↗${d.links.length} ↙${d.backlinks.length}`);
+        const edges = [
+          ...d.links.map((p) => ({ ok: true, label: byPath.get(p)?.title || p, path: p })),
+          ...d.brokenLinks.map((raw) => ({ ok: false, label: `[[${raw}]]`, path: "broken" })),
+        ];
+        edges.slice(0, 6).forEach((e, ei) => {
+          const isLast = ei === Math.min(edges.length, 6) - 1 && edges.length <= 6;
+          const arrow = e.ok ? "─►" : "─✗";
+          lines.push(`${cont}${isLast ? "└" : "├"}${arrow} ${e.label}`);
+        });
+        if (edges.length > 6) {
+          lines.push(`${cont}└─ … +${edges.length - 6} more`);
+        }
+      });
+      lines.push("");
+    }
+    return lines.join("\n").trim();
+  }
+
+  let focus = focusPath ? byPath.get(focusPath) : null;
+  if (!focus) {
+    focus = [...docs].sort(
+      (a, b) => (b.links.length + b.backlinks.length) - (a.links.length + a.backlinks.length) || a.path.localeCompare(b.path),
+    )[0];
+  }
+  const lines = [];
+  if (focus.backlinks.length > 0) {
+    lines.push(`Incoming (${focus.backlinks.length})`);
+    focus.backlinks.forEach((p, i) => {
+      const src = byPath.get(p);
+      const branch = i === focus.backlinks.length - 1 ? "└─" : "├─";
+      lines.push(`  ${branch} [${src?.type || "Doc"}] ${src?.title || p}`);
+    });
+    lines.push("       │");
+    lines.push("       ▼");
+  } else {
+    lines.push("Incoming (0)");
+  }
+
+  lines.push(`★ [${focus.type}] ${focus.title}`);
+  lines.push(`  ${focus.path}  (${focus.status} · ↗${focus.links.length} ↙${focus.backlinks.length})`);
+
+  const outItems = [
+    ...focus.links.map((p) => ({ ok: true, doc: byPath.get(p), path: p })),
+    ...focus.brokenLinks.map((raw) => ({ ok: false, raw })),
+  ];
+  if (outItems.length > 0) {
+    lines.push("       │");
+    outItems.forEach((item, idx) => {
+      const isLast = idx === outItems.length - 1;
+      const branch = isLast ? "└" : "├";
+      const pad = isLast ? "  " : "│ ";
+      if (!item.ok) {
+        lines.push(`       ${branch}─✗ [[${item.raw}]] (broken)`);
+        return;
+      }
+      const target = item.doc;
+      lines.push(`       ${branch}─► [${target?.type || "Doc"}] ${target?.title || item.path}`);
+      if (target && target.links.length > 0) {
+        const secondHop = target.links.filter((p) => p !== focus.path && !focus.links.includes(p)).slice(0, 3);
+        secondHop.forEach((p2, j) => {
+          const hopDoc = byPath.get(p2);
+          const hopBranch = j === secondHop.length - 1 ? "└" : "├";
+          lines.push(`       ${pad}   ${hopBranch}─► ${hopDoc?.title || p2}`);
+        });
+      }
+    });
+  } else {
+    lines.push("  (no outgoing links)");
+  }
+  return lines.join("\n");
 }

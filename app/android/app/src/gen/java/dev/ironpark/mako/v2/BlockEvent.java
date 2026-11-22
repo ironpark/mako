@@ -28,6 +28,7 @@ public  final class BlockEvent extends
     value_ = "";
     nodeId_ = "";
     scope_ = "";
+    locale_ = "";
   }
   public static final int BLOCK_FIELD_NUMBER = 1;
   private java.lang.String block_;
@@ -495,6 +496,78 @@ java.lang.String defaultValue) {
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     scope_ = value.toStringUtf8();
+
+  }
+
+  public static final int LOCALE_FIELD_NUMBER = 8;
+  private java.lang.String locale_;
+  /**
+   * <pre>
+   * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+   * "ko-KR"; empty defaults to "en", revision 44).
+   * </pre>
+   *
+   * <code>string locale = 8 [json_name = "locale"];</code>
+   * @return The locale.
+   */
+  @java.lang.Override
+  public java.lang.String getLocale() {
+    return locale_;
+  }
+  /**
+   * <pre>
+   * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+   * "ko-KR"; empty defaults to "en", revision 44).
+   * </pre>
+   *
+   * <code>string locale = 8 [json_name = "locale"];</code>
+   * @return The bytes for locale.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getLocaleBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(locale_);
+  }
+  /**
+   * <pre>
+   * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+   * "ko-KR"; empty defaults to "en", revision 44).
+   * </pre>
+   *
+   * <code>string locale = 8 [json_name = "locale"];</code>
+   * @param value The locale to set.
+   */
+  private void setLocale(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    locale_ = value;
+  }
+  /**
+   * <pre>
+   * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+   * "ko-KR"; empty defaults to "en", revision 44).
+   * </pre>
+   *
+   * <code>string locale = 8 [json_name = "locale"];</code>
+   */
+  private void clearLocale() {
+
+    locale_ = getDefaultInstance().getLocale();
+  }
+  /**
+   * <pre>
+   * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+   * "ko-KR"; empty defaults to "en", revision 44).
+   * </pre>
+   *
+   * <code>string locale = 8 [json_name = "locale"];</code>
+   * @param value The bytes for locale to set.
+   */
+  private void setLocaleBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    locale_ = value.toStringUtf8();
 
   }
 
@@ -1098,6 +1171,80 @@ java.lang.String defaultValue) {
       return this;
     }
 
+    /**
+     * <pre>
+     * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+     * "ko-KR"; empty defaults to "en", revision 44).
+     * </pre>
+     *
+     * <code>string locale = 8 [json_name = "locale"];</code>
+     * @return The locale.
+     */
+    @java.lang.Override
+    public java.lang.String getLocale() {
+      return instance.getLocale();
+    }
+    /**
+     * <pre>
+     * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+     * "ko-KR"; empty defaults to "en", revision 44).
+     * </pre>
+     *
+     * <code>string locale = 8 [json_name = "locale"];</code>
+     * @return The bytes for locale.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getLocaleBytes() {
+      return instance.getLocaleBytes();
+    }
+    /**
+     * <pre>
+     * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+     * "ko-KR"; empty defaults to "en", revision 44).
+     * </pre>
+     *
+     * <code>string locale = 8 [json_name = "locale"];</code>
+     * @param value The locale to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLocale(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setLocale(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+     * "ko-KR"; empty defaults to "en", revision 44).
+     * </pre>
+     *
+     * <code>string locale = 8 [json_name = "locale"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLocale() {
+      copyOnWrite();
+      instance.clearLocale();
+      return this;
+    }
+    /**
+     * <pre>
+     * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+     * "ko-KR"; empty defaults to "en", revision 44).
+     * </pre>
+     *
+     * <code>string locale = 8 [json_name = "locale"];</code>
+     * @param value The bytes for locale to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLocaleBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setLocaleBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.BlockEvent)
   }
   @java.lang.Override
@@ -1122,10 +1269,11 @@ java.lang.String defaultValue) {
             ValuesDefaultEntryHolder.defaultEntry,
             "nodeId_",
             "scope_",
+            "locale_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0001\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u00052\u0006\u0208\u0007\u0208";
+              "\u0000\b\u0000\u0000\u0001\b\b\u0001\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u00052\u0006\u0208\u0007\u0208\b\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

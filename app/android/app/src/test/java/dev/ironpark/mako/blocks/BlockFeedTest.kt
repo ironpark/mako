@@ -52,6 +52,61 @@ class BlockFeedTest {
         assertEquals("Table", vals["/mode"])
     }
 
+    @Test
+    fun collapsibleAndTreeItemExpansionIsTrackedOutsideFormValues() {
+        val leaf = UiNode.newBuilder().setId("/tree/d1/n1").setKind("tree_item").setText("Intro").setChecked(true).build()
+        val folder = UiNode.newBuilder().setId("/tree/d1").setKind("tree_item").setText("Docs").setChecked(true).addChildren(leaf).build()
+        val treeNode = UiNode.newBuilder().setId("/tree").setKind("tree").addChildren(folder).build()
+        val section = UiNode.newBuilder().setId("/sec").setKind("collapsible").setText("Tags").setChecked(false).build()
+        val root = UiNode.newBuilder().setId("").setKind("column").addChildren(treeNode).addChildren(section).build()
+
+        val form = BlockForm()
+        form.sync(root)
+        assertTrue(form.isExpanded(folder))
+        assertFalse(form.isExpanded(section))
+        // User toggles locally; unrelated sync keeps local state.
+        form.setExpanded("/sec", true)
+        form.setExpanded("/tree/d1", false)
+        form.sync(root)
+        assertTrue(form.isExpanded(section))
+        assertFalse(form.isExpanded(folder))
+        // Server flipping checked overrides local state.
+        val updatedSection = section.toBuilder().setChecked(true).build()
+        val updatedRoot = UiNode.newBuilder().setId("").setKind("column").addChildren(treeNode).addChildren(updatedSection).build()
+        form.sync(updatedRoot)
+        assertTrue(form.isExpanded(updatedSection))
+        // Never leaks into BlockEvent.values.
+        assertTrue(form.values(updatedRoot).isEmpty())
+    }
+
+    @Test
+    fun emptyOrLazyTreeItemWithChangeTracksExpansionInBlockForm() {
+        val emptyDir = UiNode.newBuilder().setId("/tree/empty").setKind("tree_item").setText("New Folder")
+            .setChecked(true).setChange(true).build()
+        val lazyDir = UiNode.newBuilder().setId("/tree/lazy").setKind("tree_item").setText("Lazy")
+            .setChecked(false).setChange(true).build()
+        val root = UiNode.newBuilder().setId("").setKind("tree").addChildren(emptyDir).addChildren(lazyDir).build()
+
+        val form = BlockForm()
+        form.sync(root)
+        assertTrue(form.isExpanded(emptyDir))
+        assertFalse(form.isExpanded(lazyDir))
+
+        // User collapses emptyDir and expands lazyDir; unrelated sync preserves local state.
+        form.setExpanded("/tree/empty", false)
+        form.setExpanded("/tree/lazy", true)
+        form.sync(root)
+        assertFalse(form.isExpanded(emptyDir))
+        assertTrue(form.isExpanded(lazyDir))
+
+        // Server flipping lazyDir checked=true -> false resets it.
+        val updatedLazy = lazyDir.toBuilder().setChecked(true).build()
+        val updatedRoot = UiNode.newBuilder().setId("").setKind("tree").addChildren(emptyDir).addChildren(updatedLazy).build()
+        form.sync(updatedRoot)
+        assertTrue(form.isExpanded(updatedLazy))
+        assertTrue(form.values(updatedRoot).isEmpty())
+    }
+
     private val shown = BlockState(BlockUpdate.newBuilder().setTree(tree("a")).build(), tree("a"))
 
     /** A page coming back with the link down keeps its tree, with why. */

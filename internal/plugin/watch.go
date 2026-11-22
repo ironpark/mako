@@ -57,10 +57,11 @@ func (p *plugin) view(key, block string) uiblock.View {
 	return v
 }
 
-func (p *plugin) subscribe(block, scopeKey string) (string, []string) {
+func (p *plugin) subscribe(block, scopeKey, locale string) (string, []string) {
 	p.mu.Lock()
 	in, evicted := p.getOrCreateInstanceLocked(block, scopeKey)
 	in.subs++
+	in.locale = normalizeLocale(locale)
 	key := in.key
 	p.mu.Unlock()
 	return key, evicted
@@ -97,6 +98,14 @@ func (m *Manager) Watch(ctx context.Context, name string, send func(*protocol.Bl
 // global, "space:<id>", "project:<id>", or "session:<id>"), calling send with
 // each update until ctx ends, send fails, or the plugin is removed.
 func (m *Manager) WatchScoped(ctx context.Context, name, scope string, send func(*protocol.BlockUpdate) error) error {
+	return m.WatchScopedLocale(ctx, name, scope, "", send)
+}
+
+// WatchScopedLocale follows the block of the name in the canonical scope key
+// with the front-end's optional BCP-47 locale (empty defaults to "en"),
+// calling send with each update until ctx ends, send fails, or the plugin is
+// removed.
+func (m *Manager) WatchScopedLocale(ctx context.Context, name, scope, locale string, send func(*protocol.BlockUpdate) error) error {
 	id, block, ok := splitBlock(name)
 	if !ok {
 		return fmt.Errorf("%q is not a plugin's block", name)
@@ -108,7 +117,7 @@ func (m *Manager) WatchScoped(ctx context.Context, name, scope string, send func
 	if !ok {
 		return noPlugin(id)
 	}
-	key, evicted := p.subscribe(block, scope)
+	key, evicted := p.subscribe(block, scope, locale)
 	defer p.unsubscribe(key)
 	if !p.post(func() {
 		p.evictInstances(evicted)
@@ -149,11 +158,19 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	key := instanceKey(block, scopeKey)
 	p.mu.Lock()
 	var tree *uiblock.Tree
+	var locale string
 	if in, ok := p.inst[key]; ok {
 		in.lastUsed = time.Now()
 		tree = in.tree
+		if ev.GetLocale() != "" {
+			in.locale = normalizeLocale(ev.GetLocale())
+		}
+		locale = in.locale
 	}
 	p.mu.Unlock()
+	if ev.GetLocale() != "" {
+		locale = normalizeLocale(ev.GetLocale())
+	}
 	msg, err := tree.Message(ev)
 	if err != nil {
 		return nil, err
@@ -187,7 +204,9 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	name := msg.Name
 	argsJSON, _ := json.Marshal(msg.Args)
 	args := string(argsJSON)
-	ctxJSON := marshalScopeContext(m.resolveScope(scopeKey))
+	sc := m.resolveScope(scopeKey)
+	sc.Locale = normalizeLocale(locale)
+	ctxJSON := marshalScopeContext(sc)
 	var open, toast string
 	err = p.do(ctx, func() error {
 		if err := p.ensure(); err != nil {

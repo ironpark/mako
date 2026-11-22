@@ -16,7 +16,7 @@ class BlockChartTest {
         UiNode.newBuilder().setKind("chart").setChart(kind).addAllSeries(s.toList()).addAllLabels(labels).setText(text).build()
 
     @Test fun aChartIsCheckedAgainOnThePhone() {
-        assertNull(chartModel(chart("pie", series("a", 1.0))))
+        assertNull(chartModel(chart("radar", series("a", 1.0))))
         val big = (1..10).map { series("s$it", *DoubleArray(300) { k -> k.toDouble() }) }.toTypedArray()
         val m = chartModel(chart("line", *big, labels = List(300) { "l$it" }))!!
         // At most 4 series of 200 points, 600 in all, and 200 labels.
@@ -33,6 +33,33 @@ class BlockChartTest {
         assertTrue(chartModel(chart("sparkline", series("e")))!!.empty)
         assertFalse(chartModel(chart("sparkline", series("one", 5.0)))!!.empty)
         assertEquals("success", chartModel(chart("line", series("t", 1.0, tone = "success")))!!.series[0].tone)
+    }
+
+    @Test fun donutAndPieChartsComputeSlicesAndBounds() {
+        val manyValues = DoubleArray(25) { (it + 1).toDouble() }
+        val manyLabels = List(25) { "S$it" }
+        val donut = chartModel(chart("donut", series("a", *manyValues), series("ignored", 1.0), labels = manyLabels, text = "Docs"))!!
+        assertEquals("donut", donut.kind)
+        assertEquals(1, donut.series.size)
+        assertEquals(16, donut.series[0].values.size)
+        assertEquals(16, donut.labels.size)
+
+        val pie = chartModel(chart("pie", series("dist", 3.0, -2.0, 0.0, 7.0), labels = listOf("A", "Neg", "Zero", "B")))!!
+        val slices = computeRadialSlices(pie)
+        assertEquals(2, slices.size)
+        assertEquals("A", slices[0].label)
+        assertEquals(0.3f, slices[0].fraction, 0.001f)
+        assertEquals(-90f, slices[0].startAngle, 0.001f)
+        assertEquals(108f, slices[0].sweepAngle, 0.01f)
+        assertEquals("B", slices[1].label)
+        assertEquals(0.7f, slices[1].fraction, 0.001f)
+        assertEquals(18f, slices[1].startAngle, 0.01f)
+        assertEquals(252f, slices[1].sweepAngle, 0.01f)
+
+        val words = ChartWords("Line chart", "Bar chart", "Sparkline", { "Series $it" }, "No data", "Donut chart", "Pie chart")
+        assertEquals("Pie chart. A: 3 (30%). B: 7 (70%)", describeChart(pie, words))
+        val emptyDonut = chartModel(chart("donut", series("z", 0.0, 0.0), labels = listOf("X", "Y")))!!
+        assertEquals("Donut chart. No data", describeChart(emptyDonut, words))
     }
 
     @Test fun axesTickAtRoundSteps() {

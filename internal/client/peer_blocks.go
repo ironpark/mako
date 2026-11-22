@@ -18,7 +18,13 @@ func (c *Client) WatchBlockOn(ctx context.Context, node, block string, fn func(*
 
 // WatchBlockOnScoped follows the block of node in the given canonical scope.
 func (c *Client) WatchBlockOnScoped(ctx context.Context, node, block, scope string, fn func(*protocol.BlockUpdate)) error {
-	return follow(ctx, c, protocol.TypeWatchBlock, &protocol.WatchBlock{Block: block, NodeId: node, Scope: scope}, fn)
+	return c.WatchBlockOnWithLocale(ctx, node, block, scope, "", fn)
+}
+
+// WatchBlockOnWithLocale follows the block of node in the given canonical scope
+// and optional BCP-47 locale (empty defaults to "en").
+func (c *Client) WatchBlockOnWithLocale(ctx context.Context, node, block, scope, locale string, fn func(*protocol.BlockUpdate)) error {
+	return follow(ctx, c, protocol.TypeWatchBlock, &protocol.WatchBlock{Block: block, NodeId: node, Scope: scope, Locale: locale}, fn)
 }
 
 // AgentBlocksOn lists the blocks node's agents show.

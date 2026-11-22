@@ -557,7 +557,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	session := widget.Column(
 		widget.Expanded(widget.Stack(feed, newTurnRail(m, find, turns), &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
 			usageOverlay(m, id, chatUsage, viewChip(m, id, group)), findBar(m, id, find.finder())).Expand()),
-		approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), planProgress(m, id, state), runningAgents(m, id, state), runningTasks(m, id), chatInput(m, id, state),
+		approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), planProgress(m, id, state), liveActivityCard(m, id, state), runningAgents(m, id, state), runningTasks(m, id), chatInput(m, id, state),
 	).Stretch()
 	// A subagent opened shows its conversation in place of the session's,
 	// which is built once and kept, scroll and draft and all, to come back
@@ -694,14 +694,21 @@ func toolGroupName(msg *protocol.ChatMessage) string {
 }
 
 // chatTurns draws the conversation: the user on the right, the agent's prose
-// as a page, and each run of consecutive calls to the same tool as one quiet
-// card whose rows fold. A run of repeated calls folds into one line naming
-// the tool and its targets, all but the last run, which is the agent's work
-// in hand.
+// as a page, and each run of consecutive calls to the same tool (or a run of
+// low-signal swarm coordination/polling calls) as one quiet card whose rows
+// fold. A run of repeated calls folds into one line naming the tool and its
+// targets, all but the last run, which is the agent's work in hand (except
+// swarm sync runs, which stay folded unless a call failed).
 func chatTurns(messages []*protocol.ChatMessage, agents map[string]*protocol.SubAgent) []chatTurnItem {
 	var turns []chatTurnItem
 	sameToolRun := func(a, b *protocol.ChatMessage) bool {
-		return a.GetRole() == "tool" && b.GetRole() == "tool" && toolGroupName(a) == toolGroupName(b)
+		if a.GetRole() != "tool" || b.GetRole() != "tool" {
+			return false
+		}
+		if isSwarmSyncTool(a) && isSwarmSyncTool(b) {
+			return true
+		}
+		return toolGroupName(a) == toolGroupName(b)
 	}
 	lastRun := -1
 	for i := range messages {
@@ -715,7 +722,8 @@ func chatTurns(messages []*protocol.ChatMessage, agents map[string]*protocol.Sub
 		t := chatTurnItem{Key: chatMessageKey(messages[i])}
 		if messages[i].GetRole() == "tool" {
 			t.Key = "run:" + t.Key
-			t.Folded = start != lastRun
+			t.SwarmSync = isSwarmSyncTool(messages[start])
+			t.Folded = start != lastRun || t.SwarmSync
 			for i < len(messages) && sameToolRun(messages[start], messages[i]) {
 				t.Messages = append(t.Messages, messages[i])
 				t.Agents = append(t.Agents, agents[messages[i].GetId()])
@@ -741,13 +749,14 @@ func chatTurns(messages []*protocol.ChatMessage, agents map[string]*protocol.Sub
 // chatTurnItem is one turn of the feed: a message, or a run of tool calls
 // with the sub-agent each started, if any.
 type chatTurnItem struct {
-	Key      string
-	Messages []*protocol.ChatMessage
-	Agents   []*protocol.SubAgent
-	Folded   bool   // a long run folded to a line
-	Sending  bool   // a message sent, not yet in the log
-	Thinking bool   // the agent thinks or reports a live activity status
-	Status   string // live activity label (e.g. "Reading file…"), empty for default "Thinking…"
+	Key       string
+	Messages  []*protocol.ChatMessage
+	Agents    []*protocol.SubAgent
+	Folded    bool   // a long run folded to a line
+	SwarmSync bool   // a coalesced run of low-signal swarm coordination calls
+	Sending   bool   // a message sent, not yet in the log
+	Thinking  bool   // the agent thinks or reports a live activity status
+	Status    string // live activity label (e.g. "Reading file…"), empty for default "Thinking…"
 }
 
 // chatGap is the room between the feed's turns, and chatTurnEstimate how
@@ -791,27 +800,36 @@ func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatSta
 // foldRun is how many consecutive calls to the same tool fold into one line.
 const foldRun = 2
 
-// toolRun is a run of consecutive calls to the same tool, folded to a line
-// showing that tool's icon, name, count, and target summary.
+// toolRun is a run of consecutive calls to the same tool (or a coalesced run of
+// low-signal swarm coordination/polling tools), folded to a line showing the
+// tool's icon, name, count, and target summary.
 func toolRun(m *model, id string, state *chatState, t chatTurnItem, body ggui.Widget) ggui.Widget {
 	first := t.Messages[0]
-	name := toolGroupName(first)
 	var details []string
 	var anyFailed, anyActive bool
 	for i, msg := range t.Messages {
-		_, detail, _, _, failed := toolParts(msg)
+		_, detail := toolDisplay(msg)
 		if detail != "" && !slices.Contains(details, detail) {
 			details = append(details, detail)
 		}
-		if failed {
+		if msg.GetError() {
 			anyFailed = true
 		}
 		if msg.GetPending() || t.Agents[i].GetRunning() {
 			anyActive = true
 		}
 	}
-	open := state.toolOpen("run:"+chatMessageKey(first), !t.Folded || anyFailed || anyActive)
-	var glyph ggui.Widget = icon(toolGlyph(first.GetKind())).Size(14).Color(pick(anyFailed, skin.DotDown, skin.Muted))
+	openByDefault := !t.Folded || anyFailed || anyActive
+	if t.SwarmSync {
+		openByDefault = anyFailed
+	}
+	open := state.toolOpen("run:"+chatMessageKey(first), openByDefault)
+	mixedSync := t.SwarmSync && !sameRawTool(t.Messages)
+	glyphName := toolRowGlyph(first)
+	if mixedSync {
+		glyphName = "refresh-cw"
+	}
+	var glyph ggui.Widget = icon(glyphName).Size(14).Color(pick(anyFailed, skin.DotDown, skin.Muted))
 	if anyActive {
 		still := glyph
 		glyph = ggui.Reactive(func() ggui.Widget {
@@ -823,6 +841,13 @@ func toolRun(m *model, id string, state *chatState, t chatTurnItem, body ggui.Wi
 			return still
 		})
 	}
+	if mixedSync {
+		titleText := Tf("Swarm sync · %d calls", len(t.Messages))
+		title := widget.Text(titleText).Size(12.5).Weight(ggui.WeightMedium).NoWrap()
+		header := foldHeader(open, glyph, title, swarmSyncSummary(t.Messages), titleText)
+		return widget.Column(header, reveal(open, func() ggui.Widget { return body })).Gap(2).Stretch()
+	}
+	name, _ := toolDisplay(first)
 	count := "×" + strconv.Itoa(len(t.Messages))
 	title := widget.Row(
 		widget.Text(name).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap(),
@@ -911,9 +936,10 @@ func copyButton(m *model, text string) ggui.Widget {
 // spinner in place of its glyph; one that started a subagent says under
 // it how far the agent has got.
 func toolRow(m *model, id string, state *chatState, msg *protocol.ChatMessage, agent *protocol.SubAgent) ggui.Widget {
-	name, detail, _, _, failed := toolParts(msg)
+	name, detail := toolDisplay(msg)
+	failed := msg.GetError()
 	open := state.toolOpen(chatMessageKey(msg), failed)
-	var glyph ggui.Widget = icon(toolGlyph(msg.GetKind())).Size(14).Color(pick(failed, skin.DotDown, skin.Muted))
+	var glyph ggui.Widget = icon(toolRowGlyph(msg)).Size(14).Color(pick(failed, skin.DotDown, skin.Muted))
 	if msg.GetPending() || agent.GetRunning() {
 		still := glyph
 		glyph = ggui.Reactive(func() ggui.Widget {

@@ -113,6 +113,33 @@ var uiCases = []uiCase{
 				{"kind":"textarea","key":"n","value":"note 2","placeholder":"Notes","onChange":["note"]}]}]},
 		{"kind":"table","key":"tbl","labels":["Name","State"],"children":[
 			{"kind":"row","key":"r1","children":[{"kind":"text","text":"Alpha updated"},{"kind":"pill","text":"Done","tone":"success"}]}]}]}`},
+	// Rich UI v2 (revision 44): fill, split, grid, wrap, collapsible, breadcrumb, tree/tree_item, graph, donut chart, interactive markdown, variant.
+	{name: "rich-ui-v2", before: `{"kind":"split","fill":true,"direction":"horizontal","ratio":0.35,"children":[
+		{"kind":"column","key":"nav","children":[
+			{"kind":"breadcrumb","key":"bc","options":["Vault","Notes"],"onChange":["crumb"]},
+			{"kind":"tree","key":"t","children":[
+				{"kind":"tree_item","key":"d1","text":"Docs","value":"1","icon":"folder","checked":true,"onTap":["sel","d1"],"children":[
+					{"kind":"tree_item","key":"n1","text":"Intro","icon":"file-text","onTap":["sel","n1"]}]}]}]},
+		{"kind":"column","key":"main","children":[
+			{"kind":"grid","key":"g","columns":2,"gap":8,"children":[
+				{"kind":"card","key":"c1","variant":"outline","children":[{"kind":"button","key":"b1","icon":"plus","variant":"ghost","size":"small","onTap":["add"]}]},
+				{"kind":"collapsible","key":"col","text":"Tags","checked":true,"children":[{"kind":"wrap","gap":4,"children":[{"kind":"chip","text":"a"}]}]}]},
+			{"kind":"markdown","key":"md","text":"[[Intro]]","onLink":["link"]},
+			{"kind":"chart","key":"ch","chart":"donut","labels":["A","B"],"series":[{"values":[3,7]}]},
+			{"kind":"graph","key":"gr","value":"a","maxHeight":280,"onChange":["pick"],"graphNodes":[{"id":"a","label":"A","weight":1},{"id":"b","label":"B","weight":2}],"graphEdges":[{"from":"a","to":"b","dashed":true}]}]}]}`,
+		next: `{"kind":"split","fill":true,"direction":"vertical","ratio":0.5,"children":[
+		{"kind":"column","key":"nav","children":[
+			{"kind":"breadcrumb","key":"bc","options":["Vault","Notes","Intro"],"onChange":["crumb"]},
+			{"kind":"tree","key":"t","children":[
+				{"kind":"tree_item","key":"d1","text":"Docs","value":"2","icon":"folder","checked":true,"onTap":["sel","d1"],"children":[
+					{"kind":"tree_item","key":"n1","text":"Intro","icon":"file-text","checked":true,"onTap":["sel","n1"]}]}]}]},
+		{"kind":"column","key":"main","children":[
+			{"kind":"grid","key":"g","columns":3,"gap":8,"children":[
+				{"kind":"card","key":"c1","variant":"primary","children":[{"kind":"button","key":"b1","icon":"plus","variant":"primary","size":"large","onTap":["add"]}]},
+				{"kind":"collapsible","key":"col","text":"Tags","checked":false,"children":[{"kind":"wrap","gap":4,"children":[{"kind":"chip","text":"a"},{"kind":"chip","text":"b"}]}]}]},
+			{"kind":"markdown","key":"md","text":"[[Intro]] updated","onLink":["link"]},
+			{"kind":"chart","key":"ch","chart":"pie","labels":["A","B"],"series":[{"values":[5,5]}]},
+			{"kind":"graph","key":"gr","value":"b","maxHeight":360,"onChange":["pick"],"graphNodes":[{"id":"a","label":"A","weight":1},{"id":"b","label":"B","tone":"accent","weight":3}],"graphEdges":[{"from":"a","to":"b","label":"rel","dashed":false}]}]}]}`},
 
 	// Ops written by hand: what a front-end must do with them, or refuse.
 	{name: "update-keeps-children", before: `{"kind":"column","children":[{"kind":"row","key":"r","children":[{"kind":"text","text":"kept"}]}]}`,

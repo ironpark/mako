@@ -29,9 +29,73 @@ const commands = new Map();
 const tools = new Map();
 // reloads maps `${id}\0${scopeKey}` -> { id, scope }
 const reloads = new Map();
+// i18nCatalogs maps normalized BCP-47 locale tag (e.g. "ko-kr", "ko", "en") -> Map<string, string>
+const i18nCatalogs = new Map();
 let plugin = null;
 let activeScope = "";
 let activeCtx = null;
+
+function normalizeLocaleTag(raw) {
+  if (typeof raw !== "string") return "";
+  return raw.trim().replace(/_/g, "-").toLowerCase();
+}
+
+function flattenCatalogEntries(entries, prefix, out) {
+  if (!entries || typeof entries !== "object" || Array.isArray(entries)) return;
+  for (const [k, v] of Object.entries(entries)) {
+    const full = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+      flattenCatalogEntries(v, full, out);
+    } else if (v !== undefined && v !== null) {
+      out.set(full, String(v));
+    }
+  }
+}
+
+function registerI18nCatalog(catalog) {
+  if (!catalog || typeof catalog !== "object" || Array.isArray(catalog)) {
+    throw new TypeError("i18n catalog must be an object keyed by locale");
+  }
+  for (const [loc, entries] of Object.entries(catalog)) {
+    const norm = normalizeLocaleTag(loc);
+    if (!norm) continue;
+    let map = i18nCatalogs.get(norm);
+    if (!map) {
+      map = new Map();
+      i18nCatalogs.set(norm, map);
+    }
+    flattenCatalogEntries(entries, "", map);
+  }
+}
+
+function translate(key, params, locale) {
+  const k = String(key ?? "");
+  const effective = (locale !== undefined && locale !== null && String(locale).trim() !== "")
+    ? String(locale)
+    : (activeCtx && activeCtx.locale) || "en";
+  const norm = normalizeLocaleTag(effective) || "en";
+  const chain = [norm];
+  const dash = norm.indexOf("-");
+  if (dash > 0) {
+    const primary = norm.slice(0, dash);
+    if (primary && !chain.includes(primary)) chain.push(primary);
+  }
+  if (!chain.includes("en")) chain.push("en");
+  let template = k;
+  for (const tag of chain) {
+    const cat = i18nCatalogs.get(tag);
+    if (cat && cat.has(k)) {
+      template = cat.get(k);
+      break;
+    }
+  }
+  if (!params || typeof params !== "object") return template;
+  return template.replace(/\{([A-Za-z0-9_.-]+)\}/g, (match, name) => (
+    Object.prototype.hasOwnProperty.call(params, name) && params[name] !== undefined && params[name] !== null
+      ? String(params[name])
+      : match
+  ));
+}
 
 const clone = (v) => JSON.parse(JSON.stringify(v === undefined ? {} : v));
 
@@ -63,6 +127,8 @@ function makeContext(ctxJson) {
   const raw = ctxJson ? JSON.parse(ctxJson) : {};
   const scopeKey = raw.scopeKey || "";
   const scope = raw.scope || (scopeKey ? scopeKey.split(":")[0] : "global");
+  const locale = (typeof raw.locale === "string" && raw.locale.trim()) ? raw.locale.trim() : "en";
+  const t = (key, params) => translate(key, params, locale);
   const scopedStorage = Object.freeze({
     getItem: (k) => host.storage.getItem(typeof k === "string" ? { key: k, scope: scopeKey } : { ...(k || {}), scope: scopeKey }),
     setItem: (k, v) => host.storage.setItem(typeof k === "string" ? { key: k, value: String(v ?? ""), scope: scopeKey } : { ...(k || {}), scope: scopeKey }),
@@ -154,6 +220,8 @@ function makeContext(ctxJson) {
     projectName: raw.projectName || "",
     sessionId: raw.sessionId || "",
     roots: Object.freeze(Array.isArray(raw.roots) ? [...raw.roots] : []),
+    locale,
+    t,
     storage: scopedStorage,
     settings: scopedSettings,
     db: scopedDb,
@@ -209,6 +277,10 @@ const mako = Object.freeze({
       tools.set(id, run);
     },
   }),
+  i18n: Object.freeze({
+    register: (catalog) => registerI18nCatalog(catalog),
+    t: (key, params, locale) => translate(key, params, locale),
+  }),
 });
 
 // The UI vocabulary. A node is a plain description; its methods set what
@@ -228,6 +300,10 @@ class UiNode {
     this.n.tone = t;
     return this;
   }
+  variant(v) {
+    this.n.variant = String(v ?? "");
+    return this;
+  }
   weight(w) {
     this.n.weight = w;
     return this;
@@ -244,8 +320,28 @@ class UiNode {
     this.n.gap = px;
     return this;
   }
+  columns(n) {
+    this.n.columns = Number(n);
+    return this;
+  }
+  ratio(r) {
+    this.n.ratio = Number(r);
+    return this;
+  }
+  fill(on = true) {
+    this.n.fill = !!on;
+    return this;
+  }
   icon(name) {
     this.n.icon = name;
+    return this;
+  }
+  checked(on = true) {
+    this.n.checked = !!on;
+    return this;
+  }
+  value(v) {
+    this.n.value = String(v ?? "");
     return this;
   }
   disabled(on = true) {
@@ -258,6 +354,14 @@ class UiNode {
   }
   onChange(name, ...args) {
     this.n.onChange = [name, ...args];
+    return this;
+  }
+  onSubmit(name, ...args) {
+    this.n.onSubmit = [name, ...args];
+    return this;
+  }
+  onLink(name, ...args) {
+    this.n.onLink = [name, ...args];
     return this;
   }
   drag(payload, group) {
@@ -276,21 +380,24 @@ class UiNode {
 }
 
 const options = [
-  "key", "tone", "weight", "size", "grow", "gap", "icon", "disabled",
-  "onTap", "onChange", "onSubmit", "drag", "dragGroup", "onDrop", "dropAccept",
-  "direction", "maxHeight", "placeholder", "labels",
+  "key", "tone", "variant", "weight", "size", "grow", "gap", "columns", "ratio", "fill",
+  "icon", "checked", "value", "disabled", "onTap", "onChange", "onSubmit", "onLink",
+  "drag", "dragGroup", "onDrop", "dropAccept", "direction", "maxHeight", "placeholder", "labels",
 ];
 
 function node(kind, fields, opts) {
   const n = new UiNode(kind, fields);
   for (const [k, v] of Object.entries(opts || {})) {
     if (!options.includes(k)) throw new Error(`${k} is not an option of a node`);
-    if (k === "key" || k === "drag" || k === "dragGroup" || k === "direction") {
+    if (v === undefined) continue;
+    if (k === "key" || k === "drag" || k === "dragGroup" || k === "direction" || k === "variant" || k === "value") {
       n.n[k] = String(v ?? "");
     } else if (k === "labels" || k === "dropAccept") {
       n.n[k] = children(v).map(String);
-    } else if (k === "maxHeight") {
+    } else if (k === "maxHeight" || k === "columns" || k === "ratio") {
       n.n[k] = Number(v);
+    } else if (k === "fill" || k === "checked" || k === "disabled") {
+      n.n[k] = Boolean(v);
     } else {
       n.n[k] = v;
     }
@@ -309,11 +416,24 @@ const ui = Object.freeze({
   stack: (c, o) => node("stack", { children: children(c) }, o),
   card: (c, o) => node("card", { children: children(c) }, o),
   scroll: (c, o) => node("scroll", { children: children(c) }, o),
+  wrap: (c, o) => node("wrap", { children: children(c) }, o),
+  grid: (a, b, c) => (Array.isArray(a)
+    ? node("grid", { children: children(a) }, b)
+    : node("grid", { columns: Number(a), children: children(b) }, c)),
+  split: (a, b, c) => (Array.isArray(a)
+    ? node("split", { children: children(a) }, b)
+    : node("split", { children: [a, b] }, c)),
+  collapsible: (title, c, o) => node("collapsible", { text: String(title ?? ""), children: children(c) }, o),
+  breadcrumb: (segments, o) => node("breadcrumb", { options: children(segments).map(String) }, o),
+  tree: (items, o) => node("tree", { children: children(items) }, o),
+  treeItem: (label, childrenOrOpts, o) => (Array.isArray(childrenOrOpts)
+    ? node("tree_item", { text: String(label ?? ""), children: childrenOrOpts }, o)
+    : node("tree_item", { text: String(label ?? "") }, childrenOrOpts)),
   text: (t, o) => node("text", { text: String(t) }, o),
   icon: (name, o) => node("icon", { icon: String(name) }, o),
   pill: (t, o) => node("pill", { text: String(t) }, o),
   chip: (t, o) => node("chip", { text: String(t) }, o),
-  button: (t, o) => node("button", { text: String(t) }, o),
+  button: (t, o) => node("button", { text: String(t ?? "") }, o),
   list: (items, row, o) => node("list", { children: children(items).map((it, i) => row(it, i)) }, o),
   input: (v, o) => node("input", { value: String(v ?? "") }, o),
   textarea: (v, o) => node("textarea", { value: String(v ?? "") }, o),
@@ -325,15 +445,41 @@ const ui = Object.freeze({
   code: (t, language, o) => node("code", { text: String(t), language: language ?? "" }, o),
   progress: (v, o) => node("progress", { progress: Number(v) }, o),
   divider: (o) => node("divider", {}, o),
-  // A chart: "line", "bar" or "sparkline", of series [{ name, values,
-  // tone }], its points named by opts.labels and itself by opts.caption,
-  // which is the node's text.
+  // A chart: "line", "bar", "sparkline", "donut" or "pie", of series
+  // [{ name, values, tone }], its points/slices named by opts.labels and
+  // itself by opts.caption, which is the node's text.
   chart: (type, series, o) => {
     const { caption, ...rest } = o || {};
     return node("chart", {
       chart: String(type),
       text: String(caption ?? ""),
       series: children(series).map((s) => ({ name: String(s.name ?? ""), tone: s.tone ?? "", values: children(s.values ?? []).map(Number) })),
+    }, rest);
+  },
+  // A declarative interactive graph canvas of nodes [{ id, label, group, tone,
+  // subtitle, weight }] and edges [{ from, to, label, tone, dashed }].
+  graph: (nodes, edges, o) => {
+    const { caption, ...rest } = o || {};
+    return node("graph", {
+      text: String(caption ?? ""),
+      graphNodes: children(nodes).map((gn) => {
+        const out = {
+          id: String(gn.id ?? ""),
+          label: String(gn.label ?? ""),
+          group: String(gn.group ?? ""),
+          tone: gn.tone ?? "",
+          subtitle: String(gn.subtitle ?? ""),
+        };
+        if (gn.weight !== undefined) out.weight = Number(gn.weight);
+        return out;
+      }),
+      graphEdges: children(edges).map((ge) => ({
+        from: String(ge.from ?? ""),
+        to: String(ge.to ?? ""),
+        label: String(ge.label ?? ""),
+        tone: ge.tone ?? "",
+        dashed: Boolean(ge.dashed),
+      })),
     }, rest);
   },
 });

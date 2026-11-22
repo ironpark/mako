@@ -135,8 +135,9 @@ func TestTreesOutOfBoundsAreRefused(t *testing.T) {
 		"text kids":  {`({ kind: "text", text: "x", children: [{ kind: "text" }] })`, "holds no children"},
 		"long text":  {`ui.text("x".repeat(100000))`, "over 8 KiB"},
 		"chart nan":  {`ui.chart("line", [{ values: [1, "x"] }])`, "finite"},
-		"chart kind": {`ui.chart("pie", [{ values: [1] }])`, "not one of"},
+		"chart kind": {`ui.chart("radar", [{ values: [1] }])`, "not one of"},
 		"chart big":  {`ui.chart("line", [{ values: Array.from({ length: 300 }, (_, i) => i) }])`, "1 to 200 values"},
+		"graph edge": {`ui.graph([{ id: "a", label: "A" }], [{ from: "a", to: "missing" }])`, "unknown target"},
 		"labels":     {`ui.text("x", { labels: ["a"] })`, "only a chart"},
 	}
 	for id, c := range cases {

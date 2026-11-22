@@ -37,16 +37,16 @@ var errPluginPeer = errors.New("a node's plugins are its own front-ends' alone")
 // are trees of one vocabulary (internal/uiblock), sent whole and then as
 // patches; the window draws them alike, framed with where they come from.
 type blockSource interface {
-	Watch(ctx context.Context, name, scope string, send func(*protocol.BlockUpdate) error) error
+	Watch(ctx context.Context, name, scope, locale string, send func(*protocol.BlockUpdate) error) error
 	Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol.PluginDone, error)
 }
 
 // pluginBlocks adapts *plugin.Manager to blockSource, forwarding the watch
-// request's canonical scope key to WatchScoped.
+// request's canonical scope key and locale to WatchScopedLocale.
 type pluginBlocks struct{ m *plugin.Manager }
 
-func (p pluginBlocks) Watch(ctx context.Context, name, scope string, send func(*protocol.BlockUpdate) error) error {
-	return p.m.WatchScoped(ctx, name, scope, send)
+func (p pluginBlocks) Watch(ctx context.Context, name, scope, locale string, send func(*protocol.BlockUpdate) error) error {
+	return p.m.WatchScopedLocale(ctx, name, scope, locale, send)
 }
 
 func (p pluginBlocks) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol.PluginDone, error) {
@@ -55,10 +55,10 @@ func (p pluginBlocks) Event(ctx context.Context, ev *protocol.BlockEvent) (*prot
 
 // agentBlocks makes the agents' blocks a blockSource: an event goes to
 // the agent as a message. Agent blocks are already session-addressed by name
-// so scope is safely ignored.
+// so scope and locale are safely ignored.
 type agentBlocks struct{ d *Daemon }
 
-func (a agentBlocks) Watch(ctx context.Context, name, _ string, send func(*protocol.BlockUpdate) error) error {
+func (a agentBlocks) Watch(ctx context.Context, name, _, _ string, send func(*protocol.BlockUpdate) error) error {
 	return a.d.agentUI.Watch(ctx, name, send)
 }
 
@@ -220,7 +220,7 @@ func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream,
 		<-gone
 		cancel()
 	}()
-	err = src.Watch(ctx, req.GetBlock(), req.GetScope(), func(u *protocol.BlockUpdate) error {
+	err = src.Watch(ctx, req.GetBlock(), req.GetScope(), req.GetLocale(), func(u *protocol.BlockUpdate) error {
 		return stream.Send(protocol.TypeBlockUpdate, env.GetId(), u)
 	})
 	if ctx.Err() != nil {

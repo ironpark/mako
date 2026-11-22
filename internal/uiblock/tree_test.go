@@ -284,3 +284,206 @@ func TestRichUIKindsAndDragGroups(t *testing.T) {
 		}
 	}
 }
+
+func TestRichUIv2KindsEventsAndDiffPatch(t *testing.T) {
+	beforeJSON := `{
+		"kind": "split",
+		"fill": true,
+		"direction": "horizontal",
+		"ratio": 0.3,
+		"children": [
+			{
+				"kind": "column",
+				"key": "left",
+				"gap": 8,
+				"children": [
+					{"kind": "breadcrumb", "key": "crumb", "options": ["Vault", "Notes", "Design"], "onChange": ["nav"]},
+					{"kind": "tree", "key": "files", "onDrop": ["moveRoot"], "dropAccept": ["note"], "children": [
+						{"kind": "tree_item", "key": "f1", "text": "Projects", "value": "2", "icon": "folder", "tone": "accent", "checked": true, "onTap": ["open", "f1"], "onChange": ["toggle", "f1"], "onDrop": ["moveInto", "f1"], "dropAccept": ["note"], "children": [
+							{"kind": "tree_item", "key": "n1", "text": "Spec.md", "value": "4 KB", "icon": "file-text", "drag": "n1", "dragGroup": "note", "onTap": ["open", "n1"]}
+						]}
+					]},
+					{"kind": "collapsible", "key": "meta", "text": "Metadata", "icon": "tag", "tone": "muted", "checked": false, "onChange": ["toggleMeta"], "children": [
+						{"kind": "wrap", "key": "tags", "gap": 4, "children": [
+							{"kind": "chip", "text": "arch"},
+							{"kind": "chip", "text": "v2"}
+						]}
+					]}
+				]
+			},
+			{
+				"kind": "column",
+				"key": "right",
+				"gap": 8,
+				"children": [
+					{"kind": "grid", "key": "cards", "columns": 3, "gap": 8, "children": [
+						{"kind": "card", "key": "k1", "variant": "outline", "children": [
+							{"kind": "button", "key": "iconOnly", "icon": "plus", "size": "small", "variant": "ghost", "onTap": ["add"]}
+						]},
+						{"kind": "card", "key": "k2", "variant": "primary", "children": [
+							{"kind": "button", "key": "save", "text": "Save", "size": "large", "variant": "primary", "onTap": ["save"]}
+						]},
+						{"kind": "textarea", "key": "ed", "value": "hello", "size": "small", "onChange": ["edit"]}
+					]},
+					{"kind": "markdown", "key": "md", "text": "See [[Spec]]", "onLink": ["follow"]},
+					{"kind": "graph", "key": "g", "text": "Links", "value": "a", "maxHeight": 320, "onChange": ["pickNode"],
+						"graphNodes": [
+							{"id": "a", "label": "Alpha", "group": "core", "tone": "accent", "subtitle": "root"},
+							{"id": "b", "label": "Beta", "group": "leaf", "tone": "success", "weight": 2.5}
+						],
+						"graphEdges": [
+							{"from": "a", "to": "b", "label": "links", "tone": "muted", "dashed": true}
+						]
+					}
+				]
+			}
+		]
+	}`
+	tr, err := Read([]byte(beforeJSON))
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if !tr.Root.GetFill() || tr.Root.GetDirection() != "horizontal" || tr.Root.GetRatio() != 0.3 {
+		t.Fatalf("root split = %+v", tr.Root)
+	}
+	grid := nodeOf(tr.Root, "/right/cards")
+	if grid == nil || grid.GetColumns() != 3 {
+		t.Fatalf("grid = %+v", grid)
+	}
+	iconBtn := nodeOf(tr.Root, "/right/cards/k1/iconOnly")
+	if iconBtn == nil || iconBtn.GetText() != "" || iconBtn.GetIcon() != "plus" || iconBtn.GetSize() != "small" || iconBtn.GetVariant() != "ghost" {
+		t.Fatalf("iconBtn = %+v", iconBtn)
+	}
+	md := nodeOf(tr.Root, "/right/md")
+	if md == nil || !md.GetChange() {
+		t.Fatalf("markdown = %+v", md)
+	}
+	g := nodeOf(tr.Root, "/right/g")
+	if g == nil || len(g.GetGraphNodes()) != 2 || g.GetGraphNodes()[0].GetWeight() != 1 || g.GetGraphNodes()[1].GetWeight() != 2.5 ||
+		len(g.GetGraphEdges()) != 1 || !g.GetGraphEdges()[0].GetDashed() || g.GetValue() != "a" || g.GetMaxHeight() != 320 || !g.GetChange() {
+		t.Fatalf("graph = %+v", g)
+	}
+
+	// Verify event handling for breadcrumb, collapsible, tree_item, markdown onLink, and graph.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/left/crumb", Kind: protocol.UiChange, Value: "1"}); err != nil || m.Name != "nav" || string(m.Args[0]) != `"1"` {
+		t.Fatalf("breadcrumb event = %+v, %v", m, err)
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/left/meta", Kind: protocol.UiChange, Value: "true"}); err != nil || m.Name != "toggleMeta" || string(m.Args[0]) != "true" {
+		t.Fatalf("collapsible event = %+v, %v", m, err)
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/left/files/f1", Kind: protocol.UiTap}); err != nil || m.Name != "open" || string(m.Args[0]) != `"f1"` {
+		t.Fatalf("tree_item tap = %+v, %v", m, err)
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/left/files/f1", Kind: protocol.UiChange, Value: "false"}); err != nil || m.Name != "toggle" || string(m.Args[1]) != "false" {
+		t.Fatalf("tree_item change = %+v, %v", m, err)
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/left/files/f1", Kind: protocol.UiDrop, Value: "n1"}); err != nil || m.Name != "moveInto" || string(m.Args[1]) != `"n1"` {
+		t.Fatalf("tree_item drop = %+v, %v", m, err)
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/right/md", Kind: protocol.UiChange, Value: "Spec"}); err != nil || m.Name != "follow" || string(m.Args[0]) != `"Spec"` {
+		t.Fatalf("markdown onLink = %+v, %v", m, err)
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/right/g", Kind: protocol.UiChange, Value: "b"}); err != nil || m.Name != "pickNode" || string(m.Args[0]) != `"b"` {
+		t.Fatalf("graph event = %+v, %v", m, err)
+	}
+
+	// Default split ratio when omitted is 0.5.
+	defSplit, err := Read([]byte(`{"kind":"split","children":[{"kind":"text","text":"L"},{"kind":"text","text":"R"}]}`))
+	if err != nil || defSplit.Root.GetRatio() != 0.5 {
+		t.Fatalf("default split ratio = %v, err = %v", defSplit, err)
+	}
+
+	// Diff & patch round-trip modifying every new field: fill, ratio, direction, columns, variant, graph_nodes, graph_edges.
+	next := proto.CloneOf(tr.Root)
+	next.Fill = false
+	next.Ratio = 0.65
+	next.Direction = "vertical"
+	nodeOf(next, "/right/cards").Columns = 2
+	nodeOf(next, "/right/cards/k1").Variant = "secondary"
+	nodeOf(next, "/right/cards/k2/save").Variant = "danger"
+	ng := nodeOf(next, "/right/g")
+	ng.Value = "b"
+	ng.MaxHeight = 480
+	ng.GraphNodes = append(ng.GraphNodes, &protocol.UiGraphNode{Id: "c", Label: "Gamma", Tone: "warning", Weight: 1.5})
+	ng.GraphEdges = []*protocol.UiGraphEdge{
+		{From: "a", To: "b", Label: "refs", Tone: "accent", Dashed: false},
+		{From: "b", To: "c", Label: "next"},
+	}
+	ops := protocol.DiffUi(tr.Root, next)
+	if len(ops) == 0 {
+		t.Fatal("expected non-empty UiOp diff for updated rich UI v2 fields")
+	}
+	got, err := protocol.ApplyUi(tr.Root, ops)
+	if err != nil {
+		t.Fatalf("ApplyUi failed: %v", err)
+	}
+	if !proto.Equal(got, next) {
+		t.Fatalf("ApplyUi mismatch:\ngot:  %v\nwant: %v", got, next)
+	}
+}
+
+func TestRichUIv2Rejections(t *testing.T) {
+	// Build oversized graph fixtures.
+	var manyNodes []string
+	for i := range maxGraphNodes + 1 {
+		manyNodes = append(manyNodes, fmt.Sprintf(`{"id":"n%d","label":"N%d"}`, i, i))
+	}
+	var manyEdges []string
+	for range maxGraphEdges + 1 {
+		manyEdges = append(manyEdges, `{"from":"a","to":"b"}`)
+	}
+	cases := map[string]struct{ tree, want string }{
+		"variant-bad":       {`{"kind":"button","text":"x","variant":"neon"}`, "variant"},
+		"variant-text":      {`{"kind":"text","text":"x","variant":"primary"}`, "only a button or card"},
+		"button-blank":      {`{"kind":"button"}`, "text or icon"},
+		"grid-zero":         {`{"kind":"grid","columns":0,"children":[]}`, "1 to 6 columns"},
+		"grid-seven":        {`{"kind":"grid","columns":7,"children":[]}`, "1 to 6 columns"},
+		"columns-on-col":    {`{"kind":"column","columns":2,"children":[]}`, "only a grid"},
+		"split-one":         {`{"kind":"split","children":[{"kind":"text","text":"a"}]}`, "exactly 2 children"},
+		"split-three":       {`{"kind":"split","children":[{"kind":"text","text":"a"},{"kind":"text","text":"b"},{"kind":"text","text":"c"}]}`, "exactly 2 children"},
+		"split-ratio-zero":  {`{"kind":"split","ratio":0,"children":[{"kind":"text","text":"a"},{"kind":"text","text":"b"}]}`, "ratio must be"},
+		"split-ratio-low":   {`{"kind":"split","ratio":0.05,"children":[{"kind":"text","text":"a"},{"kind":"text","text":"b"}]}`, "ratio must be"},
+		"split-ratio-high":  {`{"kind":"split","ratio":0.95,"children":[{"kind":"text","text":"a"},{"kind":"text","text":"b"}]}`, "ratio must be"},
+		"ratio-on-row":      {`{"kind":"row","ratio":0.5,"children":[]}`, "only a split"},
+		"fill-non-root":     {`{"kind":"column","children":[{"kind":"column","fill":true,"children":[]}]}`, "fill is only allowed"},
+		"fill-on-card":      {`{"kind":"card","fill":true,"children":[]}`, "fill is only allowed"},
+		"crumb-empty":       {`{"kind":"breadcrumb","options":[]}`, "at least one option"},
+		"crumb-spoof":       {`{"kind":"breadcrumb","options":["a\u202eb"]}`, "reordering"},
+		"crumb-tap":         {`{"kind":"breadcrumb","options":["a"],"onTap":["x"]}`, "onChange, not onTap"},
+		"crumb-drag":        {`{"kind":"breadcrumb","options":["a"],"drag":"x"}`, "does not take drag"},
+		"crumb-children":    {`{"kind":"breadcrumb","options":["a"],"children":[{"kind":"text","text":"x"}]}`, "holds no children"},
+		"collapsible-tap":   {`{"kind":"collapsible","text":"S","onTap":["x"],"children":[]}`, "onChange, not onTap"},
+		"tree-bad-child":    {`{"kind":"tree","children":[{"kind":"text","text":"x"}]}`, "must be a tree_item"},
+		"tree-item-root":    {`{"kind":"tree_item","text":"x"}`, "must be inside a tree"},
+		"tree-item-in-col":  {`{"kind":"column","children":[{"kind":"tree_item","text":"x"}]}`, "must be inside a tree"},
+		"tree-item-child":   {`{"kind":"tree","children":[{"kind":"tree_item","text":"a","children":[{"kind":"text","text":"b"}]}]}`, "must be a tree_item"},
+		"tree-item-spoof":   {`{"kind":"tree","children":[{"kind":"tree_item","text":"a","value":"bad\u202eval"}]}`, "reordering"},
+		"md-onChange":       {`{"kind":"markdown","text":"hi","onChange":["x"]}`, "takes onLink"},
+		"md-onTap":          {`{"kind":"markdown","text":"hi","onTap":["x"]}`, "takes onLink"},
+		"md-drag":           {`{"kind":"markdown","text":"hi","drag":"x"}`, "does not take drag"},
+		"onLink-on-text":    {`{"kind":"text","text":"hi","onLink":["x"]}`, "only a markdown"},
+		"graph-too-many-n":  {`{"kind":"graph","graphNodes":[` + strings.Join(manyNodes, ",") + `]}`, "at most 120 nodes"},
+		"graph-too-many-e":  {`{"kind":"graph","graphNodes":[{"id":"a","label":"A"},{"id":"b","label":"B"}],"graphEdges":[` + strings.Join(manyEdges, ",") + `]}`, "at most 400 edges"},
+		"graph-dup-id":      {`{"kind":"graph","graphNodes":[{"id":"a","label":"A"},{"id":"a","label":"A2"}]}`, "duplicated"},
+		"graph-empty-id":    {`{"kind":"graph","graphNodes":[{"id":"","label":"A"}]}`, "invalid id"},
+		"graph-empty-label": {`{"kind":"graph","graphNodes":[{"id":"a","label":""}]}`, "invalid label"},
+		"graph-spoof-label": {`{"kind":"graph","graphNodes":[{"id":"a","label":"A\u202eB"}]}`, "invalid label"},
+		"graph-bad-tone":    {`{"kind":"graph","graphNodes":[{"id":"a","label":"A","tone":"#fff"}]}`, "colour token"},
+		"graph-weight-zero": {`{"kind":"graph","graphNodes":[{"id":"a","label":"A","weight":0}]}`, "finite positive"},
+		"graph-weight-neg":  {`{"kind":"graph","graphNodes":[{"id":"a","label":"A","weight":-1}]}`, "finite positive"},
+		"graph-bad-from":    {`{"kind":"graph","graphNodes":[{"id":"a","label":"A"}],"graphEdges":[{"from":"x","to":"a"}]}`, "unknown source"},
+		"graph-bad-to":      {`{"kind":"graph","graphNodes":[{"id":"a","label":"A"}],"graphEdges":[{"from":"a","to":"y"}]}`, "unknown target"},
+		"graph-edge-tone":   {`{"kind":"graph","graphNodes":[{"id":"a","label":"A"}],"graphEdges":[{"from":"a","to":"a","tone":"pink"}]}`, "colour token"},
+		"graph-bad-value":   {`{"kind":"graph","value":"missing","graphNodes":[{"id":"a","label":"A"}]}`, "does not match any node"},
+		"graph-height-low":  {`{"kind":"graph","maxHeight":80,"graphNodes":[]}`, "120 to 1200"},
+		"graph-height-high": {`{"kind":"graph","maxHeight":1500,"graphNodes":[]}`, "120 to 1200"},
+		"graph-elsewhere":   {`{"kind":"text","text":"x","graphNodes":[{"id":"a","label":"A"}]}`, "only a graph"},
+		"graph-tap":         {`{"kind":"graph","onTap":["x"],"graphNodes":[]}`, "onChange, not onTap"},
+		"graph-children":    {`{"kind":"graph","graphNodes":[],"children":[{"kind":"text","text":"x"}]}`, "holds no children"},
+	}
+	for name, c := range cases {
+		if _, err := Read([]byte(c.tree)); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: got %v, want substring %q", name, err, c.want)
+		}
+	}
+}

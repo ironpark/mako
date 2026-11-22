@@ -81,8 +81,10 @@ func (*Agent) ExtractBaseline(screen string) string {
 
 // ExtractStatus extracts agy's live activity label from its bottom braille
 // spinner line (e.g. "Reading file…", "Running command…", "Generating…",
-// "Thinking…") while the session is actively working. Returns "" when idle,
-// showing a dialog/slash menu, or when no spinner status line is visible.
+// "Thinking…") while working, plus any active Swarm/Agent status rows shown
+// in the bottom chrome (even while the coordinator prompt is idle). Returns ""
+// when showing a dialog/slash menu or when neither spinner nor active
+// Swarm/Agent work is visible.
 func (*Agent) ExtractStatus(screen string) string {
 	norm := strings.ReplaceAll(strings.ReplaceAll(screen, "\r\n", "\n"), "\r", "\n")
 	rawLines := strings.Split(norm, "\n")
@@ -93,39 +95,299 @@ func (*Agent) ExtractStatus(screen string) string {
 	lines := rawLines[:end]
 
 	detected := screenRules.Detect(detect.Input{Screen: norm})
-	if detected.State == detect.Blocked || detected.State == detect.Idle {
-		return ""
-	}
-	if hasIdleOrDialogFooter(lines) {
-		return ""
-	}
-	if detected.State != detect.Working && !hasWorkingIndicator(lines) {
+	if detected.State == detect.Blocked || detected.ID == "slash_menu" || hasDialogFooter(lines) {
 		return ""
 	}
 
-	// Strip footer (and stacked statusLine) + prompt composer box, then scan
-	// upward across the bottom chrome region for the active braille spinner.
-	footerFloor := max(0, end-10)
-	for i := end - 1; i >= footerFloor; i-- {
-		if isEscCancelLine(lines[i]) {
-			end = i
-			break
+	activity := extractLiveActivity(lines)
+	var spinner string
+	if detected.State != detect.Idle && !hasIdleOrDialogFooter(lines) && (detected.State == detect.Working || hasWorkingIndicator(lines)) {
+		// Strip footer (and stacked statusLine) + prompt composer box, then scan
+		// upward across the bottom chrome region for the active braille spinner.
+		spinnerEnd := end
+		footerFloor := max(0, spinnerEnd-16)
+		for i := spinnerEnd - 1; i >= footerFloor; i-- {
+			if isEscCancelLine(lines[i]) {
+				spinnerEnd = i
+				break
+			}
+		}
+		spinnerEnd = trimTrailingBlanks(lines[:spinnerEnd])
+		if spinnerEnd > 0 {
+			scanFloor := max(0, spinnerEnd-14)
+			for i := spinnerEnd - 1; i >= scanFloor; i-- {
+				if !isSpinnerLine(lines[i]) || isLiveActivityHeader(lines[i]) {
+					continue
+				}
+				if label := normalizeStatusLabel(lines[i]); label != "" {
+					spinner = label
+					break
+				}
+			}
 		}
 	}
-	end = trimTrailingBlanks(lines[:end])
+
+	if spinner == "" {
+		return strings.Join(activity, "\n")
+	}
+	if len(activity) == 0 {
+		return spinner
+	}
+	return spinner + "\n" + strings.Join(activity, "\n")
+}
+
+// ExtractActivity extracts only active background Swarm/Agent status rows from
+// agy's bottom chrome (never foreground braille spinners), stripped of raw
+// keybinding hints like "alt+s board · alt+x dismiss". Returns "" on dialogs
+// or when no Swarm/Agent work is active.
+func (*Agent) ExtractActivity(screen string) string {
+	norm := strings.ReplaceAll(strings.ReplaceAll(screen, "\r\n", "\n"), "\r", "\n")
+	rawLines := strings.Split(norm, "\n")
+	end := trimTrailingBlanks(rawLines)
 	if end == 0 {
 		return ""
 	}
-	scanFloor := max(0, end-14)
-	for i := end - 1; i >= scanFloor; i-- {
-		if !isSpinnerLine(lines[i]) {
+	lines := rawLines[:end]
+
+	detected := screenRules.Detect(detect.Input{Screen: norm})
+	if detected.State == detect.Blocked || detected.ID == "slash_menu" || hasDialogFooter(lines) {
+		return ""
+	}
+	return strings.Join(extractLiveActivity(lines), "\n")
+}
+
+// extractLiveActivity scans agy's bottom chrome (below the composer box and
+// contiguous chrome immediately above it) for active Swarm(...) and Agent(...)
+// rows, stripping keyboard shortcut hints and ignoring finished ("Done") rows.
+func extractLiveActivity(lines []string) []string {
+	if len(lines) == 0 {
+		return nil
+	}
+	boxTop, boxBottom := findBottomComposerBox(lines)
+	var chrome []string
+	if boxTop >= 0 {
+		// Collect contiguous chrome lines immediately above the composer box.
+		aboveStart := boxTop
+		limit := max(0, boxTop-16)
+		for aboveStart > limit && (isBottomChromeLine(lines[aboveStart-1]) || isActivityContinuationCandidate(lines, aboveStart-1)) {
+			aboveStart--
+		}
+		chrome = append(chrome, lines[aboveStart:boxTop]...)
+		if boxBottom+1 < len(lines) {
+			chrome = append(chrome, lines[boxBottom+1:]...)
+		}
+	} else {
+		start := max(0, len(lines)-16)
+		chrome = lines[start:]
+	}
+
+	type rawEntry struct {
+		kind, name, detail string
+	}
+	var entries []rawEntry
+	for i := 0; i < len(chrome); i++ {
+		kind, name, rest, ok := parseLiveActivityHeader(chrome[i])
+		if !ok {
 			continue
 		}
-		if label := normalizeStatusLabel(lines[i]); label != "" {
-			return label
+		if rest == "" && i+1 < len(chrome) && isStandaloneActivityContinuation(chrome[i+1]) {
+			rest = strings.TrimSpace(chrome[i+1])
+			i++
+		}
+		detail := cleanActivityDetail(rest)
+		entries = append(entries, rawEntry{kind: kind, name: name, detail: detail})
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+
+	hasActiveAgent := false
+	for _, e := range entries {
+		if e.kind == "Agent" && !isInactiveActivityDetail(e.detail) {
+			hasActiveAgent = true
+			break
 		}
 	}
-	return ""
+
+	var out []string
+	seen := map[string]bool{}
+	for _, e := range entries {
+		if isInactiveActivityDetail(e.detail) {
+			continue
+		}
+		// A Swarm line with no detail and no active workers is ambiguous; skip.
+		if e.kind == "Swarm" && e.detail == "" && !hasActiveAgent {
+			continue
+		}
+		line := e.kind + "(" + e.name + ")"
+		if e.detail != "" {
+			line += " · " + e.detail
+		}
+		if utf8.RuneCountInString(line) > 200 {
+			runes := []rune(line)
+			line = strings.TrimSpace(string(runes[:200])) + "…"
+		}
+		if !seen[line] {
+			seen[line] = true
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// findBottomComposerBox locates the bottommost prompt composer box (bounded by
+// horizontal rules around a ">" line) within the bottom 24 lines of the screen.
+func findBottomComposerBox(lines []string) (top, bottom int) {
+	floor := max(0, len(lines)-24)
+	for b := len(lines) - 1; b >= floor; b-- {
+		if !isHorizontalRule(lines[b]) {
+			continue
+		}
+		limit := max(0, b-12)
+		for t := b - 1; t >= limit; t-- {
+			if isHorizontalRule(lines[t]) {
+				if looksLikeComposerBody(lines[t+1 : b]) {
+					return t, b
+				}
+				break
+			}
+			if isToolHeader(lines[t]) {
+				break
+			}
+		}
+	}
+	return -1, -1
+}
+
+// isActivityContinuationCandidate reports whether lines[i] is a wrapped
+// continuation line directly beneath a Swarm/Agent header line.
+func isActivityContinuationCandidate(lines []string, i int) bool {
+	if i <= 0 || !isStandaloneActivityContinuation(lines[i]) {
+		return false
+	}
+	_, _, rest, ok := parseLiveActivityHeader(lines[i-1])
+	return ok && rest == ""
+}
+
+func isStandaloneActivityContinuation(line string) bool {
+	t := strings.TrimSpace(line)
+	if t == "" || isHorizontalRule(t) || isComposerLine(t) || isSpinnerLine(t) ||
+		isEscCancelLine(t) || promptFooterRe.MatchString(t) || isTipLine(t) ||
+		isLiveActivityHeader(t) || startsWithToolGlyph(t) || isToolDetail(t) {
+		return false
+	}
+	lower := strings.ToLower(t)
+	return strings.Contains(t, "·") ||
+		strings.Contains(lower, "alt+s board") ||
+		strings.Contains(lower, "alt+x dismiss")
+}
+
+func isLiveActivityHeader(line string) bool {
+	_, _, _, ok := parseLiveActivityHeader(line)
+	return ok
+}
+
+// parseLiveActivityHeader parses a Swarm(...) or Agent(...) chrome line,
+// handling nested parentheses such as "Agent(worker: Swarm Worker (ui-schema))".
+func parseLiveActivityHeader(line string) (kind, name, rest string, ok bool) {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return "", "", "", false
+	}
+	t = strings.TrimLeft(t, "─━═ \t")
+	hasMarker := false
+	switch {
+	case startsWithToolGlyph(t):
+		// Strip one leading tool glyph + space(s).
+		_, sz := utf8.DecodeRuneInString(t)
+		t = strings.TrimSpace(t[sz:])
+		hasMarker = true
+	case isSpinnerLine(t):
+		t = strings.TrimLeftFunc(t, func(r rune) bool {
+			return (r >= 0x2801 && r <= 0x28FF) || unicode.IsSpace(r)
+		})
+		hasMarker = true
+	}
+	switch {
+	case strings.HasPrefix(t, "Swarm("):
+		kind = "Swarm"
+		t = t[len("Swarm("):]
+	case hasMarker && strings.HasPrefix(t, "Agent("):
+		kind = "Agent"
+		t = t[len("Agent("):]
+	default:
+		return "", "", "", false
+	}
+	// Find matching closing ')' accounting for nested parens.
+	depth := 1
+	closeIdx := -1
+	for i, r := range t {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				closeIdx = i
+			}
+		}
+		if closeIdx >= 0 {
+			break
+		}
+	}
+	if closeIdx < 0 {
+		return "", "", "", false
+	}
+	name = strings.TrimSpace(t[:closeIdx])
+	if name == "" {
+		return "", "", "", false
+	}
+	rest = strings.TrimSpace(t[closeIdx+1:])
+	return kind, name, rest, true
+}
+
+func cleanActivityDetail(rest string) string {
+	rest = strings.TrimSpace(rest)
+	if rest == "" {
+		return ""
+	}
+	var kept []string
+	for part := range strings.SplitSeq(rest, "·") {
+		seg := strings.Join(strings.Fields(strings.TrimSpace(part)), " ")
+		if seg == "" || isShortcutChromeSegment(seg) {
+			continue
+		}
+		kept = append(kept, seg)
+	}
+	return strings.Join(kept, " · ")
+}
+
+func isShortcutChromeSegment(seg string) bool {
+	lower := strings.ToLower(strings.TrimSpace(seg))
+	if lower == "" {
+		return true
+	}
+	for _, prefix := range []string{"alt+", "ctrl+", "shift+", "esc to ", "? for shortcuts"} {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return strings.Contains(lower, "alt+s board") || strings.Contains(lower, "alt+x dismiss")
+}
+
+func isInactiveActivityDetail(detail string) bool {
+	first := strings.ToLower(strings.TrimSpace(detail))
+	if first == "" {
+		return false
+	}
+	if i := strings.IndexAny(first, " ·,:-"); i >= 0 {
+		first = first[:i]
+	}
+	switch first {
+	case "done", "completed", "finished", "dismissed", "stopped", "killed", "cancelled", "canceled", "failed", "exited":
+		return true
+	}
+	return false
 }
 
 func normalizeStatusLabel(line string) string {
@@ -277,7 +539,7 @@ func stripBottomChrome(lines []string, includeIdleFooter bool) (end int, cols in
 	end = len(lines)
 
 	// 1. Strip default footer and any custom statusLine below it.
-	footerFloor := max(0, end-10)
+	footerFloor := max(0, end-16)
 	for i := end - 1; i >= footerFloor; i-- {
 		if isEscCancelLine(lines[i]) || (includeIdleFooter && promptFooterRe.MatchString(lines[i])) {
 			end = i
@@ -287,7 +549,7 @@ func stripBottomChrome(lines []string, includeIdleFooter bool) (end int, cols in
 	end = trimTrailingBlanks(lines[:end])
 
 	// 2. Iteratively strip stacked bottom chrome above the footer: composer
-	//    prompt box(es), Swarm status bars, artifact Tip banners, working
+	//    prompt box(es), Swarm/Agent status bars, artifact Tip banners, working
 	//    spinners, and horizontal rules.
 	for end > 0 {
 		prev := end
@@ -327,8 +589,8 @@ func stripBottomChrome(lines []string, includeIdleFooter bool) (end int, cols in
 			end -= 2
 		}
 
-		// Strip trailing blanks, spinners, rules, Swarm bars, and Tip banners.
-		for end > 0 && isBottomChromeLine(lines[end-1]) {
+		// Strip trailing blanks, spinners, rules, Swarm/Agent bars, and Tip banners.
+		for end > 0 && (isBottomChromeLine(lines[end-1]) || isActivityContinuationCandidate(lines, end-1)) {
 			end--
 		}
 		if end == prev {
@@ -348,6 +610,9 @@ func isTipLine(line string) bool {
 }
 
 func isSwarmChromeLine(line string) bool {
+	if isLiveActivityHeader(line) {
+		return true
+	}
 	t := strings.TrimSpace(line)
 	if t == "" {
 		return false

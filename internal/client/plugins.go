@@ -32,7 +32,14 @@ func (c *Client) WatchBlock(ctx context.Context, block string, fn func(*protocol
 // ("" for global, "space:<id>", "project:<id>", or "session:<id>"), calling fn
 // with each update until ctx ends or the stream does; see protocol.WatchBlock.
 func (c *Client) WatchBlockScoped(ctx context.Context, block, scope string, fn func(*protocol.BlockUpdate)) error {
-	return follow(ctx, c, protocol.TypeWatchBlock, &protocol.WatchBlock{Block: block, Scope: scope}, fn)
+	return c.WatchBlockWithLocale(ctx, block, scope, "", fn)
+}
+
+// WatchBlockWithLocale follows a plugin's block in the given canonical scope
+// and optional BCP-47 locale (empty defaults to "en"), calling fn with each
+// update until ctx ends or the stream does; see protocol.WatchBlock.
+func (c *Client) WatchBlockWithLocale(ctx context.Context, block, scope, locale string, fn func(*protocol.BlockUpdate)) error {
+	return follow(ctx, c, protocol.TypeWatchBlock, &protocol.WatchBlock{Block: block, Scope: scope, Locale: locale}, fn)
 }
 
 // AgentBlocks lists the blocks the daemon's agents show; see

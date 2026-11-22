@@ -1,22 +1,31 @@
 // OKF (Open Knowledge Format) project knowledge vault plugin.
 // Stores pure OKF v0.2 Markdown + YAML frontmatter files inside each project's
-// isolated private data directory (ctx.datafs) and exposes MCP/CLI tools for agents.
+// isolated private data directory (ctx.datafs), exposes CLI tools for agents,
+// and showcases Mako's Revision 44 rich UI components + en/ko i18n.
 
 import {
   DOC_STATUSES,
   DOC_TYPES,
   FOLDERS,
+  allDirPaths,
+  buildFolderTree,
+  buildKnowledgeGraph,
+  buildVaultAnalytics,
   buildVaultIndex,
   normalizeDocPath,
   parseDocument,
   parseTags,
   rebuildIndexMarkdown,
+  resolveDocLink,
+  rewriteWikiLinksForMarkdown,
   searchDocuments,
   serializeDoc,
   slugify,
   starterOverviewMarkdown,
   todayISO,
+  truncateUtf8Bytes,
 } from "./lib/okf.js";
+import { registerOKFi18n } from "./lib/i18n.js";
 
 let mako;
 
@@ -25,8 +34,13 @@ const TYPE_FILTERS = ["All", ...DOC_TYPES, "Index"];
 function safeKey(prefix, raw) {
   const clean = String(raw || "")
     .replace(/[\/#]+/g, "_")
+    .replace(/[\r\n\t]+/g, "_")
     .slice(0, 96);
   return `${prefix}-${clean}`;
+}
+
+function cleanInline(raw) {
+  return String(raw ?? "").replace(/[\r\n\t]+/g, " ").trim();
 }
 
 function statusTone(status) {
@@ -44,6 +58,43 @@ function typeTone(type) {
   return "muted";
 }
 
+function labelType(t, type) {
+  const key = `type.${type}`;
+  const res = t(key);
+  return res === key ? String(type || "") : res;
+}
+
+function labelStatus(t, status) {
+  const key = `status.${status}`;
+  const res = t(key);
+  return res === key ? String(status || "") : res;
+}
+
+function canonicalTypeFilter(value, t) {
+  const v = String(value || "").trim();
+  if (!v) return "All";
+  for (const tp of TYPE_FILTERS) {
+    if (v === tp || v === labelType(t, tp)) return tp;
+  }
+  return "All";
+}
+
+function canonicalDocType(value, t) {
+  const v = String(value || "").trim();
+  for (const tp of DOC_TYPES) {
+    if (v === tp || v === labelType(t, tp)) return tp;
+  }
+  return "Concept";
+}
+
+function canonicalDocStatus(value, t) {
+  const v = String(value || "").trim();
+  for (const st of DOC_STATUSES) {
+    if (v === st || v === labelStatus(t, st)) return st;
+  }
+  return "active";
+}
+
 function formatBytes(n) {
   const v = Number(n) || 0;
   if (v < 1024) return `${v} B`;
@@ -51,22 +102,25 @@ function formatBytes(n) {
   return `${(v / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-// formatBodyForReader renders OKF [[target|Label]] wiki-links cleanly as bold
-// text for the reader view while leaving fenced code blocks and inline backtick
-// spans untouched. Underlying files always keep pure OKF [[...]] syntax.
-function formatBodyForReader(body) {
-  const src = String(body || "");
-  if (!src.includes("[[")) return src;
-  const parts = src.split(/(```[\s\S]*?```|`[^`\n]+`)/g);
-  return parts
-    .map((part, i) => {
-      if (i % 2 === 1) return part; // fenced or inline code
-      return part.replace(/\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]/g, (_m, target, label) => {
-        const display = (label || target || "").trim();
-        return display ? `**${display}**` : _m;
-      });
-    })
-    .join("");
+function formatPct(ratio) {
+  const pct = Math.round(Math.max(0, Math.min(1, Number(ratio) || 0)) * 100);
+  return `${pct}%`;
+}
+
+function normalizeDirPath(raw) {
+  return String(raw || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .map((seg) => slugify(seg))
+    .filter(Boolean)
+    .join("/");
+}
+
+function getCtxT(ctx) {
+  if (ctx && typeof ctx.t === "function") return ctx.t;
+  return (key, params) => mako.i18n.t(key, params);
 }
 
 async function shouldAutoIndex(ctx) {
@@ -82,7 +136,8 @@ async function defaultFolder(ctx) {
 
 async function loadVaultDocs(ctx, bootstrap = false) {
   let listed = await ctx.datafs.list("", { recursive: true });
-  let mdEntries = (listed.entries || []).filter((e) => !e.dir && e.path.endsWith(".md"));
+  let entries = listed.entries || [];
+  let mdEntries = entries.filter((e) => !e.dir && e.path.endsWith(".md"));
 
   if (bootstrap && mdEntries.length === 0) {
     const overview = starterOverviewMarkdown(ctx.projectName);
@@ -91,9 +146,11 @@ async function loadVaultDocs(ctx, bootstrap = false) {
     const indexMd = rebuildIndexMarkdown(ctx.projectName, seedDocs);
     await ctx.datafs.write("index.md", indexMd);
     listed = await ctx.datafs.list("", { recursive: true });
-    mdEntries = (listed.entries || []).filter((e) => !e.dir && e.path.endsWith(".md"));
+    entries = listed.entries || [];
+    mdEntries = entries.filter((e) => !e.dir && e.path.endsWith(".md"));
   }
 
+  const dirs = entries.filter((e) => e.dir).map((e) => e.path);
   const docs = [];
   for (const entry of mdEntries) {
     const file = await ctx.datafs.read(entry.path);
@@ -102,7 +159,7 @@ async function loadVaultDocs(ctx, bootstrap = false) {
   }
   const index = buildVaultIndex(docs);
   const stats = await ctx.datafs.stats();
-  return { index, stats };
+  return { index, stats, dirs };
 }
 
 async function syncIndexFile(ctx) {
@@ -113,8 +170,9 @@ async function syncIndexFile(ctx) {
 }
 
 async function refreshState(s, ctx, bootstrap = false) {
-  const { index, stats } = await loadVaultDocs(ctx, bootstrap);
+  const { index, stats, dirs } = await loadVaultDocs(ctx, bootstrap);
   s.docs = index.docs;
+  s.dirs = dirs;
   s.hasIndex = index.hasIndex;
   s.totalLinks = index.totalLinks;
   s.broken = index.broken;
@@ -127,6 +185,9 @@ async function refreshState(s, ctx, bootstrap = false) {
   s.fileCount = stats.fileCount || 0;
   if (s.selectedPath && !s.docs.some((d) => d.path === s.selectedPath)) {
     s.selectedPath = "";
+  }
+  if (s.graphFocusPath && !s.graphFocusPath.startsWith("missing:") && !s.docs.some((d) => d.path === s.graphFocusPath)) {
+    s.graphFocusPath = "";
   }
   s.error = "";
 }
@@ -163,58 +224,78 @@ function draftFromDoc(doc) {
   };
 }
 
-function renderTopBar(s, ui, activeTab, tabOptions) {
+function renderTopBar(s, ui, t, activeTab, tabOptions) {
   return ui.row([
     ui.tabs(activeTab, tabOptions, { key: "main-tabs", onChange: ["setTab"] }),
-    ui.text(`${s.docs.length} docs · ${formatBytes(s.usedBytes)}`, { size: "small", tone: "faint", grow: 1 }),
-    ui.button("New", { key: "btn-new", icon: "file-text", tone: "accent", onTap: ["newDoc"] }),
-    ui.button("Index", { key: "btn-index", icon: "folder-open", onTap: ["rebuildIndex"] }),
-  ], { gap: 6 });
+    ui.text(t("topbar.summary", { docs: s.docs.length, size: formatBytes(s.usedBytes) }), {
+      size: "small",
+      tone: "faint",
+      grow: 1,
+    }),
+    ui.button(t("action.new"), {
+      key: "btn-new",
+      icon: "file-text",
+      size: "small",
+      variant: "ghost",
+      tone: "accent",
+      onTap: ["newDoc"],
+    }),
+    ui.button(t("action.index"), {
+      key: "btn-index",
+      icon: "folder-open",
+      size: "small",
+      variant: "ghost",
+      onTap: ["rebuildIndex"],
+    }),
+  ], { key: "topbar", gap: 6 });
 }
 
-function renderBrowse(s, ui) {
+function renderBrowse(s, ui, t) {
   const results = searchDocuments(s.docs, s.query, s.typeFilter === "All" ? "" : s.typeFilter, s.tagFilter);
   const selected = s.selectedPath ? s.docs.find((d) => d.path === s.selectedPath) : null;
 
   if (selected) {
-    return renderReader(s, ui, selected);
+    return renderReader(s, ui, t, selected);
   }
 
+  const typeFilterOptions = TYPE_FILTERS.map((tp) => labelType(t, tp));
   const controls = [
     ui.row([
       ui.input(s.query, {
         key: "search",
-        placeholder: "Search title, tags, or body…",
+        placeholder: t("browse.searchPlaceholder"),
         grow: 1,
         onChange: ["setQuery"],
         onSubmit: ["setQuery"],
       }),
-      ui.select(s.typeFilter, TYPE_FILTERS, { key: "type-filter", onChange: ["setTypeFilter"] }),
+      ui.select(labelType(t, s.typeFilter), typeFilterOptions, {
+        key: "type-filter",
+        onChange: ["setTypeFilter"],
+      }),
     ], { gap: 6 }),
   ];
 
   if (s.tagFilter) {
     controls.push(ui.row([
-      ui.text("Tag:", { size: "small", tone: "muted" }),
+      ui.text(t("browse.tagLabel"), { size: "small", tone: "muted" }),
       ui.chip(`#${s.tagFilter}`, { tone: "accent" }),
-      ui.button("Clear", { key: "clear-tag", size: "small", onTap: ["setTagFilter", ""] }),
+      ui.button(t("action.clear"), { key: "clear-tag", size: "small", variant: "ghost", onTap: ["setTagFilter", ""] }),
     ], { gap: 6 }));
   }
 
   if (results.length === 0) {
     controls.push(ui.card([
-      ui.text("No matching OKF documents.", { tone: "muted" }),
-      ui.button("Create Document", { key: "empty-new", tone: "accent", onTap: ["newDoc"] }),
+      ui.text(t("browse.empty"), { tone: "muted" }),
+      ui.button(t("action.createDoc"), { key: "empty-new", size: "small", variant: "primary", tone: "accent", onTap: ["newDoc"] }),
     ], { gap: 8 }));
     return ui.column(controls, { gap: 8 });
   }
 
-  // Let the outer block frame scroll full-height instead of clipping inside a fixed maxHeight.
   controls.push(
     ui.list(results, ({ doc, snippet }) => {
       const metaRow = [
-        ui.pill(doc.type, { tone: typeTone(doc.type) }),
-        ui.pill(doc.status, { tone: statusTone(doc.status) }),
+        ui.pill(labelType(t, doc.type), { tone: typeTone(doc.type) }),
+        ui.pill(labelStatus(t, doc.status), { tone: statusTone(doc.status) }),
         ui.text(doc.path, { size: "small", tone: "faint", grow: 1 }),
       ];
       if (doc.links.length > 0 || doc.backlinks.length > 0) {
@@ -229,9 +310,11 @@ function renderBrowse(s, ui) {
       }
       if (doc.tags.length > 0) {
         cardChildren.push(
-          ui.scroll(
-            doc.tags.slice(0, 6).map((t) => ui.chip(`#${t}`, { key: safeKey("t", t), tone: "muted", onTap: ["setTagFilter", t] })),
-            { direction: "horizontal", gap: 4 },
+          ui.wrap(
+            doc.tags.slice(0, 8).map((tag) =>
+              ui.chip(`#${tag}`, { key: safeKey("t", tag), tone: "muted", onTap: ["setTagFilter", tag] }),
+            ),
+            { gap: 4 },
           ),
         );
       }
@@ -242,60 +325,470 @@ function renderBrowse(s, ui) {
   return ui.column(controls, { gap: 8 });
 }
 
-function renderReader(s, ui, doc) {
+function buildTreeItems(node, s, ui, t) {
+  const items = [];
+  for (const dir of node.dirs) {
+    const isCollapsed = Boolean(s.collapsedDirs && s.collapsedDirs[dir.path]);
+    const children = buildTreeItems(dir, s, ui, t);
+    items.push(
+      ui.treeItem(cleanInline(dir.name), children, {
+        key: safeKey("dir", dir.path),
+        value: t("tree.folderCount", { count: dir.docCount }),
+        icon: isCollapsed ? "folder" : "folder-open",
+        tone: "accent",
+        checked: !isCollapsed,
+        onChange: ["toggleDir", dir.path],
+        onDrop: ["moveDocToFolder", dir.path],
+        dropAccept: ["okf-doc"],
+      }),
+    );
+  }
+  for (const file of node.files) {
+    const doc = file.doc;
+    const typeLbl = labelType(t, doc.type);
+    const linkInfo = (doc.links.length > 0 || doc.backlinks.length > 0)
+      ? ` · ↗${doc.links.length} ↙${doc.backlinks.length}`
+      : "";
+    const secondary = doc.title && doc.title !== file.name
+      ? `${doc.title} · ${typeLbl}${linkInfo}`
+      : `${typeLbl}${linkInfo}`;
+    items.push(
+      ui.treeItem(cleanInline(file.name), {
+        key: safeKey("tdoc", doc.path),
+        value: cleanInline(secondary),
+        icon: "file-text",
+        tone: typeTone(doc.type),
+        drag: doc.path,
+        dragGroup: "okf-doc",
+        onTap: ["openDoc", doc.path],
+      }),
+    );
+  }
+  return items;
+}
+
+function renderTree(s, ui, t) {
+  const tree = buildFolderTree(s.docs, s.dirs);
+  const totalDirs = allDirPaths(tree).length;
+  const rootItems = buildTreeItems(tree, s, ui, t);
+
+  const sections = [
+    ui.row([
+      ui.text(t("tree.summary", { dirs: totalDirs, docs: s.docs.length }), { size: "small", tone: "muted", grow: 1 }),
+      ui.button(t("action.folder"), {
+        key: "tree-new-dir-btn",
+        icon: "folder-plus",
+        size: "small",
+        variant: "ghost",
+        tone: "accent",
+        onTap: ["toggleNewFolder"],
+      }),
+      ui.button(t("action.expand"), {
+        key: "tree-expand-all",
+        size: "small",
+        variant: "ghost",
+        onTap: ["expandAllDirs"],
+      }),
+      ui.button(t("action.collapse"), {
+        key: "tree-collapse-all",
+        size: "small",
+        variant: "ghost",
+        onTap: ["collapseAllDirs"],
+      }),
+    ], { gap: 4 }),
+  ];
+
+  if (s.showNewFolder) {
+    sections.push(ui.card([
+      ui.row([
+        ui.input(s.newFolderDraft, {
+          key: "tree-mkdir-input",
+          placeholder: t("tree.newFolderPlaceholder"),
+          grow: 1,
+          onChange: ["setNewFolderDraft"],
+          onSubmit: ["createFolder"],
+        }),
+        ui.button(t("action.create"), { key: "tree-mkdir-submit", size: "small", variant: "primary", tone: "accent", onTap: ["createFolder"] }),
+        ui.button(t("action.cancel"), { key: "tree-mkdir-cancel", size: "small", variant: "ghost", onTap: ["toggleNewFolder"] }),
+      ], { gap: 6 }),
+    ], { gap: 6 }));
+  }
+
+  // Root drop zone lets users drag any nested document back to vault root.
+  const treeCardChildren = [
+    ui.row([
+      ui.icon("folder-open", { size: "small", tone: "accent" }),
+      ui.text(t("tree.rootHint"), { size: "small", tone: "muted", grow: 1 }),
+    ], {
+      key: "tree-root",
+      gap: 6,
+      onDrop: ["moveDocToFolder", ""],
+      dropAccept: ["okf-doc"],
+    }),
+    ui.divider(),
+  ];
+
+  if (rootItems.length === 0) {
+    treeCardChildren.push(ui.text(t("tree.empty"), { size: "small", tone: "muted" }));
+  } else {
+    treeCardChildren.push(ui.tree(rootItems, { key: "vault-tree" }));
+  }
+
+  sections.push(ui.card(treeCardChildren, { gap: 6 }));
+  return ui.column(sections, { gap: 8 });
+}
+
+function renderKpiCard(ui, key, label, value, tone = "accent") {
+  return ui.card([
+    ui.text(label, { size: "small", tone: "muted" }),
+    ui.text(String(value), { size: "large", weight: "semibold", tone }),
+  ], { key, variant: "secondary", gap: 2 });
+}
+
+function renderGraph(s, ui, t) {
+  const analytics = buildVaultAnalytics(s.docs, s.broken.length);
+  const byPath = new Map(s.docs.map((d) => [d.path, d]));
+  const graph = buildKnowledgeGraph(s.docs, {
+    typeTone,
+    labelType: (tp) => labelType(t, tp),
+    missingGroup: t("graph.missingGroup"),
+    missingSubtitle: t("graph.missingSubtitle"),
+  });
+
+  let focusId = s.graphFocusPath;
+  if (!focusId || !graph.nodeIds.has(focusId)) {
+    focusId = analytics.rankedHubs[0]?.doc?.path || graph.nodes[0]?.id || "";
+  }
+  const focusDoc = focusId ? byPath.get(focusId) : null;
+  const focusMissing = focusId ? graph.missingByNodeId.get(focusId) : null;
+
+  const sections = [];
+
+  // 1. 3-column KPI stat grid (Docs, Links, Integrity %)
+  sections.push(
+    ui.grid(3, [
+      renderKpiCard(ui, "kpi-docs", t("graph.kpiDocs"), analytics.totalDocs, "accent"),
+      renderKpiCard(ui, "kpi-links", t("graph.kpiLinks"), analytics.totalLinks, "success"),
+      renderKpiCard(
+        ui,
+        "kpi-integrity",
+        t("graph.kpiIntegrity"),
+        formatPct(analytics.linkHealthRatio),
+        s.broken.length > 0 ? "warning" : "success",
+      ),
+    ], { key: "graph-kpis", gap: 6 }),
+  );
+
+  // 2. Interactive Knowledge Graph Canvas
+  if (graph.nodes.length > 0) {
+    const graphCardChildren = [
+      ui.graph(graph.nodes, graph.edges, {
+        key: "knowledge-graph",
+        caption: t("graph.canvasCaption"),
+        value: focusId && graph.nodeIds.has(focusId) ? focusId : "",
+        maxHeight: 340,
+        onChange: ["setGraphFocus"],
+      }),
+    ];
+    sections.push(ui.card(graphCardChildren, { gap: 6 }));
+  } else {
+    sections.push(ui.card([ui.text(t("graph.empty"), { size: "small", tone: "muted" })]));
+  }
+
+  // 3. Selected-node inspector card (real doc or broken missing target)
+  if (focusDoc) {
+    const neighbors = [...new Set([...focusDoc.links, ...focusDoc.backlinks])];
+    const inspectorChildren = [
+      ui.row([
+        ui.pill(labelType(t, focusDoc.type), { tone: typeTone(focusDoc.type) }),
+        ui.pill(labelStatus(t, focusDoc.status), { tone: statusTone(focusDoc.status) }),
+        ui.text(focusDoc.title, { weight: "semibold", grow: 1 }),
+        ui.button(t("action.open"), {
+          key: "graph-open-focus",
+          size: "small",
+          variant: "primary",
+          tone: "accent",
+          onTap: ["openDoc", focusDoc.path],
+        }),
+        ui.button(t("action.edit"), {
+          key: "graph-edit-focus",
+          size: "small",
+          variant: "ghost",
+          onTap: ["editDoc", focusDoc.path],
+        }),
+      ], { gap: 6 }),
+      ui.text(`${focusDoc.path} · ↗${focusDoc.links.length} ↙${focusDoc.backlinks.length}`, { size: "small", tone: "faint" }),
+    ];
+
+    if (neighbors.length > 0) {
+      inspectorChildren.push(ui.text(t("graph.inspectorLinks"), { size: "small", weight: "medium", tone: "muted" }));
+      inspectorChildren.push(
+        ui.wrap(
+          neighbors.map((p) => {
+            const nb = byPath.get(p);
+            return ui.button(nb ? nb.title : p, {
+              key: safeKey("gn", p),
+              size: "small",
+              variant: "outline",
+              onTap: ["setGraphFocus", p],
+            });
+          }),
+          { gap: 4 },
+        ),
+      );
+    } else if (focusDoc.brokenLinks.length === 0) {
+      inspectorChildren.push(ui.text(t("graph.inspectorNoNeighbors"), { size: "small", tone: "faint" }));
+    }
+
+    if (focusDoc.brokenLinks.length > 0) {
+      inspectorChildren.push(ui.text(t("graph.inspectorBroken"), { size: "small", weight: "medium", tone: "danger" }));
+      inspectorChildren.push(
+        ui.wrap(
+          focusDoc.brokenLinks.map((raw) =>
+            ui.button(`+ [[${raw}]]`, {
+              key: safeKey("gbrk", raw),
+              size: "small",
+              variant: "outline",
+              tone: "warning",
+              onTap: ["createFromLink", raw],
+            }),
+          ),
+          { gap: 4 },
+        ),
+      );
+    }
+
+    sections.push(ui.card(inspectorChildren, { key: "graph-inspector", gap: 6 }));
+  } else if (focusMissing) {
+    sections.push(ui.card([
+      ui.row([
+        ui.text(t("graph.missingInspectorTitle", { target: focusMissing.target }), { weight: "semibold", tone: "danger", grow: 1 }),
+        ui.button(t("action.create"), {
+          key: "graph-create-missing",
+          size: "small",
+          variant: "primary",
+          tone: "warning",
+          onTap: ["createFromLink", focusMissing.target],
+        }),
+      ], { gap: 6 }),
+      ui.text(t("graph.missingInspectorDesc", { count: focusMissing.refs.length }), { size: "small", tone: "muted" }),
+      ui.wrap(
+        focusMissing.refs.map((p) => {
+          const src = byPath.get(p);
+          return ui.button(src ? src.title : p, {
+            key: safeKey("gmref", p),
+            size: "small",
+            variant: "ghost",
+            onTap: ["setGraphFocus", p],
+          });
+        }),
+        { gap: 4 },
+      ),
+    ], { key: "graph-inspector-missing", gap: 6 }));
+  }
+
+  // 4. Native Donut Chart: Documents by OKF Type
+  if (analytics.typeStats.length > 0) {
+    sections.push(ui.card([
+      ui.chart("donut", [
+        { name: t("graph.chartDocs"), tone: "accent", values: analytics.typeStats.map((x) => x.count) },
+      ], {
+        key: "chart-types",
+        caption: t("graph.chartByType"),
+        labels: analytics.typeStats.map((x) => truncateUtf8Bytes(labelType(t, x.type), 24)),
+      }),
+    ], { gap: 6 }));
+  }
+
+  // 5. Native Bar Chart: Top Connected Documents
+  if (analytics.topHubs.length > 0) {
+    sections.push(ui.card([
+      ui.chart("bar", [
+        { name: t("graph.chartLinksOut"), tone: "accent", values: analytics.topHubs.map((x) => x.out) },
+        { name: t("graph.chartLinksIn"), tone: "success", values: analytics.topHubs.map((x) => x.in) },
+      ], {
+        key: "chart-hubs",
+        caption: t("graph.chartTopConnected"),
+        labels: analytics.topHubs.map((x) => truncateUtf8Bytes(x.label, 24)),
+      }),
+    ], { gap: 6 }));
+  }
+
+  // 6. Centrality Ranking Table (clickable rows focus the node)
+  if (analytics.rankedHubs.length > 0) {
+    const tableRows = analytics.rankedHubs.slice(0, 10).map((h) => ui.row([
+      ui.text(h.doc.title, { size: "small", weight: h.doc.path === focusId ? "semibold" : "medium", grow: 1 }),
+      ui.pill(labelType(t, h.doc.type), { tone: typeTone(h.doc.type) }),
+      ui.text(String(h.out), { size: "small", tone: "accent" }),
+      ui.text(String(h.in), { size: "small", tone: "success" }),
+    ], { key: safeKey("hub", h.doc.path), gap: 6, onTap: ["setGraphFocus", h.doc.path] }));
+    sections.push(ui.card([
+      ui.text(t("graph.centralityTitle"), { size: "small", weight: "semibold", tone: "muted" }),
+      ui.table([t("graph.colDocument"), t("graph.colType"), "↗", "↙"], tableRows),
+    ], { gap: 6 }));
+  }
+
+  // 7. Tag Distribution Cloud using ui.wrap
+  if (analytics.tagStats.length > 0) {
+    sections.push(ui.card([
+      ui.text(t("graph.tagDistribution", { count: analytics.tagStats.length }), { size: "small", weight: "semibold", tone: "muted" }),
+      ui.wrap(
+        analytics.tagStats.slice(0, 24).map((item) => ui.chip(`#${item.tag} (${item.count})`, {
+          key: safeKey("gtag", item.tag),
+          tone: "accent",
+          onTap: ["filterTagAndClose", item.tag],
+        })),
+        { gap: 4 },
+      ),
+    ], { gap: 6 }));
+  }
+
+  return ui.column(sections, { gap: 8 });
+}
+
+function renderReader(s, ui, t, doc) {
   const byPath = new Map(s.docs.map((d) => [d.path, d]));
   const actionBar = ui.row([
-    ui.button("Back", { key: "reader-back", icon: "arrow-left", onTap: ["closeDoc"] }),
+    ui.button(t("action.back"), {
+      key: "reader-back",
+      icon: "arrow-left",
+      size: "small",
+      variant: "ghost",
+      onTap: ["closeDoc"],
+    }),
     ui.text("", { grow: 1 }),
-    ui.button("Edit", { key: "reader-edit", tone: "accent", onTap: ["editDoc", doc.path] }),
+    ui.button(t("action.graph"), {
+      key: "reader-graph",
+      icon: "network",
+      size: "small",
+      variant: "ghost",
+      onTap: ["openInGraph", doc.path],
+    }),
+    ui.button(t("action.edit"), {
+      key: "reader-edit",
+      icon: "pencil",
+      size: "small",
+      variant: "ghost",
+      tone: "accent",
+      onTap: ["editDoc", doc.path],
+    }),
     doc.status === "needs_review"
-      ? ui.button("Active", { key: "reader-active", onTap: ["setDocStatus", doc.path, "active"] })
-      : ui.button("Review", { key: "reader-review", onTap: ["setDocStatus", doc.path, "needs_review"] }),
+      ? ui.button(t("action.markActive"), {
+        key: "reader-active",
+        size: "small",
+        variant: "ghost",
+        tone: "success",
+        onTap: ["setDocStatus", doc.path, "active"],
+      })
+      : ui.button(t("action.markReview"), {
+        key: "reader-review",
+        size: "small",
+        variant: "ghost",
+        tone: "warning",
+        onTap: ["setDocStatus", doc.path, "needs_review"],
+      }),
     s.confirmDeletePath === doc.path
-      ? ui.button("Confirm", { key: "reader-del-confirm", tone: "danger", onTap: ["deleteDoc", doc.path] })
-      : ui.button("Delete", { key: "reader-del", tone: "danger", onTap: ["askDelete", doc.path] }),
-  ], { gap: 6 });
+      ? ui.button(t("action.confirmDelete"), {
+        key: "reader-del-confirm",
+        size: "small",
+        variant: "danger",
+        tone: "danger",
+        onTap: ["deleteDoc", doc.path],
+      })
+      : ui.button(t("action.delete"), {
+        key: "reader-del",
+        size: "small",
+        variant: "ghost",
+        tone: "danger",
+        onTap: ["askDelete", doc.path],
+      }),
+  ], { gap: 4 });
 
-  const metaLines = [
+  const pathSegments = doc.path.split("/").filter(Boolean);
+  const breadcrumb = ui.breadcrumb([t("breadcrumb.vault"), ...pathSegments], {
+    key: "reader-breadcrumb",
+    onChange: ["onBreadcrumb", doc.path],
+  });
+
+  const headerLines = [
     ui.row([
-      ui.pill(doc.type, { tone: typeTone(doc.type) }),
-      ui.pill(doc.status, { tone: statusTone(doc.status) }),
-      ui.text(doc.path, { size: "small", tone: "muted", grow: 1 }),
-      doc.updated ? ui.text(doc.updated, { size: "small", tone: "faint" }) : ui.text("", { size: "small" }),
+      ui.pill(labelType(t, doc.type), { tone: typeTone(doc.type) }),
+      ui.pill(labelStatus(t, doc.status), { tone: statusTone(doc.status) }),
+      ui.text(doc.updated || "", { size: "small", tone: "faint", grow: 1 }),
     ], { gap: 6 }),
     ui.text(doc.title, { size: "large", weight: "semibold" }),
   ];
   if (doc.description) {
-    metaLines.push(ui.text(doc.description, { size: "small", tone: "muted" }));
+    headerLines.push(ui.text(doc.description, { size: "small", tone: "muted" }));
   }
   if (doc.tags.length > 0) {
-    metaLines.push(
-      ui.scroll(
-        doc.tags.map((t) => ui.chip(`#${t}`, { key: safeKey("rt", t), tone: "accent", onTap: ["filterTagAndClose", t] })),
-        { direction: "horizontal", gap: 4 },
+    headerLines.push(
+      ui.wrap(
+        doc.tags.map((tag) =>
+          ui.chip(`#${tag}`, { key: safeKey("rt", tag), tone: "accent", onTap: ["filterTagAndClose", tag] }),
+        ),
+        { gap: 4 },
       ),
     );
   }
-  if (doc.source || doc.verifiedBy) {
-    const prov = [doc.source ? `Source: ${doc.source}` : "", doc.verifiedBy ? `Verified by: ${doc.verifiedBy}` : ""]
-      .filter(Boolean)
-      .join(" · ");
-    metaLines.push(ui.text(prov, { size: "small", tone: "faint" }));
+
+  const metaDetails = [
+    ui.row([
+      ui.text(t("reader.pathLabel"), { size: "small", tone: "muted" }),
+      ui.text(doc.path, { size: "small", grow: 1 }),
+    ], { gap: 6 }),
+    ui.text(t("reader.linksSummary", { out: doc.links.length, in: doc.backlinks.length }), { size: "small", tone: "muted" }),
+  ];
+  if (doc.updated) {
+    metaDetails.push(ui.row([
+      ui.text(t("reader.updatedLabel"), { size: "small", tone: "muted" }),
+      ui.text(doc.updated, { size: "small", grow: 1 }),
+    ], { gap: 6 }));
+  }
+  if (doc.okfVersion) {
+    metaDetails.push(ui.row([
+      ui.text(t("reader.versionLabel"), { size: "small", tone: "muted" }),
+      ui.text(`OKF v${doc.okfVersion}`, { size: "small", grow: 1 }),
+    ], { gap: 6 }));
+  }
+  if (doc.source) {
+    metaDetails.push(ui.row([
+      ui.text(t("reader.sourceLabel"), { size: "small", tone: "muted" }),
+      ui.text(doc.source, { size: "small", grow: 1 }),
+    ], { gap: 6 }));
+  }
+  if (doc.verifiedBy) {
+    metaDetails.push(ui.row([
+      ui.text(t("reader.verifiedByLabel"), { size: "small", tone: "muted" }),
+      ui.text(doc.verifiedBy, { size: "small", grow: 1 }),
+    ], { gap: 6 }));
   }
 
-  // Full-height body: no nested maxHeight scroll so the document fills the sidebar naturally.
+  const renderedBody = rewriteWikiLinksForMarkdown(doc.body, doc.path, s.docs) || t("reader.emptyBody");
+
   const sections = [
     actionBar,
-    ui.card(metaLines, { gap: 4 }),
+    breadcrumb,
+    ui.card(headerLines, { gap: 4 }),
+    ui.collapsible(t("reader.metadataTitle"), metaDetails, {
+      key: "reader-meta",
+      icon: "info",
+      tone: "muted",
+      checked: Boolean(s.metaExpanded),
+      onChange: ["setMetaExpanded"],
+    }),
     ui.card([
-      ui.markdown(formatBodyForReader(doc.body) || "*Empty document.*"),
+      ui.markdown(renderedBody, {
+        key: "reader-body",
+        onLink: ["openLink"],
+      }),
     ], { gap: 6 }),
   ];
 
   if (doc.links.length > 0 || doc.backlinks.length > 0 || doc.brokenLinks.length > 0) {
     const graphRows = [];
     if (doc.links.length > 0) {
-      graphRows.push(ui.text(`Links (${doc.links.length})`, { size: "small", weight: "semibold", tone: "muted" }));
+      graphRows.push(ui.text(t("reader.outgoingLinks", { count: doc.links.length }), { size: "small", weight: "semibold", tone: "muted" }));
       graphRows.push(
         ui.list(doc.links, (p) => {
           const target = byPath.get(p);
@@ -308,7 +801,7 @@ function renderReader(s, ui, doc) {
       );
     }
     if (doc.backlinks.length > 0) {
-      graphRows.push(ui.text(`Backlinks (${doc.backlinks.length})`, { size: "small", weight: "semibold", tone: "muted" }));
+      graphRows.push(ui.text(t("reader.backlinks", { count: doc.backlinks.length }), { size: "small", weight: "semibold", tone: "muted" }));
       graphRows.push(
         ui.list(doc.backlinks, (p) => {
           const src = byPath.get(p);
@@ -321,11 +814,17 @@ function renderReader(s, ui, doc) {
       );
     }
     if (doc.brokenLinks.length > 0) {
-      graphRows.push(ui.text(`Broken links (${doc.brokenLinks.length})`, { size: "small", weight: "semibold", tone: "danger" }));
+      graphRows.push(ui.text(t("reader.brokenLinks", { count: doc.brokenLinks.length }), { size: "small", weight: "semibold", tone: "danger" }));
       graphRows.push(
         ui.list(doc.brokenLinks, (target) => ui.row([
           ui.text(`[[${target}]]`, { size: "small", tone: "warning", grow: 1 }),
-          ui.button("Create", { key: safeKey("fix", target), size: "small", tone: "warning", onTap: ["createFromLink", target] }),
+          ui.button(t("action.create"), {
+            key: safeKey("fix", target),
+            size: "small",
+            variant: "outline",
+            tone: "warning",
+            onTap: ["createFromLink", target],
+          }),
         ], { key: safeKey("brkr", target), gap: 6 }), { gap: 4 }),
       );
     }
@@ -335,96 +834,217 @@ function renderReader(s, ui, doc) {
   return ui.column(sections, { gap: 8 });
 }
 
-function renderEditor(s, ui) {
+function renderEditor(s, ui, t) {
   const d = s.draft || emptyDraft();
-  const heading = d.originalPath ? `Edit ${d.originalPath}` : "New OKF Document";
+  const heading = d.originalPath ? t("editor.editTitle", { path: d.originalPath }) : t("editor.newTitle");
+  const typeOptions = DOC_TYPES.map((tp) => labelType(t, tp));
+  const statusOptions = DOC_STATUSES.map((st) => labelStatus(t, st));
+
   return ui.column([
     ui.row([
       ui.text(heading, { weight: "semibold", grow: 1 }),
-      ui.button("Cancel", { key: "ed-cancel", onTap: ["cancelEdit"] }),
-      ui.button("Save", { key: "ed-save", tone: "accent", onTap: ["saveDraft"] }),
+      ui.button(t("action.cancel"), { key: "ed-cancel", size: "small", variant: "ghost", onTap: ["cancelEdit"] }),
+      ui.button(t("action.save"), { key: "ed-save", size: "small", variant: "primary", tone: "accent", onTap: ["saveDraft"] }),
     ], { gap: 6 }),
     ui.card([
       ui.row([
-        ui.input(d.title, { key: "ed-title", placeholder: "Document title", grow: 1, onChange: ["draftField", "title"] }),
-        ui.select(d.type, DOC_TYPES, { key: "ed-type", onChange: ["draftField", "type"] }),
-        ui.select(d.status, DOC_STATUSES, { key: "ed-status", onChange: ["draftField", "status"] }),
+        ui.input(d.title, {
+          key: "ed-title",
+          placeholder: t("editor.titlePlaceholder"),
+          grow: 1,
+          onChange: ["draftField", "title"],
+        }),
+        ui.select(labelType(t, d.type), typeOptions, { key: "ed-type", onChange: ["draftField", "type"] }),
+        ui.select(labelStatus(t, d.status), statusOptions, { key: "ed-status", onChange: ["draftField", "status"] }),
       ], { gap: 6 }),
       ui.row([
-        ui.input(d.path, { key: "ed-path", placeholder: `${d.folder || "concepts"}/topic-name.md`, grow: 1, onChange: ["draftField", "path"] }),
-        ui.input(d.tags, { key: "ed-tags", placeholder: "tags: auth, api", grow: 1, onChange: ["draftField", "tags"] }),
+        ui.input(d.path, {
+          key: "ed-path",
+          placeholder: t("editor.pathPlaceholder", { folder: d.folder || "concepts" }),
+          grow: 1,
+          onChange: ["draftField", "path"],
+        }),
+        ui.input(d.tags, {
+          key: "ed-tags",
+          placeholder: t("editor.tagsPlaceholder"),
+          grow: 1,
+          onChange: ["draftField", "tags"],
+        }),
       ], { gap: 6 }),
-      ui.input(d.description, { key: "ed-desc", placeholder: "One-line summary (OKF description)", onChange: ["draftField", "description"] }),
+      ui.input(d.description, {
+        key: "ed-desc",
+        placeholder: t("editor.descPlaceholder"),
+        onChange: ["draftField", "description"],
+      }),
       ui.row([
-        ui.input(d.source, { key: "ed-source", placeholder: "Provenance source (optional)", grow: 1, onChange: ["draftField", "source"] }),
-        ui.input(d.verifiedBy, { key: "ed-verified", placeholder: "Verified by (optional)", grow: 1, onChange: ["draftField", "verifiedBy"] }),
+        ui.input(d.source, {
+          key: "ed-source",
+          placeholder: t("editor.sourcePlaceholder"),
+          grow: 1,
+          onChange: ["draftField", "source"],
+        }),
+        ui.input(d.verifiedBy, {
+          key: "ed-verified",
+          placeholder: t("editor.verifiedPlaceholder"),
+          grow: 1,
+          onChange: ["draftField", "verifiedBy"],
+        }),
       ], { gap: 6 }),
       ui.textarea(d.body, {
         key: "ed-body",
         size: "large",
-        placeholder: "# Heading\n\nWrite Markdown and link concepts with [[concepts/other-doc]]…",
+        placeholder: t("editor.bodyPlaceholder"),
         onChange: ["draftField", "body"],
       }),
     ], { gap: 8 }),
   ], { gap: 8 });
 }
 
-function renderHealth(s, ui) {
-  const statsCard = ui.card([
-    ui.scroll([
-      ui.pill(`${s.docs.length} docs`, { tone: "accent" }),
-      ui.pill(`${s.totalLinks} links`, { tone: "success" }),
-      ui.pill(`${s.broken.length} broken`, { tone: s.broken.length > 0 ? "danger" : "muted" }),
-      ui.pill(`${s.needsReview.length} review`, { tone: s.needsReview.length > 0 ? "warning" : "muted" }),
-      ui.pill(`${s.orphans.length} orphans`, { tone: "muted" }),
-    ], { direction: "horizontal", gap: 6 }),
-    ui.text(`Vault storage: ${formatBytes(s.usedBytes)} / ${formatBytes(s.quotaBytes)} (${s.fileCount} files)`, { size: "small", tone: "muted" }),
-  ], { gap: 6 });
-
-  const items = [statsCard];
+function renderHealth(s, ui, t) {
+  const items = [
+    ui.grid(3, [
+      renderKpiCard(ui, "health-kpi-broken", t("health.kpiBroken"), s.broken.length, s.broken.length > 0 ? "danger" : "success"),
+      renderKpiCard(ui, "health-kpi-review", t("health.kpiReview"), s.needsReview.length, s.needsReview.length > 0 ? "warning" : "success"),
+      renderKpiCard(ui, "health-kpi-orphans", t("health.kpiOrphans"), s.orphans.length, s.orphans.length > 0 ? "muted" : "success"),
+    ], { key: "health-kpis", gap: 6 }),
+    ui.card([
+      ui.text(
+        t("health.storage", {
+          used: formatBytes(s.usedBytes),
+          quota: formatBytes(s.quotaBytes),
+          files: s.fileCount,
+        }),
+        { size: "small", tone: "muted" },
+      ),
+    ], { variant: "secondary", gap: 4 }),
+  ];
 
   if (!s.hasIndex) {
     items.push(ui.card([
-      ui.text("Missing OKF root index.md", { weight: "medium", tone: "warning" }),
-      ui.button("Generate index.md", { key: "lint-mk-index", tone: "accent", onTap: ["rebuildIndex"] }),
+      ui.row([
+        ui.text(t("health.missingIndex"), { weight: "medium", tone: "warning", grow: 1 }),
+        ui.button(t("action.generateIndex"), {
+          key: "lint-mk-index",
+          size: "small",
+          variant: "primary",
+          tone: "accent",
+          onTap: ["rebuildIndex"],
+        }),
+      ], { gap: 6 }),
     ], { gap: 6 }));
   }
 
   if (s.broken.length > 0) {
-    items.push(ui.card([
-      ui.text(`Broken Links (${s.broken.length})`, { weight: "semibold", tone: "danger" }),
-      ui.list(s.broken, (b, i) => ui.row([
-        ui.text(`${b.from} → [[${b.target}]]`, { size: "small", grow: 1 }),
-        ui.button("Create", { key: `lint-fix-${i}`, size: "small", tone: "warning", onTap: ["createFromLink", b.target] }),
-      ], { key: `brk-${i}`, gap: 6 })),
-    ], { gap: 6 }));
+    items.push(
+      ui.collapsible(
+        t("health.brokenTitle", { count: s.broken.length }),
+        [
+          ui.list(s.broken, (b, i) => ui.row([
+            ui.text(`${b.from} → [[${b.target}]]`, { size: "small", grow: 1 }),
+            ui.button(t("action.create"), {
+              key: `lint-fix-${i}`,
+              size: "small",
+              variant: "outline",
+              tone: "warning",
+              onTap: ["createFromLink", b.target],
+            }),
+          ], { key: `brk-${i}`, gap: 6 }), { gap: 4 }),
+        ],
+        {
+          key: "health-broken",
+          icon: "shield-alert",
+          tone: "danger",
+          checked: true,
+        },
+      ),
+    );
   }
 
   if (s.needsReview.length > 0) {
-    items.push(ui.card([
-      ui.text(`Needs Review (${s.needsReview.length})`, { weight: "semibold", tone: "warning" }),
-      ui.list(s.needsReview, (r) => ui.row([
-        ui.text(`${r.title} (${r.path})`, { size: "small", grow: 1 }),
-        ui.button("Open", { key: safeKey("rev-open", r.path), size: "small", onTap: ["openDoc", r.path] }),
-      ], { key: safeKey("rev", r.path), gap: 6 })),
-    ], { gap: 6 }));
+    items.push(
+      ui.collapsible(
+        t("health.reviewTitle", { count: s.needsReview.length }),
+        [
+          ui.list(s.needsReview, (r) => ui.row([
+            ui.text(`${r.title} (${r.path})`, { size: "small", grow: 1 }),
+            ui.button(t("action.open"), {
+              key: safeKey("rev-open", r.path),
+              size: "small",
+              variant: "ghost",
+              onTap: ["openDoc", r.path],
+            }),
+          ], { key: safeKey("rev", r.path), gap: 6 }), { gap: 4 }),
+        ],
+        {
+          key: "health-review",
+          icon: "info",
+          tone: "warning",
+          checked: true,
+        },
+      ),
+    );
+  }
+
+  if (s.missingMeta.length > 0) {
+    items.push(
+      ui.collapsible(
+        t("health.missingMetaTitle", { count: s.missingMeta.length }),
+        [
+          ui.list(s.missingMeta, (m) => {
+            const reason = m.code === "missing_frontmatter"
+              ? t("health.missingFrontmatter")
+              : t("health.missingTitleOrType");
+            return ui.row([
+              ui.text(`${m.path} · ${reason}`, { size: "small", grow: 1 }),
+              ui.button(t("action.open"), {
+                key: safeKey("meta-open", m.path),
+                size: "small",
+                variant: "ghost",
+                onTap: ["openDoc", m.path],
+              }),
+            ], { key: safeKey("meta", m.path), gap: 6 });
+          }, { gap: 4 }),
+        ],
+        {
+          key: "health-meta",
+          icon: "info",
+          tone: "warning",
+          checked: true,
+        },
+      ),
+    );
   }
 
   if (s.orphans.length > 0) {
-    items.push(ui.card([
-      ui.text(`Unlinked Documents (${s.orphans.length})`, { weight: "semibold", tone: "muted" }),
-      ui.list(s.orphans, (o) => ui.row([
-        ui.text(`${o.title} (${o.path})`, { size: "small", grow: 1 }),
-        ui.button("Open", { key: safeKey("orp-open", o.path), size: "small", onTap: ["openDoc", o.path] }),
-      ], { key: safeKey("orp", o.path), gap: 6 })),
-    ], { gap: 6 }));
+    items.push(
+      ui.collapsible(
+        t("health.orphansTitle", { count: s.orphans.length }),
+        [
+          ui.list(s.orphans, (o) => ui.row([
+            ui.text(`${o.title} (${o.path})`, { size: "small", grow: 1 }),
+            ui.button(t("action.open"), {
+              key: safeKey("orp-open", o.path),
+              size: "small",
+              variant: "ghost",
+              onTap: ["openDoc", o.path],
+            }),
+          ], { key: safeKey("orp", o.path), gap: 6 }), { gap: 4 }),
+        ],
+        {
+          key: "health-orphans",
+          icon: "file-text",
+          tone: "muted",
+          checked: s.broken.length === 0 && s.needsReview.length === 0,
+        },
+      ),
+    );
   }
 
   if (s.issueCount === 0 && s.orphans.length === 0) {
     items.push(ui.card([
       ui.row([
         ui.icon("circle-check", { tone: "success" }),
-        ui.text("All OKF documents have valid frontmatter and resolved links.", { tone: "success" }),
+        ui.text(t("health.allHealthy"), { tone: "success" }),
       ], { gap: 6 }),
     ]));
   }
@@ -435,17 +1055,24 @@ function renderHealth(s, ui) {
 export default {
   activate(m) {
     mako = m;
+    registerOKFi18n(mako);
 
     mako.blocks.register("vault", {
       state: {
-        tab: "Browse",
+        tab: "browse",
         query: "",
         typeFilter: "All",
         tagFilter: "",
         selectedPath: "",
         confirmDeletePath: "",
+        metaExpanded: false,
         draft: null,
         docs: [],
+        dirs: [],
+        collapsedDirs: {},
+        showNewFolder: false,
+        newFolderDraft: "",
+        graphFocusPath: "",
         hasIndex: true,
         totalLinks: 0,
         broken: [],
@@ -461,39 +1088,64 @@ export default {
       async load(s, ctx) {
         await refreshState(s, ctx, true);
       },
-      render(s, ui) {
-        const healthLabel = s.issueCount > 0 ? `Health (${s.issueCount})` : "Health";
-        const tabOptions = s.draft ? ["Browse", healthLabel, "Editor"] : ["Browse", healthLabel];
-        const activeTab = s.tab === "Health" ? healthLabel : (s.tab === "Editor" && s.draft ? "Editor" : "Browse");
+      render(s, ui, ctx) {
+        const t = getCtxT(ctx);
+        const browseLabel = t("tab.browse");
+        const treeLabel = t("tab.tree");
+        const graphLabel = t("tab.graph");
+        const healthLabel = s.issueCount > 0 ? t("tab.healthCount", { count: s.issueCount }) : t("tab.health");
+        const editorLabel = t("tab.editor");
 
-        const parts = [
-          renderTopBar(s, ui, activeTab, tabOptions),
-        ];
+        const tabOptions = s.draft
+          ? [browseLabel, treeLabel, graphLabel, healthLabel, editorLabel]
+          : [browseLabel, treeLabel, graphLabel, healthLabel];
+
+        let activeTab = browseLabel;
+        if (s.tab === "tree") activeTab = treeLabel;
+        else if (s.tab === "graph") activeTab = graphLabel;
+        else if (s.tab === "health") activeTab = healthLabel;
+        else if (s.tab === "editor" && s.draft) activeTab = editorLabel;
+
+        const scrollChildren = [];
         if (s.error) {
-          parts.push(ui.card([ui.text(s.error, { tone: "danger", size: "small" })]));
+          scrollChildren.push(ui.card([ui.text(s.error, { tone: "danger", size: "small" })], { key: "error-card" }));
         }
-        if (activeTab === "Editor" && s.draft) {
-          parts.push(renderEditor(s, ui));
-        } else if (activeTab === healthLabel) {
-          parts.push(renderHealth(s, ui));
+        if (s.tab === "editor" && s.draft) {
+          scrollChildren.push(renderEditor(s, ui, t));
+        } else if (s.tab === "tree") {
+          scrollChildren.push(renderTree(s, ui, t));
+        } else if (s.tab === "graph") {
+          scrollChildren.push(renderGraph(s, ui, t));
+        } else if (s.tab === "health") {
+          scrollChildren.push(renderHealth(s, ui, t));
         } else {
-          parts.push(renderBrowse(s, ui));
+          scrollChildren.push(renderBrowse(s, ui, t));
         }
-        return ui.column(parts, { gap: 8 });
+
+        return ui.column([
+          renderTopBar(s, ui, t, activeTab, tabOptions),
+          ui.scroll(scrollChildren, { key: "main-scroll", grow: 1, gap: 8 }),
+        ], { gap: 8, fill: true });
       },
       on: {
         setTab(s, value) {
-          const v = String(value || "Browse");
-          if (v.startsWith("Health")) s.tab = "Health";
-          else if (v === "Editor" && s.draft) s.tab = "Editor";
-          else s.tab = "Browse";
+          const ctx = mako.blocks.context("vault");
+          const t = getCtxT(ctx);
+          const v = String(value || "").trim();
+          const healthPrefix = t("tab.health");
+          if (v === t("tab.tree") || v === "Tree" || v === "tree") s.tab = "tree";
+          else if (v === t("tab.graph") || v === "Graph" || v === "graph") s.tab = "graph";
+          else if (v === healthPrefix || v.startsWith(`${healthPrefix} (`) || v.startsWith("Health") || v === "health") s.tab = "health";
+          else if ((v === t("tab.editor") || v === "Editor" || v === "editor") && s.draft) s.tab = "editor";
+          else s.tab = "browse";
           s.confirmDeletePath = "";
         },
         setQuery(s, value) {
           s.query = String(value ?? "");
         },
         setTypeFilter(s, value) {
-          s.typeFilter = String(value || "All");
+          const ctx = mako.blocks.context("vault");
+          s.typeFilter = canonicalTypeFilter(value, getCtxT(ctx));
         },
         setTagFilter(s, tag) {
           s.tagFilter = String(tag || "");
@@ -501,29 +1153,151 @@ export default {
         filterTagAndClose(s, tag) {
           s.tagFilter = String(tag || "");
           s.selectedPath = "";
-          s.tab = "Browse";
+          s.tab = "browse";
         },
         openDoc(s, p) {
           s.selectedPath = String(p || "");
           s.confirmDeletePath = "";
-          s.tab = "Browse";
+          s.tab = "browse";
         },
         closeDoc(s) {
           s.selectedPath = "";
           s.confirmDeletePath = "";
         },
+        setMetaExpanded(s, expanded) {
+          s.metaExpanded = Boolean(expanded);
+        },
+        onBreadcrumb(s, docPath, indexStr) {
+          const idx = Number(indexStr);
+          if (!Number.isFinite(idx) || idx < 0) return;
+          const segments = String(docPath || "").split("/").filter(Boolean);
+          if (idx === 0) {
+            s.selectedPath = "";
+            s.confirmDeletePath = "";
+            s.tab = "browse";
+            return;
+          }
+          if (idx < segments.length) {
+            const nextCollapsed = { ...(s.collapsedDirs || {}) };
+            let acc = "";
+            for (let i = 0; i < idx; i++) {
+              acc = acc ? `${acc}/${segments[i]}` : segments[i];
+              nextCollapsed[acc] = false;
+            }
+            s.collapsedDirs = nextCollapsed;
+            s.selectedPath = "";
+            s.confirmDeletePath = "";
+            s.tab = "tree";
+          }
+        },
+        async openLink(s, rawHref) {
+          const href = String(rawHref || "").trim();
+          if (!href || /^https?:\/\//i.test(href)) return;
+          let cleaned = href.replace(/^okf:/i, "").split("#")[0].trim();
+          try {
+            cleaned = decodeURIComponent(cleaned);
+          } catch {}
+          if (!cleaned) return;
+          const resolved = resolveDocLink(s.docs, s.selectedPath, cleaned);
+          if (resolved) {
+            s.selectedPath = resolved;
+            s.confirmDeletePath = "";
+            s.tab = "browse";
+            return;
+          }
+          const ctx = mako.blocks.context("vault");
+          const t = getCtxT(ctx);
+          const folder = await defaultFolder(ctx);
+          const normPath = normalizeDocPath(cleaned, folder);
+          const stem = normPath.replace(/\.md$/, "").split("/").pop() || cleaned;
+          const prettyTitle = stem.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+          s.draft = emptyDraft(folder, normPath, prettyTitle);
+          s.tab = "editor";
+          s.error = "";
+          await mako.commands.runCommand({ id: "mako.toast", arg: t("toast.creatingMissingDoc", { path: normPath }) });
+        },
+        openInGraph(s, p) {
+          s.graphFocusPath = String(p || "");
+          s.tab = "graph";
+        },
+        setGraphFocus(s, id) {
+          s.graphFocusPath = String(id || "");
+        },
+        toggleDir(s, dirPath, expanded) {
+          const k = String(dirPath || "");
+          if (!k) return;
+          const nextCollapsed = typeof expanded === "boolean" ? !expanded : !s.collapsedDirs[k];
+          s.collapsedDirs = { ...s.collapsedDirs, [k]: nextCollapsed };
+        },
+        expandAllDirs(s) {
+          s.collapsedDirs = {};
+        },
+        collapseAllDirs(s) {
+          const tree = buildFolderTree(s.docs, s.dirs);
+          const next = {};
+          for (const p of allDirPaths(tree)) next[p] = true;
+          s.collapsedDirs = next;
+        },
+        toggleNewFolder(s) {
+          s.showNewFolder = !s.showNewFolder;
+          s.newFolderDraft = "";
+          s.error = "";
+        },
+        setNewFolderDraft(s, value) {
+          s.newFolderDraft = String(value ?? "");
+        },
+        async createFolder(s) {
+          const ctx = mako.blocks.context("vault");
+          const t = getCtxT(ctx);
+          const vals = mako.blocks.values("vault");
+          const raw = vals["tree-mkdir-input"] ?? s.newFolderDraft;
+          const clean = normalizeDirPath(raw);
+          if (!clean) {
+            s.error = t("error.folderRequired");
+            return;
+          }
+          await ctx.datafs.mkdir(clean);
+          s.showNewFolder = false;
+          s.newFolderDraft = "";
+          s.collapsedDirs = { ...s.collapsedDirs, [clean]: false };
+          await refreshState(s, ctx, false);
+          await mako.commands.runCommand({ id: "mako.toast", arg: t("toast.createdFolder", { path: clean }) });
+        },
+        newDocInFolder(s, dirPath) {
+          const folder = String(dirPath || "concepts");
+          s.draft = emptyDraft(folder, `${folder}/`);
+          s.tab = "editor";
+          s.error = "";
+        },
+        async moveDocToFolder(s, targetFolder, droppedPath) {
+          const srcPath = String(droppedPath || "").trim();
+          if (!srcPath || srcPath === "index.md") return;
+          const fileName = srcPath.split("/").pop();
+          if (!fileName) return;
+          const destFolder = String(targetFolder || "").replace(/^\/+|\/+$/g, "");
+          const destPath = destFolder ? `${destFolder}/${fileName}` : fileName;
+          if (destPath === srcPath) return;
+          const ctx = mako.blocks.context("vault");
+          const t = getCtxT(ctx);
+          await ctx.datafs.move(srcPath, destPath);
+          if (s.selectedPath === srcPath) s.selectedPath = destPath;
+          if (s.graphFocusPath === srcPath) s.graphFocusPath = destPath;
+          await syncIndexFile(ctx);
+          await refreshState(s, ctx, false);
+          await mako.commands.runCommand({ id: "mako.toast", arg: t("toast.movedDoc", { path: destPath }) });
+        },
         async newDoc(s) {
           const ctx = mako.blocks.context("vault");
           const folder = await defaultFolder(ctx);
           s.draft = emptyDraft(folder);
-          s.tab = "Editor";
+          s.tab = "editor";
           s.error = "";
         },
         editDoc(s, p) {
           const doc = s.docs.find((d) => d.path === p);
           if (!doc) return;
           s.draft = draftFromDoc(doc);
-          s.tab = "Editor";
+          s.tab = "editor";
           s.error = "";
         },
         async createFromLink(s, target) {
@@ -533,27 +1307,36 @@ export default {
           const stem = normPath.replace(/\.md$/, "").split("/").pop() || target;
           const prettyTitle = stem.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
           s.draft = emptyDraft(folder, normPath, prettyTitle);
-          s.tab = "Editor";
+          s.tab = "editor";
           s.error = "";
         },
         cancelEdit(s) {
           s.draft = null;
-          s.tab = "Browse";
+          s.tab = "browse";
           s.error = "";
         },
         draftField(s, field, value) {
           if (!s.draft) return;
-          s.draft[field] = String(value ?? "");
+          const ctx = mako.blocks.context("vault");
+          const t = getCtxT(ctx);
+          if (field === "type") {
+            s.draft.type = canonicalDocType(value, t);
+          } else if (field === "status") {
+            s.draft.status = canonicalDocStatus(value, t);
+          } else {
+            s.draft[field] = String(value ?? "");
+          }
         },
         async saveDraft(s) {
           if (!s.draft) return;
           const ctx = mako.blocks.context("vault");
+          const t = getCtxT(ctx);
           const vals = mako.blocks.values("vault");
           const d = {
             ...s.draft,
             title: vals["ed-title"] ?? s.draft.title,
-            type: vals["ed-type"] ?? s.draft.type,
-            status: vals["ed-status"] ?? s.draft.status,
+            type: canonicalDocType(vals["ed-type"] ?? s.draft.type, t),
+            status: canonicalDocStatus(vals["ed-status"] ?? s.draft.status, t),
             path: vals["ed-path"] ?? s.draft.path,
             tags: vals["ed-tags"] ?? s.draft.tags,
             description: vals["ed-desc"] ?? s.draft.description,
@@ -563,14 +1346,17 @@ export default {
           };
           const title = String(d.title || "").trim();
           if (!title) {
-            s.error = "Title is required.";
+            s.error = t("error.titleRequired");
             return;
           }
           const folder = d.folder || (await defaultFolder(ctx));
-          const rawPath = String(d.path || "").trim() || `${folder}/${slugify(title) || "note"}.md`;
-          const targetPath = normalizeDocPath(rawPath, folder);
+          const rawPath = String(d.path || "").trim();
+          const candidatePath = !rawPath || rawPath.endsWith("/")
+            ? `${(rawPath || folder).replace(/\/+$/, "")}/${slugify(title) || "note"}.md`
+            : rawPath;
+          const targetPath = normalizeDocPath(candidatePath, folder);
           if (!targetPath) {
-            s.error = "Valid relative .md path is required.";
+            s.error = t("error.pathRequired");
             return;
           }
 
@@ -593,12 +1379,13 @@ export default {
           await syncIndexFile(ctx);
           s.draft = null;
           s.selectedPath = targetPath;
-          s.tab = "Browse";
+          s.tab = "browse";
           await refreshState(s, ctx, false);
-          await mako.commands.runCommand({ id: "mako.toast", arg: `Saved ${targetPath}` });
+          await mako.commands.runCommand({ id: "mako.toast", arg: t("toast.savedDoc", { path: targetPath }) });
         },
         async setDocStatus(s, p, nextStatus) {
           const ctx = mako.blocks.context("vault");
+          const t = getCtxT(ctx);
           const doc = s.docs.find((d) => d.path === p);
           if (!doc) return;
           const content = serializeDoc({
@@ -616,25 +1403,32 @@ export default {
           await ctx.datafs.write(doc.path, content);
           await syncIndexFile(ctx);
           await refreshState(s, ctx, false);
+          await mako.commands.runCommand({
+            id: "mako.toast",
+            arg: t("toast.statusUpdated", { status: labelStatus(t, nextStatus) }),
+          });
         },
         askDelete(s, p) {
           s.confirmDeletePath = String(p || "");
         },
         async deleteDoc(s, p) {
           const ctx = mako.blocks.context("vault");
+          const t = getCtxT(ctx);
           await ctx.datafs.delete(String(p || ""));
           s.confirmDeletePath = "";
           if (s.selectedPath === p) s.selectedPath = "";
+          if (s.graphFocusPath === p) s.graphFocusPath = "";
           await syncIndexFile(ctx);
           await refreshState(s, ctx, false);
-          await mako.commands.runCommand({ id: "mako.toast", arg: `Deleted ${p}` });
+          await mako.commands.runCommand({ id: "mako.toast", arg: t("toast.deletedDoc", { path: p }) });
         },
         async rebuildIndex(s) {
           const ctx = mako.blocks.context("vault");
+          const t = getCtxT(ctx);
           const { index } = await loadVaultDocs(ctx, false);
           await ctx.datafs.write("index.md", rebuildIndexMarkdown(ctx.projectName, index.docs));
           await refreshState(s, ctx, false);
-          await mako.commands.runCommand({ id: "mako.toast", arg: "Rebuilt OKF index.md" });
+          await mako.commands.runCommand({ id: "mako.toast", arg: t("toast.rebuiltIndex") });
         },
       },
     });
@@ -646,7 +1440,7 @@ export default {
       mako.blocks.reload("vault", ctx.scopeKey);
     });
 
-    // --- Project-scoped tools for AI agents (MCP & mako-plugin CLI) ---
+    // --- Project-scoped tools for AI agents (mako-plugin CLI) ---
 
     mako.tools.register("list_docs", async (args, ctx) => {
       const { index, stats } = await loadVaultDocs(ctx, false);

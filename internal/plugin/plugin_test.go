@@ -264,3 +264,102 @@ func TestAPluginDrawsAChart(t *testing.T) {
 		t.Fatalf("the chart is %v", c)
 	}
 }
+
+func TestPreludeRichUIv2AndI18n(t *testing.T) {
+	r := newRig(t, testLimits, nil)
+	src := `
+export default {
+  activate(mako) {
+    mako.i18n.register({
+      en: {
+        title: "Vault ({count})",
+        nav: { home: "Home", notes: "Notes" },
+        onlyEn: "English fallback",
+      },
+      ko: {
+        title: "보관함 ({count})",
+        nav: { home: "홈" },
+      },
+      "ko-KR": {
+        "nav.notes": "노트",
+      },
+    });
+    // Second register merges cleanly without clobbering existing keys.
+    mako.i18n.register({
+      ko: { extra: "추가 {n}" },
+    });
+    mako.blocks.register("ui", {
+      state: { selected: "a", link: "" },
+      render(s, ui, ctx) {
+        const checks = [
+          ctx.locale,
+          ctx.t("title", { count: 3 }),
+          mako.i18n.t("title", { count: 0 }, "ko-KR"),
+          mako.i18n.t("nav.home", null, "ko-KR"),
+          mako.i18n.t("nav.notes", null, "ko_KR"),
+          mako.i18n.t("onlyEn", null, "ko-KR"),
+          mako.i18n.t("extra", { n: 5 }, "ko"),
+          mako.i18n.t("missing.key", { x: 1 }, "fr"),
+        ].join("|");
+        return ui.split(
+          ui.column([
+            ui.breadcrumb([ctx.t("nav.home"), ctx.t("nav.notes")], { key: "bc", onChange: ["nav"] }),
+            ui.tree([
+              ui.treeItem("Docs", [
+                ui.treeItem("Spec", { key: "spec", icon: "file-text", value: "2KB", onTap: ["pick", "spec"] }),
+              ], { key: "docs", icon: "folder", checked: true, onChange: ["exp"] }),
+            ], { key: "tr" }),
+            ui.collapsible("More", [
+              ui.wrap([ui.chip("a"), ui.chip("b")], { gap: 4 }),
+            ], { key: "col", checked: true, icon: "tag" }),
+          ], { key: "left" }),
+          ui.column([
+            ui.text(checks, { key: "i18n" }),
+            ui.grid(2, [
+              ui.card([ui.button("", { key: "add", icon: "plus", variant: "ghost", size: "small", onTap: ["add"] })], { key: "c1", variant: "outline" }),
+              ui.chart("donut", [{ values: [3, 7] }], { key: "ch", labels: ["A", "B"], caption: "Mix" }),
+            ], { key: "g", gap: 8 }),
+            ui.markdown("Open [[Spec]] " + s.link, { key: "md", onLink: ["follow"] }),
+            ui.graph(
+              [{ id: "a", label: "Alpha", tone: "accent" }, { id: "b", label: "Beta", weight: 2 }],
+              [{ from: "a", to: "b", label: "links", dashed: true }],
+              { key: "gr", value: s.selected, maxHeight: 300, caption: "Map", onChange: ["focus"] },
+            ),
+          ], { key: "right" }),
+          { fill: true, direction: "horizontal", ratio: 0.3 },
+        );
+      },
+      on: {
+        follow(s, target) { s.link = target; },
+        focus(s, nodeId) { s.selected = nodeId; },
+      },
+    });
+  },
+};`
+	r.write("richv2", map[string]string{ManifestName: manifest("richv2", nil, ""), "main.js": src})
+	w := r.watch("plugin:richv2/ui")
+	wantI18n := "en|Vault (3)|보관함 (0)|홈|노트|English fallback|추가 5|missing.key"
+	tree := w.until("rich ui v2", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, wantI18n) })
+	if tree.GetKind() != "split" || !tree.GetFill() || tree.GetRatio() != 0.3 {
+		t.Fatalf("root split = %+v", tree)
+	}
+	if _, err := r.event("plugin:richv2/ui", "/right/md", protocol.UiChange, "Spec"); err != nil {
+		t.Fatal(err)
+	}
+	w.until("markdown onLink handled", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "Open [[Spec]] Spec") })
+	if _, err := r.event("plugin:richv2/ui", "/right/gr", protocol.UiChange, "b"); err != nil {
+		t.Fatal(err)
+	}
+	w.until("graph onChange handled", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		for _, c := range n.GetChildren() {
+			if c.GetId() == "/right" {
+				for _, gc := range c.GetChildren() {
+					if gc.GetId() == "/right/gr" {
+						return gc.GetValue() == "b"
+					}
+				}
+			}
+		}
+		return false
+	})
+}

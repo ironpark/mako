@@ -878,3 +878,97 @@ releaseStale:
 		}
 	}
 }
+
+// While an agy coordinator is idle at its ">" prompt with active Swarm/Agent
+// status rows in the bottom chrome, screenLivePoller must surface those live
+// activity lines to WatchChat (without shortcut chrome) and clear them once
+// the Swarm finishes.
+func TestAgyScreenLiveEmitsSwarmActivityWhileCoordinatorIdle(t *testing.T) {
+	d := meshDaemon(t, "agy-swarm-idle")
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "transcript_full.jsonl")
+	if err := os.WriteFile(logPath, []byte(`{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","content":"<USER_REQUEST>\n/swarm\n</USER_REQUEST>"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `stty -echo
+rule="────────────────────────────────────────────────────────────────────────────────"
+div="────────────────────────────────────────────────────────────"
+while IFS= read -r cmd; do
+  case "$cmd" in
+    swarm1)
+      printf '\033[2J\033[H%s\n> /swarm\n\n  Started workers.\n\n%s\n>\n%s\n● Swarm(Plugin UI)  coordinator: @ui-schema · 69 posts · alt+s board · alt+x dismiss\n● Agent(worker: Swarm Worker (ui-schema))  Working · 1m10s' "$div" "$rule" "$rule"
+      ;;
+    swarm2)
+      printf '\033[2J\033[H%s\n> /swarm\n\n  Started workers.\n\n%s\n>\n%s\n● Swarm(Plugin UI)  coordinator: @ui-schema · 70 posts · alt+s board · alt+x dismiss\n● Agent(worker: Swarm Worker (ui-schema))  Running tests · 1m25s' "$div" "$rule" "$rule"
+      ;;
+    done)
+      printf '\033[2J\033[H%s\n> /swarm\n\n  Started workers.\n\n%s\n>\n%s\n● Swarm(Plugin UI)  Done · 71 posts · alt+s board · alt+x dismiss' "$div" "$rule" "$rule"
+      ;;
+  esac
+done`
+
+	s, err := session.Start(session.Spec{
+		ID:      "agy-sw",
+		NodeID:  d.cfg.NodeID,
+		Agent:   "agy",
+		Project: dir,
+		Command: []string{"/bin/sh", "-c", script},
+		Cols:    120,
+		Rows:    24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	s.SetConversation("conv-sw", logPath)
+	s.SetStatus(protocol.AgentDone) // coordinator idle at ">"
+	d.sessions.add(s)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	got := make(chan *protocol.ChatLive, 32)
+	go func() {
+		_ = dialDaemon(t, d).WatchChat(ctx, &protocol.WatchChat{SessionId: "agy-sw"}, func(l *protocol.ChatLive) { got <- l })
+	}()
+
+	waitFor := func(what string, ok func(*protocol.ChatLive) bool) {
+		t.Helper()
+		for {
+			select {
+			case l := <-got:
+				if ok(l) {
+					return
+				}
+			case <-ctx.Done():
+				t.Fatalf("timed out waiting for %s", what)
+			}
+		}
+	}
+	send := func(cmd string) {
+		t.Helper()
+		if _, err := s.Write([]byte(cmd + "\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	waitFor("initial snapshot", func(l *protocol.ChatLive) bool { return len(l.GetBlocks()) == 0 })
+
+	send("swarm1")
+	waitFor("idle swarm activity", func(l *protocol.ChatLive) bool {
+		st := statusBlock(l.GetBlocks())
+		return textBlocks(l.GetBlocks()) == "" &&
+			strings.Contains(st, "Swarm(Plugin UI) · coordinator: @ui-schema · 69 posts") &&
+			strings.Contains(st, "Agent(worker: Swarm Worker (ui-schema)) · Working · 1m10s") &&
+			!strings.Contains(st, "alt+s")
+	})
+
+	send("swarm2")
+	waitFor("updated swarm activity", func(l *protocol.ChatLive) bool {
+		st := statusBlock(l.GetBlocks())
+		return strings.Contains(st, "70 posts") && strings.Contains(st, "Running tests · 1m25s")
+	})
+
+	send("done")
+	waitFor("cleared swarm activity", func(l *protocol.ChatLive) bool { return len(l.GetBlocks()) == 0 })
+}

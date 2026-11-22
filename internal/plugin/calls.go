@@ -117,9 +117,11 @@ func (p *plugin) render(key string) {
 		p.mu.Unlock()
 		return
 	}
-	blockID, scopeKey := in.id, in.scopeKey
+	blockID, scopeKey, locale := in.id, in.scopeKey, in.locale
 	p.mu.Unlock()
-	ctxJSON := marshalScopeContext(p.m.resolveScope(scopeKey))
+	sc := p.m.resolveScope(scopeKey)
+	sc.Locale = normalizeLocale(locale)
+	ctxJSON := marshalScopeContext(sc)
 	out, err := p.invoke("render", false, blockID, scopeKey, ctxJSON)
 	var t *uiblock.Tree
 	var over *limitError
@@ -207,7 +209,12 @@ func (p *plugin) load(in *instance) {
 	if p.rt == nil {
 		return
 	}
-	ctxJSON := marshalScopeContext(p.m.resolveScope(in.scopeKey))
+	p.mu.Lock()
+	locale := in.locale
+	p.mu.Unlock()
+	sc := p.m.resolveScope(in.scopeKey)
+	sc.Locale = normalizeLocale(locale)
+	ctxJSON := marshalScopeContext(sc)
 	if _, err := p.invoke("load", false, in.id, in.scopeKey, ctxJSON); err != nil {
 		p.setErr(in.key, fmt.Errorf("load: %w", err))
 		return

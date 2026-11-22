@@ -34,11 +34,23 @@ export interface DbSyncEvent {
   readonly rows: number;
 }
 
-/** What activate is given: the Host API, and the plugin's blocks, commands and tools. */
+/** Nested or flat map of translation keys to template strings. */
+export type I18nMessages = { readonly [key: string]: string | I18nMessages };
+
+/** Plugin localization helper exposed on mako.i18n. */
+export interface I18nApi {
+  /** Registers or merges locale catalogs keyed by BCP-47 tag (e.g. "en", "ko", "ko-KR"). */
+  register(catalog: Record<string, I18nMessages>): void;
+  /** Looks up key with fallback (exact tag -> primary subtag -> "en" -> key) and replaces {name} placeholders. */
+  t(key: string, params?: Record<string, string | number | boolean>, locale?: string): string;
+}
+
+/** What activate is given: the Host API, and the plugin's blocks, commands, tools, and i18n. */
 export interface Mako extends HostApi {
   readonly blocks: Blocks;
   readonly commands: CommandsApi & Commands;
   readonly tools: Tools;
+  readonly i18n: I18nApi;
 }
 
 /** Declared scope kind of a plugin block, tool, or setting. */
@@ -98,6 +110,10 @@ export interface ScopeContext {
   readonly projectName: string;
   readonly sessionId: string;
   readonly roots: readonly string[];
+  /** Active BCP-47 language tag from the front-end (defaults to "en"). */
+  readonly locale: string;
+  /** Translates a key using the context's locale with {name} placeholder interpolation. */
+  t(key: string, params?: Record<string, string | number | boolean>): string;
   readonly storage: ScopedStorageApi;
   readonly settings: ScopedSettingsApi;
   readonly db: ScopedDbApi;
@@ -144,6 +160,9 @@ export interface Block<S extends object> {
 /** A colour, as a token of the theme; never a value. */
 export type Tone = "" | "muted" | "faint" | "accent" | "success" | "warning" | "danger";
 
+/** Visual style variant for button or card nodes. */
+export type Variant = "" | "primary" | "secondary" | "outline" | "ghost" | "danger";
+
 /** A message a node sends: its name in on, then arguments, JSON. */
 export type Message = [string, ...any[]];
 
@@ -151,20 +170,34 @@ export interface NodeOptions {
   /** Tells siblings apart across renders; a node's id is its keys' path. */
   key?: string | number;
   tone?: Tone;
+  /** Style variant for button or card nodes. */
+  variant?: Variant;
   weight?: "medium" | "semibold";
   size?: "small" | "large";
   /** Shares out a row's or column's room left. */
   grow?: number;
-  /** Room between a row's or column's children, in px. */
+  /** Room between a container's children, in px. */
   gap?: number;
-  /** A bundled icon beside a button's text. */
+  /** Column count (1..6) for a grid container. */
+  columns?: number;
+  /** Initial primary pane ratio (0.1..0.9) for a split container. */
+  ratio?: number;
+  /** On a root column, row, or split, skips outer auto-scroll so inner scroll panes can fill. */
+  fill?: boolean;
+  /** A bundled icon for an icon, button, collapsible, or tree_item node. */
   icon?: string;
+  /** Initial expanded/selected state for toggle, collapsible, or tree_item. */
+  checked?: boolean;
+  /** Secondary/meta text on tree_item, or focused node ID on graph. */
+  value?: string;
   disabled?: boolean;
   onTap?: Message;
-  /** Sent with the new value last: a toggle's, select's or input's. */
+  /** Sent with the new value last: toggle/collapsible/tree_item (bool), select/tabs/input/textarea/breadcrumb index/graph node ID (string). */
   onChange?: Message;
-  /** Sent with an input's text last when Return is pressed. */
+  /** Sent with an input's or textarea's text last when Return is pressed. */
   onSubmit?: Message;
+  /** On markdown, sent with the clicked link target last. */
+  onLink?: Message;
   /** Payload carried when this node is dragged onto a drop target. */
   drag?: string;
   /** Optional drag group tag matched against a target's dropAccept. */
@@ -173,36 +206,64 @@ export interface NodeOptions {
   onDrop?: Message;
   /** Restricts this drop target to drags whose dragGroup is in the list. */
   dropAccept?: string[];
-  /** Scroll container direction: "vertical" (default) or "horizontal". */
+  /** Scroll or split container direction: "vertical" or "horizontal". */
   direction?: "vertical" | "horizontal";
-  /** Scroll container maximum height in px. */
+  /** Maximum height in px for scroll (0..4000) or graph canvas (120..1200). */
   maxHeight?: number;
   placeholder?: string;
-  /** A chart's caption, said above it and read out with it. */
+  /** A chart's or graph's caption, said above it and read out with it. */
   caption?: string;
-  /** A chart's names of its points, or a table's column headers. */
+  /** A chart's names of its points/slices, or a table's column headers. */
   labels?: (string | number)[];
 }
 
-/** A series of a chart: at most 200 finite numbers, its colour a token. */
+/** A series of a chart: at most 200 finite numbers (1..16 non-negative for donut/pie), its colour a token. */
 export interface ChartSeries {
   name?: string;
   values: number[];
   tone?: Tone;
 }
 
+/** A node in a declarative interactive graph canvas. */
+export interface GraphNode {
+  id: string;
+  label: string;
+  group?: string;
+  tone?: Tone;
+  subtitle?: string;
+  /** Positive finite weight (> 0); defaults to 1. */
+  weight?: number;
+}
+
+/** An edge connecting two GraphNodes by id. */
+export interface GraphEdge {
+  from: string;
+  to: string;
+  label?: string;
+  tone?: Tone;
+  dashed?: boolean;
+}
+
 /** A node of a block's tree; its methods set what NodeOptions do. */
 export interface UiNode {
   key(k: string | number): this;
   tone(t: Tone): this;
+  variant(v: Variant): this;
   weight(w: "medium" | "semibold"): this;
   size(s: "small" | "large"): this;
   grow(n?: number): this;
   gap(px: number): this;
+  columns(n: number): this;
+  ratio(r: number): this;
+  fill(on?: boolean): this;
   icon(name: string): this;
+  checked(on?: boolean): this;
+  value(v: string): this;
   disabled(on?: boolean): this;
   onTap(name: string, ...args: any[]): this;
   onChange(name: string, ...args: any[]): this;
+  onSubmit(name: string, ...args: any[]): this;
+  onLink(name: string, ...args: any[]): this;
   drag(payload: string, group?: string): this;
   onDrop(name: string, ...args: any[]): this;
   dropAccept(...groups: string[]): this;
@@ -215,6 +276,16 @@ export interface Ui {
   stack(children: UiNode[], opts?: NodeOptions): UiNode;
   card(children: UiNode[], opts?: NodeOptions): UiNode;
   scroll(children: UiNode[], opts?: NodeOptions): UiNode;
+  wrap(children: UiNode[], opts?: NodeOptions): UiNode;
+  grid(columns: number, children: UiNode[], opts?: NodeOptions): UiNode;
+  grid(children: UiNode[], opts?: NodeOptions): UiNode;
+  split(first: UiNode, second: UiNode, opts?: NodeOptions): UiNode;
+  split(children: [UiNode, UiNode], opts?: NodeOptions): UiNode;
+  collapsible(title: string, children: UiNode[], opts?: NodeOptions): UiNode;
+  breadcrumb(segments: string[], opts?: NodeOptions): UiNode;
+  tree(items: UiNode[], opts?: NodeOptions): UiNode;
+  treeItem(label: string, opts?: NodeOptions): UiNode;
+  treeItem(label: string, children: UiNode[], opts?: NodeOptions): UiNode;
   text(text: string, opts?: NodeOptions): UiNode;
   icon(name: string, opts?: NodeOptions): UiNode;
   pill(text: string, opts?: NodeOptions): UiNode;
@@ -231,8 +302,10 @@ export interface Ui {
   code(text: string, language?: string, opts?: NodeOptions): UiNode;
   progress(value: number, opts?: NodeOptions): UiNode;
   divider(opts?: NodeOptions): UiNode;
-  /** A line, bar or sparkline chart of 1 to 4 series; 600 points in all. */
-  chart(type: "line" | "bar" | "sparkline", series: ChartSeries[], opts?: NodeOptions): UiNode;
+  /** A line, bar, sparkline, donut or pie chart; up to 4 series (600 points), or 1 series of 1..16 non-negative slices with matching labels for donut/pie. */
+  chart(type: "line" | "bar" | "sparkline" | "donut" | "pie", series: ChartSeries[], opts?: NodeOptions): UiNode;
+  /** A declarative interactive node-edge graph canvas (up to 120 nodes, 400 edges); onChange fires clicked node ID. */
+  graph(nodes: GraphNode[], edges: GraphEdge[], opts?: NodeOptions): UiNode;
 }
 
 // The Host API, from proto/mako/plugin/v1. A method that needs a permission

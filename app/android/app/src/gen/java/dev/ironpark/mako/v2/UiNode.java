@@ -8,9 +8,11 @@ package dev.ironpark.mako.v2;
 /**
  * <pre>
  * UiNode is a node of a plugin block's tree. The kinds are a fixed set
- * (docs/plugins.md): column, row, stack, text, icon, pill, chip, button,
- * list, input, toggle, select, markdown, code, progress, divider, and
- * from revision 33 chart; a colour is a token, never a value.
+ * (docs/plugins.md): column, row, stack, card, scroll, wrap, grid, split,
+ * collapsible, breadcrumb, tree, tree_item, text, icon, pill, chip, button,
+ * list, input, textarea, toggle, select, tabs, table, markdown, code,
+ * progress, divider, chart (revision 33), and graph (revision 44); a colour
+ * is a token, never a value.
  * </pre>
  *
  * Protobuf type {@code mako.v2.UiNode}
@@ -40,6 +42,9 @@ public  final class UiNode extends
     dragGroup_ = "";
     dropAccept_ = emptyProtobufList();
     direction_ = "";
+    variant_ = "";
+    graphNodes_ = emptyProtobufList();
+    graphEdges_ = emptyProtobufList();
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -164,8 +169,9 @@ public  final class UiNode extends
   private java.lang.String text_;
   /**
    * <pre>
-   * text is what a text, pill, chip, button, markdown or code node
-   * shows; an input's placeholder; a toggle's label.
+   * text is what a text, pill, chip, button, markdown, code, collapsible or
+   * tree_item node shows; an input's or textarea's placeholder; a toggle's
+   * label; a chart's or graph's caption.
    * </pre>
    *
    * <code>string text = 3 [json_name = "text"];</code>
@@ -177,8 +183,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * text is what a text, pill, chip, button, markdown or code node
-   * shows; an input's placeholder; a toggle's label.
+   * text is what a text, pill, chip, button, markdown, code, collapsible or
+   * tree_item node shows; an input's or textarea's placeholder; a toggle's
+   * label; a chart's or graph's caption.
    * </pre>
    *
    * <code>string text = 3 [json_name = "text"];</code>
@@ -191,8 +198,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * text is what a text, pill, chip, button, markdown or code node
-   * shows; an input's placeholder; a toggle's label.
+   * text is what a text, pill, chip, button, markdown, code, collapsible or
+   * tree_item node shows; an input's or textarea's placeholder; a toggle's
+   * label; a chart's or graph's caption.
    * </pre>
    *
    * <code>string text = 3 [json_name = "text"];</code>
@@ -206,8 +214,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * text is what a text, pill, chip, button, markdown or code node
-   * shows; an input's placeholder; a toggle's label.
+   * text is what a text, pill, chip, button, markdown, code, collapsible or
+   * tree_item node shows; an input's or textarea's placeholder; a toggle's
+   * label; a chart's or graph's caption.
    * </pre>
    *
    * <code>string text = 3 [json_name = "text"];</code>
@@ -218,8 +227,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * text is what a text, pill, chip, button, markdown or code node
-   * shows; an input's placeholder; a toggle's label.
+   * text is what a text, pill, chip, button, markdown, code, collapsible or
+   * tree_item node shows; an input's or textarea's placeholder; a toggle's
+   * label; a chart's or graph's caption.
    * </pre>
    *
    * <code>string text = 3 [json_name = "text"];</code>
@@ -308,8 +318,8 @@ public  final class UiNode extends
   private java.lang.String icon_;
   /**
    * <pre>
-   * icon is a bundled icon's name, for an icon node or beside a button's
-   * text.
+   * icon is a bundled icon's name, for an icon, button, collapsible or
+   * tree_item node.
    * </pre>
    *
    * <code>string icon = 5 [json_name = "icon"];</code>
@@ -321,8 +331,8 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * icon is a bundled icon's name, for an icon node or beside a button's
-   * text.
+   * icon is a bundled icon's name, for an icon, button, collapsible or
+   * tree_item node.
    * </pre>
    *
    * <code>string icon = 5 [json_name = "icon"];</code>
@@ -335,8 +345,8 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * icon is a bundled icon's name, for an icon node or beside a button's
-   * text.
+   * icon is a bundled icon's name, for an icon, button, collapsible or
+   * tree_item node.
    * </pre>
    *
    * <code>string icon = 5 [json_name = "icon"];</code>
@@ -350,8 +360,8 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * icon is a bundled icon's name, for an icon node or beside a button's
-   * text.
+   * icon is a bundled icon's name, for an icon, button, collapsible or
+   * tree_item node.
    * </pre>
    *
    * <code>string icon = 5 [json_name = "icon"];</code>
@@ -362,8 +372,8 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * icon is a bundled icon's name, for an icon node or beside a button's
-   * text.
+   * icon is a bundled icon's name, for an icon, button, collapsible or
+   * tree_item node.
    * </pre>
    *
    * <code>string icon = 5 [json_name = "icon"];</code>
@@ -494,7 +504,9 @@ public  final class UiNode extends
   private java.lang.String value_;
   /**
    * <pre>
-   * value is an input's text or a select's choice; checked a toggle's.
+   * value is an input's/textarea's text, a select's/tabs' choice, a
+   * tree_item's secondary/meta text, or a graph's focused node ID; checked
+   * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
    * </pre>
    *
    * <code>string value = 8 [json_name = "value"];</code>
@@ -506,7 +518,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * value is an input's text or a select's choice; checked a toggle's.
+   * value is an input's/textarea's text, a select's/tabs' choice, a
+   * tree_item's secondary/meta text, or a graph's focused node ID; checked
+   * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
    * </pre>
    *
    * <code>string value = 8 [json_name = "value"];</code>
@@ -519,7 +533,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * value is an input's text or a select's choice; checked a toggle's.
+   * value is an input's/textarea's text, a select's/tabs' choice, a
+   * tree_item's secondary/meta text, or a graph's focused node ID; checked
+   * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
    * </pre>
    *
    * <code>string value = 8 [json_name = "value"];</code>
@@ -533,7 +549,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * value is an input's text or a select's choice; checked a toggle's.
+   * value is an input's/textarea's text, a select's/tabs' choice, a
+   * tree_item's secondary/meta text, or a graph's focused node ID; checked
+   * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
    * </pre>
    *
    * <code>string value = 8 [json_name = "value"];</code>
@@ -544,7 +562,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * value is an input's text or a select's choice; checked a toggle's.
+   * value is an input's/textarea's text, a select's/tabs' choice, a
+   * tree_item's secondary/meta text, or a graph's focused node ID; checked
+   * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
    * </pre>
    *
    * <code>string value = 8 [json_name = "value"];</code>
@@ -587,7 +607,7 @@ public  final class UiNode extends
   private com.google.protobuf.Internal.ProtobufList<java.lang.String> options_;
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -599,7 +619,7 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -611,7 +631,7 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -624,7 +644,7 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -646,7 +666,7 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -661,7 +681,7 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -675,7 +695,7 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -689,7 +709,7 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -699,7 +719,7 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -848,7 +868,7 @@ public  final class UiNode extends
   /**
    * <pre>
    * grow shares out a row's or column's room left among the children
-   * that set it; gap is the room between a row's or column's children.
+   * that set it; gap is the room between a container's children.
    * </pre>
    *
    * <code>double grow = 14 [json_name = "grow"];</code>
@@ -861,7 +881,7 @@ public  final class UiNode extends
   /**
    * <pre>
    * grow shares out a row's or column's room left among the children
-   * that set it; gap is the room between a row's or column's children.
+   * that set it; gap is the room between a container's children.
    * </pre>
    *
    * <code>double grow = 14 [json_name = "grow"];</code>
@@ -874,7 +894,7 @@ public  final class UiNode extends
   /**
    * <pre>
    * grow shares out a row's or column's room left among the children
-   * that set it; gap is the room between a row's or column's children.
+   * that set it; gap is the room between a container's children.
    * </pre>
    *
    * <code>double grow = 14 [json_name = "grow"];</code>
@@ -914,8 +934,9 @@ public  final class UiNode extends
   private boolean tap_;
   /**
    * <pre>
-   * tap says tapping the node is answered; change that its value
-   * changing is.
+   * tap says tapping the node is answered; change that its value changing
+   * (or a markdown link, breadcrumb segment, graph node click, or
+   * collapsible/tree_item expansion toggle) is answered.
    * </pre>
    *
    * <code>bool tap = 16 [json_name = "tap"];</code>
@@ -927,8 +948,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * tap says tapping the node is answered; change that its value
-   * changing is.
+   * tap says tapping the node is answered; change that its value changing
+   * (or a markdown link, breadcrumb segment, graph node click, or
+   * collapsible/tree_item expansion toggle) is answered.
    * </pre>
    *
    * <code>bool tap = 16 [json_name = "tap"];</code>
@@ -940,8 +962,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * tap says tapping the node is answered; change that its value
-   * changing is.
+   * tap says tapping the node is answered; change that its value changing
+   * (or a markdown link, breadcrumb segment, graph node click, or
+   * collapsible/tree_item expansion toggle) is answered.
    * </pre>
    *
    * <code>bool tap = 16 [json_name = "tap"];</code>
@@ -1075,10 +1098,11 @@ public  final class UiNode extends
   private java.lang.String chart_;
   /**
    * <pre>
-   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-   * (revision 33). Its series are numbers, each series's colour a token;
-   * labels name the points along its axis; text is its caption. A front-end
-   * that does not know the kind draws nothing in its place.
+   * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+   * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+   * each series's colour a token; labels name the points along its axis (or
+   * slices of a donut/pie); text is its caption. A front-end that does not
+   * know the kind draws nothing in its place.
    * </pre>
    *
    * <code>string chart = 19 [json_name = "chart"];</code>
@@ -1090,10 +1114,11 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-   * (revision 33). Its series are numbers, each series's colour a token;
-   * labels name the points along its axis; text is its caption. A front-end
-   * that does not know the kind draws nothing in its place.
+   * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+   * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+   * each series's colour a token; labels name the points along its axis (or
+   * slices of a donut/pie); text is its caption. A front-end that does not
+   * know the kind draws nothing in its place.
    * </pre>
    *
    * <code>string chart = 19 [json_name = "chart"];</code>
@@ -1106,10 +1131,11 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-   * (revision 33). Its series are numbers, each series's colour a token;
-   * labels name the points along its axis; text is its caption. A front-end
-   * that does not know the kind draws nothing in its place.
+   * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+   * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+   * each series's colour a token; labels name the points along its axis (or
+   * slices of a donut/pie); text is its caption. A front-end that does not
+   * know the kind draws nothing in its place.
    * </pre>
    *
    * <code>string chart = 19 [json_name = "chart"];</code>
@@ -1123,10 +1149,11 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-   * (revision 33). Its series are numbers, each series's colour a token;
-   * labels name the points along its axis; text is its caption. A front-end
-   * that does not know the kind draws nothing in its place.
+   * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+   * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+   * each series's colour a token; labels name the points along its axis (or
+   * slices of a donut/pie); text is its caption. A front-end that does not
+   * know the kind draws nothing in its place.
    * </pre>
    *
    * <code>string chart = 19 [json_name = "chart"];</code>
@@ -1137,10 +1164,11 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-   * (revision 33). Its series are numbers, each series's colour a token;
-   * labels name the points along its axis; text is its caption. A front-end
-   * that does not know the kind draws nothing in its place.
+   * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+   * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+   * each series's colour a token; labels name the points along its axis (or
+   * slices of a donut/pie); text is its caption. A front-end that does not
+   * know the kind draws nothing in its place.
    * </pre>
    *
    * <code>string chart = 19 [json_name = "chart"];</code>
@@ -1617,8 +1645,9 @@ public  final class UiNode extends
   private java.lang.String direction_;
   /**
    * <pre>
-   * direction ("vertical" or "horizontal") and max_height (px) configure a
-   * scroll container (revision 41).
+   * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+   * or split (revision 44) container; max_height (px) configures a scroll
+   * container (0..4000) or graph canvas (120..1200).
    * </pre>
    *
    * <code>string direction = 26 [json_name = "direction"];</code>
@@ -1630,8 +1659,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * direction ("vertical" or "horizontal") and max_height (px) configure a
-   * scroll container (revision 41).
+   * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+   * or split (revision 44) container; max_height (px) configures a scroll
+   * container (0..4000) or graph canvas (120..1200).
    * </pre>
    *
    * <code>string direction = 26 [json_name = "direction"];</code>
@@ -1644,8 +1674,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * direction ("vertical" or "horizontal") and max_height (px) configure a
-   * scroll container (revision 41).
+   * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+   * or split (revision 44) container; max_height (px) configures a scroll
+   * container (0..4000) or graph canvas (120..1200).
    * </pre>
    *
    * <code>string direction = 26 [json_name = "direction"];</code>
@@ -1659,8 +1690,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * direction ("vertical" or "horizontal") and max_height (px) configure a
-   * scroll container (revision 41).
+   * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+   * or split (revision 44) container; max_height (px) configures a scroll
+   * container (0..4000) or graph canvas (120..1200).
    * </pre>
    *
    * <code>string direction = 26 [json_name = "direction"];</code>
@@ -1671,8 +1703,9 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * direction ("vertical" or "horizontal") and max_height (px) configure a
-   * scroll container (revision 41).
+   * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+   * or split (revision 44) container; max_height (px) configures a scroll
+   * container (0..4000) or graph canvas (120..1200).
    * </pre>
    *
    * <code>string direction = 26 [json_name = "direction"];</code>
@@ -1709,6 +1742,444 @@ public  final class UiNode extends
   private void clearMaxHeight() {
 
     maxHeight_ = 0D;
+  }
+
+  public static final int VARIANT_FIELD_NUMBER = 28;
+  private java.lang.String variant_;
+  /**
+   * <pre>
+   * variant styles a button or card: "", "primary", "secondary", "outline",
+   * "ghost", "danger" (revision 44).
+   * </pre>
+   *
+   * <code>string variant = 28 [json_name = "variant"];</code>
+   * @return The variant.
+   */
+  @java.lang.Override
+  public java.lang.String getVariant() {
+    return variant_;
+  }
+  /**
+   * <pre>
+   * variant styles a button or card: "", "primary", "secondary", "outline",
+   * "ghost", "danger" (revision 44).
+   * </pre>
+   *
+   * <code>string variant = 28 [json_name = "variant"];</code>
+   * @return The bytes for variant.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getVariantBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(variant_);
+  }
+  /**
+   * <pre>
+   * variant styles a button or card: "", "primary", "secondary", "outline",
+   * "ghost", "danger" (revision 44).
+   * </pre>
+   *
+   * <code>string variant = 28 [json_name = "variant"];</code>
+   * @param value The variant to set.
+   */
+  private void setVariant(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    variant_ = value;
+  }
+  /**
+   * <pre>
+   * variant styles a button or card: "", "primary", "secondary", "outline",
+   * "ghost", "danger" (revision 44).
+   * </pre>
+   *
+   * <code>string variant = 28 [json_name = "variant"];</code>
+   */
+  private void clearVariant() {
+
+    variant_ = getDefaultInstance().getVariant();
+  }
+  /**
+   * <pre>
+   * variant styles a button or card: "", "primary", "secondary", "outline",
+   * "ghost", "danger" (revision 44).
+   * </pre>
+   *
+   * <code>string variant = 28 [json_name = "variant"];</code>
+   * @param value The bytes for variant to set.
+   */
+  private void setVariantBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    variant_ = value.toStringUtf8();
+
+  }
+
+  public static final int COLUMNS_FIELD_NUMBER = 29;
+  private int columns_;
+  /**
+   * <pre>
+   * columns is the column count (1..6) of a grid container (revision 44).
+   * </pre>
+   *
+   * <code>int32 columns = 29 [json_name = "columns"];</code>
+   * @return The columns.
+   */
+  @java.lang.Override
+  public int getColumns() {
+    return columns_;
+  }
+  /**
+   * <pre>
+   * columns is the column count (1..6) of a grid container (revision 44).
+   * </pre>
+   *
+   * <code>int32 columns = 29 [json_name = "columns"];</code>
+   * @param value The columns to set.
+   */
+  private void setColumns(int value) {
+    
+    columns_ = value;
+  }
+  /**
+   * <pre>
+   * columns is the column count (1..6) of a grid container (revision 44).
+   * </pre>
+   *
+   * <code>int32 columns = 29 [json_name = "columns"];</code>
+   */
+  private void clearColumns() {
+
+    columns_ = 0;
+  }
+
+  public static final int RATIO_FIELD_NUMBER = 30;
+  private double ratio_;
+  /**
+   * <pre>
+   * ratio is the initial primary pane fraction (0.1..0.9) of a split
+   * container (revision 44).
+   * </pre>
+   *
+   * <code>double ratio = 30 [json_name = "ratio"];</code>
+   * @return The ratio.
+   */
+  @java.lang.Override
+  public double getRatio() {
+    return ratio_;
+  }
+  /**
+   * <pre>
+   * ratio is the initial primary pane fraction (0.1..0.9) of a split
+   * container (revision 44).
+   * </pre>
+   *
+   * <code>double ratio = 30 [json_name = "ratio"];</code>
+   * @param value The ratio to set.
+   */
+  private void setRatio(double value) {
+    
+    ratio_ = value;
+  }
+  /**
+   * <pre>
+   * ratio is the initial primary pane fraction (0.1..0.9) of a split
+   * container (revision 44).
+   * </pre>
+   *
+   * <code>double ratio = 30 [json_name = "ratio"];</code>
+   */
+  private void clearRatio() {
+
+    ratio_ = 0D;
+  }
+
+  public static final int FILL_FIELD_NUMBER = 31;
+  private boolean fill_;
+  /**
+   * <pre>
+   * fill on a root container (column, row, or split) tells front-ends to skip
+   * outer auto-scroll so plugins can pin toolbars and scroll inner panes
+   * (revision 44).
+   * </pre>
+   *
+   * <code>bool fill = 31 [json_name = "fill"];</code>
+   * @return The fill.
+   */
+  @java.lang.Override
+  public boolean getFill() {
+    return fill_;
+  }
+  /**
+   * <pre>
+   * fill on a root container (column, row, or split) tells front-ends to skip
+   * outer auto-scroll so plugins can pin toolbars and scroll inner panes
+   * (revision 44).
+   * </pre>
+   *
+   * <code>bool fill = 31 [json_name = "fill"];</code>
+   * @param value The fill to set.
+   */
+  private void setFill(boolean value) {
+    
+    fill_ = value;
+  }
+  /**
+   * <pre>
+   * fill on a root container (column, row, or split) tells front-ends to skip
+   * outer auto-scroll so plugins can pin toolbars and scroll inner panes
+   * (revision 44).
+   * </pre>
+   *
+   * <code>bool fill = 31 [json_name = "fill"];</code>
+   */
+  private void clearFill() {
+
+    fill_ = false;
+  }
+
+  public static final int GRAPH_NODES_FIELD_NUMBER = 32;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiGraphNode> graphNodes_;
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.UiGraphNode> getGraphNodesList() {
+    return graphNodes_;
+  }
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.UiGraphNodeOrBuilder> 
+      getGraphNodesOrBuilderList() {
+    return graphNodes_;
+  }
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  @java.lang.Override
+  public int getGraphNodesCount() {
+    return graphNodes_.size();
+  }
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.UiGraphNode getGraphNodes(int index) {
+    return graphNodes_.get(index);
+  }
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  public dev.ironpark.mako.v2.UiGraphNodeOrBuilder getGraphNodesOrBuilder(
+      int index) {
+    return graphNodes_.get(index);
+  }
+  private void ensureGraphNodesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiGraphNode> tmp = graphNodes_;
+    if (!tmp.isModifiable()) {
+      graphNodes_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  private void setGraphNodes(
+      int index, dev.ironpark.mako.v2.UiGraphNode value) {
+    java.util.Objects.requireNonNull(value);
+    ensureGraphNodesIsMutable();
+    graphNodes_.set(index, value);
+  }
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  private void addGraphNodes(dev.ironpark.mako.v2.UiGraphNode value) {
+    java.util.Objects.requireNonNull(value);
+    ensureGraphNodesIsMutable();
+    graphNodes_.add(value);
+  }
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  private void addGraphNodes(
+      int index, dev.ironpark.mako.v2.UiGraphNode value) {
+    java.util.Objects.requireNonNull(value);
+    ensureGraphNodesIsMutable();
+    graphNodes_.add(index, value);
+  }
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  private void addAllGraphNodes(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.UiGraphNode> values) {
+    ensureGraphNodesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, graphNodes_);
+  }
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  private void clearGraphNodes() {
+    graphNodes_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  private void removeGraphNodes(int index) {
+    ensureGraphNodesIsMutable();
+    graphNodes_.remove(index);
+  }
+
+  public static final int GRAPH_EDGES_FIELD_NUMBER = 33;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiGraphEdge> graphEdges_;
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.UiGraphEdge> getGraphEdgesList() {
+    return graphEdges_;
+  }
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.UiGraphEdgeOrBuilder> 
+      getGraphEdgesOrBuilderList() {
+    return graphEdges_;
+  }
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  @java.lang.Override
+  public int getGraphEdgesCount() {
+    return graphEdges_.size();
+  }
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.UiGraphEdge getGraphEdges(int index) {
+    return graphEdges_.get(index);
+  }
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  public dev.ironpark.mako.v2.UiGraphEdgeOrBuilder getGraphEdgesOrBuilder(
+      int index) {
+    return graphEdges_.get(index);
+  }
+  private void ensureGraphEdgesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiGraphEdge> tmp = graphEdges_;
+    if (!tmp.isModifiable()) {
+      graphEdges_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  private void setGraphEdges(
+      int index, dev.ironpark.mako.v2.UiGraphEdge value) {
+    java.util.Objects.requireNonNull(value);
+    ensureGraphEdgesIsMutable();
+    graphEdges_.set(index, value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  private void addGraphEdges(dev.ironpark.mako.v2.UiGraphEdge value) {
+    java.util.Objects.requireNonNull(value);
+    ensureGraphEdgesIsMutable();
+    graphEdges_.add(value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  private void addGraphEdges(
+      int index, dev.ironpark.mako.v2.UiGraphEdge value) {
+    java.util.Objects.requireNonNull(value);
+    ensureGraphEdgesIsMutable();
+    graphEdges_.add(index, value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  private void addAllGraphEdges(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.UiGraphEdge> values) {
+    ensureGraphEdgesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, graphEdges_);
+  }
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  private void clearGraphEdges() {
+    graphEdges_ = emptyProtobufList();
+  }
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  private void removeGraphEdges(int index) {
+    ensureGraphEdgesIsMutable();
+    graphEdges_.remove(index);
   }
 
   public static dev.ironpark.mako.v2.UiNode parseFrom(
@@ -1797,9 +2268,11 @@ public  final class UiNode extends
   /**
    * <pre>
    * UiNode is a node of a plugin block's tree. The kinds are a fixed set
-   * (docs/plugins.md): column, row, stack, text, icon, pill, chip, button,
-   * list, input, toggle, select, markdown, code, progress, divider, and
-   * from revision 33 chart; a colour is a token, never a value.
+   * (docs/plugins.md): column, row, stack, card, scroll, wrap, grid, split,
+   * collapsible, breadcrumb, tree, tree_item, text, icon, pill, chip, button,
+   * list, input, textarea, toggle, select, tabs, table, markdown, code,
+   * progress, divider, chart (revision 33), and graph (revision 44); a colour
+   * is a token, never a value.
    * </pre>
    *
    * Protobuf type {@code mako.v2.UiNode}
@@ -1940,8 +2413,9 @@ public  final class UiNode extends
 
     /**
      * <pre>
-     * text is what a text, pill, chip, button, markdown or code node
-     * shows; an input's placeholder; a toggle's label.
+     * text is what a text, pill, chip, button, markdown, code, collapsible or
+     * tree_item node shows; an input's or textarea's placeholder; a toggle's
+     * label; a chart's or graph's caption.
      * </pre>
      *
      * <code>string text = 3 [json_name = "text"];</code>
@@ -1953,8 +2427,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * text is what a text, pill, chip, button, markdown or code node
-     * shows; an input's placeholder; a toggle's label.
+     * text is what a text, pill, chip, button, markdown, code, collapsible or
+     * tree_item node shows; an input's or textarea's placeholder; a toggle's
+     * label; a chart's or graph's caption.
      * </pre>
      *
      * <code>string text = 3 [json_name = "text"];</code>
@@ -1967,8 +2442,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * text is what a text, pill, chip, button, markdown or code node
-     * shows; an input's placeholder; a toggle's label.
+     * text is what a text, pill, chip, button, markdown, code, collapsible or
+     * tree_item node shows; an input's or textarea's placeholder; a toggle's
+     * label; a chart's or graph's caption.
      * </pre>
      *
      * <code>string text = 3 [json_name = "text"];</code>
@@ -1983,8 +2459,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * text is what a text, pill, chip, button, markdown or code node
-     * shows; an input's placeholder; a toggle's label.
+     * text is what a text, pill, chip, button, markdown, code, collapsible or
+     * tree_item node shows; an input's or textarea's placeholder; a toggle's
+     * label; a chart's or graph's caption.
      * </pre>
      *
      * <code>string text = 3 [json_name = "text"];</code>
@@ -1997,8 +2474,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * text is what a text, pill, chip, button, markdown or code node
-     * shows; an input's placeholder; a toggle's label.
+     * text is what a text, pill, chip, button, markdown, code, collapsible or
+     * tree_item node shows; an input's or textarea's placeholder; a toggle's
+     * label; a chart's or graph's caption.
      * </pre>
      *
      * <code>string text = 3 [json_name = "text"];</code>
@@ -2088,8 +2566,8 @@ public  final class UiNode extends
 
     /**
      * <pre>
-     * icon is a bundled icon's name, for an icon node or beside a button's
-     * text.
+     * icon is a bundled icon's name, for an icon, button, collapsible or
+     * tree_item node.
      * </pre>
      *
      * <code>string icon = 5 [json_name = "icon"];</code>
@@ -2101,8 +2579,8 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * icon is a bundled icon's name, for an icon node or beside a button's
-     * text.
+     * icon is a bundled icon's name, for an icon, button, collapsible or
+     * tree_item node.
      * </pre>
      *
      * <code>string icon = 5 [json_name = "icon"];</code>
@@ -2115,8 +2593,8 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * icon is a bundled icon's name, for an icon node or beside a button's
-     * text.
+     * icon is a bundled icon's name, for an icon, button, collapsible or
+     * tree_item node.
      * </pre>
      *
      * <code>string icon = 5 [json_name = "icon"];</code>
@@ -2131,8 +2609,8 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * icon is a bundled icon's name, for an icon node or beside a button's
-     * text.
+     * icon is a bundled icon's name, for an icon, button, collapsible or
+     * tree_item node.
      * </pre>
      *
      * <code>string icon = 5 [json_name = "icon"];</code>
@@ -2145,8 +2623,8 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * icon is a bundled icon's name, for an icon node or beside a button's
-     * text.
+     * icon is a bundled icon's name, for an icon, button, collapsible or
+     * tree_item node.
      * </pre>
      *
      * <code>string icon = 5 [json_name = "icon"];</code>
@@ -2280,7 +2758,9 @@ public  final class UiNode extends
 
     /**
      * <pre>
-     * value is an input's text or a select's choice; checked a toggle's.
+     * value is an input's/textarea's text, a select's/tabs' choice, a
+     * tree_item's secondary/meta text, or a graph's focused node ID; checked
+     * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
      * </pre>
      *
      * <code>string value = 8 [json_name = "value"];</code>
@@ -2292,7 +2772,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * value is an input's text or a select's choice; checked a toggle's.
+     * value is an input's/textarea's text, a select's/tabs' choice, a
+     * tree_item's secondary/meta text, or a graph's focused node ID; checked
+     * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
      * </pre>
      *
      * <code>string value = 8 [json_name = "value"];</code>
@@ -2305,7 +2787,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * value is an input's text or a select's choice; checked a toggle's.
+     * value is an input's/textarea's text, a select's/tabs' choice, a
+     * tree_item's secondary/meta text, or a graph's focused node ID; checked
+     * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
      * </pre>
      *
      * <code>string value = 8 [json_name = "value"];</code>
@@ -2320,7 +2804,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * value is an input's text or a select's choice; checked a toggle's.
+     * value is an input's/textarea's text, a select's/tabs' choice, a
+     * tree_item's secondary/meta text, or a graph's focused node ID; checked
+     * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
      * </pre>
      *
      * <code>string value = 8 [json_name = "value"];</code>
@@ -2333,7 +2819,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * value is an input's text or a select's choice; checked a toggle's.
+     * value is an input's/textarea's text, a select's/tabs' choice, a
+     * tree_item's secondary/meta text, or a graph's focused node ID; checked
+     * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
      * </pre>
      *
      * <code>string value = 8 [json_name = "value"];</code>
@@ -2377,7 +2865,7 @@ public  final class UiNode extends
 
     /**
      * <pre>
-     * a select's
+     * a select's, tabs', or breadcrumb's
      * </pre>
      *
      * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -2391,7 +2879,7 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * a select's
+     * a select's, tabs', or breadcrumb's
      * </pre>
      *
      * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -2403,7 +2891,7 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * a select's
+     * a select's, tabs', or breadcrumb's
      * </pre>
      *
      * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -2416,7 +2904,7 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * a select's
+     * a select's, tabs', or breadcrumb's
      * </pre>
      *
      * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -2430,7 +2918,7 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * a select's
+     * a select's, tabs', or breadcrumb's
      * </pre>
      *
      * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -2446,7 +2934,7 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * a select's
+     * a select's, tabs', or breadcrumb's
      * </pre>
      *
      * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -2461,7 +2949,7 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * a select's
+     * a select's, tabs', or breadcrumb's
      * </pre>
      *
      * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -2476,7 +2964,7 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * a select's
+     * a select's, tabs', or breadcrumb's
      * </pre>
      *
      * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -2489,7 +2977,7 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * a select's
+     * a select's, tabs', or breadcrumb's
      * </pre>
      *
      * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -2643,7 +3131,7 @@ public  final class UiNode extends
     /**
      * <pre>
      * grow shares out a row's or column's room left among the children
-     * that set it; gap is the room between a row's or column's children.
+     * that set it; gap is the room between a container's children.
      * </pre>
      *
      * <code>double grow = 14 [json_name = "grow"];</code>
@@ -2656,7 +3144,7 @@ public  final class UiNode extends
     /**
      * <pre>
      * grow shares out a row's or column's room left among the children
-     * that set it; gap is the room between a row's or column's children.
+     * that set it; gap is the room between a container's children.
      * </pre>
      *
      * <code>double grow = 14 [json_name = "grow"];</code>
@@ -2671,7 +3159,7 @@ public  final class UiNode extends
     /**
      * <pre>
      * grow shares out a row's or column's room left among the children
-     * that set it; gap is the room between a row's or column's children.
+     * that set it; gap is the room between a container's children.
      * </pre>
      *
      * <code>double grow = 14 [json_name = "grow"];</code>
@@ -2713,8 +3201,9 @@ public  final class UiNode extends
 
     /**
      * <pre>
-     * tap says tapping the node is answered; change that its value
-     * changing is.
+     * tap says tapping the node is answered; change that its value changing
+     * (or a markdown link, breadcrumb segment, graph node click, or
+     * collapsible/tree_item expansion toggle) is answered.
      * </pre>
      *
      * <code>bool tap = 16 [json_name = "tap"];</code>
@@ -2726,8 +3215,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * tap says tapping the node is answered; change that its value
-     * changing is.
+     * tap says tapping the node is answered; change that its value changing
+     * (or a markdown link, breadcrumb segment, graph node click, or
+     * collapsible/tree_item expansion toggle) is answered.
      * </pre>
      *
      * <code>bool tap = 16 [json_name = "tap"];</code>
@@ -2741,8 +3231,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * tap says tapping the node is answered; change that its value
-     * changing is.
+     * tap says tapping the node is answered; change that its value changing
+     * (or a markdown link, breadcrumb segment, graph node click, or
+     * collapsible/tree_item expansion toggle) is answered.
      * </pre>
      *
      * <code>bool tap = 16 [json_name = "tap"];</code>
@@ -2886,10 +3377,11 @@ public  final class UiNode extends
 
     /**
      * <pre>
-     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-     * (revision 33). Its series are numbers, each series's colour a token;
-     * labels name the points along its axis; text is its caption. A front-end
-     * that does not know the kind draws nothing in its place.
+     * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+     * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+     * each series's colour a token; labels name the points along its axis (or
+     * slices of a donut/pie); text is its caption. A front-end that does not
+     * know the kind draws nothing in its place.
      * </pre>
      *
      * <code>string chart = 19 [json_name = "chart"];</code>
@@ -2901,10 +3393,11 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-     * (revision 33). Its series are numbers, each series's colour a token;
-     * labels name the points along its axis; text is its caption. A front-end
-     * that does not know the kind draws nothing in its place.
+     * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+     * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+     * each series's colour a token; labels name the points along its axis (or
+     * slices of a donut/pie); text is its caption. A front-end that does not
+     * know the kind draws nothing in its place.
      * </pre>
      *
      * <code>string chart = 19 [json_name = "chart"];</code>
@@ -2917,10 +3410,11 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-     * (revision 33). Its series are numbers, each series's colour a token;
-     * labels name the points along its axis; text is its caption. A front-end
-     * that does not know the kind draws nothing in its place.
+     * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+     * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+     * each series's colour a token; labels name the points along its axis (or
+     * slices of a donut/pie); text is its caption. A front-end that does not
+     * know the kind draws nothing in its place.
      * </pre>
      *
      * <code>string chart = 19 [json_name = "chart"];</code>
@@ -2935,10 +3429,11 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-     * (revision 33). Its series are numbers, each series's colour a token;
-     * labels name the points along its axis; text is its caption. A front-end
-     * that does not know the kind draws nothing in its place.
+     * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+     * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+     * each series's colour a token; labels name the points along its axis (or
+     * slices of a donut/pie); text is its caption. A front-end that does not
+     * know the kind draws nothing in its place.
      * </pre>
      *
      * <code>string chart = 19 [json_name = "chart"];</code>
@@ -2951,10 +3446,11 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-     * (revision 33). Its series are numbers, each series's colour a token;
-     * labels name the points along its axis; text is its caption. A front-end
-     * that does not know the kind draws nothing in its place.
+     * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+     * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+     * each series's colour a token; labels name the points along its axis (or
+     * slices of a donut/pie); text is its caption. A front-end that does not
+     * know the kind draws nothing in its place.
      * </pre>
      *
      * <code>string chart = 19 [json_name = "chart"];</code>
@@ -3442,8 +3938,9 @@ public  final class UiNode extends
 
     /**
      * <pre>
-     * direction ("vertical" or "horizontal") and max_height (px) configure a
-     * scroll container (revision 41).
+     * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+     * or split (revision 44) container; max_height (px) configures a scroll
+     * container (0..4000) or graph canvas (120..1200).
      * </pre>
      *
      * <code>string direction = 26 [json_name = "direction"];</code>
@@ -3455,8 +3952,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * direction ("vertical" or "horizontal") and max_height (px) configure a
-     * scroll container (revision 41).
+     * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+     * or split (revision 44) container; max_height (px) configures a scroll
+     * container (0..4000) or graph canvas (120..1200).
      * </pre>
      *
      * <code>string direction = 26 [json_name = "direction"];</code>
@@ -3469,8 +3967,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * direction ("vertical" or "horizontal") and max_height (px) configure a
-     * scroll container (revision 41).
+     * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+     * or split (revision 44) container; max_height (px) configures a scroll
+     * container (0..4000) or graph canvas (120..1200).
      * </pre>
      *
      * <code>string direction = 26 [json_name = "direction"];</code>
@@ -3485,8 +3984,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * direction ("vertical" or "horizontal") and max_height (px) configure a
-     * scroll container (revision 41).
+     * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+     * or split (revision 44) container; max_height (px) configures a scroll
+     * container (0..4000) or graph canvas (120..1200).
      * </pre>
      *
      * <code>string direction = 26 [json_name = "direction"];</code>
@@ -3499,8 +3999,9 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * direction ("vertical" or "horizontal") and max_height (px) configure a
-     * scroll container (revision 41).
+     * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+     * or split (revision 44) container; max_height (px) configures a scroll
+     * container (0..4000) or graph canvas (120..1200).
      * </pre>
      *
      * <code>string direction = 26 [json_name = "direction"];</code>
@@ -3539,6 +4040,473 @@ public  final class UiNode extends
     public Builder clearMaxHeight() {
       copyOnWrite();
       instance.clearMaxHeight();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * variant styles a button or card: "", "primary", "secondary", "outline",
+     * "ghost", "danger" (revision 44).
+     * </pre>
+     *
+     * <code>string variant = 28 [json_name = "variant"];</code>
+     * @return The variant.
+     */
+    @java.lang.Override
+    public java.lang.String getVariant() {
+      return instance.getVariant();
+    }
+    /**
+     * <pre>
+     * variant styles a button or card: "", "primary", "secondary", "outline",
+     * "ghost", "danger" (revision 44).
+     * </pre>
+     *
+     * <code>string variant = 28 [json_name = "variant"];</code>
+     * @return The bytes for variant.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getVariantBytes() {
+      return instance.getVariantBytes();
+    }
+    /**
+     * <pre>
+     * variant styles a button or card: "", "primary", "secondary", "outline",
+     * "ghost", "danger" (revision 44).
+     * </pre>
+     *
+     * <code>string variant = 28 [json_name = "variant"];</code>
+     * @param value The variant to set.
+     * @return This builder for chaining.
+     */
+    public Builder setVariant(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setVariant(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * variant styles a button or card: "", "primary", "secondary", "outline",
+     * "ghost", "danger" (revision 44).
+     * </pre>
+     *
+     * <code>string variant = 28 [json_name = "variant"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearVariant() {
+      copyOnWrite();
+      instance.clearVariant();
+      return this;
+    }
+    /**
+     * <pre>
+     * variant styles a button or card: "", "primary", "secondary", "outline",
+     * "ghost", "danger" (revision 44).
+     * </pre>
+     *
+     * <code>string variant = 28 [json_name = "variant"];</code>
+     * @param value The bytes for variant to set.
+     * @return This builder for chaining.
+     */
+    public Builder setVariantBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setVariantBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * columns is the column count (1..6) of a grid container (revision 44).
+     * </pre>
+     *
+     * <code>int32 columns = 29 [json_name = "columns"];</code>
+     * @return The columns.
+     */
+    @java.lang.Override
+    public int getColumns() {
+      return instance.getColumns();
+    }
+    /**
+     * <pre>
+     * columns is the column count (1..6) of a grid container (revision 44).
+     * </pre>
+     *
+     * <code>int32 columns = 29 [json_name = "columns"];</code>
+     * @param value The columns to set.
+     * @return This builder for chaining.
+     */
+    public Builder setColumns(int value) {
+      copyOnWrite();
+      instance.setColumns(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * columns is the column count (1..6) of a grid container (revision 44).
+     * </pre>
+     *
+     * <code>int32 columns = 29 [json_name = "columns"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearColumns() {
+      copyOnWrite();
+      instance.clearColumns();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * ratio is the initial primary pane fraction (0.1..0.9) of a split
+     * container (revision 44).
+     * </pre>
+     *
+     * <code>double ratio = 30 [json_name = "ratio"];</code>
+     * @return The ratio.
+     */
+    @java.lang.Override
+    public double getRatio() {
+      return instance.getRatio();
+    }
+    /**
+     * <pre>
+     * ratio is the initial primary pane fraction (0.1..0.9) of a split
+     * container (revision 44).
+     * </pre>
+     *
+     * <code>double ratio = 30 [json_name = "ratio"];</code>
+     * @param value The ratio to set.
+     * @return This builder for chaining.
+     */
+    public Builder setRatio(double value) {
+      copyOnWrite();
+      instance.setRatio(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * ratio is the initial primary pane fraction (0.1..0.9) of a split
+     * container (revision 44).
+     * </pre>
+     *
+     * <code>double ratio = 30 [json_name = "ratio"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearRatio() {
+      copyOnWrite();
+      instance.clearRatio();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * fill on a root container (column, row, or split) tells front-ends to skip
+     * outer auto-scroll so plugins can pin toolbars and scroll inner panes
+     * (revision 44).
+     * </pre>
+     *
+     * <code>bool fill = 31 [json_name = "fill"];</code>
+     * @return The fill.
+     */
+    @java.lang.Override
+    public boolean getFill() {
+      return instance.getFill();
+    }
+    /**
+     * <pre>
+     * fill on a root container (column, row, or split) tells front-ends to skip
+     * outer auto-scroll so plugins can pin toolbars and scroll inner panes
+     * (revision 44).
+     * </pre>
+     *
+     * <code>bool fill = 31 [json_name = "fill"];</code>
+     * @param value The fill to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFill(boolean value) {
+      copyOnWrite();
+      instance.setFill(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * fill on a root container (column, row, or split) tells front-ends to skip
+     * outer auto-scroll so plugins can pin toolbars and scroll inner panes
+     * (revision 44).
+     * </pre>
+     *
+     * <code>bool fill = 31 [json_name = "fill"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFill() {
+      copyOnWrite();
+      instance.clearFill();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.UiGraphNode> getGraphNodesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getGraphNodesList());
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    @java.lang.Override
+    public int getGraphNodesCount() {
+      return instance.getGraphNodesCount();
+    }/**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.UiGraphNode getGraphNodes(int index) {
+      return instance.getGraphNodes(index);
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    public Builder setGraphNodes(
+        int index, dev.ironpark.mako.v2.UiGraphNode value) {
+      copyOnWrite();
+      instance.setGraphNodes(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    public Builder setGraphNodes(
+        int index, dev.ironpark.mako.v2.UiGraphNode.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGraphNodes(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    public Builder addGraphNodes(dev.ironpark.mako.v2.UiGraphNode value) {
+      copyOnWrite();
+      instance.addGraphNodes(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    public Builder addGraphNodes(
+        int index, dev.ironpark.mako.v2.UiGraphNode value) {
+      copyOnWrite();
+      instance.addGraphNodes(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    public Builder addGraphNodes(
+        dev.ironpark.mako.v2.UiGraphNode.Builder builderForValue) {
+      copyOnWrite();
+      instance.addGraphNodes(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    public Builder addGraphNodes(
+        int index, dev.ironpark.mako.v2.UiGraphNode.Builder builderForValue) {
+      copyOnWrite();
+      instance.addGraphNodes(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    public Builder addAllGraphNodes(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.UiGraphNode> values) {
+      copyOnWrite();
+      instance.addAllGraphNodes(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    public Builder clearGraphNodes() {
+      copyOnWrite();
+      instance.clearGraphNodes();
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_nodes and graph_edges define a declarative interactive graph canvas
+     * for a graph node (revision 44).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+     */
+    public Builder removeGraphNodes(int index) {
+      copyOnWrite();
+      instance.removeGraphNodes(index);
+      return this;
+    }
+
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.UiGraphEdge> getGraphEdgesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getGraphEdgesList());
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    @java.lang.Override
+    public int getGraphEdgesCount() {
+      return instance.getGraphEdgesCount();
+    }/**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.UiGraphEdge getGraphEdges(int index) {
+      return instance.getGraphEdges(index);
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    public Builder setGraphEdges(
+        int index, dev.ironpark.mako.v2.UiGraphEdge value) {
+      copyOnWrite();
+      instance.setGraphEdges(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    public Builder setGraphEdges(
+        int index, dev.ironpark.mako.v2.UiGraphEdge.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGraphEdges(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    public Builder addGraphEdges(dev.ironpark.mako.v2.UiGraphEdge value) {
+      copyOnWrite();
+      instance.addGraphEdges(value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    public Builder addGraphEdges(
+        int index, dev.ironpark.mako.v2.UiGraphEdge value) {
+      copyOnWrite();
+      instance.addGraphEdges(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    public Builder addGraphEdges(
+        dev.ironpark.mako.v2.UiGraphEdge.Builder builderForValue) {
+      copyOnWrite();
+      instance.addGraphEdges(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    public Builder addGraphEdges(
+        int index, dev.ironpark.mako.v2.UiGraphEdge.Builder builderForValue) {
+      copyOnWrite();
+      instance.addGraphEdges(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    public Builder addAllGraphEdges(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.UiGraphEdge> values) {
+      copyOnWrite();
+      instance.addAllGraphEdges(values);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    public Builder clearGraphEdges() {
+      copyOnWrite();
+      instance.clearGraphEdges();
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+     */
+    public Builder removeGraphEdges(int index) {
+      copyOnWrite();
+      instance.removeGraphEdges(index);
       return this;
     }
 
@@ -3587,13 +4555,22 @@ public  final class UiNode extends
             "dropAccept_",
             "direction_",
             "maxHeight_",
+            "variant_",
+            "columns_",
+            "ratio_",
+            "fill_",
+            "graphNodes_",
+            dev.ironpark.mako.v2.UiGraphNode.class,
+            "graphEdges_",
+            dev.ironpark.mako.v2.UiGraphEdge.class,
           };
           java.lang.String info =
-              "\u0000\u001b\u0000\u0000\u0001\u001b\u001b\u0000\u0005\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a" +
-              "\u000b\u0000\f\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012" +
-              "\u001b\u0013\u0208\u0014\u001b\u0015\u021a\u0016\u0208\u0017\u0007\u0018\u0208\u0019" +
-              "\u021a\u001a\u0208\u001b\u0000";
+              "\u0000!\u0000\u0000\u0001!!\u0000\u0007\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a\u000b\u0000" +
+              "\f\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012\u001b\u0013" +
+              "\u0208\u0014\u001b\u0015\u021a\u0016\u0208\u0017\u0007\u0018\u0208\u0019\u021a\u001a" +
+              "\u0208\u001b\u0000\u001c\u0208\u001d\u0004\u001e\u0000\u001f\u0007 \u001b!\u001b" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

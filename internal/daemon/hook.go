@@ -295,6 +295,9 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		}
 		if events, ok := agents.As[agent.StatusLineEvents](name); ok {
 			if ev, ok := events.StatusHookEvent(msg.Input); ok {
+				if isSubAgentEvent(name, s.Info().GetConversationId(), s.TranscriptPath(), ev) {
+					return
+				}
 				if ev.SessionID != "" && ev.SessionID != s.Info().GetConversationId() {
 					if err := d.reportConversation(s, msg.Seq, ev); err != nil {
 						d.log.Warn("statusline: conversation report dropped", "session", msg.Session, "err", err)
@@ -322,6 +325,12 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	}
 	ev, ok := hooks.Event(msg.Input)
 	if !ok {
+		return
+	}
+	if parentID := s.Info().GetConversationId(); isSubAgentEvent(name, parentID, s.TranscriptPath(), ev) {
+		if ev.Kind == agent.Started || ev.Kind == agent.Stopped {
+			s.ReportSubagent(parentID, ev.SessionID, ev.Kind == agent.Started, msg.Seq)
+		}
 		return
 	}
 	switch ev.Kind {
@@ -381,4 +390,14 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 		_ = json.NewEncoder(conn).Encode(reply)
 	}
+}
+
+// isSubAgentEvent reports whether ev came from a subagent/worker of the
+// session's currently bound parent conversation rather than the parent itself.
+func isSubAgentEvent(agentName, parentID, parentLog string, ev agent.Event) bool {
+	if parentID == "" || ev.SessionID == "" || ev.SessionID == parentID {
+		return false
+	}
+	filter, ok := agents.As[agent.SubAgentHooks](agentName)
+	return ok && filter.IsSubAgent(parentID, parentLog, ev.SessionID, ev.Transcript)
 }

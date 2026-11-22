@@ -182,16 +182,32 @@ func TestPluginCommandsAndSettings(t *testing.T) {
 
 // A plugin's Markdown fetches no picture: it would reach a host the
 // plugin was not allowed, with what the plugin put in the address.
+// Local Mermaid diagrams are rendered in-process (zero network), and onLink
+// intercepts non-http(s) links.
 func TestPluginMarkdownFetchesNothing(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
-	host := pluginPage{pageHost{m: newModel(config.Default(), "")}}
+	m := newModel(config.Default(), "")
+	m.post = func(fn func()) { fn() }
+	var clicked []string
+	host := pluginPage{
+		pageHost: pageHost{m: m},
+		onLink:   func(dest string) { clicked = append(clicked, dest) },
+	}
 	for _, src := range []string{"https://evil.example/leak?d=secret", "/etc/hosts", "../x.png"} {
 		if host.Image(src) != nil {
 			t.Errorf("%s was fetched", src)
 		}
 	}
-	if host.Diagram("graph TD; a-->b", "mermaid") != nil {
-		t.Error("a diagram was drawn")
+	if host.Diagram("graph TD; a-->b", "mermaid") == nil {
+		t.Error("local mermaid diagram was not rendered")
+	}
+	if host.Diagram("print(1)", "python") != nil {
+		t.Error("non-diagram code block returned a diagram image")
+	}
+	host.Open("okf:architecture/plugin-system.md")
+	host.Open("docs/guide.md")
+	if len(clicked) != 2 || clicked[0] != "okf:architecture/plugin-system.md" || clicked[1] != "docs/guide.md" {
+		t.Fatalf("onLink clicks = %v", clicked)
 	}
 }
 

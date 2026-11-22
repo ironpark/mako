@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 
+	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -219,6 +220,25 @@ func (m *model) scopeLabel(scopeKey string) string {
 	return id
 }
 
+// activeLocale returns the active GUI locale (BCP-47 tag), reacting to m.Prefs
+// language changes while also honoring direct i18n.Set overrides in tests.
+func (m *model) activeLocale() string {
+	p := m.Prefs.Get()
+	if p.Language != "" && p.Language != "system" {
+		return i18n.Resolve(p.Language)
+	}
+	return i18n.Current()
+}
+
+// currentLocale returns the active GUI locale without subscribing to m.Prefs.
+func (m *model) currentLocale() string {
+	p := ggui.Peek(m.Prefs)
+	if p.Language != "" && p.Language != "system" {
+		return i18n.Resolve(p.Language)
+	}
+	return i18n.Current()
+}
+
 // pluginBlock follows the block of the name, of plugin id, while it is
 // drawn; title is its title as listed, until the daemon sends one.
 func pluginBlock(m *model, name, id, title, blockScope string, props map[string]any) ggui.Widget {
@@ -242,6 +262,7 @@ func treeBlock(m *model, name string, origin blockOrigin, title, blockScope stri
 		form := newBlockForm()
 		ggui.Effect(func() ggui.Cleanup {
 			scopeKey := resolved.Get()
+			locale := m.activeLocale()
 			if ggui.Peek(feed).Scope != scopeKey {
 				feed.Set(blockFeed{Scope: scopeKey})
 				form.reset()
@@ -253,7 +274,7 @@ func treeBlock(m *model, name string, origin blockOrigin, title, blockScope stri
 				return nil // not started, as under a test
 			}
 			ctx, cancel := context.WithCancel(context.Background())
-			go m.followBlockScoped(ctx, name, scopeKey, func(u *protocol.BlockUpdate) {
+			go m.followBlockScoped(ctx, name, scopeKey, locale, func(u *protocol.BlockUpdate) {
 				m.post(func() {
 					if ctx.Err() != nil {
 						return
@@ -278,15 +299,15 @@ func treeBlock(m *model, name string, origin blockOrigin, title, blockScope stri
 	})
 }
 
-// followBlockScoped watches a block on the daemon under scope, applying each
-// update to the tree it holds and handing on the whole, until ctx ends.
-func (m *model) followBlockScoped(ctx context.Context, name, scope string, fn func(*protocol.BlockUpdate)) {
+// followBlockScoped watches a block on the daemon under scope and locale,
+// applying each update to the tree it holds and handing on the whole, until ctx ends.
+func (m *model) followBlockScoped(ctx context.Context, name, scope, locale string, fn func(*protocol.BlockUpdate)) {
 	followStream(ctx, func(ctx context.Context, each func(*protocol.BlockUpdate)) error {
 		c, err := m.link.client(ctx)
 		if err != nil {
 			return err
 		}
-		return c.WatchBlockScoped(ctx, name, scope, each)
+		return c.WatchBlockWithLocale(ctx, name, scope, locale, each)
 	}, time.Second, fn)
 }
 
@@ -569,10 +590,14 @@ func blockBody(m *model, name string, origin blockOrigin, st blockScopeState, u 
 	if u.GetError() != "" {
 		rows = append(rows, pluginError(m, id, u))
 	}
-	if u.GetTree() != nil {
+	if tree := u.GetTree(); tree != nil {
 		form.redraw()
 		v := &treeView{m: m, block: name, scope: st.Key, form: form}
-		rows = append(rows, widget.Expanded(widget.Scroll(widget.Padding(v.node(u.GetTree(), false), 10, 12)).Bar(skin.Surface3)))
+		if tree.GetFill() {
+			rows = append(rows, widget.Expanded(widget.Padding(v.node(tree, false), 10, 12)))
+		} else {
+			rows = append(rows, widget.Expanded(widget.Scroll(widget.Padding(v.node(tree, false), 10, 12)).Bar(skin.Surface3)))
+		}
 	} else if u.GetError() == "" {
 		rows = append(rows, widget.Expanded(emptyNote("loader-circle", T("Starting…"))))
 	} else {

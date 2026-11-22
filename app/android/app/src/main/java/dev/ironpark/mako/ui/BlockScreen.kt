@@ -48,6 +48,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -73,6 +74,7 @@ import dev.ironpark.mako.v2.BlockEvent
 import dev.ironpark.mako.workspace.view
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 // A block of a computer's, a plugin's or an agent's, a page of its own.
 // The app draws its frame, over the tree, naming the block and where it
@@ -156,11 +158,17 @@ internal fun BlockScreen(
     }
     val needsScopeTarget = effectiveScopeKind.isNotEmpty() && activeScope.isEmpty()
 
+    val config = LocalConfiguration.current
+    val locale = remember(config) {
+        val primary = if (!config.locales.isEmpty) config.locales[0] else Locale.getDefault()
+        primary?.toLanguageTag().orEmpty().takeUnless { it == "und" }.orEmpty()
+    }
+
     var state by remember(node, block, activeScope) { mutableStateOf(BlockState()) }
     val form = remember(node, block, activeScope) { BlockForm() }
-    LaunchedEffect(node, block, activeScope, needsScopeTarget, shown) {
+    LaunchedEffect(node, block, activeScope, locale, needsScopeTarget, shown) {
         if (!shown || needsScopeTarget) return@LaunchedEffect
-        followBlock(mesh.daemon, node, block, scope = activeScope, from = state).collect {
+        followBlock(mesh.daemon, node, block, scope = activeScope, locale = locale, from = state).collect {
             val uScope = it.update?.scope.orEmpty()
             if (uScope.isNotEmpty() && effectiveScopeKind.isEmpty()) {
                 parseScopeKey(uScope)?.first?.let { k -> inferredScopeKind = k }
@@ -172,7 +180,7 @@ internal fun BlockScreen(
     val uri = LocalUriHandler.current
     val coroutineScope = rememberCoroutineScope()
     val tree by rememberUpdatedState(state.tree)
-    val events = remember(node, block, activeScope) {
+    val events = remember(node, block, activeScope, locale) {
         BlockEvents { id, kind, value ->
             coroutineScope.launch {
                 try {
@@ -184,6 +192,7 @@ internal fun BlockScreen(
                         .setValue(value)
                         .putAllValues(form.values(tree))
                     if (activeScope.isNotEmpty()) req.setScope(activeScope)
+                    if (locale.isNotEmpty()) req.setLocale(locale)
                     val done = mesh.daemon.blockEvent(req.build())
                     // A link the plugin asked, in answer, to open: a web page alone.
                     val link = done.openUrl
@@ -417,6 +426,10 @@ private fun BlockBody(
             val tree = state.tree
             if (tree == null) {
                 if (u.error.isEmpty()) CircularProgressIndicator(Modifier.padding(32.dp).size(32.dp))
+            } else if (tree.fill) {
+                Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    UiTree(tree, form, events, modifier = Modifier.fillMaxSize())
+                }
             } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)) {
                 UiTree(tree, form, events)
             }

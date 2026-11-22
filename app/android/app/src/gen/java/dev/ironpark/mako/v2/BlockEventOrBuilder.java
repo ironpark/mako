@@ -171,4 +171,26 @@ java.lang.String defaultValue);
    */
   com.google.protobuf.ByteString
       getScopeBytes();
+
+  /**
+   * <pre>
+   * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+   * "ko-KR"; empty defaults to "en", revision 44).
+   * </pre>
+   *
+   * <code>string locale = 8 [json_name = "locale"];</code>
+   * @return The locale.
+   */
+  java.lang.String getLocale();
+  /**
+   * <pre>
+   * locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+   * "ko-KR"; empty defaults to "en", revision 44).
+   * </pre>
+   *
+   * <code>string locale = 8 [json_name = "locale"];</code>
+   * @return The bytes for locale.
+   */
+  com.google.protobuf.ByteString
+      getLocaleBytes();
 }

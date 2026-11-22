@@ -300,31 +300,56 @@ Tool arguments can never override or specify another scope:
 
 | Kind | Builder | |
 |---|---|---|
-| `column`, `row`, `stack` | `ui.column(children, opts)` | Children one over another, side by side, or over each other. A child with `grow` shares the room left. |
-| `card` | `ui.card(children, opts)` | A bordered surface container for grouping items (such as a Kanban card or summary tile). |
-| `scroll` | `ui.scroll(children, opts)` | Scrollable container: `direction` (`vertical` default, or `horizontal`) and `maxHeight` (px) for vertical scroll areas. |
+| `column`, `row`, `stack` | `ui.column(children, opts)` | Children one over another, side by side, or over each other. A child with `grow` shares the room left. Set `fill: true` on a root `column`, `row`, or `split` to skip outer auto-scroll and let inner `ui.scroll(..., { grow: 1 })` panes scroll independently. |
+| `card` | `ui.card(children, opts)` | A bordered surface container for grouping items (such as a Kanban card or summary tile); supports `variant` (`primary`, `secondary`, `outline`, `ghost`, `danger`). |
+| `scroll` | `ui.scroll(children, opts)` | Scrollable container: `direction` (`vertical` default, or `horizontal`) and `maxHeight` (px, up to 4000) for vertical scroll areas. |
+| `wrap` | `ui.wrap(children, opts)` | Flex-wrap container that flows children onto multiple lines with `gap`. |
+| `grid` | `ui.grid(columns, children, opts)` | N-column grid (`columns` 1 to 6, `gap`). |
+| `split` | `ui.split(first, second, opts)` | Resizable 2-pane split container: `direction` (`horizontal` default, or `vertical`), `ratio` (0.1 to 0.9, default 0.5), `fill` when at root, and exactly 2 children. |
+| `collapsible` | `ui.collapsible(title, children, opts)` | Disclosure/accordion section: `text` (title), `icon`, `tone`, `checked` (initially expanded), optional `onChange` (receives boolean), and nested children. |
+| `breadcrumb` | `ui.breadcrumb(segments, opts)` | Clickable path trail (`options`: segment labels); `onChange` fires with the clicked segment's 0-based index as a decimal string (`"0"`, `"1"`, ...). |
+| `tree` | `ui.tree(items, opts)` | Native hierarchical tree container holding `tree_item` children. |
+| `tree_item` | `ui.treeItem(label, [children], opts)` | Hierarchical tree node inside `tree` or `tree_item`: `text` (primary label), `value` (optional secondary/meta text), `icon`, `tone`, `checked` (expanded/selected state), `onTap`, optional `onChange` (boolean expand/collapse), `drag`, `dragGroup`, `onDrop`, `dropAccept`, and optional nested `tree_item` children. |
 | `list` | `ui.list(items, (item, i) => node, opts)` | A column of rows; a row that sends a tap lights up under the pointer, as the window's lists do. |
-| `table` | `ui.table(rows, opts)` | Structured rows with optional header columns (`labels`). |
+| `table` | `ui.table(headers, rows, opts)` | Structured rows with optional header columns (`labels`). |
 | `text` | `ui.text(text, opts)` | `weight` (`medium`, `semibold`), `size` (`small`, `large`), `tone`. |
 | `icon` | `ui.icon(name, opts)` | A [bundled icon](../internal/gui/iconset/icons)'s name; another is drawn as a square. |
 | `pill` | `ui.pill(text, opts)` | A state in a word, on a wash of its tone. |
 | `chip` | `ui.chip(text, opts)` | A name of the machine's kind: a hash, a branch. |
-| `button` | `ui.button(text, opts)` | `icon` beside the text; tone `accent` fills it, `danger` warns. |
+| `button` | `ui.button(text, opts)` | `icon` beside the text (or empty `text` with `icon` for compact icon-only buttons); `size` (`small`, `large`); `variant` (`primary`, `secondary`, `outline`, `ghost`, `danger`); tone `accent` fills it, `danger` warns. |
 | `input` | `ui.input(value, opts)` | `placeholder`; `onChange` on leaving it, `onSubmit` on Return. |
-| `textarea` | `ui.textarea(value, opts)` | Multi-line text input; `placeholder`; `onChange` on leaving it. |
+| `textarea` | `ui.textarea(value, opts)` | Multi-line text input; `placeholder`, `size` (`small`, `large`); `onChange` on leaving it, `onSubmit` on shortcut. |
 | `toggle` | `ui.toggle(checked, label, opts)` | `onChange` with `true` or `false`. |
 | `select` | `ui.select(value, options, opts)` | `onChange` with the option. |
 | `tabs` | `ui.tabs(value, options, opts)` | Horizontal tab strip; `onChange` with the chosen option. |
-| `markdown` | `ui.markdown(text, opts)` | Drawn as the window draws Markdown. |
+| `markdown` | `ui.markdown(text, opts)` | Drawn as the window draws Markdown; optional `onLink` fires with the clicked link target. |
 | `code` | `ui.code(text, language, opts)` | Monospaced. |
 | `progress` | `ui.progress(value, opts)` | From 0 to 1. |
 | `divider` | `ui.divider(opts)` | A hairline. |
-| `chart` | `ui.chart(type, series, opts)` | `type` `line`, `bar` or `sparkline` (a line alone, no axes, as tall as a line of text); `series` 1 to 4 of `{name, values, tone}`, each up to 200 finite numbers, 600 in all; `opts.labels` name the points, as many as each series has, and `opts.caption` the chart. A series's colour is its `tone`, or the theme's chart colours in order. It sends no messages. |
+| `chart` | `ui.chart(type, series, opts)` | `type` `line`, `bar`, `sparkline` (1 to 4 series of up to 200 finite numbers, 600 in all), or `donut` / `pie` (revision 44: 1 series of 1 to 16 non-negative values with matching `opts.labels`); `opts.caption` titles the chart. A series's colour is its `tone`, or the theme's chart colours in order. It sends no messages. |
+| `graph` | `ui.graph(nodes, edges, opts)` | Declarative interactive node-edge graph canvas (revision 44): up to 120 nodes (`{id, label, group, tone, subtitle, weight}`) and 400 edges (`{from, to, label, tone, dashed}`), `value` for the focused/selected node ID, optional `maxHeight` (120 to 1200 px), `caption`, and `onChange` firing with the clicked node ID. |
 
 Options (`opts`, or the node's methods of the same names): `key`, `tone`,
-`weight`, `size`, `grow`, `gap`, `icon`, `disabled`, `onTap`, `onChange`,
-`onSubmit`, `drag`, `dragGroup`, `onDrop`, `dropAccept`, `direction`,
-`maxHeight`, `placeholder`, and a chart's or table's `labels`.
+`variant`, `weight`, `size`, `grow`, `gap`, `columns`, `ratio`, `fill`,
+`icon`, `checked`, `value`, `disabled`, `onTap`, `onChange`, `onSubmit`,
+`onLink`, `drag`, `dragGroup`, `onDrop`, `dropAccept`, `direction`,
+`maxHeight`, `placeholder`, `caption`, and a chart's or table's `labels`.
+
+### Localization (`mako.i18n`, `ctx.locale`, `ctx.t`)
+
+Plugins can localize block UIs, commands, and tool outputs using the built-in
+`mako.i18n` helper and the front-end's active BCP-47 language tag (revision 44):
+
+- **`mako.i18n.register(catalog)`**: Registers or merges locale catalogs keyed
+  by BCP-47 tag (e.g. `{ en: { nav: { home: "Home" } }, ko: { nav: { home: "홈" } } }`).
+  Both nested objects and flat dot-separated keys are supported and merged cleanly.
+- **`mako.i18n.t(key, params?, locale?)`**: Looks up `key` with the fallback
+  chain exact normalized tag (e.g. `ko-kr`) -> primary language subtag (`ko`)
+  -> `en` -> `key` itself, and replaces `{name}` placeholders from `params`.
+- **`ctx.locale` & `ctx.t(key, params?)`**: Every `ScopeContext` passed to
+  block `load`/`render`, commands, and tools carries `ctx.locale` (defaulting
+  to `"en"`) and a `ctx.t(key, params?)` helper bound to `ctx.locale`. When
+  `locale` is omitted from `mako.i18n.t`, it uses the active context's locale.
 
 **Drag and drop** (revisions 40–41): set `drag` (a non-empty payload string, up
 to 256 bytes) on a container or display node to make it draggable, and

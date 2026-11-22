@@ -39,7 +39,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ironpark.mako.R
 import dev.ironpark.mako.v2.UiNode
@@ -64,12 +66,13 @@ import kotlin.math.pow
 private const val MAX_SERIES = 4
 private const val MAX_POINTS = 200
 private const val MAX_CHART_POINTS = 600
+private const val MAX_PIE_SLICES = 16
 private const val MAX_LABEL = 32
 private const val MAX_SERIES_NAME = 64
 private const val MAX_VALUE = 1e15
 
 /** The kinds of chart the app draws. */
-internal val CHARTS = setOf("line", "bar", "sparkline")
+internal val CHARTS = setOf("line", "bar", "sparkline", "donut", "pie")
 
 /** The colour tokens a series may name. */
 private val TONES = setOf("muted", "faint", "accent", "success", "warning", "danger")
@@ -101,6 +104,23 @@ internal fun cleanText(s: String, max: Int): String =
  */
 internal fun chartModel(n: UiNode): ChartModel? {
     if (n.chart !in CHARTS) return null
+    val radial = n.chart == "donut" || n.chart == "pie"
+    if (radial) {
+        val s = n.seriesList.firstOrNull()
+        val series = if (s == null) emptyList() else listOf(
+            ChartSeries(
+                cleanText(s.name, MAX_SERIES_NAME),
+                s.tone.takeIf { it in TONES }.orEmpty(),
+                s.valuesList.take(MAX_PIE_SLICES).map { v -> v.takeIf { it.isFinite() && v >= 0.0 && v <= MAX_VALUE } },
+            ),
+        )
+        return ChartModel(
+            n.chart,
+            series,
+            n.labelsList.take(MAX_PIE_SLICES).map { cleanText(it, MAX_LABEL) },
+            cleanText(n.text, 512),
+        )
+    }
     var left = MAX_CHART_POINTS
     val series = n.seriesList.take(MAX_SERIES).map { s ->
         val values = s.valuesList.take(min(MAX_POINTS, left)).map { v -> v.takeIf { it.isFinite() && abs(it) <= MAX_VALUE } }
@@ -108,6 +128,33 @@ internal fun chartModel(n: UiNode): ChartModel? {
         ChartSeries(cleanText(s.name, MAX_SERIES_NAME), s.tone.takeIf { it in TONES }.orEmpty(), values)
     }
     return ChartModel(n.chart, series, n.labelsList.take(MAX_POINTS).map { cleanText(it, MAX_LABEL) }, cleanText(n.text, 512))
+}
+
+/** One slice of a donut or pie chart, with its angular span in degrees from 12 o'clock. */
+internal data class RadialSlice(
+    val index: Int,
+    val label: String,
+    val value: Double,
+    val fraction: Float,
+    val startAngle: Float,
+    val sweepAngle: Float,
+)
+
+/** Slices of a radial chart (donut/pie); empty when there are no positive values. */
+internal fun computeRadialSlices(m: ChartModel): List<RadialSlice> {
+    val s = m.series.firstOrNull() ?: return emptyList()
+    val positive = s.values.mapIndexedNotNull { i, v ->
+        if (v != null && v > 0.0) i to v else null
+    }
+    val total = positive.sumOf { it.second }
+    if (total <= 0.0) return emptyList()
+    var angle = -90f
+    return positive.map { (i, v) ->
+        val fraction = (v / total).toFloat()
+        val sweep = fraction * 360f
+        val label = m.labels.getOrNull(i)?.ifEmpty { null } ?: "#${i + 1}"
+        RadialSlice(i, label, v, fraction, angle, sweep).also { angle += sweep }
+    }
 }
 
 /** A value axis: from min to max, with ticks at step apart. */
@@ -167,14 +214,35 @@ internal fun labelStep(count: Int, room: Float, width: Float): Int {
 }
 
 /** The words a chart is described with, in the app's language. */
-internal data class ChartWords(val line: String, val bar: String, val sparkline: String, val series: (Int) -> String, val noData: String)
+internal data class ChartWords(
+    val line: String,
+    val bar: String,
+    val sparkline: String,
+    val series: (Int) -> String,
+    val noData: String,
+    val donut: String = "Donut chart",
+    val pie: String = "Pie chart",
+)
 
 /**
  * What a screen reader says of a chart: its caption, its kind, and each
- * series by its name with its last value and its range.
+ * series by its name with its last value and its range (or each slice for
+ * a donut/pie chart).
  */
 internal fun describeChart(m: ChartModel, w: ChartWords): String {
-    val kind = when (m.kind) { "bar" -> w.bar; "sparkline" -> w.sparkline; else -> w.line }
+    val kind = when (m.kind) {
+        "bar" -> w.bar
+        "sparkline" -> w.sparkline
+        "donut" -> w.donut
+        "pie" -> w.pie
+        else -> w.line
+    }
+    if (m.kind == "donut" || m.kind == "pie") {
+        val slices = computeRadialSlices(m)
+        if (slices.isEmpty()) return listOf(m.caption, kind, w.noData).filter { it.isNotEmpty() }.joinToString(". ")
+        val each = slices.map { s -> "${s.label}: ${formatValue(s.value)} (${Math.round(s.fraction * 100f)}%)" }
+        return (listOf(m.caption, kind).filter { it.isNotEmpty() } + each).joinToString(". ")
+    }
     if (m.empty) return listOf(m.caption, kind, w.noData).filter { it.isNotEmpty() }.joinToString(". ")
     val each = m.series.mapIndexed { i, s ->
         val values = s.values.filterNotNull()
@@ -185,15 +253,19 @@ internal fun describeChart(m: ChartModel, w: ChartWords): String {
     return (listOf(m.caption, kind).filter { it.isNotEmpty() } + each).joinToString(". ")
 }
 
-/** The theme's chart colours, for a series that names no tone: the look colours of projects, as the desktop's chart colours run. */
-private val chartPalette = listOf("blue", "teal", "amber", "purple").map { Look("", it).tint() }
+/** The theme's chart colours, for a series or slice that names no tone: the look colours of projects, as the desktop's chart colours run. */
+internal val chartPalette = listOf("blue", "teal", "amber", "purple", "green", "orange").map { Look("", it).tint() } + listOf(
+    Color(0xFFEC4899),
+    Color(0xFF6366F1),
+)
 
 @Composable
 private fun seriesColor(s: ChartSeries, i: Int): Color = if (s.tone.isNotEmpty()) toneColor(s.tone) else chartPalette[i % chartPalette.size]
 
 /**
  * UiChart draws a chart node: its caption, a legend for more than one
- * series, and the chart; a sparkline alone, as tall as a line of text.
+ * series, and the chart; a sparkline alone, as tall as a line of text;
+ * a donut or pie chart with its slice legend.
  * One the app does not know shows that it cannot be shown here.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -205,22 +277,34 @@ internal fun UiChart(n: UiNode, modifier: Modifier = Modifier) {
         return
     }
     val words = ChartWords(
-        stringResource(R.string.chart_line), stringResource(R.string.chart_bar), stringResource(R.string.chart_sparkline),
-        series = { "" }, noData = stringResource(R.string.chart_no_data),
+        line = stringResource(R.string.chart_line),
+        bar = stringResource(R.string.chart_bar),
+        sparkline = stringResource(R.string.chart_sparkline),
+        series = { "" },
+        noData = stringResource(R.string.chart_no_data),
+        donut = stringResource(R.string.chart_donut),
+        pie = stringResource(R.string.chart_pie),
     )
     val seriesWord = stringResource(R.string.chart_series)
     val description = describeChart(m, words.copy(series = { String.format(seriesWord, it) }))
     val colors = m.series.mapIndexed { i, s -> seriesColor(s, i) }
     val axisText = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val centerText = MaterialTheme.typography.titleSmall.copy(
+        color = MaterialTheme.colorScheme.onSurface,
+        fontWeight = FontWeight.SemiBold,
+    )
+    val surfaceBg = MaterialTheme.colorScheme.surface
     val grid = MaterialTheme.colorScheme.outlineVariant
     val zeroLine = MaterialTheme.colorScheme.outline
     val measurer = rememberTextMeasurer()
+    val radial = m.kind == "donut" || m.kind == "pie"
+    val slices = remember(m) { if (radial) computeRadialSlices(m) else emptyList() }
     Column(modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = description }) {
         if (m.caption.isNotEmpty()) Text(
             m.caption, style = if (n.size == "large") MaterialTheme.typography.titleSmall else MaterialTheme.typography.bodySmall,
             color = toneColor(n.tone.ifEmpty { "muted" }), modifier = Modifier.padding(bottom = 6.dp),
         )
-        if (m.series.size > 1 && m.kind != "sparkline") FlowRow(
+        if (!radial && m.series.size > 1 && m.kind != "sparkline") FlowRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 6.dp),
         ) {
             m.series.forEachIndexed { i, s ->
@@ -232,9 +316,113 @@ internal fun UiChart(n: UiNode, modifier: Modifier = Modifier) {
             }
         }
         when {
+            radial && slices.isEmpty() -> Text(stringResource(R.string.chart_no_data), style = axisText, modifier = Modifier.padding(vertical = 8.dp))
+            radial -> RadialChartRow(
+                donut = m.kind == "donut",
+                slices = slices,
+                measurer = measurer,
+                centerText = centerText,
+                axisText = axisText,
+                separatorColor = surfaceBg,
+            )
             m.empty -> Text(stringResource(R.string.chart_no_data), style = axisText, modifier = Modifier.padding(vertical = 8.dp))
             m.kind == "sparkline" -> Canvas(Modifier.fillMaxWidth().height(28.dp)) { sparkline(m, colors) }
             else -> Canvas(Modifier.fillMaxWidth().height(168.dp)) { chart(m, colors, measurer, axisText, grid, zeroLine) }
+        }
+    }
+}
+
+@Composable
+private fun RadialChartRow(
+    donut: Boolean,
+    slices: List<RadialSlice>,
+    measurer: TextMeasurer,
+    centerText: TextStyle,
+    axisText: TextStyle,
+    separatorColor: Color,
+) {
+    val total = slices.sumOf { it.value }
+    val totalLabel = formatValue(total)
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Canvas(Modifier.size(132.dp)) {
+            val d = min(size.width, size.height)
+            if (donut) {
+                val stroke = d * 0.24f
+                val inset = stroke / 2f + 2.dp.toPx()
+                val arcSize = Size(d - inset * 2f, d - inset * 2f)
+                val topLeft = Offset((size.width - arcSize.width) / 2f, (size.height - arcSize.height) / 2f)
+                val gapDeg = if (slices.size > 1) 1.5f else 0f
+                slices.forEach { s ->
+                    val sweep = max(0.5f, s.sweepAngle - gapDeg)
+                    drawArc(
+                        color = chartPalette[s.index % chartPalette.size],
+                        startAngle = s.startAngle + gapDeg / 2f,
+                        sweepAngle = sweep,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = arcSize,
+                        style = Stroke(width = stroke, cap = StrokeCap.Butt),
+                    )
+                }
+                val measured = measurer.measure(totalLabel, centerText)
+                drawText(
+                    measured,
+                    topLeft = Offset((size.width - measured.size.width) / 2f, (size.height - measured.size.height) / 2f),
+                )
+            } else {
+                val inset = 2.dp.toPx()
+                val arcSize = Size(d - inset * 2f, d - inset * 2f)
+                val topLeft = Offset((size.width - arcSize.width) / 2f, (size.height - arcSize.height) / 2f)
+                slices.forEach { s ->
+                    drawArc(
+                        color = chartPalette[s.index % chartPalette.size],
+                        startAngle = s.startAngle,
+                        sweepAngle = s.sweepAngle,
+                        useCenter = true,
+                        topLeft = topLeft,
+                        size = arcSize,
+                    )
+                    if (slices.size > 1) {
+                        drawArc(
+                            color = separatorColor,
+                            startAngle = s.startAngle,
+                            sweepAngle = s.sweepAngle,
+                            useCenter = true,
+                            topLeft = topLeft,
+                            size = arcSize,
+                            style = Stroke(width = 1.5.dp.toPx()),
+                        )
+                    }
+                }
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            slices.forEach { s ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Dot(chartPalette[s.index % chartPalette.size], size = 8.dp)
+                    Text(
+                        s.label,
+                        Modifier.weight(1f),
+                        style = axisText,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${formatValue(s.value)} (${Math.round(s.fraction * 100f)}%)",
+                        style = axisText.tabular(),
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }

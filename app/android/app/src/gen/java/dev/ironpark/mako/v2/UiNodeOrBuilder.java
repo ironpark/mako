@@ -46,8 +46,9 @@ public interface UiNodeOrBuilder extends
 
   /**
    * <pre>
-   * text is what a text, pill, chip, button, markdown or code node
-   * shows; an input's placeholder; a toggle's label.
+   * text is what a text, pill, chip, button, markdown, code, collapsible or
+   * tree_item node shows; an input's or textarea's placeholder; a toggle's
+   * label; a chart's or graph's caption.
    * </pre>
    *
    * <code>string text = 3 [json_name = "text"];</code>
@@ -56,8 +57,9 @@ public interface UiNodeOrBuilder extends
   java.lang.String getText();
   /**
    * <pre>
-   * text is what a text, pill, chip, button, markdown or code node
-   * shows; an input's placeholder; a toggle's label.
+   * text is what a text, pill, chip, button, markdown, code, collapsible or
+   * tree_item node shows; an input's or textarea's placeholder; a toggle's
+   * label; a chart's or graph's caption.
    * </pre>
    *
    * <code>string text = 3 [json_name = "text"];</code>
@@ -90,8 +92,8 @@ public interface UiNodeOrBuilder extends
 
   /**
    * <pre>
-   * icon is a bundled icon's name, for an icon node or beside a button's
-   * text.
+   * icon is a bundled icon's name, for an icon, button, collapsible or
+   * tree_item node.
    * </pre>
    *
    * <code>string icon = 5 [json_name = "icon"];</code>
@@ -100,8 +102,8 @@ public interface UiNodeOrBuilder extends
   java.lang.String getIcon();
   /**
    * <pre>
-   * icon is a bundled icon's name, for an icon node or beside a button's
-   * text.
+   * icon is a bundled icon's name, for an icon, button, collapsible or
+   * tree_item node.
    * </pre>
    *
    * <code>string icon = 5 [json_name = "icon"];</code>
@@ -144,7 +146,9 @@ public interface UiNodeOrBuilder extends
 
   /**
    * <pre>
-   * value is an input's text or a select's choice; checked a toggle's.
+   * value is an input's/textarea's text, a select's/tabs' choice, a
+   * tree_item's secondary/meta text, or a graph's focused node ID; checked
+   * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
    * </pre>
    *
    * <code>string value = 8 [json_name = "value"];</code>
@@ -153,7 +157,9 @@ public interface UiNodeOrBuilder extends
   java.lang.String getValue();
   /**
    * <pre>
-   * value is an input's text or a select's choice; checked a toggle's.
+   * value is an input's/textarea's text, a select's/tabs' choice, a
+   * tree_item's secondary/meta text, or a graph's focused node ID; checked
+   * is a toggle's state or a collapsible's/tree_item's expanded/selected state.
    * </pre>
    *
    * <code>string value = 8 [json_name = "value"];</code>
@@ -170,7 +176,7 @@ public interface UiNodeOrBuilder extends
 
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -180,7 +186,7 @@ public interface UiNodeOrBuilder extends
       getOptionsList();
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -189,7 +195,7 @@ public interface UiNodeOrBuilder extends
   int getOptionsCount();
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -199,7 +205,7 @@ public interface UiNodeOrBuilder extends
   java.lang.String getOptions(int index);
   /**
    * <pre>
-   * a select's
+   * a select's, tabs', or breadcrumb's
    * </pre>
    *
    * <code>repeated string options = 10 [json_name = "options"];</code>
@@ -248,7 +254,7 @@ public interface UiNodeOrBuilder extends
   /**
    * <pre>
    * grow shares out a row's or column's room left among the children
-   * that set it; gap is the room between a row's or column's children.
+   * that set it; gap is the room between a container's children.
    * </pre>
    *
    * <code>double grow = 14 [json_name = "grow"];</code>
@@ -264,8 +270,9 @@ public interface UiNodeOrBuilder extends
 
   /**
    * <pre>
-   * tap says tapping the node is answered; change that its value
-   * changing is.
+   * tap says tapping the node is answered; change that its value changing
+   * (or a markdown link, breadcrumb segment, graph node click, or
+   * collapsible/tree_item expansion toggle) is answered.
    * </pre>
    *
    * <code>bool tap = 16 [json_name = "tap"];</code>
@@ -295,10 +302,11 @@ public interface UiNodeOrBuilder extends
 
   /**
    * <pre>
-   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-   * (revision 33). Its series are numbers, each series's colour a token;
-   * labels name the points along its axis; text is its caption. A front-end
-   * that does not know the kind draws nothing in its place.
+   * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+   * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+   * each series's colour a token; labels name the points along its axis (or
+   * slices of a donut/pie); text is its caption. A front-end that does not
+   * know the kind draws nothing in its place.
    * </pre>
    *
    * <code>string chart = 19 [json_name = "chart"];</code>
@@ -307,10 +315,11 @@ public interface UiNodeOrBuilder extends
   java.lang.String getChart();
   /**
    * <pre>
-   * chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-   * (revision 33). Its series are numbers, each series's colour a token;
-   * labels name the points along its axis; text is its caption. A front-end
-   * that does not know the kind draws nothing in its place.
+   * chart is a chart node's kind of chart: "line", "bar", "sparkline"
+   * (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+   * each series's colour a token; labels name the points along its axis (or
+   * slices of a donut/pie); text is its caption. A front-end that does not
+   * know the kind draws nothing in its place.
    * </pre>
    *
    * <code>string chart = 19 [json_name = "chart"];</code>
@@ -439,8 +448,9 @@ public interface UiNodeOrBuilder extends
 
   /**
    * <pre>
-   * direction ("vertical" or "horizontal") and max_height (px) configure a
-   * scroll container (revision 41).
+   * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+   * or split (revision 44) container; max_height (px) configures a scroll
+   * container (0..4000) or graph canvas (120..1200).
    * </pre>
    *
    * <code>string direction = 26 [json_name = "direction"];</code>
@@ -449,8 +459,9 @@ public interface UiNodeOrBuilder extends
   java.lang.String getDirection();
   /**
    * <pre>
-   * direction ("vertical" or "horizontal") and max_height (px) configure a
-   * scroll container (revision 41).
+   * direction ("vertical" or "horizontal") configures a scroll (revision 41)
+   * or split (revision 44) container; max_height (px) configures a scroll
+   * container (0..4000) or graph canvas (120..1200).
    * </pre>
    *
    * <code>string direction = 26 [json_name = "direction"];</code>
@@ -464,4 +475,102 @@ public interface UiNodeOrBuilder extends
    * @return The maxHeight.
    */
   double getMaxHeight();
+
+  /**
+   * <pre>
+   * variant styles a button or card: "", "primary", "secondary", "outline",
+   * "ghost", "danger" (revision 44).
+   * </pre>
+   *
+   * <code>string variant = 28 [json_name = "variant"];</code>
+   * @return The variant.
+   */
+  java.lang.String getVariant();
+  /**
+   * <pre>
+   * variant styles a button or card: "", "primary", "secondary", "outline",
+   * "ghost", "danger" (revision 44).
+   * </pre>
+   *
+   * <code>string variant = 28 [json_name = "variant"];</code>
+   * @return The bytes for variant.
+   */
+  com.google.protobuf.ByteString
+      getVariantBytes();
+
+  /**
+   * <pre>
+   * columns is the column count (1..6) of a grid container (revision 44).
+   * </pre>
+   *
+   * <code>int32 columns = 29 [json_name = "columns"];</code>
+   * @return The columns.
+   */
+  int getColumns();
+
+  /**
+   * <pre>
+   * ratio is the initial primary pane fraction (0.1..0.9) of a split
+   * container (revision 44).
+   * </pre>
+   *
+   * <code>double ratio = 30 [json_name = "ratio"];</code>
+   * @return The ratio.
+   */
+  double getRatio();
+
+  /**
+   * <pre>
+   * fill on a root container (column, row, or split) tells front-ends to skip
+   * outer auto-scroll so plugins can pin toolbars and scroll inner panes
+   * (revision 44).
+   * </pre>
+   *
+   * <code>bool fill = 31 [json_name = "fill"];</code>
+   * @return The fill.
+   */
+  boolean getFill();
+
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.UiGraphNode> 
+      getGraphNodesList();
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  dev.ironpark.mako.v2.UiGraphNode getGraphNodes(int index);
+  /**
+   * <pre>
+   * graph_nodes and graph_edges define a declarative interactive graph canvas
+   * for a graph node (revision 44).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiGraphNode graph_nodes = 32 [json_name = "graphNodes"];</code>
+   */
+  int getGraphNodesCount();
+
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.UiGraphEdge> 
+      getGraphEdgesList();
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  dev.ironpark.mako.v2.UiGraphEdge getGraphEdges(int index);
+  /**
+   * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
+   */
+  int getGraphEdgesCount();
 }

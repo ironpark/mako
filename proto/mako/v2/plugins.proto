@@ -173,6 +173,9 @@ message PluginAction {
   // scope is the optional canonical scope key ("" for global, "space:<id>",
   // "project:<id>", "session:<id>") for scoped settings or commands (revision 42).
   string scope = 6;
+  // locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+  // "ko-KR"; empty defaults to "en", revision 44).
+  string locale = 7;
 }
 
 // PluginDone answers PluginAction and BlockEvent.
@@ -197,6 +200,9 @@ message WatchBlock {
   // scope is the canonical scope key ("" for global, "space:<id>",
   // "project:<id>", "session:<id>", revision 42).
   string scope = 3;
+  // locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+  // "ko-KR"; empty defaults to "en", revision 44).
+  string locale = 4;
 }
 
 // BlockUpdate is a block's tree, whole or as the changes since the last.
@@ -247,50 +253,60 @@ message BlockEvent {
   string node_id = 6;
   // scope is the canonical scope key of the target block instance (revision 42).
   string scope = 7;
+  // locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
+  // "ko-KR"; empty defaults to "en", revision 44).
+  string locale = 8;
 }
 
 // UiNode is a node of a plugin block's tree. The kinds are a fixed set
-// (docs/plugins.md): column, row, stack, text, icon, pill, chip, button,
-// list, input, toggle, select, markdown, code, progress, divider, and
-// from revision 33 chart; a colour is a token, never a value.
+// (docs/plugins.md): column, row, stack, card, scroll, wrap, grid, split,
+// collapsible, breadcrumb, tree, tree_item, text, icon, pill, chip, button,
+// list, input, textarea, toggle, select, tabs, table, markdown, code,
+// progress, divider, chart (revision 33), and graph (revision 44); a colour
+// is a token, never a value.
 message UiNode {
   // id is the node's path from the root by its own and its ancestors'
   // keys, which patches find it by: unique in the tree.
   string id = 1;
   string kind = 2;
-  // text is what a text, pill, chip, button, markdown or code node
-  // shows; an input's placeholder; a toggle's label.
+  // text is what a text, pill, chip, button, markdown, code, collapsible or
+  // tree_item node shows; an input's or textarea's placeholder; a toggle's
+  // label; a chart's or graph's caption.
   string text = 3;
   // tone is the colour token: "", "muted", "faint", "accent", "success",
   // "warning", "danger".
   string tone = 4;
-  // icon is a bundled icon's name, for an icon node or beside a button's
-  // text.
+  // icon is a bundled icon's name, for an icon, button, collapsible or
+  // tree_item node.
   string icon = 5;
   // weight is "", "medium" or "semibold"; size "", "small" or "large".
   string weight = 6;
   string size = 7;
-  // value is an input's text or a select's choice; checked a toggle's.
+  // value is an input's/textarea's text, a select's/tabs' choice, a
+  // tree_item's secondary/meta text, or a graph's focused node ID; checked
+  // is a toggle's state or a collapsible's/tree_item's expanded/selected state.
   string value = 8;
   bool checked = 9;
-  repeated string options = 10; // a select's
+  repeated string options = 10; // a select's, tabs', or breadcrumb's
   // progress is a progress bar's, from 0 to 1.
   double progress = 11;
   string language = 12; // a code node's
   bool disabled = 13;
   // grow shares out a row's or column's room left among the children
-  // that set it; gap is the room between a row's or column's children.
+  // that set it; gap is the room between a container's children.
   double grow = 14;
   double gap = 15;
-  // tap says tapping the node is answered; change that its value
-  // changing is.
+  // tap says tapping the node is answered; change that its value changing
+  // (or a markdown link, breadcrumb segment, graph node click, or
+  // collapsible/tree_item expansion toggle) is answered.
   bool tap = 16;
   bool change = 17;
   repeated UiNode children = 18;
-  // chart is a chart node's kind of chart: "line", "bar" or "sparkline"
-  // (revision 33). Its series are numbers, each series's colour a token;
-  // labels name the points along its axis; text is its caption. A front-end
-  // that does not know the kind draws nothing in its place.
+  // chart is a chart node's kind of chart: "line", "bar", "sparkline"
+  // (revision 33), "donut" or "pie" (revision 44). Its series are numbers,
+  // each series's colour a token; labels name the points along its axis (or
+  // slices of a donut/pie); text is its caption. A front-end that does not
+  // know the kind draws nothing in its place.
   string chart = 19;
   repeated UiSeries series = 20;
   repeated string labels = 21;
@@ -304,10 +320,27 @@ message UiNode {
   // drags matching one of those groups (empty accepts any group, revision 41).
   string drag_group = 24;
   repeated string drop_accept = 25;
-  // direction ("vertical" or "horizontal") and max_height (px) configure a
-  // scroll container (revision 41).
+  // direction ("vertical" or "horizontal") configures a scroll (revision 41)
+  // or split (revision 44) container; max_height (px) configures a scroll
+  // container (0..4000) or graph canvas (120..1200).
   string direction = 26;
   double max_height = 27;
+  // variant styles a button or card: "", "primary", "secondary", "outline",
+  // "ghost", "danger" (revision 44).
+  string variant = 28;
+  // columns is the column count (1..6) of a grid container (revision 44).
+  int32 columns = 29;
+  // ratio is the initial primary pane fraction (0.1..0.9) of a split
+  // container (revision 44).
+  double ratio = 30;
+  // fill on a root container (column, row, or split) tells front-ends to skip
+  // outer auto-scroll so plugins can pin toolbars and scroll inner panes
+  // (revision 44).
+  bool fill = 31;
+  // graph_nodes and graph_edges define a declarative interactive graph canvas
+  // for a graph node (revision 44).
+  repeated UiGraphNode graph_nodes = 32;
+  repeated UiGraphEdge graph_edges = 33;
 }
 
 // UiSeries is a series of a chart node: its name, colour token and values,
@@ -316,6 +349,26 @@ message UiSeries {
   string name = 1;
   string tone = 2;
   repeated double values = 3;
+}
+
+// UiGraphNode is a node in a declarative interactive graph canvas (revision 44).
+message UiGraphNode {
+  string id = 1;
+  string label = 2;
+  string group = 3;
+  string tone = 4;
+  string subtitle = 5;
+  double weight = 6;
+}
+
+// UiGraphEdge is an edge connecting two UiGraphNodes in a graph canvas
+// (revision 44).
+message UiGraphEdge {
+  string from = 1;
+  string to = 2;
+  string label = 3;
+  string tone = 4;
+  bool dashed = 5;
 }
 
 // UiOp is a change of a tree. op "replace" puts node in place of the node

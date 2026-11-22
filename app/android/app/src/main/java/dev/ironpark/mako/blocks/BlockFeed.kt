@@ -3,6 +3,7 @@ package dev.ironpark.mako.blocks
 import androidx.compose.runtime.mutableStateMapOf
 import dev.ironpark.mako.net.Daemon
 import dev.ironpark.mako.net.MakoException
+import dev.ironpark.mako.net.currentLocaleTag
 import dev.ironpark.mako.v2.BlockUpdate
 import dev.ironpark.mako.v2.UiNode
 import kotlinx.coroutines.CancellationException
@@ -31,8 +32,9 @@ fun followBlock(
     node: String,
     block: String,
     scope: String = "",
+    locale: String = currentLocaleTag(),
     from: BlockState = BlockState(),
-): Flow<BlockState> = followUpdates(from) { daemon.watchBlock(node, block, scope) }
+): Flow<BlockState> = followUpdates(from) { daemon.watchBlock(node, block, scope, locale) }
 
 /** followBlock of the streams watch opens. */
 internal fun followUpdates(from: BlockState, watch: () -> Flow<BlockUpdate>): Flow<BlockState> = flow {
@@ -84,18 +86,31 @@ class BlockForm {
     private val fields = mutableStateMapOf<String, String>()
     private val given = mutableMapOf<String, String>()
 
+    /** Expansion state for collapsible and branch tree_item nodes; not part of BlockEvent.values. */
+    private val expanded = mutableStateMapOf<String, Boolean>()
+    private val givenExpanded = mutableMapOf<String, Boolean>()
+
     /** What each input last sent, or was last given: leaving one sends a change only if its value is not that. */
     private val sent = mutableMapOf<String, String>()
 
-    /** Takes in what tree gives its fields; called as a tree comes, not while one is drawn. */
+    /** Takes in what tree gives its fields and expandable containers; called as a tree comes, not while one is drawn. */
     fun sync(tree: UiNode?) {
         if (tree == null) return
-        walk(tree) { n ->
-            val g = given(n)
-            if (given[n.id] != g) {
-                given[n.id] = g
-                fields[n.id] = g
-                sent[n.id] = g
+        walkAll(tree) { n ->
+            if (n.kind in FIELDS) {
+                val g = given(n)
+                if (given[n.id] != g) {
+                    given[n.id] = g
+                    fields[n.id] = g
+                    sent[n.id] = g
+                }
+            }
+            if (isExpandable(n)) {
+                val g = n.checked
+                if (givenExpanded[n.id] != g) {
+                    givenExpanded[n.id] = g
+                    expanded[n.id] = g
+                }
             }
         }
     }
@@ -105,6 +120,13 @@ class BlockForm {
 
     fun set(id: String, value: String) {
         fields[id] = value
+    }
+
+    /** Whether a collapsible or branch tree_item node is currently expanded. */
+    fun isExpanded(n: UiNode): Boolean = expanded[n.id] ?: n.checked
+
+    fun setExpanded(id: String, open: Boolean) {
+        expanded[id] = open
     }
 
     /**
@@ -132,8 +154,16 @@ class BlockForm {
 
     private fun given(n: UiNode): String = if (n.kind == "toggle") n.checked.toString() else n.value
 
+    private fun isExpandable(n: UiNode): Boolean =
+        n.kind == "collapsible" || (n.kind == "tree_item" && (n.childrenCount > 0 || n.change))
+
     private fun walk(n: UiNode, fn: (UiNode) -> Unit) {
         if (n.kind in FIELDS) fn(n)
         n.childrenList.forEach { walk(it, fn) }
+    }
+
+    private fun walkAll(n: UiNode, fn: (UiNode) -> Unit) {
+        fn(n)
+        n.childrenList.forEach { walkAll(it, fn) }
     }
 }

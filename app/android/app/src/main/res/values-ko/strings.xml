@@ -341,8 +341,15 @@
     <string name="chart_line">선 차트</string>
     <string name="chart_bar">막대 차트</string>
     <string name="chart_sparkline">스파크라인</string>
+    <string name="chart_donut">도넛 차트</string>
+    <string name="chart_pie">원형 차트</string>
     <string name="chart_series">계열 %d</string>
     <string name="chart_no_data">데이터 없음</string>
+    <string name="graph_empty">그래프 노드 없음</string>
+    <string name="graph_summary">노드 %1$d개, 연결 %2$d개의 그래프</string>
+    <string name="graph_zoom_in">확대</string>
+    <string name="graph_zoom_out">축소</string>
+    <string name="graph_zoom_reset">보기 초기화</string>
     <string name="block_unknown_kind">이 버전의 앱에서는 표시할 수 없습니다</string>
     <string name="panel_missing">%1$s에 설치되지 않음</string>
     <string name="block_dragging">항목 이동 중 · 강조된 영역을 눌러 놓으세요</string>

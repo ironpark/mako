@@ -51,6 +51,10 @@ func chartNode(n *protocol.UiNode) ggui.Widget {
 	case "sparkline":
 		c = ui.LineChart(data, config).Height(36).Axes(false, false).Grid(false).Legend(false).Dots(false).
 			Curve(ui.ChartLinear).TooltipCursor(false).StrokeWidth(1.5)
+	case "donut":
+		c = ui.PieChart(data, config).Height(190).InnerRadius(0.55).OuterRadius(0.85).Legend(true).AnimationDelay(0)
+	case "pie":
+		c = ui.PieChart(data, config).Height(190).InnerRadius(0).OuterRadius(0.85).Legend(true).AnimationDelay(0)
 	default:
 		c = ui.LineChart(data, config).Height(160).Legend(len(config) > 1).Dots(false).Curve(ui.ChartMonotone)
 	}

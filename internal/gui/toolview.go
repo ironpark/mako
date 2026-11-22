@@ -1,7 +1,9 @@
 package gui
 
 import (
+	"cmp"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -38,7 +40,7 @@ func toolBody(m *model, msg *protocol.ChatMessage) ggui.Widget {
 	_ = json.Unmarshal([]byte(args), &in)
 	var rows []ggui.Widget
 	if !msg.GetOutput() {
-		rows = toolInput(m, kind, args, in)
+		rows = toolInputFor(m, msg.GetTool(), kind, args, in)
 	}
 	if result != "" {
 		rows = append(rows, toolOutput(m, msg, in, result, failed))
@@ -51,6 +53,12 @@ func toolBody(m *model, msg *protocol.ChatMessage) ggui.Widget {
 
 // toolInput is what a call asked for, as its kind reads.
 func toolInput(m *model, kind string, args string, in map[string]any) []ggui.Widget {
+	return toolInputFor(m, "", kind, args, in)
+}
+
+// toolInputFor renders structured inputs for a tool call, supporting both
+// canonical protocol kinds and agy swarm/task coordination tools.
+func toolInputFor(m *model, tool, kind, args string, in map[string]any) []ggui.Widget {
 	if in == nil {
 		if args == "" {
 			return nil
@@ -115,6 +123,9 @@ func toolInput(m *model, kind string, args string, in map[string]any) []ggui.Wid
 		if options := agent.List(in, "options"); len(options) > 0 {
 			rows = append(rows, fieldChips(map[string]any{"options": options}, "options"))
 		}
+		return rows
+	}
+	if rows := swarmToolInput(tool, in); len(rows) > 0 {
 		return rows
 	}
 	return fieldRows(in)
@@ -465,4 +476,508 @@ func fieldRows(in map[string]any) []ggui.Widget {
 		rows = append([]ggui.Widget{fieldChips(in, short...)}, rows...)
 	}
 	return rows
+}
+
+// toolRowGlyph is the icon for a tool row, giving agy swarm/task coordination
+// tools dedicated icons before falling back to canonical tool kinds.
+func toolRowGlyph(msg *protocol.ChatMessage) string {
+	switch msg.GetTool() {
+	case "read_board":
+		return "messages-square"
+	case "swarm_wait", "schedule":
+		return "clock"
+	case "post_message", "send_message":
+		return "send-horizontal"
+	case "swarm", "invoke_subagent":
+		return "users"
+	case "manage_task":
+		return "list"
+	}
+	return toolGlyph(msg.GetKind())
+}
+
+// isSwarmSyncTool reports whether msg is a low-signal swarm/task coordination
+// or polling call that should coalesce with adjacent coordination calls into a
+// single compact collapsible group row.
+func isSwarmSyncTool(msg *protocol.ChatMessage) bool {
+	if msg == nil || msg.GetRole() != "tool" {
+		return false
+	}
+	switch msg.GetTool() {
+	case "read_board", "swarm_wait", "manage_task", "schedule":
+		return true
+	case "swarm":
+		if msg.GetOutput() {
+			return false
+		}
+		var in map[string]any
+		if json.Unmarshal([]byte(msg.GetText()), &in) == nil {
+			action := strings.ToLower(agent.Str(in, "action", "Action"))
+			return action == "status" || action == "models"
+		}
+	}
+	return false
+}
+
+// sameRawTool reports whether every message in msgs invokes the same raw tool.
+func sameRawTool(msgs []*protocol.ChatMessage) bool {
+	if len(msgs) <= 1 {
+		return true
+	}
+	first := toolGroupName(msgs[0])
+	for _, msg := range msgs[1:] {
+		if toolGroupName(msg) != first {
+			return false
+		}
+	}
+	return true
+}
+
+// swarmSyncSummary builds a concise ordered breakdown of a coalesced swarm sync
+// run, e.g. "Read board ×6 · Wait for board ×4 · Manage task · Schedule".
+func swarmSyncSummary(msgs []*protocol.ChatMessage) string {
+	var order []string
+	counts := map[string]int{}
+	for _, msg := range msgs {
+		label, _ := toolDisplay(msg)
+		if counts[label] == 0 {
+			order = append(order, label)
+		}
+		counts[label]++
+	}
+	parts := make([]string, 0, len(order))
+	for _, label := range order {
+		if n := counts[label]; n > 1 {
+			parts = append(parts, fmt.Sprintf("%s ×%d", label, n))
+		} else {
+			parts = append(parts, label)
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+// toolDisplay returns the concise display label and one-line summary detail for
+// a tool row. For agy swarm/task coordination tools it derives readable labels
+// and summaries directly from the JSON arguments; other tools keep toolParts.
+func toolDisplay(msg *protocol.ChatMessage) (label, detail string) {
+	name, fallbackDetail, args, _, _ := toolParts(msg)
+	rawTool := msg.GetTool()
+	var in map[string]any
+	if !msg.GetOutput() && args != "" {
+		_ = json.Unmarshal([]byte(args), &in)
+	}
+	switch rawTool {
+	case "read_board":
+		return T("Read board"), cmp.Or(readBoardDetail(in), fallbackDetail)
+	case "swarm_wait":
+		return T("Wait for board"), cmp.Or(swarmWaitDetail(in), fallbackDetail)
+	case "post_message":
+		d := agent.OneLine(agent.Str(in, "text", "message", "content"), 100)
+		return T("Post to board"), cmp.Or(d, fallbackDetail)
+	case "swarm":
+		return T("Swarm"), cmp.Or(swarmDetail(in), fallbackDetail)
+	case "manage_task":
+		return T("Manage task"), cmp.Or(manageTaskDetail(in), fallbackDetail)
+	case "schedule":
+		return T("Schedule"), cmp.Or(scheduleDetail(in), fallbackDetail)
+	case "invoke_subagent":
+		return T("Subagent"), cmp.Or(subagentToolDetail(in), fallbackDetail)
+	case "send_message":
+		return T("Send message"), cmp.Or(sendMessageDetail(in), fallbackDetail)
+	}
+	return name, fallbackDetail
+}
+
+func readBoardDetail(in map[string]any) string {
+	if in == nil {
+		return ""
+	}
+	if status, _ := in["status"].(bool); status {
+		return T("roster status")
+	}
+	if seqs := seqList(in["seqs"]); seqs != "" {
+		return seqs
+	}
+	if since, ok := intField(in, "since"); ok && since > 0 {
+		return Tf("since #%d", since)
+	}
+	if limit, ok := intField(in, "limit"); ok && limit > 0 {
+		return Tf("latest %d", limit)
+	}
+	return T("latest messages")
+}
+
+func swarmWaitDetail(in map[string]any) string {
+	if in == nil {
+		return ""
+	}
+	mentionsOnly := true
+	if v, ok := in["mentions_only"].(bool); ok {
+		mentionsOnly = v
+	}
+	since, hasSince := intField(in, "since")
+	switch {
+	case hasSince && since > 0 && !mentionsOnly:
+		return Tf("since #%d · all messages", since)
+	case hasSince && since > 0:
+		return Tf("since #%d · mentions", since)
+	case !mentionsOnly:
+		return T("all messages")
+	default:
+		return T("mentions")
+	}
+}
+
+func swarmDetail(in map[string]any) string {
+	if in == nil {
+		return ""
+	}
+	action := agent.Str(in, "action", "Action")
+	name := agent.Str(in, "name", "Name")
+	model := agent.Str(in, "model", "Model")
+	title := agent.Str(in, "title", "Title")
+	brief := agent.OneLine(agent.Str(in, "brief", "Brief"), 80)
+	switch strings.ToLower(action) {
+	case "add":
+		head := "add"
+		if name != "" {
+			head += " " + name
+		}
+		if n, ok := intField(in, "n"); ok && n > 1 {
+			head += fmt.Sprintf(" ×%d", n)
+		} else if tasks := agent.List(in, "tasks"); len(tasks) > 0 {
+			head += " (" + Tf("%d tasks", len(tasks)) + ")"
+		}
+		var parts []string
+		parts = append(parts, head)
+		if model != "" {
+			parts = append(parts, model)
+		}
+		if brief != "" {
+			parts = append(parts, brief)
+		}
+		return strings.Join(parts, " · ")
+	case "kill":
+		if name != "" {
+			return "kill " + name
+		}
+		return "kill"
+	case "model":
+		switch {
+		case name != "" && model != "":
+			return fmt.Sprintf("model %s → %s", name, model)
+		case model != "":
+			return "model → " + model
+		case name != "":
+			return "model " + name
+		default:
+			return "model"
+		}
+	case "title":
+		if title != "" {
+			return agent.OneLine(title, 90)
+		}
+		return "title"
+	case "status":
+		return T("status")
+	case "models":
+		if all, _ := in["all"].(bool); all {
+			return T("models (all)")
+		}
+		return T("models")
+	default:
+		return strings.TrimSpace(action + " " + name)
+	}
+}
+
+func manageTaskDetail(in map[string]any) string {
+	if in == nil {
+		return ""
+	}
+	action := agent.Str(in, "Action", "action")
+	taskID := agent.Str(in, "TaskId", "task_id", "taskId")
+	input := agent.OneLine(agent.Str(in, "Input", "input"), 80)
+	switch strings.ToLower(action) {
+	case "list":
+		return T("list tasks")
+	case "kill":
+		if taskID != "" {
+			return "kill " + taskID
+		}
+		return "kill"
+	case "status":
+		if taskID != "" {
+			return "status " + taskID
+		}
+		return T("status")
+	case "send_input":
+		switch {
+		case taskID != "" && input != "":
+			return fmt.Sprintf("%s: %s", taskID, input)
+		case input != "":
+			return input
+		case taskID != "":
+			return "send_input " + taskID
+		}
+	}
+	return strings.TrimSpace(action + " " + taskID)
+}
+
+func scheduleDetail(in map[string]any) string {
+	if in == nil {
+		return ""
+	}
+	cron := agent.Str(in, "CronExpression", "cron_expression", "cron")
+	secs, hasSecs := intField(in, "DurationSeconds")
+	if !hasSecs {
+		secs, hasSecs = intField(in, "duration_seconds")
+	}
+	prompt := agent.OneLine(agent.Str(in, "Prompt", "prompt"), 80)
+	var when string
+	switch {
+	case cron != "":
+		when = cron
+	case hasSecs && secs > 0:
+		when = formatShortDuration(secs)
+	}
+	switch {
+	case when != "" && prompt != "":
+		return when + " · " + prompt
+	case when != "":
+		return when
+	default:
+		return prompt
+	}
+}
+
+func subagentToolDetail(in map[string]any) string {
+	if in == nil {
+		return ""
+	}
+	role := agent.Str(in, "agent", "Role", "TypeName", "role", "typeName")
+	desc := agent.Str(in, "description", "toolSummary")
+	prompt := agent.OneLine(agent.Str(in, "prompt", "Prompt"), 90)
+	if role == "" || prompt == "" {
+		if subs := agent.List(in, "Subagents"); len(subs) > 0 {
+			if first, ok := subs[0].(map[string]any); ok {
+				role = cmp.Or(role, agent.Str(first, "Role", "Name", "TypeName"))
+				prompt = cmp.Or(prompt, agent.OneLine(agent.Str(first, "Prompt"), 90))
+			}
+		}
+	}
+	body := cmp.Or(desc, prompt)
+	switch {
+	case role != "" && body != "" && role != body:
+		return role + " · " + body
+	case body != "":
+		return body
+	default:
+		return role
+	}
+}
+
+func sendMessageDetail(in map[string]any) string {
+	if in == nil {
+		return ""
+	}
+	to := agent.Str(in, "to", "To", "target", "Target", "recipient", "Recipient", "conversation_id", "ConversationId")
+	body := agent.OneLine(agent.Str(in, "text", "Text", "message", "Message", "content", "Content"), 90)
+	switch {
+	case to != "" && body != "":
+		return fmt.Sprintf("→ %s: %s", to, body)
+	case to != "":
+		return "→ " + to
+	default:
+		return body
+	}
+}
+
+// swarmToolInput formats the expanded input section for agy swarm/task tools.
+func swarmToolInput(tool string, in map[string]any) []ggui.Widget {
+	if in == nil {
+		return nil
+	}
+	switch tool {
+	case "read_board":
+		var chips [][2]string
+		if status, _ := in["status"].(bool); status {
+			chips = append(chips, [2]string{T("Mode"), T("roster status")})
+		}
+		if seqs := seqList(in["seqs"]); seqs != "" {
+			chips = append(chips, [2]string{T("Messages"), seqs})
+		}
+		if since, ok := intField(in, "since"); ok && since > 0 {
+			chips = append(chips, [2]string{T("Since"), fmt.Sprintf("#%d", since)})
+		}
+		if limit, ok := intField(in, "limit"); ok && limit > 0 {
+			chips = append(chips, [2]string{T("Limit"), strconv.Itoa(limit)})
+		}
+		if len(chips) == 0 {
+			chips = append(chips, [2]string{T("Mode"), T("latest messages")})
+		}
+		return []ggui.Widget{labeledChips(chips)}
+	case "swarm_wait":
+		var chips [][2]string
+		if since, ok := intField(in, "since"); ok && since > 0 {
+			chips = append(chips, [2]string{T("Since"), fmt.Sprintf("#%d", since)})
+		}
+		mentionsOnly := true
+		if v, ok := in["mentions_only"].(bool); ok {
+			mentionsOnly = v
+		}
+		chips = append(chips, [2]string{T("Wake on"), pick(mentionsOnly, T("Mentions only"), T("All messages"))})
+		return []ggui.Widget{labeledChips(chips)}
+	case "post_message":
+		if text := agent.Str(in, "text", "message", "content"); text != "" {
+			return []ggui.Widget{proseBlock(text)}
+		}
+	case "swarm":
+		var chips [][2]string
+		if v := agent.Str(in, "action", "Action"); v != "" {
+			chips = append(chips, [2]string{T("Action"), v})
+		}
+		if v := agent.Str(in, "name", "Name"); v != "" {
+			chips = append(chips, [2]string{T("Target"), v})
+		}
+		if v := agent.Str(in, "title", "Title"); v != "" {
+			chips = append(chips, [2]string{T("Swarm"), v})
+		}
+		if v := agent.Str(in, "model", "Model"); v != "" {
+			chips = append(chips, [2]string{T("Model"), v})
+		}
+		if v := agent.Str(in, "workspace", "Workspace"); v != "" {
+			chips = append(chips, [2]string{T("Workspace"), v})
+		}
+		var rows []ggui.Widget
+		if len(chips) > 0 {
+			rows = append(rows, labeledChips(chips))
+		}
+		if brief := agent.Str(in, "brief", "Brief"); brief != "" {
+			rows = append(rows, proseBlock(brief))
+		}
+		return rows
+	case "manage_task":
+		var chips [][2]string
+		if v := agent.Str(in, "Action", "action"); v != "" {
+			chips = append(chips, [2]string{T("Action"), v})
+		}
+		if v := agent.Str(in, "TaskId", "task_id", "taskId"); v != "" {
+			chips = append(chips, [2]string{T("Task"), v})
+		}
+		var rows []ggui.Widget
+		if len(chips) > 0 {
+			rows = append(rows, labeledChips(chips))
+		}
+		if input := agent.Str(in, "Input", "input"); input != "" {
+			rows = append(rows, proseBlock(input))
+		}
+		return rows
+	case "schedule":
+		var chips [][2]string
+		if v := agent.Str(in, "CronExpression", "cron_expression", "cron"); v != "" {
+			chips = append(chips, [2]string{T("Cron"), v})
+		}
+		if secs, ok := intField(in, "DurationSeconds"); ok && secs > 0 {
+			chips = append(chips, [2]string{T("Timer"), formatShortDuration(secs)})
+		} else if secs, ok := intField(in, "duration_seconds"); ok && secs > 0 {
+			chips = append(chips, [2]string{T("Timer"), formatShortDuration(secs)})
+		}
+		if v := agent.Str(in, "TimerCondition", "timer_condition"); v != "" {
+			chips = append(chips, [2]string{T("Condition"), v})
+		}
+		var rows []ggui.Widget
+		if len(chips) > 0 {
+			rows = append(rows, labeledChips(chips))
+		}
+		if prompt := agent.Str(in, "Prompt", "prompt"); prompt != "" {
+			rows = append(rows, proseBlock(prompt))
+		}
+		return rows
+	case "invoke_subagent":
+		var chips [][2]string
+		if role := agent.Str(in, "Role", "TypeName", "agent"); role != "" {
+			chips = append(chips, [2]string{T("Subagent"), role})
+		}
+		var rows []ggui.Widget
+		if len(chips) > 0 {
+			rows = append(rows, labeledChips(chips))
+		}
+		if prompt := agent.Str(in, "Prompt", "prompt"); prompt != "" {
+			rows = append(rows, proseBlock(prompt))
+		}
+		return rows
+	case "send_message":
+		var rows []ggui.Widget
+		if to := agent.Str(in, "to", "To", "target", "Target", "recipient", "Recipient", "conversation_id", "ConversationId"); to != "" {
+			rows = append(rows, labeledChips([][2]string{{T("Recipient"), to}}))
+		}
+		if body := agent.Str(in, "text", "Text", "message", "Message", "content", "Content"); body != "" {
+			rows = append(rows, proseBlock(body))
+		}
+		return rows
+	}
+	return nil
+}
+
+func labeledChips(pairs [][2]string) ggui.Widget {
+	var rows []ggui.Widget
+	for _, p := range pairs {
+		if p[1] == "" {
+			continue
+		}
+		rows = append(rows, widget.Row(
+			widget.Text(p[0]).Size(11).Color(skin.ExtraMuted).NoWrap(),
+			widget.Flex(widget.Text(p[1]).Size(12).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis().Selectable(), 1),
+		).Gap(6).Align(widget.AlignCenter))
+	}
+	if len(rows) == 0 {
+		return widget.Box()
+	}
+	return widget.Column(rows...).Gap(4).Stretch()
+}
+
+func intField(in map[string]any, key string) (int, bool) {
+	if in == nil {
+		return 0, false
+	}
+	switch v := in[key].(type) {
+	case float64:
+		return int(v), true
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	}
+	return 0, false
+}
+
+func seqList(v any) string {
+	list, ok := v.([]any)
+	if !ok || len(list) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, e := range list {
+		if f, ok := e.(float64); ok {
+			parts = append(parts, fmt.Sprintf("#%d", int(f)))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatShortDuration(secs int) string {
+	if secs < 60 {
+		return fmt.Sprintf("%ds", secs)
+	}
+	if secs < 3600 {
+		if rem := secs % 60; rem > 0 {
+			return fmt.Sprintf("%dm%ds", secs/60, rem)
+		}
+		return fmt.Sprintf("%dm", secs/60)
+	}
+	h, rem := secs/3600, (secs%3600)/60
+	if rem > 0 {
+		return fmt.Sprintf("%dh%dm", h, rem)
+	}
+	return fmt.Sprintf("%dh", h)
 }

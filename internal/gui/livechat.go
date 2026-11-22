@@ -3,15 +3,18 @@ package gui
 import (
 	"context"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -147,14 +150,208 @@ func liveTurns(blocks []*protocol.LiveBlock) []chatTurnItem {
 		turns[i].Key = "live:" + turns[i].Key
 	}
 	if n := len(blocks); n > 0 && blocks[n-1].GetKind() == "thinking" {
-		turns = append(turns, chatTurnItem{
-			Key:      "live:thinking",
-			Messages: []*protocol.ChatMessage{{Role: "assistant"}},
-			Thinking: true,
-			Status:   blocks[n-1].GetText(),
-		})
+		fg, acts := splitLiveStatus(blocks[n-1].GetText())
+		if fg != "" || len(acts) == 0 {
+			turns = append(turns, chatTurnItem{
+				Key:      "live:thinking",
+				Messages: []*protocol.ChatMessage{{Role: "assistant"}},
+				Thinking: true,
+				Status:   fg,
+			})
+		}
 	}
 	return turns
+}
+
+// liveActivityItem is one structured active Swarm/Agent row extracted from
+// live status blocks (such as agy's bottom Swarm and background Agent rows).
+type liveActivityItem struct {
+	Kind     string // "swarm" or "agent"
+	Title    string
+	Detail   string
+	Duration string
+}
+
+// splitLiveStatus separates foreground spinner status lines (e.g. "Thinking…")
+// from structured Swarm(...) and Agent(...) live activity rows.
+func splitLiveStatus(text string) (status string, activities []liveActivityItem) {
+	if strings.TrimSpace(text) == "" {
+		return "", nil
+	}
+	var fg []string
+	for line := range strings.SplitSeq(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if item, ok := parseLiveActivityItem(line); ok {
+			activities = append(activities, item)
+			continue
+		}
+		fg = append(fg, line)
+	}
+	return strings.Join(fg, " · "), activities
+}
+
+func parseLiveActivityItem(line string) (liveActivityItem, bool) {
+	var kind, rest string
+	switch {
+	case strings.HasPrefix(line, "Swarm("):
+		kind, rest = "swarm", line[len("Swarm("):]
+	case strings.HasPrefix(line, "Agent("):
+		kind, rest = "agent", line[len("Agent("):]
+	default:
+		return liveActivityItem{}, false
+	}
+	depth := 1
+	closeIdx := -1
+	for i, r := range rest {
+		switch r {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				closeIdx = i
+			}
+		}
+		if closeIdx >= 0 {
+			break
+		}
+	}
+	if closeIdx < 0 {
+		return liveActivityItem{}, false
+	}
+	title := strings.TrimSpace(rest[:closeIdx])
+	if title == "" {
+		return liveActivityItem{}, false
+	}
+	if kind == "agent" {
+		if trimmed, ok := strings.CutPrefix(title, "worker:"); ok {
+			if t := strings.TrimSpace(trimmed); t != "" {
+				title = t
+			}
+		}
+	}
+	tail := strings.TrimSpace(rest[closeIdx+1:])
+	tail = strings.TrimSpace(strings.TrimPrefix(tail, "·"))
+	var parts []string
+	for part := range strings.SplitSeq(tail, "·") {
+		if p := strings.TrimSpace(part); p != "" {
+			parts = append(parts, p)
+		}
+	}
+	var duration string
+	if len(parts) > 0 && looksLikeElapsed(parts[len(parts)-1]) {
+		duration = parts[len(parts)-1]
+		parts = parts[:len(parts)-1]
+	}
+	for i, p := range parts {
+		if strings.EqualFold(p, "working") {
+			parts[i] = T("Working")
+		}
+	}
+	return liveActivityItem{
+		Kind:     kind,
+		Title:    title,
+		Detail:   strings.Join(parts, " · "),
+		Duration: duration,
+	}, true
+}
+
+// looksLikeElapsed reports whether s looks like an agy duration token such as
+// "45s", "6m44s", or "27h53m4s".
+func looksLikeElapsed(s string) bool {
+	if len(s) < 2 || len(s) > 16 {
+		return false
+	}
+	hasDigit, hasUnit := false, false
+	for _, r := range s {
+		switch {
+		case unicode.IsDigit(r):
+			hasDigit = true
+		case r == 'd' || r == 'h' || r == 'm' || r == 's':
+			hasUnit = true
+		default:
+			return false
+		}
+	}
+	last := s[len(s)-1]
+	return hasDigit && hasUnit && (last == 's' || last == 'm' || last == 'h' || last == 'd')
+}
+
+// liveActivityItems extracts active Swarm/Agent rows from live blocks, dropping
+// Agent rows already represented in runningAgents so they never appear twice.
+func liveActivityItems(blocks []*protocol.LiveBlock, running []*protocol.SubAgent) []liveActivityItem {
+	var all []liveActivityItem
+	for _, b := range blocks {
+		if b.GetKind() != "thinking" {
+			continue
+		}
+		_, acts := splitLiveStatus(b.GetText())
+		all = append(all, acts...)
+	}
+	if len(all) == 0 {
+		return nil
+	}
+	var runningDescs []string
+	for _, a := range running {
+		if a.GetRunning() {
+			if d := strings.ToLower(strings.TrimSpace(a.GetDescription())); d != "" {
+				runningDescs = append(runningDescs, d)
+			}
+		}
+	}
+	var out []liveActivityItem
+	for _, item := range all {
+		if item.Kind == "agent" && len(runningDescs) > 0 {
+			t := strings.ToLower(strings.TrimSpace(item.Title))
+			if slices.ContainsFunc(runningDescs, func(d string) bool {
+				return d == t || strings.Contains(d, t) || strings.Contains(t, d)
+			}) {
+				continue
+			}
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+// liveActivityCard surfaces live Swarm and background Agent status rows over
+// the composer (for agents like agy whose workers stay active while the main
+// prompt is idle). Nothing shows when none are active or the session stopped.
+func liveActivityCard(m *model, id string, state *chatState) ggui.Widget {
+	items := ggui.Derived(func() []liveActivityItem {
+		if s, ok := sessionIn(m.Sessions.Get(), id); !ok || s.GetState() != protocol.StateRunning {
+			return nil
+		}
+		return liveActivityItems(state.live.Get(), state.result.Get().Chat.GetAgents())
+	}).WithEqual(slices.Equal[[]liveActivityItem])
+	return ggui.View(items, func(list []liveActivityItem) ggui.Widget {
+		if len(list) == 0 {
+			return widget.Box()
+		}
+		rows := make([]ggui.Widget, len(list))
+		for i, item := range list {
+			var cols []ggui.Widget
+			cols = append(cols, ui.Spinner().Size(13))
+			if item.Kind == "swarm" {
+				cols = append(cols, widget.Text(T("Swarm")).Size(11.5).Weight(ggui.WeightMedium).Color(skin.AccentBright).NoWrap())
+			}
+			cols = append(cols, widget.Text(item.Title).Size(12.5).Weight(ggui.WeightMedium).NoWrap())
+			if item.Detail != "" {
+				cols = append(cols, widget.Expanded(muted(widget.Text(item.Detail).Size(12).NoWrap().Ellipsis())))
+			} else {
+				cols = append(cols, widget.Spacer())
+			}
+			if item.Duration != "" {
+				cols = append(cols, muted(widget.Text(item.Duration).Size(11.5).NoWrap()))
+			}
+			rows[i] = widget.Row(cols...).Gap(8).Align(widget.AlignCenter)
+		}
+		return &lane{child: widget.Box(widget.Column(rows...).Gap(6).Stretch()).
+			Fill(skin.Surface1).Border(1, skin.Border).Radius(10).Pad(8, 12)}
+	})
 }
 
 // liveStatusLabel localizes well-known agent activity statuses while passing

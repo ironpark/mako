@@ -21,6 +21,32 @@ type ScopeContext struct {
 	ProjectName string   `json:"projectName"`
 	SessionID   string   `json:"sessionId"`
 	Roots       []string `json:"roots"`
+	Locale      string   `json:"locale"`
+}
+
+// localeRe validates a safe BCP-47 language tag (e.g. "en", "ko", "ko-KR", "zh-Hans-CN").
+var localeRe = regexp.MustCompile(`^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$`)
+
+// normalizeLocale sanitizes an optional BCP-47 language tag, converting
+// underscores to hyphens and defaulting to "en" when empty or invalid.
+func normalizeLocale(raw string) string {
+	s := strings.ReplaceAll(strings.TrimSpace(raw), "_", "-")
+	if s == "" || len(s) > 35 || !localeRe.MatchString(s) {
+		return "en"
+	}
+	parts := strings.Split(s, "-")
+	parts[0] = strings.ToLower(parts[0])
+	for i := 1; i < len(parts); i++ {
+		switch len(parts[i]) {
+		case 2:
+			parts[i] = strings.ToUpper(parts[i])
+		case 4:
+			parts[i] = strings.ToUpper(parts[i][:1]) + strings.ToLower(parts[i][1:])
+		default:
+			parts[i] = strings.ToLower(parts[i])
+		}
+	}
+	return strings.Join(parts, "-")
 }
 
 // allowedScopes are the manifest-level scope declarations.
@@ -180,6 +206,7 @@ func (m *Manager) resolveToolScope(declaredScope string, provided ScopeContext) 
 			Scope:    protocol.ScopeGlobal,
 			ScopeKey: "",
 			Roots:    []string{},
+			Locale:   normalizeLocale(provided.Locale),
 		}, nil
 	case protocol.ScopeSpace:
 		if provided.SpaceID == "" {
@@ -229,6 +256,7 @@ func (m *Manager) resolveToolScope(declaredScope string, provided ScopeContext) 
 	if sc.Roots == nil {
 		sc.Roots = []string{}
 	}
+	sc.Locale = normalizeLocale(provided.Locale)
 	return sc, nil
 }
 
@@ -239,6 +267,7 @@ func marshalScopeContext(sc ScopeContext) string {
 	if sc.Roots == nil {
 		sc.Roots = []string{}
 	}
+	sc.Locale = normalizeLocale(sc.Locale)
 	b, _ := json.Marshal(sc)
 	return string(b)
 }

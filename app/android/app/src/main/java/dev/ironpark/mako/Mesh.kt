@@ -626,6 +626,9 @@ class Mesh(
         /** The first protocol revision whose daemon supports scoped plugin blocks, tools and settings (protocol.RevisionPluginScope). */
         const val REVISION_PLUGIN_SCOPE = 42L
 
+        /** The first protocol revision whose daemon supports rich UI v2 components and plugin locale (protocol.RevisionPluginRichUIv2). */
+        const val REVISION_PLUGIN_RICH_UI_V2 = 44L
+
         /** How a node's link stands, as Node.link says (protocol.Link*). */
         const val LINK_LINKING = "linking"
         const val LINK_DOWN = "down"

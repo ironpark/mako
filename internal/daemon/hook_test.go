@@ -525,3 +525,114 @@ func TestNamedEvent(t *testing.T) {
 		t.Fatal("named an event in what is no object")
 	}
 }
+
+// An agy swarm worker / subagent inherits MAKO_SESSION and fires the same
+// lifecycle hooks under its own conversationId. Those hooks must never hijack
+// the parent session's ConversationId, TranscriptPath, or AgentStatus, while a
+// genuine new user conversation (/new) still rebinds cleanly.
+func TestAgySubagentHooksDoNotHijackParentConversation(t *testing.T) {
+	home := t.TempDir()
+	project := t.TempDir()
+	agyRoot := filepath.Join(home, ".gemini", "antigravity-cli")
+
+	parentID := "0492e25a-38a3-40ec-8f63-03cd7b76b08a"
+	monitorID := "4aa27cb9-78c6-475e-be5a-8479b7a708c3"
+	newConvID := "12345678-1234-4123-8123-123456789abc"
+
+	mkLog := func(id, content string) string {
+		p := filepath.Join(agyRoot, "brain", id, ".system_generated", "logs", "transcript_full.jsonl")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	parentLog := mkLog(parentID, `{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","content":"<USER_REQUEST>\nStart swarm\n</USER_REQUEST>"}`)
+	monitorLog := mkLog(monitorID, `{"step_index":0,"source":"SYSTEM","type":"SYSTEM_MESSAGE","content":"[Message] sender=`+parentID+`"}`)
+	newLog := mkLog(newConvID, `{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","content":"<USER_REQUEST>\nFresh chat\n</USER_REQUEST>"}`)
+
+	subDir := filepath.Join(agyRoot, "brain", parentID, ".system_generated", "subagents")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subDir, monitorID+".json"), []byte(`{"conversationId":"`+monitorID+`","state":"SUBAGENT_STATE_ALIVE"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	d := meshDaemon(t, "agy-subagent-hook")
+	s, err := session.Start(session.Spec{
+		ID: "agy-coord", NodeID: d.cfg.NodeID, Agent: "agy", Project: project,
+		Command: []string{"/bin/sh", "-c", "sleep 30"},
+		Env:     map[string]string{"HOME": home},
+		Cols:    80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	d.sessions.add(s)
+	d.saved[s.ID()] = savedSession{Info: s.Info(), Request: &protocol.OpenSession{Agent: "agy", Project: project}}
+	d.trackConversation(s)
+
+	send := func(seq int64, payload string) {
+		t.Helper()
+		client, server := net.Pipe()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			d.serveHook(t.Context(), server)
+		}()
+		if err := json.NewEncoder(client).Encode(hookMessage{Session: s.ID(), Seq: seq, Input: json.RawMessage(payload)}); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, client)
+		_ = client.Close()
+		<-done
+	}
+
+	// 1. Coordinator binds parent conversation and finishes its own turn while
+	// monitor is still SUBAGENT_STATE_ALIVE: parent stays bound to parentID and
+	// remains AgentWorking while its child is alive.
+	send(1, `{"hook_event_name":"SessionStart","conversationId":"`+parentID+`","transcriptPath":"`+parentLog+`"}`)
+	send(2, `{"hook_event_name":"Stop","conversationId":"`+parentID+`","transcriptPath":"`+parentLog+`"}`)
+	if gotID, gotLog := s.Info().GetConversationId(), s.TranscriptPath(); gotID != parentID || gotLog != parentLog {
+		t.Fatalf("parent bind = (%q, %q), want (%q, %q)", gotID, gotLog, parentID, parentLog)
+	}
+	if s.Info().GetStatus() != protocol.AgentWorking {
+		t.Fatalf("parent status with alive subagent = %s, want working", s.Info().GetStatus())
+	}
+
+	// 2. Monitor worker fires SessionStart, PreInvocation, Stop — parent must
+	// never be hijacked to monitor's conversation or transcript.
+	send(3, `{"hook_event_name":"SessionStart","conversationId":"`+monitorID+`","transcriptPath":"`+monitorLog+`"}`)
+	send(4, `{"hook_event_name":"PreInvocation","conversationId":"`+monitorID+`","transcriptPath":"`+monitorLog+`"}`)
+	send(5, `{"hook_event_name":"Stop","conversationId":"`+monitorID+`","transcriptPath":"`+monitorLog+`"}`)
+	if gotID, gotLog := s.Info().GetConversationId(), s.TranscriptPath(); gotID != parentID || gotLog != parentLog {
+		t.Fatalf("subagent hijacked parent: got (%q, %q), want (%q, %q)", gotID, gotLog, parentID, parentLog)
+	}
+
+	// 3. Once monitor is killed and parent stops, parent becomes AgentDone, and
+	// a late PreInvocation from monitor still cannot hijack or overwrite status.
+	if err := os.WriteFile(filepath.Join(subDir, monitorID+".json"), []byte(`{"conversationId":"`+monitorID+`","state":"SUBAGENT_STATE_KILLED"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	send(6, `{"hook_event_name":"Stop","conversationId":"`+parentID+`","transcriptPath":"`+parentLog+`"}`)
+	if s.Info().GetStatus() != protocol.AgentDone {
+		t.Fatalf("parent status after subagent killed = %s, want done", s.Info().GetStatus())
+	}
+	send(7, `{"hook_event_name":"PreInvocation","conversationId":"`+monitorID+`","transcriptPath":"`+monitorLog+`"}`)
+	if gotID, gotLog := s.Info().GetConversationId(), s.TranscriptPath(); gotID != parentID || gotLog != parentLog {
+		t.Fatalf("late subagent hook hijacked parent: got (%q, %q), want (%q, %q)", gotID, gotLog, parentID, parentLog)
+	}
+	if s.Info().GetStatus() != protocol.AgentDone {
+		t.Fatalf("late subagent hook overwrote parent status: got %s, want done", s.Info().GetStatus())
+	}
+
+	// 4. Genuine /new conversation (not a subagent) still rebinds cleanly.
+	send(8, `{"hook_event_name":"SessionStart","conversationId":"`+newConvID+`","transcriptPath":"`+newLog+`"}`)
+	if gotID, gotLog := s.Info().GetConversationId(), s.TranscriptPath(); gotID != newConvID || gotLog != newLog {
+		t.Fatalf("genuine /new did not rebind: got (%q, %q), want (%q, %q)", gotID, gotLog, newConvID, newLog)
+	}
+}

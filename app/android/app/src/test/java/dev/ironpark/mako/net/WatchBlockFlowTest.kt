@@ -88,6 +88,35 @@ class WatchBlockFlowTest {
         assertEquals("node-a", req.nodeId)
         assertEquals("plugin:ci-status/ci", req.block)
         assertEquals("", req.scope)
+        assertEquals("", req.locale)
+        assertEquals(listOf(update), got)
+        assertTrue(stream.closed)
+    }
+
+    @Test
+    fun watchBlockFlowSendsLocaleWhenProvided() = runBlocking {
+        val update = BlockUpdate.newBuilder()
+            .setBlock("plugin:okf/main")
+            .setGone(true)
+            .build()
+        val stream = FakeStream(listOf(Result.success(envelope { blockUpdate = update })))
+
+        val got = watchBlockFlow(
+            open = { stream },
+            send = FakeStream::send,
+            recv = FakeStream::recv,
+            node = "node-a",
+            block = "plugin:okf/main",
+            scope = "project:p1",
+            locale = "ko-KR",
+        ).toList()
+
+        assertEquals(1, stream.sent.size)
+        val req = stream.sent.single().watchBlock
+        assertEquals("node-a", req.nodeId)
+        assertEquals("plugin:okf/main", req.block)
+        assertEquals("project:p1", req.scope)
+        assertEquals("ko-KR", req.locale)
         assertEquals(listOf(update), got)
         assertTrue(stream.closed)
     }

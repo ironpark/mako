@@ -93,7 +93,9 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		if _, _, err := parseScopeKey(scopeKey); err != nil {
 			return nil, err
 		}
-		ctxJSON := marshalScopeContext(m.resolveScope(scopeKey))
+		sc := m.resolveScope(scopeKey)
+		sc.Locale = normalizeLocale(a.GetLocale())
+		ctxJSON := marshalScopeContext(sc)
 		var open, toast string
 		err := p.do(ctx, func() error {
 			if err := p.ensure(); err != nil {

@@ -232,6 +232,63 @@ func TestChatTurnsGroupOnlySameToolCalls(t *testing.T) {
 	}
 }
 
+func TestChatTurnsCoalesceSwarmCoordinationRuns(t *testing.T) {
+	msgs := []*protocol.ChatMessage{
+		{Role: "tool", Id: "1", Tool: "read_board", Text: `{"since":60}`},
+		{Role: "tool", Id: "2", Tool: "read_board", Text: `{"status":true}`},
+		{Role: "tool", Id: "3", Tool: "swarm_wait", Text: `{"since":60}`},
+		{Role: "tool", Id: "4", Tool: "manage_task", Text: `{"Action":"kill","TaskId":"t1"}`},
+		{Role: "tool", Id: "5", Tool: "swarm_wait", Text: `{"since":62}`},
+		{Role: "tool", Id: "6", Tool: "manage_task", Text: `{"Action":"list"}`},
+		{Role: "tool", Id: "7", Tool: "read_board", Text: `{"since":62}`},
+		{Role: "tool", Id: "8", Tool: "schedule", Text: `{"CronExpression":"*/3 * * * *","Prompt":"Check stall"}`},
+		{Role: "tool", Id: "9", Tool: "swarm_wait", Text: `{"since":65}`, Pending: true},
+	}
+	turns := chatTurns(msgs, nil)
+	if len(turns) != 1 || !turns[0].SwarmSync || !turns[0].Folded || len(turns[0].Messages) != 9 {
+		t.Fatalf("got %d turns (%+v), want 1 folded SwarmSync turn with 9 calls", len(turns), turns)
+	}
+
+	// Substantive tools like post_message or Edit stay separate from sync runs.
+	withPost := append(slices.Clone(msgs),
+		&protocol.ChatMessage{Role: "tool", Id: "10", Tool: "post_message", Text: `{"text":"@coordinator [done] ready"}`},
+		&protocol.ChatMessage{Role: "tool", Id: "11", Tool: "read_board", Text: `{"since":66}`},
+	)
+	splitTurns := chatTurns(withPost, nil)
+	if len(splitTurns) != 3 || !splitTurns[0].SwarmSync || splitTurns[1].SwarmSync || !splitTurns[2].SwarmSync {
+		t.Fatalf("got %d split turns, want [sync(9), post_message(1), sync(1)]", len(splitTurns))
+	}
+
+	// Render the coalesced 9-call run: collapsed by default even though it is
+	// the last run and waiting on swarm_wait, then expands cleanly on click.
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "agy", Project: "/tmp", State: protocol.StateRunning, Status: protocol.AgentWorking}})
+	m.Selected.Set("s")
+	state := m.chatState("s")
+	state.loading = true
+	state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Conversation: "c", Messages: msgs}})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return chatView(m, "s", 1) }, ggui.Sz(900, 700))
+	defer p.Close()
+	p.Frame()
+
+	wantHeader := Tf("Swarm sync · %d calls", 9)
+	hdr, ok := p.Find(wantHeader)
+	if !ok {
+		t.Fatalf("missing coalesced header %q:\n%s", wantHeader, p.Semantics().String())
+	}
+	page := p.Semantics().String()
+	if strings.Contains(page, "kill t1") {
+		t.Fatalf("coalesced swarm sync run should be collapsed by default:\n%s", page)
+	}
+	p.Click(hdr.Center())
+	p.Frame()
+	page = p.Semantics().String()
+	if !strings.Contains(page, "kill t1") || !strings.Contains(page, "*/3 * * * * · Check stall") {
+		t.Fatalf("expanded swarm sync run missing readable details:\n%s", page)
+	}
+}
+
 // A plain shell has no conversation, so the shortcut leaves it in Terminal.
 func TestShellHasNoChat(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())

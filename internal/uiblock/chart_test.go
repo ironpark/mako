@@ -45,7 +45,7 @@ func TestChartsOutOfBoundsAreRefused(t *testing.T) {
 		return "[" + strings.Join(s, ",") + "]"
 	}
 	cases := map[string]struct{ tree, want string }{
-		"type":      {`{"kind":"chart","chart":"pie","series":[{"values":[1]}]}`, "not one of"},
+		"type":      {`{"kind":"chart","chart":"radar","series":[{"values":[1]}]}`, "not one of"},
 		"none":      {`{"kind":"chart","chart":"line","series":[]}`, "1 to 4 series"},
 		"many":      {`{"kind":"chart","chart":"line","series":` + series(5, 2) + `}`, "1 to 4 series"},
 		"long":      {`{"kind":"chart","chart":"line","series":` + series(1, 201) + `}`, "1 to 200 values"},
@@ -66,6 +66,42 @@ func TestChartsOutOfBoundsAreRefused(t *testing.T) {
 	for name, c := range cases {
 		if _, err := Read([]byte(c.tree)); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: %v, want %q", name, err, c.want)
+		}
+	}
+}
+
+func TestDonutAndPieCharts(t *testing.T) {
+	for _, typ := range []string{"donut", "pie"} {
+		tr, err := Read([]byte(`{"kind":"chart","chart":"` + typ + `","text":"Breakdown","labels":["Docs","Code","Empty"],"series":[{"name":"count","tone":"accent","values":[12,5,0]}]}`))
+		if err != nil {
+			t.Fatalf("%s: %v", typ, err)
+		}
+		if tr.Root.GetChart() != typ || len(tr.Root.GetSeries()) != 1 || len(tr.Root.GetLabels()) != 3 {
+			t.Fatalf("%s: unexpected node %+v", typ, tr.Root)
+		}
+		// Diff/patch round-trip.
+		next := proto.CloneOf(tr.Root)
+		next.Series[0].Values = []float64{10, 8, 2}
+		got, err := protocol.ApplyUi(tr.Root, protocol.DiffUi(tr.Root, next))
+		if err != nil || !proto.Equal(got, next) {
+			t.Fatalf("%s patch: %v %v", typ, got, err)
+		}
+	}
+	var vals17, labels17 []string
+	for i := range 17 {
+		vals17 = append(vals17, "1")
+		labels17 = append(labels17, fmt.Sprintf(`"s%d"`, i))
+	}
+	bad := map[string]struct{ tree, want string }{
+		"two-series": {`{"kind":"chart","chart":"donut","labels":["a"],"series":[{"values":[1]},{"values":[2]}]}`, "1 series"},
+		"no-labels":  {`{"kind":"chart","chart":"pie","series":[{"values":[1,2]}]}`, "requires 2 labels"},
+		"mismatch":   {`{"kind":"chart","chart":"donut","labels":["a"],"series":[{"values":[1,2]}]}`, "requires 2 labels"},
+		"negative":   {`{"kind":"chart","chart":"pie","labels":["a","b"],"series":[{"values":[1,-0.5]}]}`, "non-negative"},
+		"too-many":   {`{"kind":"chart","chart":"donut","labels":[` + strings.Join(labels17, ",") + `],"series":[{"values":[` + strings.Join(vals17, ",") + `]}]}`, "1 to 16 values"},
+	}
+	for name, c := range bad {
+		if _, err := Read([]byte(c.tree)); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: got %v, want %q", name, err, c.want)
 		}
 	}
 }

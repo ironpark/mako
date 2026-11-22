@@ -562,3 +562,110 @@ func TestEnsureSidecarAndDeliverMessage(t *testing.T) {
 		t.Fatalf("agentapi args = %q, want %q", string(got), want)
 	}
 }
+
+func TestIsSubAgentAndSubAgentHookFiltering(t *testing.T) {
+	a := New()
+	root := t.TempDir()
+	parentID := "0492e25a-38a3-40ec-8f63-03cd7b76b08a"
+	workerMetaID := "4aa27cb9-78c6-475e-be5a-8479b7a708c3"
+	workerMemberID := "c0cd66a6-519d-49f2-bf3b-92ba3d120538"
+	workerSenderID := "112e8e38-3691-4fa6-acfb-5f8b0fdb42e9"
+	unrelatedID := "99999999-9999-4999-8999-999999999999"
+
+	parentLog := a.LogPath(root, parentID)
+	workerMetaLog := a.LogPath(root, workerMetaID)
+	workerSenderLog := a.LogPath(root, workerSenderID)
+	unrelatedLog := a.LogPath(root, unrelatedID)
+
+	for _, p := range []string{parentLog, workerMetaLog, workerSenderLog, unrelatedLog} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	subDir := filepath.Join(root, "brain", parentID, ".system_generated", "subagents")
+	swarmDir := filepath.Join(root, "brain", parentID, ".system_generated", "swarm")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(swarmDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(subDir, workerMetaID+".json"), []byte(`{"conversationId":"`+workerMetaID+`","state":"SUBAGENT_STATE_ALIVE"}`), 0o644)
+	_ = os.WriteFile(filepath.Join(swarmDir, "members.json"), []byte(`{"members":{"ui-schema":{"conversation_id":"`+workerMemberID+`"}}}`), 0o644)
+	_ = os.WriteFile(workerSenderLog, []byte(`{"step_index":0,"source":"SYSTEM","type":"SYSTEM_MESSAGE","content":"[Message] sender=`+parentID+` brief"}`+"\n"), 0o644)
+	_ = os.WriteFile(unrelatedLog, []byte(`{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","content":"<USER_REQUEST>\nhello\n</USER_REQUEST>"}`+"\n"), 0o644)
+
+	if !a.IsSubAgent(parentID, parentLog, workerMetaID, workerMetaLog) {
+		t.Fatal("expected worker in subagents/*.json to be detected as subagent")
+	}
+	// Works even when parentLog is not yet bound by deriving brainDir from childLog.
+	if !a.IsSubAgent(parentID, "", workerMetaID, workerMetaLog) {
+		t.Fatal("expected detection from childLog when parentLog is empty")
+	}
+	if !a.IsSubAgent(parentID, parentLog, workerMemberID, "") {
+		t.Fatal("expected worker in swarm/members.json to be detected as subagent")
+	}
+	if !a.IsSubAgent(parentID, parentLog, workerSenderID, workerSenderLog) {
+		t.Fatal("expected worker with SYSTEM_MESSAGE sender=parentID to be detected as subagent")
+	}
+	if a.IsSubAgent(parentID, parentLog, unrelatedID, unrelatedLog) {
+		t.Fatal("unrelated /new conversation was falsely treated as subagent")
+	}
+	if a.IsSubAgent(parentID, parentLog, parentID, parentLog) {
+		t.Fatal("parent conversation itself must not be a subagent")
+	}
+
+	// Explicit subagent fields in Event payload are filtered safely.
+	for _, raw := range []string{
+		`{"hook_event_name":"SessionStart","conversationId":"sub","isSubagent":true}`,
+		`{"hook_event_name":"PreInvocation","conversationId":"sub","agentId":"w1"}`,
+		`{"hook_event_name":"Stop","conversationId":"sub","parentConversationId":"parent"}`,
+	} {
+		if ev, ok := a.Event([]byte(raw)); ok {
+			t.Fatalf("subagent hook %s should be ignored, got %+v", raw, ev)
+		}
+	}
+	if ev, ok := a.Event([]byte(`{"hook_event_name":"SubagentStart","conversationId":"sub","parentConversationId":"parent","agentId":"w1"}`)); !ok || ev.Kind != agent.ChildStarted || ev.SessionID != "parent" || ev.AgentID != "w1" {
+		t.Fatalf("SubagentStart = %+v %v", ev, ok)
+	}
+}
+
+func TestAgyNewSubAgents(t *testing.T) {
+	a := New()
+	root := t.TempDir()
+	parentID := "0492e25a-38a3-40ec-8f63-03cd7b76b08a"
+	aliveID := "112e8e38-3691-4fa6-acfb-5f8b0fdb42e9"
+	killedID := "e0dc1918-d065-4209-b30d-ee13ffd36126"
+
+	parentLog := a.LogPath(root, parentID)
+	aliveLog := a.LogPath(root, aliveID)
+	killedLog := a.LogPath(root, killedID)
+	for _, p := range []string{parentLog, aliveLog, killedLog} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	subDir := filepath.Join(root, "brain", parentID, ".system_generated", "subagents")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(subDir, aliveID+".json"), []byte(`{"conversationId":"`+aliveID+`","subagentDescriptor":{"typeName":"worker","role":"Swarm Worker (ui-schema)"},"state":"SUBAGENT_STATE_ALIVE","spawnStepIndex":10}`), 0o644)
+	_ = os.WriteFile(filepath.Join(subDir, killedID+".json"), []byte(`{"conversationId":"`+killedID+`","subagentDescriptor":{"typeName":"worker","role":"Swarm Worker (old)"},"state":"SUBAGENT_STATE_KILLED","spawnStepIndex":2}`), 0o644)
+	_ = os.WriteFile(aliveLog, []byte(
+		`{"step_index":0,"source":"SYSTEM","type":"SYSTEM_MESSAGE","created_at":"2026-11-22T00:02:06Z","content":"brief"}`+"\n"+
+			`{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","tool_calls":[{"name":"run_command","args":{"CommandLine":"go test ./..."}}]}`+"\n",
+	), 0o644)
+
+	msgs := []*protocol.ChatMessage{
+		{Role: "tool", Id: "10.0", Tool: "swarm", Text: `{"action":"add","name":"ui-schema"}`},
+	}
+	scan := a.NewSubAgents()
+	got := scan.Read(parentLog, msgs)
+	if len(got) != 1 {
+		t.Fatalf("got %d subagents (%+v), want 1 alive subagent", len(got), got)
+	}
+	sub := got[0]
+	if sub.GetId() != aliveID || !sub.GetRunning() || sub.GetCallId() != "10.0" || sub.GetDescription() != "Swarm Worker (ui-schema)" || sub.GetToolCalls() != 1 || sub.GetTool() != "run_command" || sub.GetDetail() != "go test ./..." || sub.GetLog() != aliveLog {
+		t.Fatalf("unexpected subagent: %+v", sub)
+	}
+}

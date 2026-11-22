@@ -122,6 +122,10 @@ func (m *model) actOnPlugin(req *protocol.PluginAction) {
 	if m.post == nil {
 		return
 	}
+	if req != nil && req.Locale == "" {
+		req = proto.CloneOf(req)
+		req.Locale = m.currentLocale()
+	}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.PluginDone, error) {
 		return c.PluginAction(ctx, req)
 	}, func(done *protocol.PluginDone, err error) {
@@ -142,7 +146,7 @@ func (m *model) blockEvent(block, scope, node, kind, value string, values map[st
 	if m.post == nil {
 		return
 	}
-	req := &protocol.BlockEvent{Block: block, Scope: scope, Node: node, Kind: kind, Value: value, Values: values}
+	req := &protocol.BlockEvent{Block: block, Scope: scope, Node: node, Kind: kind, Value: value, Values: values, Locale: m.currentLocale()}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.PluginDone, error) {
 		return c.BlockEvent(ctx, req)
 	}, func(done *protocol.PluginDone, err error) {

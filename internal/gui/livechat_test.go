@@ -1,10 +1,12 @@
 package gui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ironpark/ggui"
 
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -93,6 +95,62 @@ func TestArgumentsStreamingSayWhatACallDoes(t *testing.T) {
 	} {
 		if got := argsPreview(args); got != want {
 			t.Errorf("argsPreview(%s) = %q, want %q", args, got, want)
+		}
+	}
+}
+
+func TestLiveActivitySplittingAndCard(t *testing.T) {
+	raw := strings.Join([]string{
+		"Swarm(Plugin UI rich components) · coordinator: @ui-schema · 69 posts",
+		"Agent(worker: Swarm Worker (ui-schema)) · For split elements... · 6m44s",
+		"Agent(worker: Swarm Worker (monitor)) · Working · 27h53m4s",
+	}, "\n")
+
+	// When only Swarm/Agent activity is present (coordinator idle at ">"),
+	// liveTurns must NOT emit a spurious "Thinking…" turn in the feed.
+	turns := liveTurns([]*protocol.LiveBlock{{Index: 0, Kind: "thinking", Text: raw}})
+	if len(turns) != 0 {
+		t.Fatalf("activity-only live block emitted feed turns: %+v", turns)
+	}
+
+	// When a foreground spinner status accompanies Swarm/Agent activity,
+	// liveTurns emits the foreground status while splitLiveStatus extracts both.
+	fg, acts := splitLiveStatus("Thinking…\n" + raw)
+	if fg != "Thinking…" || len(acts) != 3 {
+		t.Fatalf("splitLiveStatus = (%q, %+v)", fg, acts)
+	}
+	if acts[0].Kind != "swarm" || acts[0].Title != "Plugin UI rich components" || acts[0].Detail != "coordinator: @ui-schema · 69 posts" {
+		t.Fatalf("swarm item = %+v", acts[0])
+	}
+	if acts[1].Kind != "agent" || acts[1].Title != "Swarm Worker (ui-schema)" || acts[1].Detail != "For split elements..." || acts[1].Duration != "6m44s" {
+		t.Fatalf("agent 1 = %+v", acts[1])
+	}
+	if acts[2].Kind != "agent" || acts[2].Title != "Swarm Worker (monitor)" || acts[2].Detail != T("Working") || acts[2].Duration != "27h53m4s" {
+		t.Fatalf("agent 2 = %+v", acts[2])
+	}
+
+	// Deduplicates Agent rows already shown in runningAgents while keeping Swarm summary.
+	deduped := liveActivityItems(
+		[]*protocol.LiveBlock{{Index: 0, Kind: "thinking", Text: raw}},
+		[]*protocol.SubAgent{{Id: "a1", Running: true, Description: "Swarm Worker (ui-schema)"}},
+	)
+	if len(deduped) != 2 || deduped[0].Kind != "swarm" || deduped[1].Title != "Swarm Worker (monitor)" {
+		t.Fatalf("deduped = %+v", deduped)
+	}
+
+	// Render liveActivityCard over the composer and confirm Swarm & Agent rows appear.
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "agy", State: protocol.StateRunning, Status: protocol.AgentDone}})
+	state := m.chatState("s")
+	state.live.Set([]*protocol.LiveBlock{{Index: 0, Kind: "thinking", Text: raw}})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return liveActivityCard(m, "s", state) }, ggui.Sz(800, 200))
+	defer p.Close()
+	p.Frame()
+	page := p.Semantics().String()
+	for _, want := range []string{T("Swarm"), "Plugin UI rich components", "Swarm Worker (ui-schema)", "6m44s", "Swarm Worker (monitor)", "27h53m4s"} {
+		if !strings.Contains(page, want) {
+			t.Fatalf("liveActivityCard missing %q:\n%s", want, page)
 		}
 	}
 }

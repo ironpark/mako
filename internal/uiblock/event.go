@@ -75,7 +75,7 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 	_ = json.Unmarshal(parts[0], &m.Name)
 	if ev.GetKind() != protocol.UiTap {
 		var value any = ev.GetValue()
-		if kind == KindToggle {
+		if ev.GetKind() == protocol.UiChange && (kind == KindToggle || kind == KindCollapsible || kind == KindTreeItem) {
 			value = ev.GetValue() == "true"
 		}
 		b, _ := json.Marshal(value)
