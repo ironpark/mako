@@ -551,7 +551,7 @@ func (m *model) sessionLive(id string) bool {
 
 // attach dials a session's terminal on a worker.
 func (m *model) attach(id string) {
-	if m.dialing[id] || !isSessionTab(id) {
+	if m.post == nil || m.dialing[id] || !isSessionTab(id) {
 		return
 	}
 	if conn := m.conns[id]; conn != nil {

@@ -117,6 +117,10 @@ func drawnSVG(f *protocol.File, data []byte) decodedImage {
 // fetch makes a daemon call off the window's goroutine and hands done its
 // result back on it.
 func fetch[T any](m *model, timeout time.Duration, call func(context.Context, *client.Client) (T, error), done func(T, error)) {
+	post := m.post
+	if post == nil {
+		return
+	}
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -125,7 +129,7 @@ func fetch[T any](m *model, timeout time.Duration, call func(context.Context, *c
 		if err == nil {
 			v, err = call(ctx, c)
 		}
-		m.post(func() { done(v, err) })
+		post(func() { done(v, err) })
 	}()
 }
 
