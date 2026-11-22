@@ -1161,7 +1161,7 @@ func spaceWindowAgentsPanel(m *model, st sidebarState, sw *spaceWindowState) ggu
 				label := sessionTitle(sess, titles[sid])
 				sel := sid == activeTab
 				line := []ggui.Widget{
-					&busyGlyph{icon: agentGlyph(sess.GetAgent(), skin.Muted).Size(15), busy: func() bool { return m.busy(sid) }},
+					sessionAvatar(m, sess, 20),
 					widget.Expanded(widget.Text(label).Size(13).NoWrap().Ellipsis()),
 					widget.Box(widget.Center(&activityDot{state: m.dotFor(sid)})).Size(18, 18),
 				}

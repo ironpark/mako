@@ -87,7 +87,9 @@ func (m *model) closeLaunch(id string) {
 func launchView(m *model, id string) ggui.Widget {
 	l := m.launchOf(id)
 	greeting := widget.Center(widget.Column(
-		icon("sparkles").Size(34).Color(skin.ExtraMuted),
+		ggui.Reactive(func() ggui.Widget {
+			return launchAvatar(m, l.Form.Get().Agent)
+		}),
 		widget.Text(T("What should we work on?")).Size(22).Weight(ggui.WeightMedium),
 		ggui.Reactive(func() ggui.Widget {
 			f := l.Form.Get()

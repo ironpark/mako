@@ -526,7 +526,7 @@ func agentRow(m *model, s *protocol.SessionInfo, selected bool, title string, ta
 	id := s.GetId()
 	label := sessionTitle(s, title)
 	head := []ggui.Widget{
-		widget.Padding(&busyGlyph{icon: agentGlyph(s.GetAgent(), skin.Muted).Size(15), busy: func() bool { return m.busy(id) }}, 0, 2.5, 0, 2.5),
+		sessionAvatar(m, s, 20),
 		widget.Expanded(widget.Text(label).Size(pick(compact, 13.0, 13.5)).NoWrap().Ellipsis()),
 	}
 	if compact {

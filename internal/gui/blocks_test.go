@@ -22,7 +22,7 @@ func TestTheWindowsBlocksAreRegistered(t *testing.T) {
 			t.Errorf("%s has no title", d.Name)
 		}
 	}
-	want := []string{layoutdoc.BlockSidebar, layoutdoc.BlockHeader, filesTab, gitTab, agentsTab, forgeTab}
+	want := []string{layoutdoc.BlockSidebar, layoutdoc.BlockHeader, filesTab, gitTab, agentsTab, forgeTab, layoutdoc.BlockAvatar}
 	if strings.Join(names, " ") != strings.Join(want, " ") {
 		t.Fatalf("blocks %v, want %v", names, want)
 	}

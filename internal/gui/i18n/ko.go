@@ -1734,4 +1734,23 @@ var catalogKo = map[string]string{
 	"Return all detached panes":        "분리된 분할 창 모두 돌려놓기",
 	"Open in new window":               "새 창으로 열기",
 	"Open current space in new window": "현재 스페이스를 새 창으로 열기",
+
+	// Open Bot Avatar
+	"Bot avatar":                                                                                           "봇 아바타",
+	"Show bot avatars":                                                                                     "봇 아바타 표시",
+	"Display animated Open Bot Avatars for AI agents in the sidebar, new-session screen, and avatar block.": "사이드바, 새 세션 화면, 아바타 블록에 움직이는 Open Bot Avatar를 표시합니다.",
+	"Avatar":                                                                                               "아바타",
+	"Auto per agent":                                                                                       "에이전트별 자동",
+	"Custom JSON":                                                                                          "커스텀 JSON",
+	"Mood":                                                                                                 "기분",
+	"Neutral":                                                                                              "기본",
+	"Happy":                                                                                                "기쁨",
+	"Preview state":                                                                                        "상태 미리보기",
+	"Thinking":                                                                                             "생각 중",
+	"Custom avatar JSON":                                                                                   "커스텀 아바타 JSON",
+	"Paste an Open Bot Avatar v1 JSON definition to use a custom shape.":                                   "Open Bot Avatar v1 JSON 정의를 붙여넣어 커스텀 모양을 사용합니다.",
+	"Valid avatar: %s":                                                                                     "유효한 아바타: %s",
+	"Body color":                                                                                           "몸체 색상",
+	"Optional #rrggbb override; leave empty for the agent or avatar default.":                              "선택적 #rrggbb 색상 재정의. 비워 두면 에이전트나 아바타 기본 색상을 사용합니다.",
+	"No active session":                                                                                    "활성 세션 없음",
 }

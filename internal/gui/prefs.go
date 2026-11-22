@@ -32,6 +32,8 @@ type prefs struct {
 	// Background images, under the window and under each session.
 	WindowBackdrop  backdrop `json:"window_backdrop"`
 	SessionBackdrop backdrop `json:"session_backdrop"`
+	// BotAvatar configures animated Open Bot Avatars for AI agents.
+	BotAvatar botAvatarPrefs `json:"bot_avatar"`
 
 	// Terminal
 	FontSize     float64 `json:"font_size"`
@@ -140,6 +142,7 @@ func defaultPrefs() prefs {
 		UsageDisplay:    "used",
 		WindowBackdrop:  defaultBackdrop(),
 		SessionBackdrop: defaultBackdrop(),
+		BotAvatar:       defaultBotAvatarPrefs(),
 		FontSize:        13,
 		LineHeight:      1.4,
 		CursorStyle:     "block",
@@ -177,6 +180,7 @@ func (p prefs) normalized() prefs {
 		p.Theme = d.Theme
 	}
 	p.WindowBackdrop, p.SessionBackdrop = p.WindowBackdrop.normalized(), p.SessionBackdrop.normalized()
+	p.BotAvatar = p.BotAvatar.normalized()
 	if _, ok := i18n.Catalog(p.Language); !ok && p.Language != "system" {
 		p.Language = d.Language
 	}

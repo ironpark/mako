@@ -25,6 +25,7 @@ const (
 	BlockGit     = "mako.git"
 	BlockAgents  = "mako.agents"
 	BlockForge   = "mako.forge"
+	BlockAvatar  = "mako.avatar"
 )
 
 // Block declares a block: its name, its title in English, and the JSON
@@ -45,6 +46,7 @@ func Builtin() []Block {
 		{Name: BlockGit, Title: "Git", Props: NoProps()},
 		{Name: BlockAgents, Title: "Agents", Props: NoProps()},
 		{Name: BlockForge, Title: "Forge", Props: NoProps()},
+		{Name: BlockAvatar, Title: "Bot avatar", Props: NoProps()},
 	}
 }
 

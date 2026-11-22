@@ -93,6 +93,7 @@ func appearanceSettings(m *model) ggui.Widget {
 				card(backdropRows(m, T("Sessions"), T("Behind each session's terminal and chat, over the window's."), sessionBackdrop)...),
 			),
 		),
+		botAvatarSettings(m),
 	)
 }
 

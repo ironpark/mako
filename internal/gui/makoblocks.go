@@ -42,6 +42,7 @@ var makoViews = map[string]blockDef{
 	// The forge's tab is named for the project's forge.
 	forgeTab: {Label: func(m *model) string { return forgeLabel(m.forgeOf()) },
 		Build: func(m *model, _ map[string]any) blockView { return blockView{Body: forgePanel(m)} }},
+	layoutdoc.BlockAvatar: {Build: func(m *model, _ map[string]any) blockView { return blockView{Body: avatarBlockPanel(m)} }},
 }
 
 // builtinBlocks is a registry of the window's own blocks.
