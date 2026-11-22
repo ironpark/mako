@@ -11,8 +11,8 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/grandcat/zeroconf v1.0.0
-	github.com/ironpark/ggfx v0.0.0-20261122084833-734958d0a729
-	github.com/ironpark/ggui v0.6.1
+	github.com/ironpark/ggfx v0.0.0-20261122101835-96cb5098aa06
+	github.com/ironpark/ggui v0.6.2
 	github.com/ironpark/ggui/pkg/fswatch v0.2.2
 	github.com/ironpark/ggwd v0.0.0-20261120121552-0b5175d66b9d
 	github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291
