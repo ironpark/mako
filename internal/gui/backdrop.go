@@ -140,7 +140,7 @@ type backdropView struct {
 	layer, scrim  ggui.Widget
 	child         ggui.Widget
 	shown         bool
-	from, cleared uitheme.Theme // the theme last cleared, and what clearing made of it
+	from, cleared *uitheme.Theme // the theme last cleared, and what clearing made of it
 }
 
 func (b *backdropView) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
@@ -288,23 +288,12 @@ func tiles(at, room ggui.Rect) iter.Seq[ggui.Rect] {
 // each layout would be a new environment, and every cache under the image
 // would miss.
 func (b *backdropView) clearSurfaces(env ggui.Env) ggui.Env {
-	t := uitheme.From(env)
-	if !sameTheme(t, b.from) {
+	t := uitheme.Of(env)
+	if !t.Equal(b.from) {
 		var none color.Color = color.RGBA{}
 		b.from, b.cleared = t, t.Set(uitheme.CSSColor("surface-0"), none).Set(uitheme.CSSColor("sidebar-fill"), none)
 	}
 	return b.cleared.Apply(env)
-}
-
-// sameTheme compares themes by value; one holding a value that cannot be
-// compared is never the same.
-func sameTheme(a, b uitheme.Theme) (same bool) {
-	defer func() {
-		if recover() != nil {
-			same = false
-		}
-	}()
-	return a == b
 }
 
 // fillGround paints a surface's fill, but not one a background image cleared.

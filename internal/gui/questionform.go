@@ -8,6 +8,7 @@ import (
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
+	"github.com/ironpark/ggui/ui/chat"
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/client"
@@ -24,28 +25,28 @@ import (
 // questionForm asks questions a step at a time and gives submit the
 // answers, one for each, in order.
 func questionForm(questions []*protocol.Question, submit func([]*protocol.QuestionAnswer)) ggui.Widget {
-	items := make([]ui.Question, len(questions))
+	items := make([]chat.Question, len(questions))
 	for i, q := range questions {
-		item := ui.Question{
+		item := chat.Question{
 			Name: strconv.Itoa(i), Title: q.GetQuestion(), Description: q.GetHeader(),
 			Required: true, Multiple: q.GetMultiSelect(),
 			InputLabel: T("Other"), Placeholder: T("Answer in your own words"),
 		}
 		for j, o := range q.GetOptions() {
-			item.Choices = append(item.Choices, ui.QuestionOption{Value: strconv.Itoa(j), Label: o.GetLabel(), Description: o.GetDescription()})
+			item.Choices = append(item.Choices, chat.QuestionOption{Value: strconv.Itoa(j), Label: o.GetLabel(), Description: o.GetDescription()})
 		}
 		items[i] = item
 	}
-	answers := ggui.State(ui.QuestionAnswers{})
-	return ui.Questionnaire(answers, items...).
+	answers := ggui.State(chat.QuestionAnswers{})
+	return chat.Questionnaire(answers, items...).
 		Name(T("The agent's questions")).
-		Shortcuts(ui.QuestionNumbers).
+		Shortcuts(chat.QuestionNumbers).
 		SubmitLabel(T("Answer")).
-		OnSubmit(func(got ui.QuestionAnswers) { submit(formAnswers(len(questions), got)) })
+		OnSubmit(func(got chat.QuestionAnswers) { submit(formAnswers(len(questions), got)) })
 }
 
 // formAnswers are the form's answers to n questions as the protocol's.
-func formAnswers(n int, got ui.QuestionAnswers) []*protocol.QuestionAnswer {
+func formAnswers(n int, got chat.QuestionAnswers) []*protocol.QuestionAnswer {
 	out := make([]*protocol.QuestionAnswer, n)
 	for i := range out {
 		a := got[strconv.Itoa(i)]

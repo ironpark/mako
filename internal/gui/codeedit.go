@@ -155,7 +155,7 @@ func (e *codeEditor) OnChange(fn func(string)) *codeEditor { e.input.OnChange(fn
 func (e *codeEditor) AutoFocus(v bool) *codeEditor { e.autoFocus = v; return e }
 
 func (e *codeEditor) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	if p, ok := uitheme.From(env).Get(skin.Key); ok {
+	if p, ok := uitheme.Of(env).Get(skin.Key); ok {
 		e.pal = p
 	}
 	e.ground = ggui.ResolveColor(skin.Surface0, env)

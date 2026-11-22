@@ -36,20 +36,76 @@ type subagentMetaRead struct {
 }
 
 type membersRead struct {
-	size   int64
-	mod    time.Time
-	killed map[string]bool
+	size     int64
+	mod      time.Time
+	inactive map[string]bool
 }
+
+var subagentClock = time.Now
 
 type childScan struct {
 	agent.Tail
 	dec                agent.Decoder
+	seenSteps          bool
+	working            bool
+	lastTool           string
+	started, updated   time.Time
+	fileMod            time.Time
 	calls              int32
 	tool, kind, detail string
 }
 
 func (c *childScan) read(path string) {
-	c.Tail.Read(path, func() { *c = childScan{dec: New().NewDecoder()} }, func(line []byte) {
+	if stat, err := os.Stat(path); err == nil {
+		c.fileMod = stat.ModTime()
+	} else {
+		c.fileMod = time.Time{}
+	}
+	c.Tail.Read(path, func() { *c = childScan{dec: New().NewDecoder(), fileMod: c.fileMod} }, func(line []byte) {
+		var st struct {
+			Type      string    `json:"type"`
+			Status    string    `json:"status"`
+			CreatedAt time.Time `json:"created_at"`
+			ToolCalls []struct {
+				Name string `json:"name"`
+			} `json:"tool_calls"`
+		}
+		if json.Unmarshal(line, &st) == nil && st.Type != "" {
+			c.seenSteps = true
+			if !st.CreatedAt.IsZero() {
+				if c.started.IsZero() {
+					c.started = st.CreatedAt
+				}
+				c.updated = st.CreatedAt
+			}
+			switch st.Type {
+			case "USER_INPUT", "SYSTEM_MESSAGE":
+				c.working = true
+				c.lastTool = ""
+			case "PLANNER_RESPONSE":
+				if len(st.ToolCalls) > 0 {
+					last := st.ToolCalls[len(st.ToolCalls)-1].Name
+					c.lastTool = last
+					// swarm_wait parks the worker on the board until woken.
+					c.working = last != "swarm_wait"
+				} else {
+					c.lastTool = ""
+					c.working = strings.EqualFold(st.Status, "RUNNING")
+				}
+			case "GENERIC":
+				switch {
+				case strings.EqualFold(st.Status, "RUNNING"):
+					c.working = true
+				case c.lastTool == "swarm_wait":
+					c.working = false
+				default:
+					c.working = true
+				}
+			case "ERROR_MESSAGE", "CANCELLED":
+				c.working = false
+				c.lastTool = ""
+			}
+		}
 		for _, m := range c.dec.Line(line) {
 			if m.GetRole() == "tool" && !m.GetOutput() {
 				c.calls++
@@ -97,8 +153,9 @@ func (s *subagents) Read(path string, messages []*protocol.ChatMessage) []*proto
 	if len(metaPaths) == 0 {
 		return nil
 	}
-	killed := s.killedMembers()
+	inactive := s.inactiveMembers()
 	stepCalls := callsByStep(messages)
+	now := subagentClock()
 
 	var out []*protocol.SubAgent
 	for _, metaPath := range metaPaths {
@@ -110,9 +167,9 @@ func (s *subagents) Read(path string, messages []*protocol.ChatMessage) []*proto
 		if !agent.ValidID.MatchString(id) {
 			continue
 		}
-		running := meta.State == "SUBAGENT_STATE_ALIVE" && !killed[id]
+		alive := meta.State == "SUBAGENT_STATE_ALIVE" && !inactive[id]
 		callID := stepCalls[meta.SpawnStepIndex]
-		if !running && callID == "" {
+		if !alive && callID == "" {
 			continue
 		}
 		childLog := filepath.Join(s.brainDir, id, ".system_generated", "logs", logFile)
@@ -122,6 +179,30 @@ func (s *subagents) Read(path string, messages []*protocol.ChatMessage) []*proto
 			s.scans[childLog] = scan
 		}
 		scan.read(childLog)
+
+		// agy leaves subagents in SUBAGENT_STATE_ALIVE after they finish so
+		// the parent can still send follow-up messages. Derive whether the
+		// subagent is actively working from its transcript turn state and
+		// recency so completed or parked subagents do not pile up as running.
+		running := alive
+		if running && scan.seenSteps {
+			running = scan.working
+		}
+		if running {
+			lastActive := scan.fileMod
+			if scan.updated.After(lastActive) {
+				lastActive = scan.updated
+			}
+			if lastActive.IsZero() {
+				lastActive = mod
+			}
+			if !lastActive.IsZero() && now.Sub(lastActive) > agent.StaleAgent {
+				running = false
+			}
+		}
+		if !running && callID == "" {
+			continue
+		}
 
 		desc := cmp.Or(meta.SubagentDescriptor.Role, meta.SubagentDescriptor.TypeName, id)
 		a := &protocol.SubAgent{
@@ -136,8 +217,12 @@ func (s *subagents) Read(path string, messages []*protocol.ChatMessage) []*proto
 			Detail:      scan.detail,
 			Log:         childLog,
 		}
-		if !scan.Started.IsZero() {
-			a.Started, a.Updated = scan.Started.Unix(), scan.Updated.Unix()
+		started, updated := scan.started, scan.updated
+		if started.IsZero() {
+			started, updated = scan.Started, scan.Updated
+		}
+		if !started.IsZero() {
+			a.Started, a.Updated = started.Unix(), updated.Unix()
 		} else if !mod.IsZero() {
 			a.Started, a.Updated = mod.Unix(), mod.Unix()
 		}
@@ -176,33 +261,43 @@ func (s *subagents) readMeta(path string) (subagentMeta, time.Time, bool) {
 	return r.meta, r.mod, r.ok
 }
 
-func (s *subagents) killedMembers() map[string]bool {
+func (s *subagents) inactiveMembers() map[string]bool {
 	stat, err := os.Stat(s.membersLoc)
 	if err != nil {
 		return nil
 	}
 	if s.members != nil && s.members.size == stat.Size() && s.members.mod.Equal(stat.ModTime()) {
-		return s.members.killed
+		return s.members.inactive
 	}
-	mr := &membersRead{size: stat.Size(), mod: stat.ModTime(), killed: map[string]bool{}}
+	mr := &membersRead{size: stat.Size(), mod: stat.ModTime(), inactive: map[string]bool{}}
 	if body, err := os.ReadFile(s.membersLoc); err == nil {
 		var doc struct {
 			Members map[string]struct {
 				ConversationID string `json:"conversation_id"`
 				Killed         bool   `json:"killed"`
 				Phase          string `json:"phase"`
+				DesiredState   string `json:"desired_state"`
+				WakeMode       string `json:"wake_mode"`
 			} `json:"members"`
 		}
 		if json.Unmarshal(body, &doc) == nil {
 			for _, m := range doc.Members {
-				if m.ConversationID != "" && (m.Killed || strings.EqualFold(m.Phase, "KILLED")) {
-					mr.killed[m.ConversationID] = true
+				if m.ConversationID == "" {
+					continue
+				}
+				parked := m.WakeMode != "" && !strings.EqualFold(m.WakeMode, "working")
+				stopped := m.Killed ||
+					strings.EqualFold(m.Phase, "KILLED") ||
+					strings.EqualFold(m.Phase, "STOPPED") ||
+					strings.EqualFold(m.DesiredState, "KILLED")
+				if stopped || parked {
+					mr.inactive[m.ConversationID] = true
 				}
 			}
 		}
 	}
 	s.members = mr
-	return mr.killed
+	return mr.inactive
 }
 
 // callsByStep maps agy step_index to a spawning tool call's ID ("<step>.<i>").

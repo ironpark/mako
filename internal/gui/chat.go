@@ -424,7 +424,7 @@ const (
 
 // viewSideButton is the view switch as a button: its own drawing alone,
 // with no fill of the button's over it.
-var viewSideButton = ui.NewVariant("view-switch", func(t uitheme.Theme) ui.ButtonStyle {
+var viewSideButton = ui.NewVariant("view-switch", func(t *uitheme.Theme) ui.ButtonStyle {
 	return ui.ButtonStyle{Label: t.Fg}
 })
 
@@ -457,7 +457,7 @@ type viewToggle struct {
 var viewThumbSlot = ggui.NewSlot[*ggui.Motion]("view switch thumb")
 
 func (v *viewToggle) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	theme := uitheme.From(env)
+	theme := uitheme.Of(env)
 	v.track, v.border = theme.Muted, theme.Border
 	v.thumb = ggui.ResolveColor(viewThumb(), env)
 	v.motion = env.Motion(theme.MotionFast)

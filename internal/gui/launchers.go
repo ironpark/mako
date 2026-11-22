@@ -164,7 +164,7 @@ var (
 )
 
 func (f *launchFan) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	f.motion = env.Motion(uitheme.From(env).MotionSlow)
+	f.motion = env.Motion(uitheme.Of(env).MotionSlow)
 	f.pillSize = f.pill.Layout(ggui.Loose(ggui.Sz(ggui.Unbounded, ggui.Unbounded)), env)
 	f.plusSize = f.plus.Layout(c, env)
 	return f.plusSize

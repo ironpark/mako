@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -667,5 +668,107 @@ func TestAgyNewSubAgents(t *testing.T) {
 	sub := got[0]
 	if sub.GetId() != aliveID || !sub.GetRunning() || sub.GetCallId() != "10.0" || sub.GetDescription() != "Swarm Worker (ui-schema)" || sub.GetToolCalls() != 1 || sub.GetTool() != "run_command" || sub.GetDetail() != "go test ./..." || sub.GetLog() != aliveLog {
 		t.Fatalf("unexpected subagent: %+v", sub)
+	}
+}
+
+func TestAgyCompletedAndParkedSubAgentsNotRunning(t *testing.T) {
+	a := New()
+	root := t.TempDir()
+	parentID := "5be8efb1-e3fd-4a9f-abd8-4a268de95c36"
+	doneID := "6a4e3524-3e91-43e9-bff6-755e49a565ac"
+	oldDoneID := "3d336a18-21f3-43d7-819d-19d41d1aab9d"
+	parkedID := "4aa27cb9-78c6-475e-be5a-8479b7a708c3"
+	staleID := "454232d2-fbd9-41a3-99d0-e1e46702a012"
+
+	parentLog := a.LogPath(root, parentID)
+	for _, id := range []string{parentID, doneID, oldDoneID, parkedID, staleID} {
+		if err := os.MkdirAll(filepath.Dir(a.LogPath(root, id)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sysDir := filepath.Join(root, "brain", parentID, ".system_generated")
+	subDir := filepath.Join(sysDir, "subagents")
+	swarmDir := filepath.Join(sysDir, "swarm")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(swarmDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeMeta := func(id, typ, role string, step int) {
+		_ = os.WriteFile(filepath.Join(subDir, id+".json"),
+			[]byte(`{"conversationId":"`+id+`","subagentDescriptor":{"typeName":"`+typ+`","role":"`+role+`"},"state":"SUBAGENT_STATE_ALIVE","spawnStepIndex":`+strconv.Itoa(step)+`}`), 0o644)
+	}
+	writeMeta(doneID, "research", "Graphics Drivers Auditor", 37)
+	writeMeta(oldDoneID, "research", "Older Auditor", 5) // spawn step scrolled out of messages
+	writeMeta(parkedID, "worker", "Swarm Worker (monitor)", 40)
+	writeMeta(staleID, "research", "Stale Auditor", 41)
+
+	// Completed subagent: ALIVE in metadata, but ended turn with PLANNER_RESPONSE DONE and no tool_calls.
+	doneLog := a.LogPath(root, doneID)
+	_ = os.WriteFile(doneLog, []byte(
+		`{"step_index":0,"source":"SYSTEM","type":"SYSTEM_MESSAGE","created_at":"2026-11-22T07:10:00Z","content":"audit"}`+"\n"+
+			`{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-11-22T07:11:00Z","tool_calls":[{"name":"send_message","args":{"Recipient":"p","Message":"done"}}]}`+"\n"+
+			`{"step_index":2,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-11-22T07:11:01Z","content":"Message sent"}`+"\n"+
+			`{"step_index":3,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-11-22T07:11:02Z","content":"Audit complete."}`+"\n",
+	), 0o644)
+	// Same for oldDoneID whose spawn call is outside the current window.
+	_ = os.WriteFile(a.LogPath(root, oldDoneID), []byte(
+		`{"step_index":0,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-11-22T06:00:00Z","content":"Done."}`+"\n",
+	), 0o644)
+	// Parked swarm worker: called swarm_wait and has wake_mode != "working" in members.json.
+	_ = os.WriteFile(a.LogPath(root, parkedID), []byte(
+		`{"step_index":0,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-11-22T07:00:00Z","tool_calls":[{"name":"swarm_wait","args":{"since":1}}]}`+"\n"+
+			`{"step_index":1,"source":"MODEL","type":"GENERIC","status":"DONE","created_at":"2026-11-22T07:00:01Z","content":"parked"}`+"\n",
+	), 0o644)
+	_ = os.WriteFile(filepath.Join(swarmDir, "members.json"), []byte(
+		`{"members":{"monitor":{"conversation_id":"`+parkedID+`","phase":"RUNNING","wake_mode":"anything","killed":false}}}`,
+	), 0o644)
+	// Stale subagent: mid-tool-call, but log file hasn't been touched in over StaleAgent.
+	staleLog := a.LogPath(root, staleID)
+	_ = os.WriteFile(staleLog, []byte(
+		`{"step_index":0,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","created_at":"2026-11-22T05:00:00Z","tool_calls":[{"name":"run_command","args":{"CommandLine":"sleep 999"}}]}`+"\n",
+	), 0o644)
+	oldTime := time.Now().Add(-agent.StaleAgent - time.Minute)
+	_ = os.Chtimes(staleLog, oldTime, oldTime)
+	_ = os.Chtimes(filepath.Join(subDir, staleID+".json"), oldTime, oldTime)
+
+	msgs := []*protocol.ChatMessage{
+		{Role: "tool", Id: "37.0", Tool: "invoke_subagent", Text: `{}`},
+		{Role: "tool", Id: "40.0", Tool: "swarm", Text: `{}`},
+		{Role: "tool", Id: "41.0", Tool: "invoke_subagent", Text: `{}`},
+	}
+	scan := a.NewSubAgents()
+	got := scan.Read(parentLog, msgs)
+	byID := map[string]*protocol.SubAgent{}
+	for _, sa := range got {
+		byID[sa.GetId()] = sa
+	}
+	if _, exists := byID[oldDoneID]; exists {
+		t.Fatalf("completed subagent outside message window should be omitted: %+v", byID[oldDoneID])
+	}
+	for _, id := range []string{doneID, parkedID, staleID} {
+		sa, ok := byID[id]
+		if !ok {
+			t.Fatalf("expected subagent %s in results for inline link, got %+v", id, got)
+		}
+		if sa.GetRunning() {
+			t.Fatalf("subagent %s should not be Running: %+v", id, sa)
+		}
+	}
+
+	// Sending a follow-up message to doneID resumes it as Running=true.
+	f, err := os.OpenFile(doneLog, os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(`{"step_index":4,"source":"SYSTEM","type":"SYSTEM_MESSAGE","created_at":"` + time.Now().UTC().Format(time.RFC3339) + `","content":"follow-up"}` + "\n")
+	_ = f.Close()
+
+	got = scan.Read(parentLog, msgs)
+	for _, sa := range got {
+		if sa.GetId() == doneID && !sa.GetRunning() {
+			t.Fatalf("resumed subagent %s should be Running=true after follow-up message", doneID)
+		}
 	}
 }

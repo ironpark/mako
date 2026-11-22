@@ -127,7 +127,7 @@ var Key = ggui.NewEnvKey[Palette]("mako palette")
 
 // Theme maps a palette onto ggui's semantic tokens, so the stock
 // controls (buttons, selects, dialogs, fields) match the custom chrome.
-func Theme(p Palette) uitheme.Theme {
+func Theme(p Palette) *uitheme.Theme {
 	t := uitheme.Default()
 	if p.Dark {
 		t = uitheme.Dark()

@@ -147,7 +147,7 @@ func (t *terminalView) OnLink(fn func(target, cwd string)) *terminalView {
 }
 
 func (t *terminalView) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
-	if p, ok := uitheme.From(env).Get(skin.Key); ok {
+	if p, ok := uitheme.Of(env).Get(skin.Key); ok {
 		t.pal = p
 	}
 	t.ground = ggui.ResolveColor(skin.Surface0, env)
