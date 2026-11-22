@@ -24,6 +24,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 
 	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/iconset"
@@ -460,7 +461,11 @@ func (r *mdRenderer) inlineNode(c ast.Node, style mdStyle, out *[]widget.TextSpa
 	}
 	switch c := c.(type) {
 	case *ast.Text:
-		add(string(c.Value(r.src)), style)
+		val := c.Value(r.src)
+		if !c.IsRaw() {
+			val = util.UnescapePunctuations(val)
+		}
+		add(string(val), style)
 		switch {
 		case c.HardLineBreak():
 			add("\n", style)

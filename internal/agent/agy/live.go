@@ -6,16 +6,21 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"golang.org/x/text/width"
+
 	"github.com/ironpark/mako/internal/detect"
 )
 
 var (
 	spinnerLineRe    = regexp.MustCompile(`^\s*[\x{2801}-\x{28FF}]+(?:\s|$)`)
 	promptFooterRe   = regexp.MustCompile(`^\s*\? for shortcuts\b`)
-	numberedListRe   = regexp.MustCompile(`^\d+[.)]\s+`)
+	numberedListRe   = regexp.MustCompile(`^(\d+[.)]\s+)(.*)$`)
 	expandHintRe     = regexp.MustCompile(`^(?:\(ctrl\+o to expand\)|(?:…|\.\.\.)\s*\+\d+\s+(?:more\s+)?lines?)$`)
 	markdownLinkRe   = regexp.MustCompile(`!?\[([^\]]*)\]\([^)\s]+(?:\s+"[^"]*")?\)`)
+	fileLinkRe       = regexp.MustCompile(`\[[^\]]*\]\(file://([^)#\s]+)(?:#[^)\s]*)?\)`)
 	tableSeparatorRe = regexp.MustCompile(`^\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?$`)
+	rawHTMLTagRe     = regexp.MustCompile(`</?[A-Za-z][A-Za-z0-9_.:-]*(?:\s[^>\n]*)?/?>`)
+	htmlBreakRe      = regexp.MustCompile(`(?i)<br\s*/?>`)
 )
 
 // ExtractLive extracts the currently streaming assistant response text from an
@@ -77,6 +82,77 @@ func (*Agent) ExtractBaseline(screen string) string {
 		return ""
 	}
 	return extractBodyText(lines, true)
+}
+
+// ExtractTurn counts the rendered user prompt turns in the conversation body
+// above the composer box and returns the latest user prompt text.
+func (*Agent) ExtractTurn(screen string) (int, string) {
+	norm := strings.ReplaceAll(strings.ReplaceAll(screen, "\r\n", "\n"), "\r", "\n")
+	rawLines := strings.Split(norm, "\n")
+	end := trimTrailingBlanks(rawLines)
+	if end == 0 {
+		return 0, ""
+	}
+	lines := rawLines[:end]
+	bodyEnd, cols := stripBottomChrome(lines, true)
+	if bodyEnd == 0 {
+		return 0, ""
+	}
+	body := lines[:bodyEnd]
+
+	inFence := false
+	turns := 0
+	lastIdx := -1
+	for i, line := range body {
+		if isFenceLine(line) {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			continue
+		}
+		if isUserPromptLine(line) {
+			// Skip contiguous multi-line "> " lines belonging to the same prompt.
+			if i > 0 && isUserPromptLine(body[i-1]) {
+				continue
+			}
+			turns++
+			lastIdx = i
+		}
+	}
+	if lastIdx < 0 {
+		return 0, ""
+	}
+
+	var parts []string
+	parts = append(parts, strings.TrimSpace(body[lastIdx][2:]))
+	j := lastIdx + 1
+	for j < len(body) && strings.HasPrefix(body[j], "> ") {
+		parts = append(parts, strings.TrimSpace(body[j][2:]))
+		j++
+	}
+	wrapMin := 50
+	if cols > 0 {
+		wrapMin = max(40, cols-20)
+	}
+	prevLine := body[j-1]
+	for j < len(body) {
+		curr := body[j]
+		if strings.TrimSpace(curr) == "" ||
+			isToolHeader(curr) || isToolDetail(curr) || isSpinnerLine(curr) ||
+			isHorizontalRule(curr) || isBoxStart(curr) || isAnnouncementLine(curr) {
+			break
+		}
+		prevLen := displayWidth(strings.TrimRight(prevLine, " \t"))
+		if prevLen >= wrapMin && strings.HasPrefix(curr, "  ") && !startsMarkdownBlock(strings.TrimSpace(curr)) {
+			parts = append(parts, strings.TrimSpace(curr))
+			prevLine = curr
+			j++
+			continue
+		}
+		break
+	}
+	return turns, strings.TrimSpace(strings.Join(parts, " "))
 }
 
 // ExtractStatus extracts agy's live activity label from its bottom braille
@@ -730,7 +806,7 @@ func findCurrentTurnStart(lines []string, cols int) (start int, ok bool) {
 			isHorizontalRule(curr) || isBoxStart(curr) || isAnnouncementLine(curr) {
 			break
 		}
-		prevLen := utf8.RuneCountInString(strings.TrimRight(prevLine, " \t"))
+		prevLen := displayWidth(strings.TrimRight(prevLine, " \t"))
 		if prevLen >= wrapMin && strings.HasPrefix(curr, "  ") && !startsMarkdownBlock(strings.TrimSpace(curr)) {
 			prevLine = curr
 			start++
@@ -952,22 +1028,313 @@ func formatExtractedLines(lines []string, cols int) string {
 		effCols -= minIndent
 	}
 
-	out := joinWrappedLines(trimmed, effCols)
+	converted := convertBoxTables(trimmed)
+	out := joinWrappedLines(converted, effCols)
+	out = escapeRawHTMLInLines(out)
 	return strings.TrimSpace(strings.Join(out, "\n"))
+}
+
+// convertBoxTables converts Unicode box-drawing tables rendered by agy's TUI
+// (e.g. ┌──┬──┐ / │ ... │ / ├──┼──┤ / └──┴──┘ or rounded ╭──┬──╮) into GFM pipe
+// tables so Goldmark/mdview renders them as structured tables instead of a
+// flattened paragraph. Multi-line wrapped cells and mid-stream tables without
+// a closing bottom border are handled cleanly.
+func convertBoxTables(lines []string) []string {
+	var out []string
+	inFence := false
+	for i := 0; i < len(lines); {
+		line := lines[i]
+		if isFenceLine(line) {
+			inFence = !inFence
+			out = append(out, line)
+			i++
+			continue
+		}
+		if inFence {
+			out = append(out, line)
+			i++
+			continue
+		}
+		if isBoxTableStart(lines, i) {
+			end := consumeBoxTable(lines, i)
+			if gfm := renderBoxTableAsGFM(lines[i:end]); len(gfm) > 0 {
+				if len(out) > 0 && strings.TrimSpace(out[len(out)-1]) != "" {
+					out = append(out, "")
+				}
+				out = append(out, gfm...)
+				if end < len(lines) && strings.TrimSpace(lines[end]) != "" {
+					out = append(out, "")
+				}
+				i = end
+				continue
+			}
+		}
+		out = append(out, line)
+		i++
+	}
+	return out
+}
+
+func isBoxTableTop(line string) bool {
+	t := strings.TrimSpace(line)
+	return (strings.HasPrefix(t, "┌") || strings.HasPrefix(t, "╭")) &&
+		strings.ContainsRune(t, '─') && strings.ContainsRune(t, '┬')
+}
+
+func isBoxTableMid(line string) bool {
+	t := strings.TrimSpace(line)
+	return (strings.HasPrefix(t, "├") || strings.HasPrefix(t, "╞")) &&
+		(strings.ContainsRune(t, '┼') || strings.ContainsRune(t, '╪')) &&
+		(strings.ContainsRune(t, '─') || strings.ContainsRune(t, '═'))
+}
+
+func isBoxTableBottom(line string) bool {
+	t := strings.TrimSpace(line)
+	return (strings.HasPrefix(t, "└") || strings.HasPrefix(t, "╰")) &&
+		strings.ContainsRune(t, '─') && strings.ContainsRune(t, '┴')
+}
+
+func isBoxTableDataRow(line string) bool {
+	t := strings.TrimSpace(line)
+	if !strings.HasPrefix(t, "│") && !strings.HasPrefix(t, "┃") {
+		return false
+	}
+	return strings.Count(t, "│")+strings.Count(t, "┃") >= 2
+}
+
+func isBoxTableStart(lines []string, i int) bool {
+	if isBoxTableTop(lines[i]) {
+		return true
+	}
+	// Handle a table whose top border scrolled off the top of the buffer:
+	// data row(s) followed within a few lines by a ├──┼──┤ divider.
+	if isBoxTableDataRow(lines[i]) {
+		limit := min(len(lines), i+4)
+		for j := i + 1; j < limit; j++ {
+			if isBoxTableMid(lines[j]) {
+				return true
+			}
+			if !isBoxTableDataRow(lines[j]) {
+				return false
+			}
+		}
+	}
+	return false
+}
+
+func consumeBoxTable(lines []string, start int) int {
+	i := start
+	if isBoxTableTop(lines[i]) {
+		i++
+	}
+	for i < len(lines) {
+		switch {
+		case isBoxTableBottom(lines[i]):
+			return i + 1
+		case isBoxTableMid(lines[i]) || isBoxTableDataRow(lines[i]):
+			i++
+		default:
+			return i
+		}
+	}
+	return i
+}
+
+func splitBoxTableCells(line string) []string {
+	t := strings.TrimSpace(line)
+	// Strip leading border glyph ("│" or "┃").
+	if strings.HasPrefix(t, "│") {
+		t = strings.TrimPrefix(t, "│")
+	} else if strings.HasPrefix(t, "┃") {
+		t = strings.TrimPrefix(t, "┃")
+	}
+	// Strip trailing border glyph if present (may be missing on a mid-stream line).
+	if strings.HasSuffix(t, "│") {
+		t = strings.TrimSuffix(t, "│")
+	} else if strings.HasSuffix(t, "┃") {
+		t = strings.TrimSuffix(t, "┃")
+	}
+	// Split on either "│" or "┃".
+	var cells []string
+	start := 0
+	for idx, r := range t {
+		if r == '│' || r == '┃' {
+			cells = append(cells, strings.TrimSpace(t[start:idx]))
+			start = idx + utf8.RuneLen(r)
+		}
+	}
+	cells = append(cells, strings.TrimSpace(t[start:]))
+	return cells
+}
+
+func renderBoxTableAsGFM(block []string) []string {
+	type rawLine struct {
+		isMid bool
+		cells []string
+	}
+	var items []rawLine
+	midCount := 0
+	numCols := 0
+	for _, line := range block {
+		switch {
+		case isBoxTableTop(line) || isBoxTableBottom(line):
+			continue
+		case isBoxTableMid(line):
+			midCount++
+			items = append(items, rawLine{isMid: true})
+		case isBoxTableDataRow(line):
+			cells := splitBoxTableCells(line)
+			if len(cells) > numCols {
+				numCols = len(cells)
+			}
+			items = append(items, rawLine{cells: cells})
+		}
+	}
+	if numCols < 2 || len(items) == 0 {
+		return nil
+	}
+
+	// Partition lines into header group (before first mid border) and body groups.
+	var headerLines [][]string
+	var bodyGroups [][][]string
+	seenFirstMid := false
+	var curGroup [][]string
+
+	flushGroup := func() {
+		if len(curGroup) > 0 {
+			bodyGroups = append(bodyGroups, curGroup)
+			curGroup = nil
+		}
+	}
+
+	for _, it := range items {
+		if it.isMid {
+			if !seenFirstMid {
+				seenFirstMid = true
+			} else {
+				flushGroup()
+			}
+			continue
+		}
+		if !seenFirstMid {
+			headerLines = append(headerLines, it.cells)
+			continue
+		}
+		if midCount >= 2 {
+			// Explicit row dividers between body rows: merge all lines within each divider band.
+			curGroup = append(curGroup, it.cells)
+		} else {
+			// Compact table (only header divider): start a new row unless col 0 is
+			// empty and another column continues a wrapped cell of the previous row.
+			if len(curGroup) > 0 && len(it.cells) > 0 && it.cells[0] == "" && hasNonEmptyCell(it.cells[1:]) {
+				curGroup = append(curGroup, it.cells)
+			} else {
+				flushGroup()
+				curGroup = append(curGroup, it.cells)
+			}
+		}
+	}
+	flushGroup()
+
+	if len(headerLines) == 0 {
+		return nil
+	}
+
+	mergeRow := func(rows [][]string) []string {
+		merged := make([]string, numCols)
+		for col := range numCols {
+			var parts []string
+			for _, r := range rows {
+				if col < len(r) && r[col] != "" {
+					parts = append(parts, r[col])
+				}
+			}
+			merged[col] = escapeTableCell(joinTableCellParts(parts))
+		}
+		return merged
+	}
+
+	formatRow := func(cells []string) string {
+		return "| " + strings.Join(cells, " | ") + " |"
+	}
+
+	sepCells := make([]string, numCols)
+	for i := range sepCells {
+		sepCells[i] = "---"
+	}
+
+	out := make([]string, 0, 2+len(bodyGroups))
+	out = append(out, formatRow(mergeRow(headerLines)))
+	out = append(out, formatRow(sepCells))
+	for _, g := range bodyGroups {
+		out = append(out, formatRow(mergeRow(g)))
+	}
+	return out
+}
+
+func hasNonEmptyCell(cells []string) bool {
+	for _, c := range cells {
+		if c != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func joinTableCellParts(parts []string) string {
+	if len(parts) == 0 {
+		return ""
+	}
+	res := parts[0]
+	for i := 1; i < len(parts); i++ {
+		prev := parts[i-1]
+		curr := parts[i]
+		// Inside narrow table cells, column width is bounded by the cell itself.
+		cellCols := max(displayWidth(prev), 12)
+		sep := joinSeparator(prev, curr, cellCols)
+		res += sep + curr
+	}
+	return res
+}
+
+func escapeTableCell(s string) string {
+	if !strings.ContainsRune(s, '|') {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s) + 4)
+	for i := 0; i < len(s); i++ {
+		if s[i] == '|' && (i == 0 || s[i-1] != '\\') {
+			b.WriteByte('\\')
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 func joinWrappedLines(lines []string, cols int) []string {
 	if cols <= 0 {
 		cols = 80
 	}
+	wrapCols := effectiveWrapCols(lines, cols)
+
 	var out []string
 	inFence := false
 	rawPrev := ""
+	var listStack []int
+	inListItem := false
+	activeItemIndent := 0
+	activeItemBodyCol := 0
+
 	for _, line := range lines {
 		if isFenceLine(line) {
 			inFence = !inFence
 			out = append(out, line)
 			rawPrev = ""
+			inListItem = false
+			if !inFence {
+				listStack = nil
+			}
 			continue
 		}
 		if inFence {
@@ -980,10 +1347,48 @@ func joinWrappedLines(lines []string, cols int) []string {
 				out = append(out, "")
 			}
 			rawPrev = ""
+			inListItem = false
 			continue
 		}
-		if len(out) > 0 && rawPrev != "" && shouldJoinWrap(rawPrev, line, cols) {
-			out[len(out)-1] += " " + strings.TrimSpace(line)
+
+		ind := leadingSpaces(line)
+		trimmed := strings.TrimSpace(line)
+
+		if marker, body, rawMarkerW, ok := parseListItem(trimmed); ok {
+			for len(listStack) > 0 && listStack[len(listStack)-1] > ind {
+				listStack = listStack[:len(listStack)-1]
+			}
+			if len(listStack) == 0 || listStack[len(listStack)-1] < ind {
+				listStack = append(listStack, ind)
+			}
+			level := len(listStack) - 1
+			out = append(out, strings.Repeat("  ", level)+marker+body)
+			rawPrev = line
+			inListItem = true
+			activeItemIndent = ind
+			activeItemBodyCol = ind + rawMarkerW
+			continue
+		}
+
+		// Hanging-indent continuation of the current list item (including 3rd+ wrapped lines).
+		if inListItem && len(out) > 0 && rawPrev != "" &&
+			!startsMarkdownBlock(trimmed) &&
+			ind >= activeItemIndent+2 && ind <= activeItemBodyCol+2 &&
+			!endsWithBlockColon(strings.TrimSpace(rawPrev)) {
+			sep := joinSeparator(rawPrev, line, wrapCols)
+			out[len(out)-1] += sep + trimmed
+			rawPrev = line
+			continue
+		}
+
+		inListItem = false
+		if ind == 0 {
+			listStack = nil
+		}
+
+		if len(out) > 0 && rawPrev != "" && shouldJoinWrap(rawPrev, line, wrapCols) {
+			sep := joinSeparator(rawPrev, line, wrapCols)
+			out[len(out)-1] += sep + trimmed
 			rawPrev = line
 			continue
 		}
@@ -991,6 +1396,34 @@ func joinWrappedLines(lines []string, cols int) []string {
 		rawPrev = line
 	}
 	return out
+}
+
+func effectiveWrapCols(lines []string, cols int) int {
+	maxW := 0
+	inFence := false
+	for _, line := range lines {
+		if isFenceLine(line) {
+			inFence = !inFence
+			continue
+		}
+		if inFence || isBoxLine(line) || isHorizontalRule(line) {
+			continue
+		}
+		if w := displayWidth(line); w > maxW {
+			maxW = w
+		}
+	}
+	// If agy wraps prose to a narrower column width than the terminal composer
+	// box (e.g. 80/100 cols inside a 140-col pane), adapt to the observed width
+	// while never shrinking below 56 so short lines (like "Status: OK") stay intact.
+	if maxW >= 56 && maxW < cols-8 {
+		return maxW + 2
+	}
+	return cols
+}
+
+func endsWithBlockColon(trimmed string) bool {
+	return strings.HasSuffix(trimmed, ":") && !strings.HasSuffix(trimmed, "://")
 }
 
 func shouldJoinWrap(prev, curr string, cols int) bool {
@@ -1008,7 +1441,7 @@ func shouldJoinWrap(prev, curr string, cols int) bool {
 	}
 	// Never join onto headings, tables, fences, rules, box borders, or lines ending in ':'.
 	if strings.HasPrefix(pt, "#") || strings.HasPrefix(pt, "|") ||
-		isFenceLine(pt) || isMarkdownRule(pt) || isBoxLine(pt) || strings.HasSuffix(pt, ":") {
+		isFenceLine(pt) || isMarkdownRule(pt) || isBoxLine(pt) || endsWithBlockColon(pt) {
 		return false
 	}
 
@@ -1016,15 +1449,256 @@ func shouldJoinWrap(prev, curr string, cols int) bool {
 	currIndent := leadingSpaces(curr)
 	if currIndent != prevIndent {
 		// Allow wrapped continuation of a bullet or numbered list item.
-		if !(isListItem(pt) && currIndent >= prevIndent+2 && currIndent <= prevIndent+4) {
+		if _, _, rawW, ok := parseListItem(pt); !(ok && currIndent >= prevIndent+2 && currIndent <= prevIndent+rawW+2) {
 			return false
 		}
 	}
 
-	prevLen := utf8.RuneCountInString(prev)
-	firstWord := firstWordLen(ct)
-	minWrapLen := max(36, cols/2)
-	return prevLen >= minWrapLen && prevLen+1+firstWord >= cols-10
+	prevW := displayWidth(prev)
+	firstW := firstWordWidth(ct)
+	minWrapW := max(36, cols/2)
+	return prevW >= minWrapW && prevW+1+firstW >= cols-10
+}
+
+// joinSeparator returns "" when prev and curr were split mid-token or at
+// intra-token punctuation (e.g. "README.m"+"d", "README"+".md", "agent-cli."+"sock",
+// "app-"+"server", "--"+"plugin-dir", ", /"+"live"), and " " for normal word wraps.
+func joinSeparator(prev, curr string, cols int) string {
+	pt := strings.TrimSpace(prev)
+	ct := strings.TrimSpace(curr)
+	if pt == "" || ct == "" {
+		return " "
+	}
+
+	firstCurr, _ := utf8.DecodeRuneInString(ct)
+	lastPrev, lastSz := utf8.DecodeLastRuneInString(pt)
+	beforeLast := rune(0)
+	if len(pt) > lastSz {
+		beforeLast, _ = utf8.DecodeLastRuneInString(pt[:len(pt)-lastSz])
+	}
+
+	// Unclosed/split bold markers ("**" at boundary).
+	oddBold := strings.Count(pt, "**")%2 == 1
+	if (strings.HasSuffix(pt, "**") && oddBold) || (strings.HasPrefix(ct, "**") && oddBold) {
+		return ""
+	}
+
+	// URL scheme break ("https://", "file://", "ws://").
+	if strings.HasSuffix(pt, "://") && isASCIITokenStart(firstCurr) {
+		return ""
+	}
+
+	// Double-dash CLI flag break ("--" + "plugin-dir").
+	if strings.HasSuffix(pt, "--") && isASCIIIdentRune(firstCurr) {
+		return ""
+	}
+
+	// Hyphenated identifier/flag break ("app-" + "server", "mako-" + "<hash>").
+	if lastPrev == '-' && isASCIIWordOrDot(beforeLast) && (isASCIIIdentRune(firstCurr) || firstCurr == '<') {
+		return ""
+	}
+
+	// Path or route slash break ("docs/agents/" + "README.md", ", /" + "live"),
+	// while keeping spaced separators like "mako-msg / mako-plugin".
+	if lastPrev == '/' && (isASCIITokenStart(firstCurr) || firstCurr == '<') {
+		if beforeLast != 0 && !unicode.IsSpace(beforeLast) {
+			return ""
+		}
+		// If preceded by space (" /"), check the rune before that space:
+		// punctuation/delimiters (", /live", "(/mako)") mean a leading path/route,
+		// whereas a word ("mako-msg / mako-plugin") means a binary slash separator.
+		trimmedBeforeSlash := strings.TrimRight(pt[:len(pt)-lastSz], " \t")
+		if trimmedBeforeSlash == "" {
+			return ""
+		}
+		pre, _ := utf8.DecodeLastRuneInString(trimmedBeforeSlash)
+		if !unicode.IsLetter(pre) && !unicode.IsDigit(pre) && pre != ')' && pre != ']' && pre != '`' && pre != '*' {
+			return ""
+		}
+	}
+
+	// Break right before a file extension or dot-member ("README" + ".md", "hooks" + ".sock").
+	if firstCurr == '.' && len(ct) > 1 {
+		nextR, _ := utf8.DecodeRuneInString(ct[1:])
+		if isASCIIIdentRune(nextR) && (isASCIIIdentRune(lastPrev) || lastPrev == '-' || lastPrev == '*') {
+			return ""
+		}
+	}
+
+	// Break right after a dot in a filename or qualified symbol
+	// ("agent-cli." + "sock", "mcp_config." + "json", "pi." + "registerMcpServer",
+	// "SubAgentHooks." + "IsSubAgent", "agents." + "As[T]").
+	if lastPrev == '.' && isASCIIIdentRune(beforeLast) {
+		if firstCurr >= 'a' && firstCurr <= 'z' {
+			return ""
+		}
+		if firstCurr >= 'A' && firstCurr <= 'Z' && looksLikeCodeSymbol(firstToken(ct)) {
+			return ""
+		}
+	}
+
+	// Hard-wrapped long path/URL/token split mid-word at the right margin
+	// (e.g. "/Users/.../README.m" + "d", "/Users/.../READM" + "E.md").
+	if isASCIITokenContinue(lastPrev) && isASCIITokenStart(firstCurr) {
+		lastTok := lastToken(pt)
+		firstTok := firstToken(ct)
+		isPathOrLong := strings.ContainsRune(lastTok, '/') || displayWidth(lastTok) >= 32
+		if isPathOrLong {
+			if oddBold {
+				return ""
+			}
+			if displayWidth(prev) >= cols-5 && isLikelyMidTokenContinuation(lastTok, firstTok) {
+				return ""
+			}
+		}
+	}
+
+	return " "
+}
+
+func isASCIIIdentRune(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+}
+
+func isASCIIWordOrDot(r rune) bool {
+	return isASCIIIdentRune(r) || r == '.'
+}
+
+func isASCIITokenStart(r rune) bool {
+	return isASCIIIdentRune(r) || r == '.' || r == '/' || r == '-' || r == '~'
+}
+
+func isASCIITokenContinue(r rune) bool {
+	return isASCIIIdentRune(r) || r == '.' || r == '/' || r == '-' || r == ':'
+}
+
+func lastToken(s string) string {
+	i := strings.LastIndexFunc(s, unicode.IsSpace)
+	if i < 0 {
+		return s
+	}
+	return s[i+1:]
+}
+
+func firstToken(s string) string {
+	i := strings.IndexFunc(s, unicode.IsSpace)
+	if i < 0 {
+		return s
+	}
+	return s[:i]
+}
+
+// looksLikeCodeSymbol reports whether an uppercase-initial token looks like a
+// Go/JS/TS symbol (CamelCase, dotted, callable, generic, or snake_case) rather
+// than a normal capitalized English sentence starter like "The" or "Next".
+func looksLikeCodeSymbol(tok string) bool {
+	tok = strings.TrimRight(tok, ".,;:!?)]}*`")
+	if len(tok) < 2 {
+		return false
+	}
+	hasLower := false
+	for i, r := range tok {
+		if i > 0 && r >= 'A' && r <= 'Z' && hasLower {
+			return true // CamelCase (e.g. IsSubAgent)
+		}
+		if r >= 'a' && r <= 'z' {
+			hasLower = true
+		}
+		if r == '(' || r == '[' || r == '_' || r == '.' {
+			return true
+		}
+	}
+	return false
+}
+
+// isLikelyMidTokenContinuation distinguishes a hard-split path/URL fragment
+// (".../README.m" + "d", ".../READM" + "E.md") from a complete path followed
+// by a normal word (".../README.md" + "explains").
+func isLikelyMidTokenContinuation(lastTok, firstTok string) bool {
+	cleanFirst := strings.TrimRight(firstTok, ",;:!?)")
+	if strings.ContainsAny(cleanFirst, "./_*") {
+		return true
+	}
+	// Very short 1-2 letter fragment (like "d" after "README.m") is a hard wrap.
+	if len(cleanFirst) <= 2 && isAllASCIIAlphaNum(cleanFirst) {
+		return true
+	}
+	// If the path's final segment has an incomplete 1-char extension (".m") or
+	// ends in uppercase letters continued by uppercase ("READM" + "E").
+	base := lastTok
+	if slash := strings.LastIndexByte(base, '/'); slash >= 0 {
+		base = base[slash+1:]
+	}
+	if dot := strings.LastIndexByte(base, '.'); dot >= 0 && len(base)-dot-1 == 1 {
+		return true
+	}
+	return false
+}
+
+func isAllASCIIAlphaNum(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+			return false
+		}
+	}
+	return true
+}
+
+// escapeRawHTMLInLines escapes tag-like placeholders (e.g. <hash>, <id>,
+// <task-notification>) outside fenced code blocks and inline code spans so
+// Goldmark renders them verbatim instead of stripping them as raw HTML tags.
+func escapeRawHTMLInLines(lines []string) []string {
+	inFence := false
+	for i, line := range lines {
+		if isFenceLine(line) {
+			inFence = !inFence
+			continue
+		}
+		if inFence || !strings.ContainsRune(line, '<') {
+			continue
+		}
+		lines[i] = escapeRawHTMLOutsideCode(line)
+	}
+	return lines
+}
+
+func escapeRawHTMLOutsideCode(line string) string {
+	var b strings.Builder
+	b.Grow(len(line) + 8)
+	i := 0
+	for i < len(line) {
+		if line[i] == '`' {
+			// Copy inline backtick code span verbatim.
+			ticks := 0
+			for i+ticks < len(line) && line[i+ticks] == '`' {
+				ticks++
+			}
+			delim := line[i : i+ticks]
+			if end := strings.Index(line[i+ticks:], delim); end >= 0 {
+				next := i + ticks + end + ticks
+				b.WriteString(line[i:next])
+				i = next
+				continue
+			}
+			b.WriteString(delim)
+			i += ticks
+			continue
+		}
+		if line[i] == '<' && (i == 0 || line[i-1] != '\\') {
+			if loc := rawHTMLTagRe.FindStringIndex(line[i:]); loc != nil && loc[0] == 0 {
+				b.WriteByte('\\')
+				b.WriteString(line[i : i+loc[1]])
+				i += loc[1]
+				continue
+			}
+		}
+		b.WriteByte(line[i])
+		i++
+	}
+	return b.String()
 }
 
 func startsMarkdownBlock(trimmed string) bool {
@@ -1037,13 +1711,34 @@ func startsMarkdownBlock(trimmed string) bool {
 	return false
 }
 
-func isListItem(trimmed string) bool {
-	for _, p := range []string{"- ", "* ", "+ ", "• "} {
+// unicodeBulletPrefixes are bullet glyphs rendered by agy's TUI for markdown
+// unordered list items, normalized back to "- " for Goldmark rendering.
+var unicodeBulletPrefixes = []string{"• ", "◦ ", "▪ ", "▫ ", "‣ ", "∙ ", "▸ ", "· "}
+
+// parseListItem parses a markdown or agy TUI-rendered list item line.
+// It returns the normalized markdown marker ("- " for unicode bullets, or the
+// original ASCII marker), the item body, the original marker's display width,
+// and whether the line is a list item.
+func parseListItem(trimmed string) (marker, body string, rawMarkerWidth int, ok bool) {
+	for _, p := range []string{"- ", "* ", "+ "} {
 		if strings.HasPrefix(trimmed, p) {
-			return true
+			return p, trimmed[len(p):], 2, true
 		}
 	}
-	return numberedListRe.MatchString(trimmed)
+	for _, p := range unicodeBulletPrefixes {
+		if strings.HasPrefix(trimmed, p) {
+			return "- ", trimmed[len(p):], displayWidth(p), true
+		}
+	}
+	if m := numberedListRe.FindStringSubmatch(trimmed); m != nil {
+		return m[1], m[2], displayWidth(m[1]), true
+	}
+	return "", "", 0, false
+}
+
+func isListItem(trimmed string) bool {
+	_, _, _, ok := parseListItem(trimmed)
+	return ok
 }
 
 func isMarkdownRule(trimmed string) bool {
@@ -1068,30 +1763,64 @@ func isMarkdownRule(trimmed string) bool {
 	return count >= 3
 }
 
-func firstWordLen(s string) int {
-	n := 0
+func displayWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		w += runeDisplayWidth(r)
+	}
+	return w
+}
+
+func runeDisplayWidth(r rune) int {
+	if r < 0x20 || r == 0x7f || unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) || unicode.Is(unicode.Cf, r) {
+		return 0
+	}
+	switch width.LookupRune(r).Kind() {
+	case width.EastAsianWide, width.EastAsianFullwidth:
+		return 2
+	}
+	return 1
+}
+
+func firstWordWidth(s string) int {
+	w := 0
 	for _, r := range s {
 		if unicode.IsSpace(r) {
 			break
 		}
-		n++
+		w += runeDisplayWidth(r)
 	}
-	return n
+	return w
 }
 
 func matchesLogged(extracted, logged string) bool {
 	na := normalizeForCompare(extracted)
-	nb := normalizeForCompare(logged)
-	if na == "" || nb == "" {
+	if na == "" {
 		return false
 	}
-	if na == nb {
+	match := func(candidate string) bool {
+		nb := normalizeForCompare(candidate)
+		if nb == "" {
+			return false
+		}
+		if na == nb {
+			return true
+		}
+		// If only a trailing or interior slice of an already-logged reply fits in
+		// the buffer (e.g. long reply scrolled off top, or trailing rule/tip stripped),
+		// suppress it as well.
+		return utf8.RuneCountInString(na) >= 20 && strings.Contains(nb, na)
+	}
+	if match(logged) {
 		return true
 	}
-	// If only a trailing or interior slice of an already-logged reply fits in
-	// the buffer (e.g. long reply scrolled off top, or trailing rule/tip stripped),
-	// suppress it as well.
-	return utf8.RuneCountInString(na) >= 20 && strings.Contains(nb, na)
+	// agy's TUI may expand [label](file:///abs/path) to /abs/path on screen.
+	if strings.Contains(logged, "](file://") {
+		if match(fileLinkRe.ReplaceAllString(logged, "$1")) {
+			return true
+		}
+	}
+	return false
 }
 
 // normalizeForCompare strips markdown block/inline markers that agy renders
@@ -1112,6 +1841,10 @@ func normalizeForCompare(s string) string {
 		if strings.Contains(t, "](") {
 			t = markdownLinkRe.ReplaceAllString(t, "$1")
 		}
+		// Normalize inline HTML line breaks ("<br>", "<br/>") to spaces.
+		if strings.Contains(t, "<") {
+			t = htmlBreakRe.ReplaceAllString(t, " ")
+		}
 		// Strip line-leading heading prefixes ("## Heading" -> "Heading").
 		if hashes := strings.TrimLeft(t, "#"); len(hashes) < len(t) && (hashes == "" || strings.HasPrefix(hashes, " ") || strings.HasPrefix(hashes, "\t")) {
 			t = strings.TrimSpace(hashes)
@@ -1120,25 +1853,22 @@ func normalizeForCompare(s string) string {
 		if strings.HasPrefix(t, "> ") {
 			t = strings.TrimSpace(t[2:])
 		}
-		// Strip line-leading bullet list markers ("- ", "+ ", "* ", "• ").
-		for _, p := range []string{"- ", "+ ", "* ", "• "} {
-			if strings.HasPrefix(t, p) {
-				t = strings.TrimSpace(t[len(p):])
-				break
-			}
+		// Strip line-leading bullet list markers ("- ", "+ ", "* ", "• ", "◦ ", ...).
+		if _, body, _, ok := parseListItem(t); ok {
+			t = strings.TrimSpace(body)
 		}
 		runes := []rune(t)
 		for i := 0; i < len(runes); i++ {
 			r := runes[i]
-			// Unescape markdown backslash escapes (e.g. "\_" -> "_").
+			// Unescape markdown backslash escapes (e.g. "\_" -> "_", "\<" -> "<").
 			if r == '\\' && i+1 < len(runes) {
 				switch runes[i+1] {
-				case '*', '_', '`', '[', ']', '~', '|', '#', '>':
+				case '*', '_', '`', '[', ']', '~', '|', '#', '>', '<':
 					continue
 				}
 			}
 			switch r {
-			case '`', '*', '_', '~', '•':
+			case '`', '*', '_', '~', '•', '◦', '▪', '▫', '‣', '∙', '▸':
 				continue
 			case '|', '─', '━', '═', '│', '┃', '┌', '┐', '└', '┘', '├', '┤', '┬', '┴', '┼', '╭', '╮', '╰', '╯':
 				if !inSpace {

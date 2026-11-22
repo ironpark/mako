@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
@@ -26,6 +28,7 @@ type screenLivePoller struct {
 	s        *session.Session
 	driver   agent.ScreenLive
 	baseline agent.ScreenLiveBaseline
+	turn     agent.ScreenLiveTurn
 	status   agent.ScreenLiveStatus
 	activity agent.ScreenLiveActivity
 	logs     agent.Logs
@@ -36,12 +39,16 @@ type screenLivePoller struct {
 	lastLogSize     int64
 	hadLog          bool
 	lastLogged      string
+	lastUser        string
+	awaitingReply   bool
 	lastEmitted     string
 	lastStatus      string
 	wasWorking      bool
 	idleOutputs     uint64
 	hasIdleBaseline bool
 	idleText        string
+	idleTurns       int
+	idlePrompt      string
 	stepSeq         uint64
 	step            string
 }
@@ -52,6 +59,7 @@ func screenLivePollerFactory(hub *liveHub, s *session.Session) func(gen uint64) 
 		return nil
 	}
 	baseline, _ := driver.(agent.ScreenLiveBaseline)
+	turn, _ := driver.(agent.ScreenLiveTurn)
 	status, _ := driver.(agent.ScreenLiveStatus)
 	activity, _ := driver.(agent.ScreenLiveActivity)
 	logs, _ := agents.As[agent.Logs](s.Agent())
@@ -61,6 +69,7 @@ func screenLivePollerFactory(hub *liveHub, s *session.Session) func(gen uint64) 
 			s:        s,
 			driver:   driver,
 			baseline: baseline,
+			turn:     turn,
 			status:   status,
 			activity: activity,
 			logs:     logs,
@@ -110,6 +119,9 @@ func (p *screenLivePoller) tick(size func() int64) (checked bool, logSize int64)
 		if p.baseline != nil {
 			p.idleText = p.baseline.ExtractBaseline(screen)
 		}
+		if p.turn != nil {
+			p.idleTurns, p.idlePrompt = p.turn.ExtractTurn(screen)
+		}
 		p.idleOutputs = outputs
 		p.hasIdleBaseline = true
 
@@ -158,9 +170,9 @@ func (p *screenLivePoller) tick(size func() int64) (checked bool, logSize int64)
 		p.lastLogSize = logSize
 		p.hadLog = true
 		if logPath != "" && logSize > 0 {
-			p.lastLogged = lastLoggedAssistantText(logPath, p.logs)
+			p.lastLogged, p.lastUser, p.awaitingReply = lastLoggedTurn(logPath, p.logs)
 		} else {
-			p.lastLogged = ""
+			p.lastLogged, p.lastUser, p.awaitingReply = "", "", false
 		}
 	}
 
@@ -174,15 +186,45 @@ func (p *screenLivePoller) tick(size func() int64) (checked bool, logSize int64)
 	}
 	p.lastOutputs = outputs
 
+	var curTurns int
+	var curPrompt string
+	hasTurn := p.turn != nil
+	if hasTurn {
+		curTurns, curPrompt = p.turn.ExtractTurn(screen)
+	}
+
 	extracted := p.driver.ExtractLive(screen, p.lastLogged)
+
+	// Gate A: When a new user prompt has already been logged in the transcript
+	// (awaitingReply == true) but the TUI has not yet painted that new prompt
+	// into the conversation body, everything currently visible above the
+	// composer still belongs to the previous turn and must be suppressed.
+	if extracted != "" && hasTurn && p.awaitingReply && p.lastUser != "" {
+		if p.hasIdleBaseline {
+			if curTurns <= p.idleTurns {
+				extracted = ""
+			}
+		} else if curPrompt != "" && !strings.HasPrefix(curPrompt, "/") && !screenPromptMatches(curPrompt, p.lastUser) {
+			extracted = ""
+		}
+	}
+
+	// Gate B: Suppress pre-turn idle baseline text (including viewport-shifted
+	// subsets/supersets/overlaps when the spinner or composer box resizes) until
+	// the TUI paints the new prompt or genuine new reply text appears.
 	if p.idleText != "" {
+		samePromptTurn := hasTurn && curTurns <= p.idleTurns && curPrompt == p.idlePrompt
 		switch {
 		case extracted == "":
-			// Screen has moved on (e.g. new user prompt rendered or tool started).
-			p.idleText = ""
-		case extracted == p.idleText || p.driver.ExtractLive(screen, p.idleText) == "":
-			// Still showing the previous turn's completed text before the TUI
-			// paints the new prompt; suppress without retiring the baseline yet.
+			// Only retire idleText once a new prompt turn actually appeared or
+			// no stale prompt remains; if we suppressed above while still on
+			// the old prompt turn, keep idleText armed.
+			if !samePromptTurn {
+				p.idleText = ""
+			}
+		case extracted == p.idleText ||
+			p.driver.ExtractLive(screen, p.idleText) == "" ||
+			isStaleOverlap(extracted, p.idleText, samePromptTurn):
 			extracted = ""
 		default:
 			// Genuine new reply text appeared; retire the pre-turn baseline.
@@ -258,30 +300,36 @@ func (p *screenLivePoller) clear() {
 	p.lastStatus = ""
 }
 
-// lastLoggedAssistantText reads the tail of path and returns the latest
-// logged assistant message text across turns, or "" if none. Keeping the
-// previous turn's assistant text after a new USER_INPUT is logged ensures that
-// a newly submitted turn cannot briefly re-emit the previous reply before the
-// TUI repaints the new turn prompt.
+// lastLoggedAssistantText returns the latest logged assistant message text from
+// path across turns, or "" if none.
 func lastLoggedAssistantText(path string, logs agent.Logs) string {
+	last, _, _ := lastLoggedTurn(path, logs)
+	return last
+}
+
+// lastLoggedTurn reads the tail of path and returns the latest logged assistant
+// message text across turns, the latest logged user prompt text, and whether
+// the conversation is currently awaiting the first assistant reply to that user
+// prompt (i.e. a user message was logged after the latest assistant message).
+func lastLoggedTurn(path string, logs agent.Logs) (lastAssistant, lastUser string, awaitingReply bool) {
 	if path == "" || logs == nil {
-		return ""
+		return "", "", false
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return ""
+		return "", "", false
 	}
 	defer f.Close()
 
 	fi, err := f.Stat()
 	if err != nil || fi.Size() == 0 {
-		return ""
+		return "", "", false
 	}
 	var offset int64
 	if fi.Size() > screenLiveTailWindow {
 		offset = fi.Size() - screenLiveTailWindow
 		if _, err := f.Seek(offset, io.SeekStart); err != nil {
-			return ""
+			return "", "", false
 		}
 	}
 
@@ -292,19 +340,25 @@ func lastLoggedAssistantText(path string, logs agent.Logs) string {
 	if offset > 0 {
 		// Discard the leading partial line after seeking into the middle.
 		if _, err := agent.ReadRecord(reader, &long); err != nil {
-			return ""
+			return "", "", false
 		}
 	}
 
 	dec := logs.NewDecoder()
-	var last string
 	for {
 		line, err := agent.ReadRecord(reader, &long)
 		if len(line) > 0 {
 			for _, msg := range dec.Line(line) {
-				if msg.GetRole() == "assistant" {
+				switch msg.GetRole() {
+				case "assistant":
 					if t := strings.TrimSpace(msg.GetText()); t != "" {
-						last = t
+						lastAssistant = t
+						awaitingReply = false
+					}
+				case "user":
+					if t := strings.TrimSpace(msg.GetText()); t != "" {
+						lastUser = t
+						awaitingReply = true
 					}
 				}
 			}
@@ -313,5 +367,76 @@ func lastLoggedAssistantText(path string, logs agent.Logs) string {
 			break
 		}
 	}
-	return last
+	return lastAssistant, lastUser, awaitingReply
+}
+
+// screenPromptMatches reports whether the latest user prompt echoed on screen
+// corresponds to the latest logged user prompt (tolerating whitespace
+// normalization and multi-line/truncated terminal echoes).
+func screenPromptMatches(screenPrompt, loggedUser string) bool {
+	ns := normalizeCompactText(screenPrompt)
+	nu := normalizeCompactText(loggedUser)
+	if ns == "" || nu == "" {
+		return false
+	}
+	if ns == nu {
+		return true
+	}
+	// Multi-line or long user prompts may be partially echoed or wrapped on screen.
+	if strings.HasPrefix(nu, ns) || strings.HasPrefix(ns, nu) {
+		return utf8.RuneCountInString(ns) >= 4 || ns == nu
+	}
+	return false
+}
+
+// isStaleOverlap detects when extracted text still belongs to the pre-turn
+// idleText even after the viewport shifted by a few lines (e.g. when a spinner
+// appeared or a multi-line draft shrank on submit).
+func isStaleOverlap(extracted, idleText string, samePromptTurn bool) bool {
+	na := normalizeCompactText(extracted)
+	nb := normalizeCompactText(idleText)
+	if na == "" || nb == "" {
+		return false
+	}
+	if na == nb {
+		return true
+	}
+	// Bidirectional containment covers both a scrolled-off tail and a newly
+	// uncovered superset when the composer box shrinks on submit.
+	minLen := min(utf8.RuneCountInString(na), utf8.RuneCountInString(nb))
+	if minLen >= 12 && (strings.Contains(nb, na) || strings.Contains(na, nb)) {
+		return true
+	}
+	if !samePromptTurn {
+		return false
+	}
+	// On the exact same prompt turn, check whether a substantial prefix or
+	// suffix overlaps (covers top+bottom 1-line shift simultaneously).
+	ra := []rune(na)
+	rb := []rune(nb)
+	const probe = 24
+	if len(ra) >= probe && len(rb) >= probe {
+		if strings.Contains(nb, string(ra[:probe])) || strings.Contains(nb, string(ra[len(ra)-probe:])) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeCompactText(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	inSpace := true
+	for _, r := range s {
+		if unicode.IsSpace(r) {
+			if !inSpace {
+				b.WriteByte(' ')
+				inSpace = true
+			}
+			continue
+		}
+		b.WriteRune(r)
+		inSpace = false
+	}
+	return strings.TrimSpace(b.String())
 }

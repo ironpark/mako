@@ -250,7 +250,7 @@ func TestExtractLiveStreamingCases(t *testing.T) {
 			want:       "",
 		},
 		{
-			name: "rendered_markdown_table_preserved_with_prose",
+			name: "rendered_markdown_table_converted_to_gfm_with_prose",
 			screen: divider + "\n" +
 				"> Compare options\n\n" +
 				"  Here is a summary table:\n\n" +
@@ -265,11 +265,9 @@ func TestExtractLiveStreamingCases(t *testing.T) {
 			want: strings.Join([]string{
 				"Here is a summary table:",
 				"",
-				"┌──────┬───────┐",
-				"│ Mode │ Speed │",
-				"├──────┼───────┤",
-				"│ Fast │ High  │",
-				"└──────┴───────┘",
+				"| Mode | Speed |",
+				"| --- | --- |",
+				"| Fast | High |",
 			}, "\n"),
 		},
 		{
@@ -515,5 +513,228 @@ func TestExtractSwarmAndAgentActivity(t *testing.T) {
 		"● Swarm(Plugin UI)  coordinator: active · 12 posts · alt+s board · alt+x dismiss\n"
 	if got := a.ExtractActivity(permWithSwarm); got != "" {
 		t.Fatalf("ExtractActivity(permWithSwarm) = %q, want empty", got)
+	}
+}
+
+func TestExtractLiveNestedUnicodeBulletsTokenJoinsAndHTMLPlaceholders(t *testing.T) {
+	a := New()
+	rule80 := strings.Repeat("─", 80)
+	divider := strings.Repeat("─", 60)
+
+	// Reproduces agy's rendered PTY screen for nested bullet lists containing
+	// Korean text, hard-wrapped file paths, dotted filenames, CLI flags, routes,
+	// and backtick-stripped angle-bracket placeholders (<hash>, <id>, <task-notification>).
+	screen := divider + "\n" +
+		"> docs 작성해줘\n\n" +
+		"  작성된 문서\n\n" +
+		"  • **/Users/ironpark/Projects/Personal/open-source/mako/docs/agents/agy/README.m\n" +
+		"    d** — Antigravity CLI (agy) 통합 상세\n" +
+		"    • mako-bridge 사이드카(sidecar.json + config.json 자동 등록, agent-cli.\n" +
+		"      sock 스트림) → agentapi send-message → PTY 3단계 메시지 전달\n" +
+		"    • 전역 hooks.json(mako-<hash>) 병합과 SubAgentHooks.IsSubAgent 3중 방어\n" +
+		"    • ScreenLive PTY 추출, brain/<id> 트랜스크립트 스캔, mcp_config.\n" +
+		"      json 환경변수 자격증명 분리\n" +
+		"  • **/Users/ironpark/Projects/Personal/open-source/mako/docs/agents/codex/README\n" +
+		"    .md** — Codex CLI (codex) 통합 상세\n" +
+		"    • codex app-\n" +
+		"      server + codex --remote 브리지, mako-msg /\n" +
+		"      mako-plugin CLI 지원\n" +
+		"  • **/Users/ironpark/Projects/Personal/open-source/mako/docs/agents/claude/READM\n" +
+		"    E.md** — Claude Code (claude) 통합 상세\n" +
+		"    • 내장 mako-live Mod(embed.FS 추출, --\n" +
+		"      plugin-dir, MAKO_LIVE_SOCKET, /\n" +
+		"      live 60ms 배치 스트리밍)\n" +
+		"    ◦ BackgroundTasks(Bash background / <task-notification>)\n" +
+		"  • **/Users/ironpark/Projects/Personal/open-source/mako/docs/agents/other/README\n" +
+		"    .md** — pi, omp, omo, opencode 통합 상세\n" +
+		"    • pi.\n" +
+		"      registerMcpServer stdio MCP 확장\n" +
+		"⣾  Generating...\n" +
+		rule80 + "\n>\n" + rule80 + "\n" +
+		"esc to cancel                          auto · Gemini 4 Neon · high\n"
+
+	got := a.ExtractLive(screen, "")
+	want := strings.Join([]string{
+		"작성된 문서",
+		"",
+		"- **/Users/ironpark/Projects/Personal/open-source/mako/docs/agents/agy/README.md** — Antigravity CLI (agy) 통합 상세",
+		"  - mako-bridge 사이드카(sidecar.json + config.json 자동 등록, agent-cli.sock 스트림) → agentapi send-message → PTY 3단계 메시지 전달",
+		"  - 전역 hooks.json(mako-\\<hash>) 병합과 SubAgentHooks.IsSubAgent 3중 방어",
+		"  - ScreenLive PTY 추출, brain/\\<id> 트랜스크립트 스캔, mcp_config.json 환경변수 자격증명 분리",
+		"- **/Users/ironpark/Projects/Personal/open-source/mako/docs/agents/codex/README.md** — Codex CLI (codex) 통합 상세",
+		"  - codex app-server + codex --remote 브리지, mako-msg / mako-plugin CLI 지원",
+		"- **/Users/ironpark/Projects/Personal/open-source/mako/docs/agents/claude/README.md** — Claude Code (claude) 통합 상세",
+		"  - 내장 mako-live Mod(embed.FS 추출, --plugin-dir, MAKO_LIVE_SOCKET, /live 60ms 배치 스트리밍)",
+		"  - BackgroundTasks(Bash background / \\<task-notification>)",
+		"- **/Users/ironpark/Projects/Personal/open-source/mako/docs/agents/other/README.md** — pi, omp, omo, opencode 통합 상세",
+		"  - pi.registerMcpServer stdio MCP 확장",
+	}, "\n")
+	if got != want {
+		t.Fatalf("ExtractLive() mismatch:\ngot:\n%s\n\nwant:\n%s", got, want)
+	}
+
+	// Once transcript_full.jsonl records the completed markdown (with file://
+	// links and backtick-wrapped placeholders), matchesLogged must suppress it.
+	logged := strings.Join([]string{
+		"### 작성된 문서",
+		"",
+		"- **[docs/agents/agy/README.md](file:///Users/ironpark/Projects/Personal/open-source/mako/docs/agents/agy/README.md)** — Antigravity CLI (`agy`) 통합 상세",
+		"  - `mako-bridge` 사이드카(`sidecar.json` + `config.json` 자동 등록, `agent-cli.sock` 스트림) → `agentapi send-message` → PTY 3단계 메시지 전달",
+		"  - 전역 `hooks.json`(`mako-<hash>`) 병합과 `SubAgentHooks.IsSubAgent` 3중 방어",
+		"  - `ScreenLive` PTY 추출, `brain/<id>` 트랜스크립트 스캔, `mcp_config.json` 환경변수 자격증명 분리",
+		"- **[docs/agents/codex/README.md](file:///Users/ironpark/Projects/Personal/open-source/mako/docs/agents/codex/README.md)** — Codex CLI (`codex`) 통합 상세",
+		"  - `codex app-server` + `codex --remote` 브리지, `mako-msg` / `mako-plugin` CLI 지원",
+		"- **[docs/agents/claude/README.md](file:///Users/ironpark/Projects/Personal/open-source/mako/docs/agents/claude/README.md)** — Claude Code (`claude`) 통합 상세",
+		"  - 내장 `mako-live` Mod(`embed.FS` 추출, `--plugin-dir`, `MAKO_LIVE_SOCKET`, `/live` 60ms 배치 스트리밍)",
+		"  - `BackgroundTasks`(`Bash` background / `<task-notification>`)",
+		"- **[docs/agents/other/README.md](file:///Users/ironpark/Projects/Personal/open-source/mako/docs/agents/other/README.md)** — `pi`, `omp`, `omo`, `opencode` 통합 상세",
+		"  - `pi.registerMcpServer` stdio MCP 확장",
+	}, "\n")
+	if suppressed := a.ExtractLive(screen, logged); suppressed != "" {
+		t.Fatalf("ExtractLive(screen, logged) = %q, want empty (suppressed)", suppressed)
+	}
+}
+
+func TestExtractLiveKoreanWideWrapAndCodeFencePreservation(t *testing.T) {
+	a := New()
+	rule80 := strings.Repeat("─", 80)
+	divider := strings.Repeat("─", 60)
+
+	// Korean characters are 2 display columns wide: 35 Korean chars = 70 cols on an
+	// 80-col screen, which must rejoin across wrapped lines while preserving
+	// sentence-ending spaces and untouched fenced code blocks.
+	screen := divider + "\n" +
+		"> 설명해줘\n\n" +
+		"  공통 인터페이스 설계 문서와 에이전트별 통합 문서를 실제 드라이버 코드와 데몬\n" +
+		"  파이프라인을 기준으로 정리했습니다. 다음 단계로 검증을 진행합니다.\n\n" +
+		"  ```html\n" +
+		"  <task-notification>keep verbatim</task-notification>\n" +
+		"  ```\n" +
+		"  • Indented code `<id>` stays intact, bare <hash> is escaped.\n" +
+		"⠙  Generating...\n" +
+		rule80 + "\n>\n" + rule80 + "\n" +
+		"esc to cancel                          auto · Gemini 4 Neon · high\n"
+
+	got := a.ExtractLive(screen, "")
+	want := strings.Join([]string{
+		"공통 인터페이스 설계 문서와 에이전트별 통합 문서를 실제 드라이버 코드와 데몬 파이프라인을 기준으로 정리했습니다. 다음 단계로 검증을 진행합니다.",
+		"",
+		"```html",
+		"<task-notification>keep verbatim</task-notification>",
+		"```",
+		"- Indented code `<id>` stays intact, bare \\<hash> is escaped.",
+	}, "\n")
+	if got != want {
+		t.Fatalf("ExtractLive() =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+func TestJoinSeparatorKeepsNormalSentenceSpaces(t *testing.T) {
+	if sep := joinSeparator("  The command finished.", "  Next step runs tests.", 78); sep != " " {
+		t.Fatalf("sentence break sep = %q, want space", sep)
+	}
+	if sep := joinSeparator("  설명을 완료했습니다.", "  다음 단계로 이동합니다.", 78); sep != " " {
+		t.Fatalf("korean sentence break sep = %q, want space", sep)
+	}
+	if sep := joinSeparator("  Check docs/agents/README.md", "  explains the design.", 78); sep != " " {
+		t.Fatalf("complete path followed by word sep = %q, want space", sep)
+	}
+	if sep := joinSeparator("  Use mako-msg /", "  mako-plugin CLI", 78); sep != " " {
+		t.Fatalf("binary slash separator sep = %q, want space", sep)
+	}
+	if sep := joinSeparator("  Check SubAgentHooks.", "  IsSubAgent(parent, child)", 78); sep != "" {
+		t.Fatalf("qualified CamelCase symbol sep = %q, want empty", sep)
+	}
+}
+
+func TestExtractLiveBoxTableConversions(t *testing.T) {
+	a := New()
+	rule80 := strings.Repeat("─", 80)
+	divider := strings.Repeat("─", 60)
+
+	t.Run("multiline_cells_with_row_dividers_and_placeholders", func(t *testing.T) {
+		screen := divider + "\n" +
+			"> 표로 정리해줘\n\n" +
+			"  비교 요약:\n" +
+			"  ┌─────────────┬────────────────────────────┐\n" +
+			"  │ 항목        │ 설명                       │\n" +
+			"  ├─────────────┼────────────────────────────┤\n" +
+			"  │ hooks.json  │ mako-<hash> 키로           │\n" +
+			"  │             │ agent-cli.                 │\n" +
+			"  │             │ sock에 연결                │\n" +
+			"  ├─────────────┼────────────────────────────┤\n" +
+			"  │ ScreenLive  │ brain/<id> 로그와          │\n" +
+			"  │             │ 비교 (a | b)               │\n" +
+			"  └─────────────┴────────────────────────────┘\n" +
+			"  후속 설명 문장입니다.\n" +
+			"⣾  Generating...\n" +
+			rule80 + "\n>\n" + rule80 + "\n" +
+			"esc to cancel                          auto · Gemini 4 Neon · high\n"
+
+		got := a.ExtractLive(screen, "")
+		want := strings.Join([]string{
+			"비교 요약:",
+			"",
+			"| 항목 | 설명 |",
+			"| --- | --- |",
+			"| hooks.json | mako-\\<hash> 키로 agent-cli.sock에 연결 |",
+			"| ScreenLive | brain/\\<id> 로그와 비교 (a \\| b) |",
+			"",
+			"후속 설명 문장입니다.",
+		}, "\n")
+		if got != want {
+			t.Fatalf("ExtractLive() =\n%s\n\nwant:\n%s", got, want)
+		}
+
+		// Completed markdown with <br> in cells and backticks must suppress cleanly.
+		logged := "비교 요약:\n\n| 항목 | 설명 |\n| --- | --- |\n| `hooks.json` | `mako-<hash>` 키로<br>`agent-cli.sock`에 연결 |\n| `ScreenLive` | `brain/<id>` 로그와 비교 (a | b) |\n\n후속 설명 문장입니다."
+		if suppressed := a.ExtractLive(screen, logged); suppressed != "" {
+			t.Fatalf("expected logged table with <br> to suppress, got %q", suppressed)
+		}
+	})
+
+	t.Run("compact_table_without_body_dividers_and_rounded_streaming_table", func(t *testing.T) {
+		screen := divider + "\n" +
+			"> Compare\n\n" +
+			"  ╭──────┬─────────────╮\n" +
+			"  │ Key  │ Description │\n" +
+			"  ├──────┼─────────────┤\n" +
+			"  │ Fast │ Low latency │\n" +
+			"  │      │ mode        │\n" +
+			"  │ Safe │ Full checks │\n" +
+			"⠙  Generating...\n" +
+			rule80 + "\n>\n" + rule80 + "\n" +
+			"esc to cancel                          auto · Gemini 4 Neon · high\n"
+
+		got := a.ExtractLive(screen, "")
+		want := strings.Join([]string{
+			"| Key | Description |",
+			"| --- | --- |",
+			"| Fast | Low latency mode |",
+			"| Safe | Full checks |",
+		}, "\n")
+		if got != want {
+			t.Fatalf("ExtractLive(streaming table) =\n%s\n\nwant:\n%s", got, want)
+		}
+	})
+}
+
+func TestExtractTurn(t *testing.T) {
+	a := New()
+	rule80 := strings.Repeat("─", 80)
+	divider := strings.Repeat("─", 60)
+
+	screen := divider + "\n" +
+		"> First prompt\n\n" +
+		"  First reply.\n\n" +
+		divider + "\n" +
+		"> 두 번째 질문\n\n" +
+		"  두 번째 응답.\n\n" +
+		rule80 + "\n> draft text\n" + rule80 + "\n" +
+		"? for shortcuts                        auto · Gemini 4 Neon · high\n"
+
+	turns, prompt := a.ExtractTurn(screen)
+	if turns != 2 || prompt != "두 번째 질문" {
+		t.Fatalf("ExtractTurn() = (%d, %q), want (2, %q)", turns, prompt, "두 번째 질문")
 	}
 }

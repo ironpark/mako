@@ -67,3 +67,15 @@ func TestAMarkdownPageSelectsAsOne(t *testing.T) {
 		t.Fatalf("a click on a block left %d blocks selected", n)
 	}
 }
+
+func TestEscapedAngleBracketsRenderLiterally(t *testing.T) {
+	src := "- hooks.json(mako-\\<hash>) and brain/\\<id>\n  - \\<task-notification>\n\n| 항목 | 설명 |\n| --- | --- |\n| hooks.json | mako-\\<hash> 연결 |\n"
+	p := ggui.NewProbe(Page(Base{}, src), ggui.Sz(900, 600))
+	defer p.Close()
+	p.Frame()
+	for _, want := range []string{"hooks.json(mako-<hash>) and brain/<id>", "<task-notification>", "mako-<hash> 연결"} {
+		if _, ok := p.Semantics().Find(ggui.RoleText, want); !ok {
+			t.Fatalf("expected literal rendered text %q in semantics tree", want)
+		}
+	}
+}

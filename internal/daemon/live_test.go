@@ -751,6 +751,120 @@ drain:
 	}
 }
 
+// Even when Turn 1's logged markdown differs slightly (e.g. <br> in tables) OR
+// the viewport shifts on submit (composer shrinks / spinner scrolls 1 line) OR
+// the user submits the exact same prompt twice, Turn 1 must never flash as live
+// text before Turn 2's prompt is painted on screen.
+func TestAgyScreenLiveDoesNotFlashOnViewportShiftOrSamePrompt(t *testing.T) {
+	d := meshDaemon(t, "agy-no-flash-shift")
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "transcript_full.jsonl")
+	initialLog := `{"step_index":0,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\n계속\n</USER_REQUEST>"}` + "\n" +
+		`{"step_index":1,"source":"MODEL","type":"PLANNER_RESPONSE","status":"DONE","content":"요약:\n\n| 항목 | 설명 |\n| --- | --- |\n| A | 첫 줄<br>둘째 줄 |"}` + "\n"
+	if err := os.WriteFile(logPath, []byte(initialLog), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `stty -echo
+rule="────────────────────────────────────────────────────────────────────────────────"
+div="────────────────────────────────────────────────────────────"
+while IFS= read -r cmd; do
+  case "$cmd" in
+    idle_tall_composer)
+      printf '\033[2J\033[H%s\n> 계속\n\n  ┌──────┬───────────────┐\n  │ 항목 │ 설명          │\n  ├──────┼───────────────┤\n  │ A    │ 첫 줄 둘째 줄 │\n  └──────┴───────────────┘\n\n%s\n> 계속\n> 두번째줄\n%s\n? for shortcuts                        auto · Gemini 4 Neon · high' "$div" "$rule" "$rule"
+      ;;
+    submit_shifted)
+      printf '\033[2J\033[H%s\n> 계속\n\n  요약:\n\n  ┌──────┬───────────────┐\n  │ 항목 │ 설명          │\n  ├──────┼───────────────┤\n  │ A    │ 첫 줄 둘째 줄 │\n  └──────┴───────────────┘\n⣾  Thinking...\n%s\n>\n%s\nesc to cancel                          auto · Gemini 4 Neon · high' "$div" "$rule" "$rule"
+      ;;
+    turn2_stream)
+      printf '\033[2J\033[H%s\n> 계속\n\n  요약:\n\n  ┌──────┬───────────────┐\n  │ 항목 │ 설명          │\n  ├──────┼───────────────┤\n  │ A    │ 첫 줄 둘째 줄 │\n  └──────┴───────────────┘\n\n%s\n> 계속\n\n  새 응답입니다.\n⠙  Generating...\n%s\n>\n%s\nesc to cancel                          auto · Gemini 4 Neon · high' "$div" "$div" "$rule" "$rule"
+      ;;
+  esac
+done`
+
+	s, err := session.Start(session.Spec{
+		ID:      "agy-nf-shift",
+		NodeID:  d.cfg.NodeID,
+		Agent:   "agy",
+		Project: dir,
+		Command: []string{"/bin/sh", "-c", script},
+		Cols:    80,
+		Rows:    24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	s.SetConversation("conv-nf-shift", logPath)
+	s.SetStatus(protocol.AgentDone)
+	d.sessions.add(s)
+
+	send := func(cmd string) {
+		t.Helper()
+		if _, err := s.Write([]byte(cmd + "\n")); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	send("idle_tall_composer")
+	time.Sleep(150 * time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	got := make(chan *protocol.ChatLive, 32)
+	go func() {
+		_ = dialDaemon(t, d).WatchChat(ctx, &protocol.WatchChat{SessionId: "agy-nf-shift"}, func(l *protocol.ChatLive) { got <- l })
+	}()
+
+	select {
+	case <-got:
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for initial WatchChat frame")
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	// User submits identical prompt "계속": composer shrinks uncovering "요약:"
+	// above the table, status flips to AgentWorking, USER_INPUT is logged,
+	// while the 2nd "> 계속" is not yet painted.
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString(`{"step_index":2,"source":"USER_EXPLICIT","type":"USER_INPUT","status":"DONE","content":"<USER_REQUEST>\n계속\n</USER_REQUEST>"}` + "\n")
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	send("submit_shifted")
+	s.SetStatus(protocol.AgentWorking)
+
+	deadline := time.After(350 * time.Millisecond)
+drain:
+	for {
+		select {
+		case l := <-got:
+			if txt := textBlocks(l.GetBlocks()); txt != "" {
+				t.Fatalf("stale previous turn flashed on viewport shift: %q", txt)
+			}
+		case <-deadline:
+			break drain
+		}
+	}
+
+	// Once the 2nd "> 계속" paints and Turn 2 streams, it must appear immediately.
+	send("turn2_stream")
+	for {
+		select {
+		case l := <-got:
+			if textBlocks(l.GetBlocks()) == "새 응답입니다." {
+				return
+			}
+		case <-ctx.Done():
+			t.Fatal("timed out waiting for Turn 2 live reply after same-prompt turn")
+		}
+	}
+}
+
 // Rapid disconnect + reconnect on a screen-polled liveChat synchronously clears
 // old screen blocks and fences out any in-flight poller from the cancelled
 // generation so follower 2 never sees stale blocks or gets its stream clobbered.

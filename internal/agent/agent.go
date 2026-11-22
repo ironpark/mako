@@ -204,6 +204,14 @@ type ScreenLiveBaseline interface {
 	ExtractBaseline(screen string) string
 }
 
+// ScreenLiveTurn is optionally implemented alongside ScreenLive to report the
+// count of rendered user prompt turns and the latest prompt's text on screen,
+// so the poller can reliably detect when a newly submitted user turn has not
+// yet been painted into the conversation scrollback.
+type ScreenLiveTurn interface {
+	ExtractTurn(screen string) (turns int, prompt string)
+}
+
 // ScreenLiveStatus is optionally implemented alongside ScreenLive to extract
 // the agent's current live activity label (e.g. "Reading file…",
 // "Running command…", "Thinking…") shown next to its working spinner.
