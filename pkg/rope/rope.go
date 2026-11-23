@@ -1,6 +1,7 @@
 package rope
 
 import (
+	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -303,19 +304,150 @@ func (r *Rope) String() string {
 
 // Replace replaces the byte range [start, end) with text, returning a new Rope.
 func (r *Rope) Replace(start, end int, text string) *Rope {
-	start = max(start, 0)
-	end = min(max(end, start), r.Len())
+	if r == nil || r.root == nil {
+		return New(text)
+	}
+	n := r.Len()
+	start = min(max(start, 0), n)
+	end = min(max(end, start), n)
+	if start == end && text == "" {
+		return r
+	}
+	if start == 0 && end == n {
+		return New(text)
+	}
 
-	before := r.Slice(0, start)
-	after := r.Slice(end, r.Len())
+	var left, right node
+	if start == end {
+		left, right = splitNode(r.root, start)
+	} else {
+		left, _ = splitNode(r.root, start)
+		_, right = splitNode(r.root, end)
+	}
+	var mid node
+	if text != "" {
+		mid = New(text).root
+	}
+	root := concatNodes(concatNodes(left, mid), right)
+	if root == nil {
+		return New("")
+	}
+	return &Rope{root: root}
+}
 
-	var b strings.Builder
-	b.Grow(len(before) + len(text) + len(after))
-	b.WriteString(before)
-	b.WriteString(text)
-	b.WriteString(after)
+func fromNodes(nodes []node) node {
+	switch len(nodes) {
+	case 0:
+		return nil
+	case 1:
+		return nodes[0]
+	default:
+		return newInternal(slices.Clone(nodes))
+	}
+}
 
-	return New(b.String())
+func splitNode(n node, offset int) (left, right node) {
+	if n == nil || offset <= 0 {
+		return nil, n
+	}
+	if offset >= n.summary().Bytes {
+		return n, nil
+	}
+	if n.leaf() {
+		l := n.(*leafNode)
+		return newLeaf(l.text[:offset]), newLeaf(l.text[offset:])
+	}
+	in := n.(*internalNode)
+	for i, c := range in.children {
+		cb := c.summary().Bytes
+		if offset < cb {
+			cl, cr := splitNode(c, offset)
+			return concatNodes(fromNodes(in.children[:i]), cl),
+				concatNodes(cr, fromNodes(in.children[i+1:]))
+		}
+		if offset == cb {
+			return fromNodes(in.children[:i+1]), fromNodes(in.children[i+1:])
+		}
+		offset -= cb
+	}
+	return n, nil
+}
+
+func concatNodes(a, b node) node {
+	if a == nil || a.summary().Bytes == 0 {
+		return b
+	}
+	if b == nil || b.summary().Bytes == 0 {
+		return a
+	}
+
+	ah, bh := a.height(), b.height()
+	if ah == bh {
+		if ah == 0 {
+			al, bl := a.(*leafNode), b.(*leafNode)
+			if len(al.text)+len(bl.text) <= maxChunk {
+				return newLeaf(al.text + bl.text)
+			}
+			return newInternal([]node{a, b})
+		}
+		ai, bi := a.(*internalNode), b.(*internalNode)
+		ac, bc := ai.children, bi.children
+		combined := make([]node, 0, len(ac)+len(bc))
+		combined = append(combined, ac...)
+		if ah == 1 {
+			lastA := combined[len(combined)-1].(*leafNode)
+			firstB := bc[0].(*leafNode)
+			if len(lastA.text)+len(firstB.text) <= maxChunk {
+				combined[len(combined)-1] = newLeaf(lastA.text + firstB.text)
+				bc = bc[1:]
+			}
+		}
+		combined = append(combined, bc...)
+		return joinChildren(combined)
+	}
+
+	if ah > bh {
+		ai := a.(*internalNode)
+		ac := ai.children
+		merged := concatNodes(ac[len(ac)-1], b)
+		if merged.height() == ah-1 {
+			children := make([]node, len(ac))
+			copy(children, ac[:len(ac)-1])
+			children[len(ac)-1] = merged
+			return newInternal(children)
+		}
+		mc := merged.(*internalNode).children
+		combined := make([]node, 0, len(ac)-1+len(mc))
+		combined = append(combined, ac[:len(ac)-1]...)
+		combined = append(combined, mc...)
+		return joinChildren(combined)
+	}
+
+	bi := b.(*internalNode)
+	bc := bi.children
+	merged := concatNodes(a, bc[0])
+	if merged.height() == bh-1 {
+		children := make([]node, len(bc))
+		children[0] = merged
+		copy(children[1:], bc[1:])
+		return newInternal(children)
+	}
+	mc := merged.(*internalNode).children
+	combined := make([]node, 0, len(mc)+len(bc)-1)
+	combined = append(combined, mc...)
+	combined = append(combined, bc[1:]...)
+	return joinChildren(combined)
+}
+
+func joinChildren(combined []node) node {
+	if len(combined) <= maxChildren {
+		return newInternal(combined)
+	}
+	mid := len(combined) / 2
+	return newInternal([]node{
+		newInternal(slices.Clone(combined[:mid])),
+		newInternal(slices.Clone(combined[mid:])),
+	})
 }
 
 // Insert inserts text at byte offset.

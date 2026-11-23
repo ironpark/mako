@@ -2,7 +2,9 @@ package plugin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -43,15 +45,35 @@ func (s *kvStore) reset() {
 	s.data, s.loaded = nil, false
 }
 
-func (s *kvStore) load() {
+func (s *kvStore) load() error {
 	if s.loaded {
-		return
+		return nil
 	}
+	b, err := os.ReadFile(s.path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			s.data = map[string]string{}
+			s.loaded = true
+			return nil
+		}
+		s.data = nil
+		s.loaded = false
+		return fmt.Errorf("load %s: %w", filepath.Base(s.path), err)
+	}
+	var data map[string]string
+	if err := json.Unmarshal(b, &data); err != nil {
+		s.data = nil
+		s.loaded = false
+		return fmt.Errorf("load %s: %w", filepath.Base(s.path), err)
+	}
+	if data == nil {
+		s.data = nil
+		s.loaded = false
+		return fmt.Errorf("load %s: unexpected null JSON", filepath.Base(s.path))
+	}
+	s.data = data
 	s.loaded = true
-	s.data = map[string]string{}
-	if b, err := os.ReadFile(s.path); err == nil {
-		_ = json.Unmarshal(b, &s.data)
-	}
+	return nil
 }
 
 func (s *kvStore) usedLocked() int {
@@ -62,11 +84,6 @@ func (s *kvStore) usedLocked() int {
 	return n
 }
 
-func (s *kvStore) get(key string) (string, bool) {
-	v, ok, _ := s.getScoped("", key)
-	return v, ok
-}
-
 func (s *kvStore) getScoped(scopeKey, key string) (string, bool, error) {
 	k, err := storageKey(scopeKey, key)
 	if err != nil {
@@ -74,7 +91,9 @@ func (s *kvStore) getScoped(scopeKey, key string) (string, bool, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.load()
+	if err := s.load(); err != nil {
+		return "", false, err
+	}
 	v, ok := s.data[k]
 	return v, ok, nil
 }
@@ -95,7 +114,9 @@ func (s *kvStore) setScoped(scopeKey, key, value string) (int, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.load()
+	if err := s.load(); err != nil {
+		return 0, err
+	}
 	old, had := s.data[k]
 	if !had && len(s.data) >= maxStorageKeys {
 		return 0, fmt.Errorf("the store holds %d keys, its most", maxStorageKeys)
@@ -119,10 +140,6 @@ func (s *kvStore) setScoped(scopeKey, key, value string) (int, error) {
 	return used, nil
 }
 
-func (s *kvStore) del(key string) (bool, error) {
-	return s.delScoped("", key)
-}
-
 func (s *kvStore) delScoped(scopeKey, key string) (bool, error) {
 	k, err := storageKey(scopeKey, key)
 	if err != nil {
@@ -130,18 +147,19 @@ func (s *kvStore) delScoped(scopeKey, key string) (bool, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.load()
-	_, ok := s.data[k]
+	if err := s.load(); err != nil {
+		return false, err
+	}
+	old, ok := s.data[k]
 	if !ok {
 		return false, nil
 	}
 	delete(s.data, k)
-	return true, s.saveLocked()
-}
-
-func (s *kvStore) keys(prefix string) []string {
-	out, _ := s.keysScoped("", prefix)
-	return out
+	if err := s.saveLocked(); err != nil {
+		s.data[k] = old
+		return false, err
+	}
+	return true, nil
 }
 
 func (s *kvStore) keysScoped(scopeKey, prefix string) ([]string, error) {
@@ -150,7 +168,9 @@ func (s *kvStore) keysScoped(scopeKey, prefix string) ([]string, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.load()
+	if err := s.load(); err != nil {
+		return nil, err
+	}
 	var out []string
 	if scopeKey == "" {
 		for k := range s.data {
@@ -176,7 +196,9 @@ func (s *kvStore) keysScoped(scopeKey, prefix string) ([]string, error) {
 func (s *kvStore) used() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.load()
+	if err := s.load(); err != nil {
+		return 0
+	}
 	return s.usedLocked()
 }
 

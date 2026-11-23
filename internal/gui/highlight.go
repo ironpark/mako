@@ -125,6 +125,11 @@ func (h *highlighter) setLanguages(zl []zed.Language) {
 	langs = append(langs, builtinLanguages()...)
 	h.mu.Lock()
 	h.langs = langs
+	for k := range h.loaded {
+		if !strings.HasPrefix(k, "builtin:") {
+			delete(h.loaded, k)
+		}
+	}
 	h.mu.Unlock()
 }
 

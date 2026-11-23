@@ -33,6 +33,9 @@ type Op struct {
 
 // Apply is d with ops applied, checked against cat; d is not changed.
 func Apply(d *Doc, ops []Op, cat Catalog) (*Doc, error) {
+	if d == nil {
+		return nil, errors.New("no document")
+	}
 	if d.Version > Version {
 		return nil, fmt.Errorf("the document is of version %d, which this node does not write", d.Version)
 	}
@@ -109,7 +112,7 @@ func (d *Doc) apply(op Op) error {
 		switch {
 		case op.Block != "":
 			i := StackIndex(n, op.Block)
-			if n.Children[i].Block != op.Block {
+			if i < 0 || i >= len(n.Children) || n.Children[i].Block != op.Block {
 				return fmt.Errorf("stack %q holds no %s", op.ID, op.Block)
 			}
 			n.Active = i

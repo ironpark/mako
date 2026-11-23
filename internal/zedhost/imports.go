@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -159,7 +160,7 @@ func (e *Extension) defineSet(li *wasmtime.ComponentLinkerInstance, set importSe
 		err := li.AddFunc(name, func(_ *wasmtime.ComponentCaller, args []Val) ([]Val, error) {
 			res, err := fn(e, args)
 			if err != nil {
-				e.log.Debug("import failed", "import", name, "err", err)
+				e.logger().Debug("import failed", "import", name, "err", err)
 			}
 			return res, err
 		})
@@ -216,7 +217,7 @@ func (e *Extension) setInstallationStatus(args []Val) ([]Val, error) {
 	if status.Payload != nil {
 		attrs = append(attrs, "detail", status.Payload.Str)
 	}
-	e.log.Debug("installation status", attrs...)
+	e.logger().Debug("installation status", attrs...)
 	return nil, nil
 }
 
@@ -228,34 +229,86 @@ func (e *Extension) worktreeIDs(args []Val) ([]Val, error) {
 
 // Files ------------------------------------------------------------------
 
-// path is a path the guest names, in its work directory, where its "."
-// is. An absolute one must be inside it already.
-func (e *Extension) path(p string) (string, error) {
+// relPath returns p as a clean path relative to e.work, refusing anything
+// that would escape e.work.
+func (e *Extension) relPath(p string) (string, error) {
 	if filepath.IsAbs(p) {
 		rel, err := filepath.Rel(e.work, p)
-		if err != nil || !filepath.IsLocal(rel) && rel != "." {
+		if err != nil || (!filepath.IsLocal(rel) && rel != ".") {
 			return "", fmt.Errorf("%s is outside the extension's work directory", p)
 		}
-		return p, nil
+		return filepath.Clean(rel), nil
 	}
 	p = filepath.Clean(filepath.FromSlash(p))
 	if p != "." && !filepath.IsLocal(p) {
 		return "", fmt.Errorf("%s is outside the extension's work directory", p)
 	}
-	return filepath.Join(e.work, p), nil
+	return p, nil
+}
+
+// path is a path the guest names, in its work directory, where its "."
+// is. An absolute one must be inside it already.
+func (e *Extension) path(p string) (string, error) {
+	rel, err := e.relPath(p)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(e.work, rel), nil
+}
+
+func (e *Extension) openWorkRoot() (*os.Root, func(), error) {
+	if e.workRoot != nil {
+		return e.workRoot, func() {}, nil
+	}
+	root, err := openRoot(e.work)
+	if err != nil {
+		return nil, nil, err
+	}
+	return root, func() { _ = root.Close() }, nil
+}
+
+func (e *Extension) client() *http.Client {
+	if e.httpClient != nil {
+		return e.httpClient
+	}
+	return sharedAPIClient
+}
+
+func (e *Extension) downloadClient() *http.Client {
+	if e.httpClient != nil {
+		return e.httpClient
+	}
+	return sharedDownloadClient
+}
+
+func (e *Extension) logger() *slog.Logger {
+	if e.log != nil {
+		return e.log
+	}
+	return slog.New(slog.DiscardHandler)
 }
 
 func (e *Extension) makeFileExecutable(args []Val) ([]Val, error) {
-	p, err := e.path(arg(args, 0).Str)
+	rel, err := e.relPath(arg(args, 0).Str)
 	if err != nil {
 		return []Val{Err(err.Error())}, nil
 	}
 	if runtime.GOOS == "windows" {
 		return []Val{OkUnit()}, nil
 	}
-	fi, err := os.Stat(p)
+	root, cleanup, err := e.openWorkRoot()
+	if err != nil {
+		return []Val{Err(err.Error())}, nil
+	}
+	defer cleanup()
+	f, err := root.Open(rel)
+	if err != nil {
+		return []Val{Err(err.Error())}, nil
+	}
+	defer f.Close()
+	fi, err := f.Stat()
 	if err == nil {
-		err = os.Chmod(p, fi.Mode().Perm()|0o755)
+		err = f.Chmod(fi.Mode().Perm() | 0o755)
 	}
 	if err != nil {
 		return []Val{Err(err.Error())}, nil
@@ -264,14 +317,19 @@ func (e *Extension) makeFileExecutable(args []Val) ([]Val, error) {
 }
 
 func (e *Extension) downloadFile(args []Val) ([]Val, error) {
-	url, kind := arg(args, 0).Str, arg(args, 2).Str
-	dst, err := e.path(arg(args, 1).Str)
+	rawURL, kind := arg(args, 0).Str, arg(args, 2).Str
+	rel, err := e.relPath(arg(args, 1).Str)
 	if err != nil {
 		return []Val{Err(err.Error())}, nil
 	}
-	e.log.Info("downloading", "url", url, "to", dst)
-	if err := download(e.context(), url, dst, kind); err != nil {
-		return []Val{Errf("downloading %s: %v", url, err)}, nil
+	root, cleanup, err := e.openWorkRoot()
+	if err != nil {
+		return []Val{Err(err.Error())}, nil
+	}
+	defer cleanup()
+	e.logger().Info("downloading", "url", rawURL, "to", rel)
+	if err := downloadToRootLimit(e.context(), rawURL, root, rel, kind, e.downloadClient(), e.work, maxDownload); err != nil {
+		return []Val{Errf("downloading %s: %v", rawURL, err)}, nil
 	}
 	return []Val{OkUnit()}, nil
 }
@@ -318,7 +376,7 @@ func (e *Extension) npm(args ...string) ([]byte, error) {
 }
 
 func (e *Extension) npmLatestVersion(args []Val) ([]Val, error) {
-	out, err := e.npm("view", arg(args, 0).Str, "version", "--json")
+	out, err := e.npm("view", "--json", "--", arg(args, 0).Str, "version")
 	if err != nil {
 		return []Val{Err(err.Error())}, nil
 	}
@@ -331,11 +389,16 @@ func (e *Extension) npmLatestVersion(args []Val) ([]Val, error) {
 
 func (e *Extension) npmInstalledVersion(args []Val) ([]Val, error) {
 	name := arg(args, 0).Str
-	p, err := e.path(filepath.Join("node_modules", filepath.FromSlash(name), "package.json"))
+	rel, err := e.relPath(filepath.Join("node_modules", filepath.FromSlash(name), "package.json"))
 	if err != nil {
 		return []Val{Err(err.Error())}, nil
 	}
-	b, err := os.ReadFile(p)
+	root, cleanup, err := e.openWorkRoot()
+	if err != nil {
+		return []Val{Err(err.Error())}, nil
+	}
+	defer cleanup()
+	b, err := root.ReadFile(rel)
 	if errors.Is(err, os.ErrNotExist) {
 		return []Val{Ok(None())}, nil
 	}
@@ -353,9 +416,9 @@ func (e *Extension) npmInstalledVersion(args []Val) ([]Val, error) {
 
 func (e *Extension) npmInstall(args []Val) ([]Val, error) {
 	spec := arg(args, 0).Str + "@" + arg(args, 1).Str
-	e.log.Info("npm install", "package", spec)
+	e.logger().Info("npm install", "package", spec)
 	if _, err := e.npm("install", "--prefix", e.work, "--save-exact", "--no-audit", "--no-fund",
-		"--fetch-retry-mintimeout", "2000", "--fetch-retry-maxtimeout", "5000", spec); err != nil {
+		"--fetch-retry-mintimeout", "2000", "--fetch-retry-maxtimeout", "5000", "--", spec); err != nil {
 		return []Val{Err(err.Error())}, nil
 	}
 	return []Val{OkUnit()}, nil
@@ -405,9 +468,13 @@ func (e *Extension) runCommand(args []Val) ([]Val, error) {
 const maxFetch = 64 << 20
 
 func (e *Extension) fetch(args []Val) ([]Val, error) {
+	return e.fetchLimit(args, maxFetch)
+}
+
+func (e *Extension) fetchLimit(args []Val, limit int64) ([]Val, error) {
 	req := arg(args, 0)
 	method, _ := field(req, "method")
-	url, _ := field(req, "url")
+	rawURL, _ := field(req, "url")
 	headers, _ := field(req, "headers")
 	body, _ := field(req, "body")
 	policy, _ := field(req, "redirect-policy")
@@ -416,27 +483,42 @@ func (e *Extension) fetch(args []Val) ([]Val, error) {
 	if body.Payload != nil {
 		rb = bytes.NewReader(byteSlice(*body.Payload))
 	}
-	r, err := http.NewRequestWithContext(e.context(), strings.ToUpper(method.Str), url.Str, rb)
+	r, err := http.NewRequestWithContext(e.context(), strings.ToUpper(method.Str), rawURL.Str, rb)
 	if err != nil {
+		return []Val{Err(err.Error())}, nil
+	}
+	if err := checkExternalURL(r.URL); err != nil {
 		return []Val{Err(err.Error())}, nil
 	}
 	for _, kv := range pairsOf(headers) {
 		r.Header.Add(kv[0], kv[1])
 	}
-	client := &http.Client{}
+	base := e.client()
+	client := base
 	switch policy.Str {
 	case "no-follow":
-		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	case "follow-limit":
-		limit := 0
-		if policy.Payload != nil {
-			limit = int(policy.Payload.Int)
+		client = &http.Client{
+			Transport:     base.Transport,
+			Timeout:       base.Timeout,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		}
-		client.CheckRedirect = func(_ *http.Request, via []*http.Request) error {
-			if len(via) > limit {
-				return fmt.Errorf("more than %d redirects", limit)
-			}
-			return nil
+	case "follow-limit":
+		redirLimit := 0
+		if policy.Payload != nil {
+			redirLimit = int(policy.Payload.Int)
+		}
+		client = &http.Client{
+			Transport: base.Transport,
+			Timeout:   base.Timeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if err := checkExternalURL(req.URL); err != nil {
+					return err
+				}
+				if len(via) > redirLimit {
+					return fmt.Errorf("more than %d redirects", redirLimit)
+				}
+				return nil
+			},
 		}
 	}
 	resp, err := client.Do(r)
@@ -444,9 +526,12 @@ func (e *Extension) fetch(args []Val) ([]Val, error) {
 		return []Val{Err(err.Error())}, nil
 	}
 	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, maxFetch))
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
 		return []Val{Err(err.Error())}, nil
+	}
+	if int64(len(b)) > limit {
+		return []Val{Errf("response exceeds %d bytes limit", limit)}, nil
 	}
 	var hs [][2]string
 	for k, vs := range resp.Header {

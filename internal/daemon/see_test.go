@@ -39,7 +39,7 @@ func TestASessionSeenIsSeenOnEveryNode(t *testing.T) {
 		info := listed()
 		return info.GetAttentionSeq() == attention && info.GetSeenSeq() == 0
 	})
-	info, err := c.SeeSession(t.Context(), &protocol.SeeSession{NodeId: b.cfg.NodeID, SessionId: "far", Seq: attention})
+	info, err := c.SeeSession(t.Context(), &protocol.SeeSession{NodeId: b.config().NodeID, SessionId: "far", Seq: attention})
 	if err != nil || info.GetSeenSeq() != attention {
 		t.Fatalf("seeing it: %+v %v", info, err)
 	}

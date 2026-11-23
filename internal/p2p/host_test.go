@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -452,5 +453,44 @@ func TestATrustStateGoesWithItsLink(t *testing.T) {
 	tr.settle(p, st, nil)
 	if !tr.trusts(p) {
 		t.Fatal("a later introduction did not clear the failure")
+	}
+}
+
+type closeableSigner struct {
+	ssh.Signer
+	closes atomic.Int32
+}
+
+func (c *closeableSigner) Close() error {
+	c.closes.Add(1)
+	return nil
+}
+
+func TestHostCloseClosesOwnerOnce(t *testing.T) {
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	base, err := ssh.NewSignerFromKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner := &closeableSigner{Signer: base}
+	h, err := New(context.Background(), Config{
+		Dir:   t.TempDir(),
+		Host:  "127.0.0.1",
+		NoNAT: true,
+		Node:  "n",
+		Name:  "n",
+		Owner: owner,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	if err := h.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+	if got := owner.closes.Load(); got != 1 {
+		t.Fatalf("owner.Close() called %d times, want 1", got)
 	}
 }

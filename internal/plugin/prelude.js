@@ -123,6 +123,76 @@ function getState(id, scopeKey) {
   return byScope.get(sk);
 }
 
+const decisionPayload = (req) => (typeof req === "string" ? req : JSON.stringify(req === undefined ? {} : req));
+
+async function decisionEvaluate(req, opts) {
+  const res = await host.decision.evaluate({
+    requestJson: decisionPayload(req),
+    timeoutMs: Number(opts?.timeoutMs || 0),
+  });
+  const parsed = res.responseJson ? JSON.parse(res.responseJson) : {};
+  if (res.provider && !parsed.provider) parsed.provider = res.provider;
+  if (res.model && !parsed.model) parsed.model = res.model;
+  parsed.elapsedMs = Number(res.elapsedMs || 0);
+  return parsed;
+}
+
+const decisionApi = Object.freeze({
+  status: () => host.decision.status({}),
+  evaluate: decisionEvaluate,
+  async tryEvaluate(req, opts) {
+    try {
+      const result = await decisionEvaluate(req, opts);
+      return { ok: true, result };
+    } catch (err) {
+      const msg = err && err.message ? String(err.message) : String(err);
+      return { ok: false, unavailable: /decision unavailable/i.test(msg), error: msg };
+    }
+  },
+  submit: (req, opts) => host.decision.submit({
+    requestJson: decisionPayload(req),
+    timeoutMs: Number(opts?.timeoutMs || 0),
+    tag: opts?.tag !== undefined ? String(opts.tag) : "",
+  }),
+  score: (state, instructions, levels, opts) => decisionEvaluate({ state, type: "score", instructions, levels }, opts),
+  choice: (state, instructions, options, opts) => decisionEvaluate({ state, type: "choice", instructions, options }, opts),
+  async yes(state, instructions, opts) {
+    const res = await decisionEvaluate({ state, type: "noul", instructions }, opts);
+    if (typeof res.yes === "boolean") return res.yes;
+    return Number(res.probability || 0) >= 0.5;
+  },
+});
+
+const agentsApi = Object.freeze({
+  ...host.agents,
+  async list() {
+    const res = await host.agents.listAgents({});
+    return Array.isArray(res.agents) ? res.agents : [];
+  },
+  ask(req) {
+    const r = req || {};
+    return host.agents.askAgent({
+      agent: String(r.agent || ""),
+      profile: String(r.profile || ""),
+      project: String(r.project || ""),
+      root: String(r.root || ""),
+      prompt: String(r.prompt || ""),
+      format: String(r.format || ""),
+      jsonSchema: typeof r.jsonSchema === "string"
+        ? r.jsonSchema
+        : (r.jsonSchema ? JSON.stringify(r.jsonSchema) : ""),
+      timeoutMs: Number(r.timeoutMs || 0),
+      title: String(r.title || ""),
+      tag: String(r.tag || ""),
+    });
+  },
+  cancel(requestId) {
+    return host.agents.cancelAsk(
+      typeof requestId === "string" ? { requestId } : (requestId || {}),
+    );
+  },
+});
+
 function makeContext(ctxJson) {
   const raw = ctxJson ? JSON.parse(ctxJson) : {};
   const scopeKey = raw.scopeKey || "";
@@ -167,6 +237,29 @@ function makeContext(ctxJson) {
     }),
     syncDelete: (table, id) => host.db.syncDelete({ table: String(table || ""), id: String(id || ""), scope: scopeKey }),
   });
+  const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const bytesToBase64 = (bytes) => {
+    let out = "";
+    for (let i = 0; i < bytes.length; i += 3) {
+      const b0 = bytes[i];
+      const hasB1 = i + 1 < bytes.length;
+      const hasB2 = i + 2 < bytes.length;
+      const b1 = hasB1 ? bytes[i + 1] : 0;
+      const b2 = hasB2 ? bytes[i + 2] : 0;
+      const n = (b0 << 16) | (b1 << 8) | b2;
+      out += base64Alphabet[(n >>> 18) & 63];
+      out += base64Alphabet[(n >>> 12) & 63];
+      out += hasB1 ? base64Alphabet[(n >>> 6) & 63] : "=";
+      out += hasB2 ? base64Alphabet[n & 63] : "=";
+    }
+    return out;
+  };
+  const encodeDataBase64 = (value) => {
+    if (typeof value === "string") return value;
+    if (value instanceof ArrayBuffer) return bytesToBase64(new Uint8Array(value));
+    if (ArrayBuffer.isView(value)) return bytesToBase64(new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+    throw new TypeError("datafs.write data must be a base64 string, ArrayBuffer, or TypedArray");
+  };
   const scopedDatafs = Object.freeze({
     read: (p, opts) => host.datafs.readData({
       path: String(p || ""),
@@ -174,12 +267,20 @@ function makeContext(ctxJson) {
       length: opts?.length || 0,
       scope: scopeKey,
     }),
-    write(p, content, opts) {
+    async write(p, content, opts) {
+      if (content instanceof ArrayBuffer || ArrayBuffer.isView(content)) {
+        return host.datafs.writeData({
+          path: String(p || ""),
+          data: encodeDataBase64(content),
+          makeDirs: opts?.makeDirs !== false,
+          scope: scopeKey,
+        });
+      }
       if (content !== null && typeof content === "object") {
         return host.datafs.writeData({
           path: String(p || ""),
           text: content.text !== undefined ? String(content.text) : "",
-          data: content.data !== undefined ? String(content.data) : undefined,
+          data: content.data !== undefined ? encodeDataBase64(content.data) : undefined,
           makeDirs: content.makeDirs !== undefined ? Boolean(content.makeDirs) : (opts?.makeDirs !== false),
           scope: scopeKey,
         });
@@ -211,6 +312,18 @@ function makeContext(ctxJson) {
     }),
     stats: () => host.datafs.dataStats({ scope: scopeKey }),
   });
+  const scopedAgents = Object.freeze({
+    list: () => agentsApi.list(),
+    ask: (req) => {
+      const r = req || {};
+      return agentsApi.ask({
+        ...r,
+        project: r.project !== undefined && r.project !== "" ? r.project : (raw.projectId || ""),
+        root: r.root !== undefined && r.root !== "" ? r.root : ((Array.isArray(raw.roots) && raw.roots[0]) || ""),
+      });
+    },
+    cancel: (requestId) => agentsApi.cancel(requestId),
+  });
   return Object.freeze({
     scope,
     scopeKey,
@@ -226,6 +339,7 @@ function makeContext(ctxJson) {
     settings: scopedSettings,
     db: scopedDb,
     datafs: scopedDatafs,
+    agents: scopedAgents,
   });
 }
 
@@ -233,6 +347,8 @@ const defaultGlobalCtx = makeContext("");
 
 const mako = Object.freeze({
   ...host,
+  decision: decisionApi,
+  agents: agentsApi,
   blocks: Object.freeze({
     register(id, def) {
       if (!declared.blocks.includes(id)) throw new Error(`block ${id} is not declared in plugin.toml`);
@@ -380,7 +496,7 @@ class UiNode {
 }
 
 const options = [
-  "key", "tone", "variant", "weight", "size", "grow", "gap", "columns", "ratio", "fill",
+  "key", "text", "tone", "variant", "weight", "size", "grow", "gap", "columns", "ratio", "fill",
   "icon", "checked", "value", "disabled", "onTap", "onChange", "onSubmit", "onLink",
   "drag", "dragGroup", "onDrop", "dropAccept", "direction", "maxHeight", "placeholder", "labels",
 ];
@@ -390,7 +506,7 @@ function node(kind, fields, opts) {
   for (const [k, v] of Object.entries(opts || {})) {
     if (!options.includes(k)) throw new Error(`${k} is not an option of a node`);
     if (v === undefined) continue;
-    if (k === "key" || k === "drag" || k === "dragGroup" || k === "direction" || k === "variant" || k === "value") {
+    if (k === "key" || k === "text" || k === "drag" || k === "dragGroup" || k === "direction" || k === "variant" || k === "value") {
       n.n[k] = String(v ?? "");
     } else if (k === "labels" || k === "dropAccept") {
       n.n[k] = children(v).map(String);
@@ -443,7 +559,9 @@ const ui = Object.freeze({
   table: (headers, rows, o) => node("table", { labels: children(headers).map(String), children: children(rows) }, o),
   markdown: (t, o) => node("markdown", { text: String(t) }, o),
   code: (t, language, o) => node("code", { text: String(t), language: language ?? "" }, o),
-  progress: (v, o) => node("progress", { progress: Number(v) }, o),
+  progress: (v, o) => (v !== null && typeof v === "object"
+    ? node("progress", { progress: 0 }, v)
+    : node("progress", { progress: v === undefined ? 0 : Number(v) }, o)),
   divider: (o) => node("divider", {}, o),
   // A chart: "line", "bar", "sparkline", "donut" or "pie", of series
   // [{ name, values, tone }], its points/slices named by opts.labels and

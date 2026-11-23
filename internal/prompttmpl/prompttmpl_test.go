@@ -1,6 +1,7 @@
 package prompttmpl
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -141,7 +142,6 @@ func TestForLimitsAgents(t *testing.T) {
 
 func TestParseCall(t *testing.T) {
 	for draft, want := range map[string]Call{
-		"//":               {},
 		"//rev":            {Name: "rev"},
 		"//rev a b":        {Name: "rev", Args: "a b"},
 		"//rev\nmore text": {Name: "rev", Args: "more text"},
@@ -151,7 +151,7 @@ func TestParseCall(t *testing.T) {
 			t.Errorf("%q: got %+v, %v", draft, got, ok)
 		}
 	}
-	for _, draft := range []string{"/rev", "hi", "// rev"} {
+	for _, draft := range []string{"//", "/rev", "hi", "// rev", "//\t"} {
 		if _, ok := ParseCall(draft); ok {
 			t.Errorf("%q read as a call", draft)
 		}
@@ -254,5 +254,97 @@ func TestCompleteAndClosing(t *testing.T) {
 	}
 	if Closing(" }} b") != 3 || Closing("}}") != 2 || Closing(" b}}") != 0 || ClosingOne(" } b") != 2 || ClosingOne("b}") != 0 {
 		t.Fatal("closing")
+	}
+}
+
+func TestParseDraft(t *testing.T) {
+	for draft, want := range map[string]Call{
+		"//":               {},
+		"//rev":            {Name: "rev"},
+		"//rev a b":        {Name: "rev", Args: "a b"},
+		"//rev\nmore text": {Name: "rev", Args: "more text"},
+	} {
+		got, ok := ParseDraft(draft)
+		if !ok || got != want {
+			t.Errorf("%q: got %+v, %v", draft, got, ok)
+		}
+	}
+	for _, draft := range []string{"/rev", "hi", "// rev", "//\t"} {
+		if _, ok := ParseDraft(draft); ok {
+			t.Errorf("%q read as a draft", draft)
+		}
+	}
+}
+
+func TestMetadataLoadingSkipsWasmAndSupportsFillWith(t *testing.T) {
+	dir := t.TempDir()
+	validSrc := `---
+description: Multiply depth
+agents: [claude]
+args:
+  - name: depth
+    type: integer
+    default: 3
+---
+Depth={{args.depth * 2}}`
+	badBodySrc := `---
+description: Broken JS body
+---
+` + "```js\nconst = ;\n```"
+
+	if err := os.WriteFile(filepath.Join(dir, "valid.md"), []byte(validSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "badbody.md"), []byte(badBodySrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "badmeta.md"), []byte("---\nargs: [{name: '1bad'}]\n---\nhi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tm, err := ParseMetadata("badbody", []byte(badBodySrc))
+	if err != nil {
+		t.Fatalf("ParseMetadata should not compile JS body: %v", err)
+	}
+	if tm.Description != "Broken JS body" {
+		t.Fatalf("unexpected description: %q", tm.Description)
+	}
+	if _, err := tm.FillWith(context.Background(), nil, nil, nil); err == nil {
+		t.Fatal("FillWith on badbody should still surface JS syntax error")
+	}
+
+	all, broken := LoadAllMetadata(dir)
+	if len(broken) != 1 || broken[0].Name != "badmeta" {
+		t.Fatalf("unexpected broken: %+v", broken)
+	}
+	var validMeta *Template
+	var hasBuiltin bool
+	for _, item := range all {
+		if item.Name == "valid" {
+			validMeta = item
+		}
+		if item.Builtin {
+			hasBuiltin = true
+		}
+	}
+	if validMeta == nil || !hasBuiltin {
+		t.Fatalf("missing validMeta (%v) or builtin (%v) in LoadAllMetadata", validMeta != nil, hasBuiltin)
+	}
+	if !validMeta.For("claude", "") || validMeta.For("codex", "") {
+		t.Fatal("For() failed on metadata-loaded template")
+	}
+	if got := validMeta.Usage(); got != "[depth:integer=3]" {
+		t.Fatalf("Usage() = %q", got)
+	}
+	vals, err := validMeta.Bind("4")
+	if err != nil || vals["depth"] != "4" {
+		t.Fatalf("Bind() = %v, %v", vals, err)
+	}
+	out, err := validMeta.FillWith(context.Background(), vals, nil, nil)
+	if err != nil || out != "Depth=8" {
+		t.Fatalf("FillWith on metadata-loaded template = %q, %v", out, err)
+	}
+	if validMeta.nodes != nil || validMeta.comp != nil {
+		t.Fatal("FillWith mutated metadata-loaded template fields")
 	}
 }

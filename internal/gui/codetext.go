@@ -15,7 +15,11 @@ func codeText(m *model, src string, l language, has bool, size float64) *widget.
 	ready := ggui.State(0) // counts the highlights the worker has found
 	if has {
 		hl = m.syntaxFor(l)
-		hl.wake = func() { m.post(func() { ready.Set(ggui.Peek(ready) + 1) }) }
+		hl.wake = func() {
+			if post := m.post; post != nil {
+				post(func() { ready.Set(ggui.Peek(ready) + 1) })
+			}
+		}
 		tab = pick(l.TabSize > 0, l.TabSize, tab)
 	}
 	src = strings.TrimSuffix(expandTabs(src, tab), "\n")

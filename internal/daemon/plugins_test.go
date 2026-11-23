@@ -407,7 +407,7 @@ func setTestWorkspaceSpaceAndProjects(t *testing.T, d *Daemon, dirA, dirB string
 					"r1": {
 						CreatedAt: mark(),
 						Locations: map[string]*protocol.ElementMeta{
-							workspace.LocationKey(d.cfg.NodeID, dirA): {AddedAt: mark()},
+							workspace.LocationKey(d.config().NodeID, dirA): {AddedAt: mark()},
 						},
 					},
 				},
@@ -419,7 +419,7 @@ func setTestWorkspaceSpaceAndProjects(t *testing.T, d *Daemon, dirA, dirB string
 					"r2": {
 						CreatedAt: mark(),
 						Locations: map[string]*protocol.ElementMeta{
-							workspace.LocationKey(d.cfg.NodeID, dirB): {AddedAt: mark()},
+							workspace.LocationKey(d.config().NodeID, dirB): {AddedAt: mark()},
 						},
 					},
 				},
@@ -573,7 +573,7 @@ func TestResolvePluginScopeEnrichment(t *testing.T) {
 	startIn := func(id, dir string) *session.Session {
 		t.Helper()
 		s, err := session.Start(session.Spec{
-			ID: id, NodeID: d.cfg.NodeID, Agent: "claude", Project: dir,
+			ID: id, NodeID: d.config().NodeID, Agent: "claude", Project: dir,
 			Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
 		})
 		if err != nil {
@@ -703,7 +703,7 @@ scope = "global"
 		_, cleanup := d.projectAgents.server(ctx, "", id, "")
 		t.Cleanup(cleanup)
 		s, err := session.Start(session.Spec{
-			ID: id, NodeID: d.cfg.NodeID, Agent: "claude", Project: dir,
+			ID: id, NodeID: d.config().NodeID, Agent: "claude", Project: dir,
 			Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
 		})
 		if err != nil {

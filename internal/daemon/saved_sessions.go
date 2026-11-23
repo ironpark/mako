@@ -99,12 +99,13 @@ func (d *Daemon) loadSessions(dir string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	saved := sessionFile{NodeID: d.cfg.NodeID}
+	nodeID := d.config().NodeID
+	saved := sessionFile{NodeID: nodeID}
 	if err == nil {
 		if err := json.Unmarshal(data, &saved); err != nil {
 			return fmt.Errorf("read saved sessions: %w", err)
 		}
-		if saved.NodeID != d.cfg.NodeID {
+		if saved.NodeID != nodeID {
 			return fmt.Errorf("saved sessions belong to node %q", saved.NodeID)
 		}
 	}
@@ -112,7 +113,7 @@ func (d *Daemon) loadSessions(dir string) error {
 		saved.Sessions = map[string]savedSession{}
 	}
 	for id, entry := range saved.Sessions {
-		entry.Info.Id, entry.Info.NodeId = id, d.cfg.NodeID
+		entry.Info.Id, entry.Info.NodeId = id, nodeID
 		entry.Info.State, entry.Info.Busy, entry.Info.ExitCode = protocol.StateStopped, false, nil
 		entry.Info.Status, entry.Info.StatusAt, entry.Info.Approval = "", nil, nil
 		entry.Info.Caps = agents.Caps(entry.Info.GetAgent())
@@ -127,7 +128,7 @@ func (d *Daemon) saveSessionsLocked() error {
 	if d.sessionPath == "" {
 		return nil
 	}
-	data, err := json.MarshalIndent(sessionFile{NodeID: d.cfg.NodeID, Sessions: d.saved}, "", "  ")
+	data, err := json.MarshalIndent(sessionFile{NodeID: d.config().NodeID, Sessions: d.saved}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -415,8 +416,8 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	launch.SetEnv("AGENT_MAKO_SESSION", id)
 	launch.SetEnv("AGENT_MAKO_PROJECT", req.GetProject())
 	launch.SetEnv("AGENT_MAKO_MODE", mode)
-	if d.cfg != nil && d.cfg.NodeID != "" {
-		launch.SetEnv("AGENT_MAKO_NODE", d.cfg.NodeID)
+	if nodeID := d.config().NodeID; nodeID != "" {
+		launch.SetEnv("AGENT_MAKO_NODE", nodeID)
 	}
 	if req.GetProfile() != "" {
 		launch.SetEnv("AGENT_MAKO_PROFILE", req.GetProfile())
@@ -479,7 +480,7 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		cleanup()
 		return nil, fmt.Errorf("conversation %s already belongs to another session", conversationID)
 	}
-	s, err := session.Start(session.Spec{ID: id, NodeID: d.cfg.NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
+	s, err := session.Start(session.Spec{ID: id, NodeID: d.config().NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
 		Project: req.GetProject(), Command: launch.Command, Shown: launch.Shown, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree(), OnChange: d.pokeStatus})
 	if err != nil {
 		cleanup()

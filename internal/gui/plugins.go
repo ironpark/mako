@@ -202,6 +202,10 @@ func permissionText(p string) string {
 		return T("Change the window layout")
 	case "secrets":
 		return T("Keep secrets in the system keychain")
+	case "decision":
+		return T("Ask the decision model short typed questions, with the API keys set in Settings")
+	case "agents:ask":
+		return T("List this node's agents and ask them questions, which runs them and may cost money")
 	}
 	return p
 }

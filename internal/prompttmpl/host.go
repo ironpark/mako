@@ -146,8 +146,9 @@ func SchemaJSON(schema any) (string, error) {
 }
 
 type scriptBudget struct {
-	parent context.Context
-	done   chan struct{}
+	parent   context.Context
+	done     chan struct{}
+	deadline time.Time
 
 	mu      sync.Mutex
 	err     error
@@ -160,11 +161,28 @@ type scriptBudget struct {
 }
 
 func newBudget(parent context.Context, cpu, wall time.Duration) *scriptBudget {
-	b := &scriptBudget{parent: parent, done: make(chan struct{}), left: cpu, started: time.Now()}
-	b.timer = time.AfterFunc(cpu, func() { b.end(errScriptCPU) })
+	deadline := time.Now().Add(wall)
+	if pd, ok := parent.Deadline(); ok && pd.Before(deadline) {
+		deadline = pd
+	}
+	b := &scriptBudget{parent: parent, done: make(chan struct{}), deadline: deadline, left: cpu, started: time.Now()}
+	if err := parent.Err(); err != nil {
+		b.end(err)
+	}
+	b.timer = time.AfterFunc(cpu, b.endCPU)
 	b.wall = time.AfterFunc(wall, func() { b.end(errScriptWall) })
 	b.stop = context.AfterFunc(parent, func() { b.end(parent.Err()) })
 	return b
+}
+
+func (b *scriptBudget) endCPU() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.paused > 0 || b.err != nil {
+		return
+	}
+	b.err = errScriptCPU
+	close(b.done)
 }
 
 func (b *scriptBudget) end(err error) {
@@ -218,7 +236,7 @@ func (b *scriptBudget) exceeded() error {
 	return nil
 }
 
-func (b *scriptBudget) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (b *scriptBudget) Deadline() (time.Time, bool) { return b.deadline, true }
 func (b *scriptBudget) Done() <-chan struct{}       { return b.done }
 func (b *scriptBudget) Value(key any) any           { return b.parent.Value(key) }
 
@@ -373,7 +391,7 @@ func evalPromptJS(b *scriptBudget, t *Template, program string, values, builtins
 		b.pause()
 		defer b.resume()
 
-		out, callErr := dispatchHostCall(b.parent, host, op, []byte(raw))
+		out, callErr := dispatchHostCall(b, host, op, []byte(raw))
 		if callErr != nil {
 			return nil, callErr
 		}

@@ -267,9 +267,6 @@ func TestALayoutChangeWithNoWindow(t *testing.T) {
 	}
 }
 
-//go:fix inline
-func ptrTo[T any](v T) *T { return new(v) }
-
 // The allowances are node-local and scoped: once allows the one change; a
 // space's allows changes of its document alone; always allows every one;
 // forgetting has agents ask again. They outlast the daemon.

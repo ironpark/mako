@@ -186,7 +186,10 @@ interface types {
   record session-event {
     /// kind is "sessionStarted", "sessionEnded", "sessionSlept" (its
     /// program stopped, to start again on its conversation),
-    /// "sessionStatus" (its agent's status changed) or "agentMessage".
+    /// "sessionStatus" (its agent's status changed), "agentMessage",
+    /// "agentStarted", "agentRefused", "layoutChanged", "layoutRefused",
+    /// "decisionAnswered", "decisionFailed", "agentAskStarted",
+    /// "agentAnswered", or "agentAskFailed".
     kind: string,
     /// session is the session, as it stands after.
     session: option<session>,
@@ -206,6 +209,24 @@ interface types {
     /// to a plugin that asked, without a subscription.
     document: string,
     revision: string,
+    /// output is, for "agentAnswered", the agent's answer (JSON text when the
+    /// ask's format was json), at most 64 KiB; truncated says it was cut.
+    output: string,
+    truncated: bool,
+    /// response_json is, for "decisionAnswered", the normalized response.
+    response-json: string,
+    /// elapsed_ms is how long an ask or a decision took.
+    elapsed-ms: u32,
+    /// tag is the tag the ask or Submit gave.
+    tag: string,
+    /// code says why, for "agentAskFailed" and "decisionFailed": "refused",
+    /// "canceled", "timeout", "unavailable" or "failed". These kinds
+    /// come to a plugin that asked, without a subscription.
+    code: string,
+    /// agent and profile name the agent running an ask, for "agentAskStarted"
+    /// (emitted when a previously pending ask is approved and starts running).
+    agent: string,
+    profile: string,
   }
 
   /// AgentMessage is a message one agent sent another of this node's, as
@@ -678,6 +699,115 @@ interface types {
     output: string,
     exit-code: s32,
   }
+
+  /// StatusResponse tells whether a decision model is available.
+  record status-response {
+    /// available says a provider has a key; provider and model are what an
+    /// evaluation would use now ("" when not available).
+    available: bool,
+    provider: string,
+    model: string,
+  }
+
+  /// EvaluateRequest asks the decision model typed questions synchronously.
+  record evaluate-request {
+    /// request_json is a decision request: {"state": any, "questions": {key:
+    /// {"type": "choice"|"score"|"noul", "instructions", "options"|"levels"|
+    /// "criteria"}}}, or one question's fields at the top. At most 256 KiB
+    /// and 32 questions.
+    request-json: string,
+    /// timeout_ms bounds it: 0 for 15 s, at most 20000.
+    timeout-ms: u32,
+  }
+
+  /// EvaluateResponse holds the normalized decision answers.
+  record evaluate-response {
+    /// response_json is the normalized response: {"provider","model",
+    /// "answers": {key: {"type","choice","score","level","label","probability",
+    /// "yes","confidence","probabilities","refusal"}}, and the sole answer's
+    /// fields at the top for one question}.
+    response-json: string,
+    provider: string,
+    model: string,
+    elapsed-ms: u32,
+  }
+
+  /// SubmitRequest asks the decision model typed questions asynchronously.
+  record submit-request {
+    request-json: string,
+    /// timeout_ms: 0 for 30 s, at most 45000.
+    timeout-ms: u32,
+    /// tag is the plugin's own, at most 512 bytes, given back in the event.
+    tag: string,
+  }
+
+  /// SubmitResponse identifies the pending asynchronous decision evaluation.
+  record submit-response {
+    request-id: string,
+  }
+
+  /// ListAgentsResponse lists the node's agents and profiles.
+  record list-agents-response {
+    agents: list<agent-profile>,
+  }
+
+  /// AgentProfile is an agent's configuration, its default ("" profile) or one
+  /// of its profiles.
+  record agent-profile {
+    agent: string,
+    profile: string,
+    /// label is "agent" or "agent · profile".
+    label: string,
+    description: string,
+    model: string,
+    effort: string,
+    /// installed says its program is found; askable that it may be asked now;
+    /// reason why not, when it may not.
+    installed: bool,
+    askable: bool,
+    reason: string,
+    /// always_allowed says the user lets the plugin ask it without asking.
+    always-allowed: bool,
+  }
+
+  /// AskAgentRequest asks an agent a one-shot question in a project folder.
+  record ask-agent-request {
+    agent: string,
+    profile: string,
+    /// project is a project's ID and root one of its folders ("" for its
+    /// first), as the block's context gives them: where the agent runs.
+    project: string,
+    root: string,
+    /// prompt is the question with its context, at most 96 KiB.
+    prompt: string,
+    /// format is "text" (default) or "json"; json_schema, at most 16 KiB, the
+    /// JSON Schema a json answer follows, where the agent takes one.
+    format: string,
+    json-schema: string,
+    /// timeout_ms bounds the run: 0 for 120 s, from 15000 to 300000.
+    timeout-ms: u32,
+    /// title is what the user is shown when asked, at most 200 bytes.
+    title: string,
+    /// tag is the plugin's own, at most 512 bytes, given back in the event.
+    tag: string,
+  }
+
+  /// AskAgentResponse says the ask was accepted.
+  record ask-agent-response {
+    request-id: string,
+    /// asked says the user is asked first; else it runs at once.
+    asked: bool,
+  }
+
+  /// CancelAskRequest names an ask to cancel.
+  record cancel-ask-request {
+    request-id: string,
+  }
+
+  /// CancelAskResponse says whether the ask was found and canceled.
+  record cancel-ask-response {
+    found: bool,
+  }
 }
 
 /// LogService writes to the daemon's log, under the plugin's name.
@@ -975,6 +1105,56 @@ interface exec {
   run-process: func(req: run-process-request) -> result<run-process-response, string>;
 }
 
+/// DecisionService asks this node's decision model typed questions (choice,
+/// score, noul) about a state, as mako.decide does in a prompt template, with
+/// the provider, model and API keys the user set in Settings ▸ API keys: a
+/// request's own provider and model are ignored. No key is ever told. The
+/// plugin evaluates 60 times a minute, Evaluate and Submit together.
+interface decision {
+  use types.{status-response, evaluate-request, evaluate-response, submit-request, submit-response};
+
+  /// Status says whether a decision model is set up, and which.
+  /// Needs the permission decision.
+  status: func() -> result<status-response, string>;
+
+  /// Evaluate evaluates a request and waits for its answers, at most 20 s.
+  /// Needs the permission decision.
+  evaluate: func(req: evaluate-request) -> result<evaluate-response, string>;
+
+  /// Submit evaluates a request after the call returns, at most 45 s; its
+  /// answers come to the default export's on.decisionAnswered, or why not
+  /// to on.decisionFailed, as a SessionEvent with the request's id and tag.
+  /// At most 2 of a plugin's wait at once.
+  /// Needs the permission decision.
+  submit: func(req: submit-request) -> result<submit-response, string>;
+}
+
+/// AgentsService lists the agents of this node a plugin may ask, and asks
+/// one a question: the agent runs once, not interactively, without YOLO, in
+/// a folder of a project of this node's, and its answer comes back to the
+/// plugin. The first ask of an agent and profile is asked of the user, who
+/// may allow that one alone or every ask of that agent and profile from then
+/// on. At most 2 of a plugin's asks wait or run at once, and it asks 30 times
+/// an hour.
+interface agents {
+  use types.{list-agents-response, ask-agent-request, ask-agent-response, cancel-ask-request, cancel-ask-response};
+
+  /// ListAgents lists this node's agents and their profiles, and whether
+  /// each may be asked.
+  /// Needs the permission agents:ask.
+  list-agents: func() -> result<list-agents-response, string>;
+
+  /// AskAgent asks an agent a question after the call returns; its answer
+  /// comes to the default export's on.agentAnswered, or why none to
+  /// on.agentAskFailed, as a SessionEvent with the request's id and tag.
+  /// Needs the permission agents:ask.
+  ask-agent: func(req: ask-agent-request) -> result<ask-agent-response, string>;
+
+  /// CancelAsk cancels an ask of the plugin's that waits or runs.
+  /// Needs the permission agents:ask.
+  cancel-ask: func(req: cancel-ask-request) -> result<cancel-ask-response, string>;
+}
+
 /// What a plugin's component imports: the whole Host API. The host
 /// refuses at run time the calls the plugin has no permission for.
 world plugin {
@@ -991,4 +1171,6 @@ world plugin {
   import secrets;
   import layout;
   import exec;
+  import decision;
+  import agents;
 }

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/ironpark/mako/internal/keychain"
 	"github.com/ironpark/mako/internal/layoutdoc"
@@ -104,8 +105,10 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		Projects:     d.pluginProjects,
 		ResolveScope: d.resolvePluginScope,
 		Agents:       pluginAgents{d},
+		Decisions:    pluginDecisions{d},
+		Asks:         pluginAsks{d},
 		Layout:       pluginLayout{d},
-		NodeID:       d.cfg.NodeID,
+		NodeID:       d.config().NodeID,
 		SyncChanged:  func() { d.pokeStatus() },
 		Changed:      func() { d.changes.firePlugins(); d.syncProjectAgents() },
 		Installs:     d.store,
@@ -119,9 +122,11 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 	d.projectAgents.messages.added = d.pluginMessage
 	go func() {
 		defer close(ch)
-		go d.store.Run(ctx)
-		go d.feedPluginEvents(ctx)
+		var wg sync.WaitGroup
+		wg.Go(func() { d.store.Run(ctx) })
+		wg.Go(func() { d.feedPluginEvents(ctx) })
 		d.plugins.Run(ctx)
+		wg.Wait()
 	}()
 	return ch
 }
@@ -201,7 +206,7 @@ func (d *Daemon) handleBlockEvent(ctx context.Context, stream *transport.Stream,
 
 // handleWatchBlock streams a block's tree until the front-end hangs up: a
 // block of this node's, or, relayed, of the node the request names.
-func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, _ bool) error {
+func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, _ bool) (err error) {
 	req, err := protocol.Body[*protocol.WatchBlock](env)
 	if err != nil {
 		return err
@@ -213,18 +218,18 @@ func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream,
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	gone := hungUp(stream)
-	go func() {
-		<-gone
+	parentCtx := ctx
+	ctx, cancel := context.WithCancel(parentCtx)
+	h := watchStreamHangup(stream, cancel)
+	defer func() {
 		cancel()
+		err = h.finish(parentCtx, env.GetId(), err)
 	}()
 	err = src.Watch(ctx, req.GetBlock(), req.GetScope(), req.GetLocale(), func(u *protocol.BlockUpdate) error {
 		return stream.Send(protocol.TypeBlockUpdate, env.GetId(), u)
 	})
 	if ctx.Err() != nil {
-		return context.Canceled
+		return ctx.Err()
 	}
 	return err
 }
@@ -305,9 +310,10 @@ func (d *Daemon) sessionScopeContext(sessionID string, info *protocol.SessionInf
 	st := d.workspace.get(false).GetState()
 	repo := cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())
 	proj, _ := d.projectFor(info.GetProject(), repo)
-	if proj == nil && st != nil && d.cfg != nil {
+	nodeID := d.config().NodeID
+	if proj == nil && st != nil && nodeID != "" {
 		var tmp projectStore
-		tmp.resolveLocked(workspace.Scopes(st, d.cfg.NodeID))
+		tmp.resolveLocked(workspace.Scopes(st, nodeID))
 		r := repo
 		if r == "" {
 			r = d.heads.of(info.GetProject()).repo
@@ -349,10 +355,10 @@ func (d *Daemon) projectMeta(st *protocol.WorkspaceState, projectID string) (nam
 				if name == "" {
 					name = wp.GetName().GetValue()
 				}
-				if len(roots) == 0 && d.cfg != nil {
+				if nodeID := d.config().NodeID; len(roots) == 0 && nodeID != "" {
 					for _, r := range workspace.Roots(wp) {
 						for _, key := range workspace.Members(r.GetLocations()) {
-							if n, path, ok := workspace.SplitLocation(key); ok && n == d.cfg.NodeID && path != "" && !slices.Contains(roots, path) {
+							if n, path, ok := workspace.SplitLocation(key); ok && n == nodeID && path != "" && !slices.Contains(roots, path) {
 								roots = append(roots, path)
 							}
 						}

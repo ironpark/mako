@@ -160,7 +160,7 @@ func TestAChatIsFollowedAcrossNodes(t *testing.T) {
 	defer cancel()
 	got := make(chan *protocol.ChatLive, 16)
 	go func() {
-		_ = dialDaemon(t, a).WatchChat(ctx, &protocol.WatchChat{NodeId: b.cfg.NodeID, SessionId: "agent"}, func(l *protocol.ChatLive) { got <- l })
+		_ = dialDaemon(t, a).WatchChat(ctx, &protocol.WatchChat{NodeId: b.config().NodeID, SessionId: "agent"}, func(l *protocol.ChatLive) { got <- l })
 	}()
 	next := func(what string, ok func(*protocol.ChatLive) bool) {
 		t.Helper()
@@ -302,7 +302,7 @@ func TestLiveModMessagesPollAndAck(t *testing.T) {
 	// /mako/status reports project sessions and child status summary.
 	mainSess, _ := d.sessions.get("claude-main")
 	childSess, err := session.Start(session.Spec{
-		ID: "claude-child", NodeID: d.cfg.NodeID, Agent: "claude", Project: mainSess.Info().GetProject(),
+		ID: "claude-child", NodeID: d.config().NodeID, Agent: "claude", Project: mainSess.Info().GetProject(),
 		Command: []string{"sh", "-c", "sleep 30"}, Cols: 80, Rows: 10,
 	})
 	if err != nil {
@@ -339,7 +339,7 @@ func TestHandleSendKeepsClaudeUserPromptOnPTY(t *testing.T) {
 	dir := t.TempDir()
 	ptyOut := filepath.Join(dir, "pty.out")
 	s, err := session.Start(session.Spec{
-		ID: "claude-gui", NodeID: d.cfg.NodeID, Agent: "claude", Project: dir,
+		ID: "claude-gui", NodeID: d.config().NodeID, Agent: "claude", Project: dir,
 		Command: []string{"sh", "-c", `stty -echo; printf '\033[?2004h'; while IFS= read -r line; do printf '%s\n' "$line" >> pty.out; done`},
 		Cols:    80, Rows: 10,
 	})
@@ -455,7 +455,7 @@ done`
 
 	s, err := session.Start(session.Spec{
 		ID:      "agy-1",
-		NodeID:  d.cfg.NodeID,
+		NodeID:  d.config().NodeID,
 		Agent:   "agy",
 		Project: dir,
 		Command: []string{"/bin/sh", "-c", script},
@@ -655,7 +655,7 @@ done`
 
 	s, err := session.Start(session.Spec{
 		ID:      "agy-nf",
-		NodeID:  d.cfg.NodeID,
+		NodeID:  d.config().NodeID,
 		Agent:   "agy",
 		Project: dir,
 		Command: []string{"/bin/sh", "-c", script},
@@ -784,7 +784,7 @@ done`
 
 	s, err := session.Start(session.Spec{
 		ID:      "agy-nf-shift",
-		NodeID:  d.cfg.NodeID,
+		NodeID:  d.config().NodeID,
 		Agent:   "agy",
 		Project: dir,
 		Command: []string{"/bin/sh", "-c", script},
@@ -1024,7 +1024,7 @@ done`
 
 	s, err := session.Start(session.Spec{
 		ID:      "agy-sw",
-		NodeID:  d.cfg.NodeID,
+		NodeID:  d.config().NodeID,
 		Agent:   "agy",
 		Project: dir,
 		Command: []string{"/bin/sh", "-c", script},

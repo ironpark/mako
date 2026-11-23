@@ -892,8 +892,7 @@ type grid struct {
 	size         float64
 	font, italic *ggui.Font // italic is nil where there is none
 	pal          skin.Palette
-	ground       color.Color // the fill under the cells: the theme's, clear over a background image
-	scale        float64     // device pixels per logical pixel
+	scale        float64 // device pixels per logical pixel
 	runBuf       *[]byte
 	memo         *paintMemo
 }

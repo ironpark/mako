@@ -15,13 +15,27 @@ export interface Plugin {
   on?: PluginEvents;
 }
 
-/** What a plugin does on each kind of event it subscribed to. */
+/** What a plugin does on each kind of event it subscribed to or requested. */
 export interface PluginEvents {
   sessionStarted?(event: SessionEvent): void | Promise<void>;
   sessionEnded?(event: SessionEvent): void | Promise<void>;
   sessionSlept?(event: SessionEvent): void | Promise<void>;
   sessionStatus?(event: SessionEvent): void | Promise<void>;
   agentMessage?(event: SessionEvent): void | Promise<void>;
+  agentStarted?(event: SessionEvent): void | Promise<void>;
+  agentRefused?(event: SessionEvent): void | Promise<void>;
+  layoutChanged?(event: SessionEvent): void | Promise<void>;
+  layoutRefused?(event: SessionEvent): void | Promise<void>;
+  /** Fired when an asynchronous mako.decision.submit evaluation completes. */
+  decisionAnswered?(event: SessionEvent): void | Promise<void>;
+  /** Fired when an asynchronous mako.decision.submit evaluation fails. */
+  decisionFailed?(event: SessionEvent): void | Promise<void>;
+  /** Fired when a previously pending mako.agents.ask question is approved by the user and starts running. */
+  agentAskStarted?(event: SessionEvent): void | Promise<void>;
+  /** Fired when an asynchronous mako.agents.ask question completes. */
+  agentAnswered?(event: SessionEvent): void | Promise<void>;
+  /** Fired when an asynchronous mako.agents.ask question fails, is refused, or is canceled. */
+  agentAskFailed?(event: SessionEvent): void | Promise<void>;
   /** Fired when CRDT-synced SQLite rows arrive from a trusted peer node. */
   dbSync?(event: DbSyncEvent): void | Promise<void>;
 }
@@ -45,12 +59,41 @@ export interface I18nApi {
   t(key: string, params?: Record<string, string | number | boolean>, locale?: string): string;
 }
 
+/** Decision model helper exposed on mako.decision (needs decision permission). */
+export interface DecisionHelpers {
+  status(): Promise<StatusResponse>;
+  evaluate(request: Record<string, any> | string, opts?: { timeoutMs?: number }): Promise<Record<string, any>>;
+  tryEvaluate(request: Record<string, any> | string, opts?: { timeoutMs?: number }): Promise<
+    { ok: true; result: Record<string, any> } | { ok: false; unavailable: boolean; error: string }
+  >;
+  submit(request: Record<string, any> | string, opts?: { timeoutMs?: number; tag?: string }): Promise<SubmitResponse>;
+  score(state: any, instructions: string, levels: readonly string[], opts?: { timeoutMs?: number }): Promise<Record<string, any>>;
+  choice(state: any, instructions: string, options: readonly string[], opts?: { timeoutMs?: number }): Promise<Record<string, any>>;
+  yes(state: any, instructions: string, opts?: { timeoutMs?: number }): Promise<boolean>;
+}
+
+/** One-shot agent ask helper exposed on mako.agents (needs agents:ask permission). */
+export interface AgentsHelpers {
+  list(): Promise<AgentProfile[]>;
+  ask(req: Omit<AskAgentRequest, "jsonSchema"> & { jsonSchema?: string | Record<string, any> }): Promise<AskAgentResponse>;
+  cancel(requestId: string | CancelAskRequest): Promise<CancelAskResponse>;
+}
+
+/** Scoped one-shot agent ask helper bound to a ScopeContext's projectId and first root. */
+export interface ScopedAgentsApi {
+  list(): Promise<AgentProfile[]>;
+  ask(req: Omit<AskAgentRequest, "jsonSchema"> & { jsonSchema?: string | Record<string, any> }): Promise<AskAgentResponse>;
+  cancel(requestId: string | CancelAskRequest): Promise<CancelAskResponse>;
+}
+
 /** What activate is given: the Host API, and the plugin's blocks, commands, tools, and i18n. */
-export interface Mako extends HostApi {
+export interface Mako extends Omit<HostApi, "decision" | "agents"> {
   readonly blocks: Blocks;
   readonly commands: CommandsApi & Commands;
   readonly tools: Tools;
   readonly i18n: I18nApi;
+  readonly decision: DecisionHelpers;
+  readonly agents: AgentsApi & AgentsHelpers;
 }
 
 /** Declared scope kind of a plugin block, tool, or setting. */
@@ -118,6 +161,7 @@ export interface ScopeContext {
   readonly settings: ScopedSettingsApi;
   readonly db: ScopedDbApi;
   readonly datafs: ScopedDatafsApi;
+  readonly agents: ScopedAgentsApi;
 }
 
 export interface Blocks {
@@ -160,8 +204,8 @@ export interface Block<S extends object> {
 /** A colour, as a token of the theme; never a value. */
 export type Tone = "" | "muted" | "faint" | "accent" | "success" | "warning" | "danger";
 
-/** Visual style variant for button or card nodes. */
-export type Variant = "" | "primary" | "secondary" | "outline" | "ghost" | "danger";
+/** Visual style variant token, interpreted by node kind. */
+export type Variant = "" | "primary" | "secondary" | "outline" | "ghost" | "danger" | "soft" | "solid" | "spinner" | "follow" | "badge";
 
 /** A message a node sends: its name in on, then arguments, JSON. */
 export type Message = [string, ...any[]];
@@ -169,6 +213,8 @@ export type Message = [string, ...any[]];
 export interface NodeOptions {
   /** Tells siblings apart across renders; a node's id is its keys' path. */
   key?: string | number;
+  /** Optional label text (e.g. beside a progress spinner). */
+  text?: string;
   tone?: Tone;
   /** Style variant for button or card nodes. */
   variant?: Variant;
@@ -301,6 +347,7 @@ export interface Ui {
   markdown(text: string, opts?: NodeOptions): UiNode;
   code(text: string, language?: string, opts?: NodeOptions): UiNode;
   progress(value: number, opts?: NodeOptions): UiNode;
+  progress(opts?: NodeOptions): UiNode;
   divider(opts?: NodeOptions): UiNode;
   /** A line, bar, sparkline, donut or pie chart; up to 4 series (600 points), or 1 series of 1..16 non-negative slices with matching labels for donut/pie. */
   chart(type: "line" | "bar" | "sparkline" | "donut" | "pie", series: ChartSeries[], opts?: NodeOptions): UiNode;
@@ -338,6 +385,10 @@ export interface HostApi {
   readonly layout: LayoutApi;
   /** ExecService runs programs. No plugin is granted exec in this version: */
   readonly exec: ExecApi;
+  /** DecisionService asks this node's decision model typed questions (choice, */
+  readonly decision: DecisionApi;
+  /** AgentsService lists the agents of this node a plugin may ask, and asks */
+  readonly agents: AgentsApi;
 }
 
 /** LogService writes to the daemon's log, under the plugin's name. */
@@ -730,6 +781,70 @@ export interface ExecApi {
   runProcess(req?: RunProcessRequest): Promise<RunProcessResponse>;
 }
 
+/**
+ * DecisionService asks this node's decision model typed questions (choice,
+ * score, noul) about a state, as mako.decide does in a prompt template, with
+ * the provider, model and API keys the user set in Settings ▸ API keys: a
+ * request's own provider and model are ignored. No key is ever told. The
+ * plugin evaluates 60 times a minute, Evaluate and Submit together.
+ */
+export interface DecisionApi {
+  /**
+   * Status says whether a decision model is set up, and which.
+   *
+   * Needs decision.
+   */
+  status(req?: StatusRequest): Promise<StatusResponse>;
+  /**
+   * Evaluate evaluates a request and waits for its answers, at most 20 s.
+   *
+   * Needs decision.
+   */
+  evaluate(req?: EvaluateRequest): Promise<EvaluateResponse>;
+  /**
+   * Submit evaluates a request after the call returns, at most 45 s; its
+   * answers come to the default export's on.decisionAnswered, or why not
+   * to on.decisionFailed, as a SessionEvent with the request's id and tag.
+   * At most 2 of a plugin's wait at once.
+   *
+   * Needs decision.
+   */
+  submit(req?: SubmitRequest): Promise<SubmitResponse>;
+}
+
+/**
+ * AgentsService lists the agents of this node a plugin may ask, and asks
+ * one a question: the agent runs once, not interactively, without YOLO, in
+ * a folder of a project of this node's, and its answer comes back to the
+ * plugin. The first ask of an agent and profile is asked of the user, who
+ * may allow that one alone or every ask of that agent and profile from then
+ * on. At most 2 of a plugin's asks wait or run at once, and it asks 30 times
+ * an hour.
+ */
+export interface AgentsApi {
+  /**
+   * ListAgents lists this node's agents and their profiles, and whether
+   * each may be asked.
+   *
+   * Needs agents:ask.
+   */
+  listAgents(req?: ListAgentsRequest): Promise<ListAgentsResponse>;
+  /**
+   * AskAgent asks an agent a question after the call returns; its answer
+   * comes to the default export's on.agentAnswered, or why none to
+   * on.agentAskFailed, as a SessionEvent with the request's id and tag.
+   *
+   * Needs agents:ask.
+   */
+  askAgent(req?: AskAgentRequest): Promise<AskAgentResponse>;
+  /**
+   * CancelAsk cancels an ask of the plugin's that waits or runs.
+   *
+   * Needs agents:ask.
+   */
+  cancelAsk(req?: CancelAskRequest): Promise<CancelAskResponse>;
+}
+
 /** WriteRequest is a line for the log. */
 export interface WriteRequest {
   /** level is "debug", "info", "warn" or "error"; "" is "info". */
@@ -943,7 +1058,10 @@ export interface SessionEvent {
   /**
    * kind is "sessionStarted", "sessionEnded", "sessionSlept" (its
    * program stopped, to start again on its conversation),
-   * "sessionStatus" (its agent's status changed) or "agentMessage".
+   * "sessionStatus" (its agent's status changed), "agentMessage",
+   * "agentStarted", "agentRefused", "layoutChanged", "layoutRefused",
+   * "decisionAnswered", "decisionFailed", "agentAskStarted",
+   * "agentAnswered", or "agentAskFailed".
    */
   kind?: string;
   /** session is the session, as it stands after. */
@@ -968,6 +1086,30 @@ export interface SessionEvent {
    */
   document?: string;
   revision?: string;
+  /**
+   * output is, for "agentAnswered", the agent's answer (JSON text when the
+   * ask's format was json), at most 64 KiB; truncated says it was cut.
+   */
+  output?: string;
+  truncated?: boolean;
+  /** response_json is, for "decisionAnswered", the normalized response. */
+  responseJson?: string;
+  /** elapsed_ms is how long an ask or a decision took. */
+  elapsedMs?: number;
+  /** tag is the tag the ask or Submit gave. */
+  tag?: string;
+  /**
+   * code says why, for "agentAskFailed" and "decisionFailed": "refused",
+   * "canceled", "timeout", "unavailable" or "failed". These kinds
+   * come to a plugin that asked, without a subscription.
+   */
+  code?: string;
+  /**
+   * agent and profile name the agent running an ask, for "agentAskStarted"
+   * (emitted when a previously pending ask is approved and starts running).
+   */
+  agent?: string;
+  profile?: string;
 }
 
 /**
@@ -1499,4 +1641,135 @@ export interface RunProcessRequest {
 export interface RunProcessResponse {
   output?: string;
   exitCode?: number;
+}
+
+/** StatusRequest asks whether a decision model is configured. */
+export interface StatusRequest {
+}
+
+/** StatusResponse tells whether a decision model is available. */
+export interface StatusResponse {
+  /**
+   * available says a provider has a key; provider and model are what an
+   * evaluation would use now ("" when not available).
+   */
+  available?: boolean;
+  provider?: string;
+  model?: string;
+}
+
+/** EvaluateRequest asks the decision model typed questions synchronously. */
+export interface EvaluateRequest {
+  /**
+   * request_json is a decision request: {"state": any, "questions": {key:
+   * {"type": "choice"|"score"|"noul", "instructions", "options"|"levels"|
+   * "criteria"}}}, or one question's fields at the top. At most 256 KiB
+   * and 32 questions.
+   */
+  requestJson?: string;
+  /** timeout_ms bounds it: 0 for 15 s, at most 20000. */
+  timeoutMs?: number;
+}
+
+/** EvaluateResponse holds the normalized decision answers. */
+export interface EvaluateResponse {
+  /**
+   * response_json is the normalized response: {"provider","model",
+   * "answers": {key: {"type","choice","score","level","label","probability",
+   * "yes","confidence","probabilities","refusal"}}, and the sole answer's
+   * fields at the top for one question}.
+   */
+  responseJson?: string;
+  provider?: string;
+  model?: string;
+  elapsedMs?: number;
+}
+
+/** SubmitRequest asks the decision model typed questions asynchronously. */
+export interface SubmitRequest {
+  requestJson?: string;
+  /** timeout_ms: 0 for 30 s, at most 45000. */
+  timeoutMs?: number;
+  /** tag is the plugin's own, at most 512 bytes, given back in the event. */
+  tag?: string;
+}
+
+/** SubmitResponse identifies the pending asynchronous decision evaluation. */
+export interface SubmitResponse {
+  requestId?: string;
+}
+
+/** ListAgentsRequest asks for the node's agents and profiles. */
+export interface ListAgentsRequest {
+}
+
+/** ListAgentsResponse lists the node's agents and profiles. */
+export interface ListAgentsResponse {
+  agents?: AgentProfile[];
+}
+
+/**
+ * AgentProfile is an agent's configuration, its default ("" profile) or one
+ * of its profiles.
+ */
+export interface AgentProfile {
+  agent?: string;
+  profile?: string;
+  /** label is "agent" or "agent · profile". */
+  label?: string;
+  description?: string;
+  model?: string;
+  effort?: string;
+  /**
+   * installed says its program is found; askable that it may be asked now;
+   * reason why not, when it may not.
+   */
+  installed?: boolean;
+  askable?: boolean;
+  reason?: string;
+  /** always_allowed says the user lets the plugin ask it without asking. */
+  alwaysAllowed?: boolean;
+}
+
+/** AskAgentRequest asks an agent a one-shot question in a project folder. */
+export interface AskAgentRequest {
+  agent?: string;
+  profile?: string;
+  /**
+   * project is a project's ID and root one of its folders ("" for its
+   * first), as the block's context gives them: where the agent runs.
+   */
+  project?: string;
+  root?: string;
+  /** prompt is the question with its context, at most 96 KiB. */
+  prompt?: string;
+  /**
+   * format is "text" (default) or "json"; json_schema, at most 16 KiB, the
+   * JSON Schema a json answer follows, where the agent takes one.
+   */
+  format?: string;
+  jsonSchema?: string;
+  /** timeout_ms bounds the run: 0 for 120 s, from 15000 to 300000. */
+  timeoutMs?: number;
+  /** title is what the user is shown when asked, at most 200 bytes. */
+  title?: string;
+  /** tag is the plugin's own, at most 512 bytes, given back in the event. */
+  tag?: string;
+}
+
+/** AskAgentResponse says the ask was accepted. */
+export interface AskAgentResponse {
+  requestId?: string;
+  /** asked says the user is asked first; else it runs at once. */
+  asked?: boolean;
+}
+
+/** CancelAskRequest names an ask to cancel. */
+export interface CancelAskRequest {
+  requestId?: string;
+}
+
+/** CancelAskResponse says whether the ask was found and canceled. */
+export interface CancelAskResponse {
+  found?: boolean;
 }

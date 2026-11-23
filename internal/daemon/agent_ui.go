@@ -147,12 +147,14 @@ func treeArg(tree map[string]any) (json.RawMessage, error) {
 
 // closeUIWith closes a session's blocks once it ends, watching it once.
 func (d *Daemon) closeUIWith(s *session.Session) {
-	d.uiWatched.Do(s.ID(), func() {
-		go func() {
-			<-s.Done()
+	d.uiWatched.watch(s.ID(), func(stop <-chan struct{}) {
+		select {
+		case <-s.Done():
+		case <-stop:
+		}
+		if d.agentUI != nil {
 			d.agentUI.CloseSession(s.ID())
-			d.uiWatched.Forget(s.ID())
-		}()
+		}
 	})
 }
 
@@ -238,30 +240,56 @@ func (d *Daemon) agentUIEvent(ev *protocol.BlockEvent) (*protocol.PluginDone, er
 	return &protocol.PluginDone{}, nil
 }
 
-// onceSet runs a function once a key, until the key is forgotten.
+// onceSet runs a watcher once a key, until the key is forgotten, and tracks
+// active watchers so daemon shutdown can stop and await them.
 type onceSet struct {
-	mu   sync.Mutex
-	keys map[string]bool
+	mu      sync.Mutex
+	keys    map[string]bool
+	stopped bool
+	stop    chan struct{}
+	wg      sync.WaitGroup
 }
 
-func (o *onceSet) Do(key string, fn func()) {
+func (o *onceSet) watch(key string, fn func(stop <-chan struct{})) {
 	o.mu.Lock()
-	if o.keys[key] {
+	if o.stopped || o.keys[key] {
 		o.mu.Unlock()
 		return
 	}
 	if o.keys == nil {
 		o.keys = map[string]bool{}
 	}
+	if o.stop == nil {
+		o.stop = make(chan struct{})
+	}
+	stop := o.stop
 	o.keys[key] = true
+	o.wg.Add(1)
 	o.mu.Unlock()
-	fn()
+
+	go func() {
+		defer o.wg.Done()
+		defer o.Forget(key)
+		fn(stop)
+	}()
 }
 
 func (o *onceSet) Forget(key string) {
 	o.mu.Lock()
 	delete(o.keys, key)
 	o.mu.Unlock()
+}
+
+func (o *onceSet) stopAndWait() {
+	o.mu.Lock()
+	if !o.stopped {
+		o.stopped = true
+		if o.stop != nil {
+			close(o.stop)
+		}
+	}
+	o.mu.Unlock()
+	o.wg.Wait()
 }
 
 // handleListAgentBlocks lists the blocks the agents of the node the

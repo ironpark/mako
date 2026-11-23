@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -16,9 +17,13 @@ import (
 // connection to its daemon's socket, or a libp2p stream from a peer.
 type Stream struct {
 	io.ReadWriteCloser
-	pack   bool             // frames that compress well go compressed
-	packer *protocol.Packer // frames go packed as one stream, once asked
-	hailed bool             // a hello was sent whose welcome is not read yet
+	mu        sync.Mutex
+	closed    bool
+	pack      bool             // frames that compress well go compressed
+	packer    *protocol.Packer // frames go packed as one stream, once asked
+	hailed    bool             // a hello was sent whose welcome is not read yet
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // NewStream carries frames over rw.
@@ -37,9 +42,44 @@ func NewPeerStream(rw io.ReadWriteCloser) *Stream { return &Stream{ReadWriteClos
 // the daemon at the other end asked: see protocol.Packer. Only a stream
 // between daemons packs.
 func (s *Stream) PackStream() {
-	if s.pack && s.packer == nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pack && !s.closed && s.packer == nil {
 		s.packer = protocol.NewPacker()
 	}
+}
+
+func (s *Stream) closeCodecs() error {
+	s.mu.Lock()
+	s.closed = true
+	p := s.packer
+	s.packer = nil
+	s.mu.Unlock()
+	if p != nil {
+		return p.Close()
+	}
+	return nil
+}
+
+// Close closes any stream packer, unblocks concurrent readers where CloseRead
+// is supported, and closes the underlying stream. Safe to call repeatedly.
+func (s *Stream) Close() error {
+	s.closeOnce.Do(func() {
+		packErr := s.closeCodecs()
+		if r, ok := s.ReadWriteCloser.(interface{ CloseRead() error }); ok {
+			_ = r.CloseRead()
+		}
+		rwErr := s.ReadWriteCloser.Close()
+		switch {
+		case packErr == nil:
+			s.closeErr = rwErr
+		case rwErr == nil:
+			s.closeErr = packErr
+		default:
+			s.closeErr = errors.Join(rwErr, packErr)
+		}
+	})
+	return s.closeErr
 }
 
 // Hangup stops reading the stream as well as writing it, so a reader
@@ -49,7 +89,19 @@ func (s *Stream) Hangup() error {
 	case interface{ CloseRead() error }:
 		_ = rw.CloseRead()
 	case interface{ Reset() error }:
-		return rw.Reset()
+		s.closeOnce.Do(func() {
+			packErr := s.closeCodecs()
+			rwErr := rw.Reset()
+			switch {
+			case packErr == nil:
+				s.closeErr = rwErr
+			case rwErr == nil:
+				s.closeErr = packErr
+			default:
+				s.closeErr = errors.Join(rwErr, packErr)
+			}
+		})
+		return s.closeErr
 	}
 	return s.Close()
 }
@@ -64,8 +116,11 @@ func (s *Stream) Send(t protocol.Type, id string, msg proto.Message) error {
 }
 
 func (s *Stream) send(env *protocol.Envelope) error {
-	if s.packer != nil {
-		return protocol.WriteStreamed(s, env, s.packer)
+	s.mu.Lock()
+	p := s.packer
+	s.mu.Unlock()
+	if p != nil {
+		return protocol.WriteStreamed(s, env, p)
 	}
 	return protocol.WriteFrame(s, env, s.pack)
 }

@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -155,5 +156,180 @@ func TestDatafsSandboxQuotaAndSymlinkRejection(t *testing.T) {
 		if e.GetName() == "link.txt" {
 			t.Fatal("symlink leaked into ListData")
 		}
+	}
+}
+
+func TestDatafsBinaryWriteRoundTripAndTypeErrors(t *testing.T) {
+	r := newRig(t, testLimits, nil)
+	r.write("binfs", map[string]string{
+		ManifestName: manifest("binfs", []string{"fs:data"}, ""),
+		"main.js": `export default {
+  activate(mako) {
+    mako.blocks.register("ui", {
+      state: { out: "" },
+      async load(s, ctx) {
+        const bytes = new Uint8Array([0x00, 0x01, 0xfe, 0xff, 0x80]);
+        await ctx.datafs.write("u8.bin", { data: bytes });
+        await ctx.datafs.write("ab.bin", { data: bytes.buffer });
+        await ctx.datafs.write("sub.bin", { data: bytes.subarray(1, 4) });
+        await ctx.datafs.write("direct.bin", bytes);
+        await ctx.datafs.write("b64.bin", { data: "AAEC/w==" });
+
+        const r1 = await ctx.datafs.read("u8.bin");
+        const r2 = await ctx.datafs.read("ab.bin");
+        const r3 = await ctx.datafs.read("sub.bin");
+        const r4 = await ctx.datafs.read("direct.bin");
+        const r5 = await ctx.datafs.read("b64.bin");
+
+        const errs = [];
+        for (const bad of [123, [1, 2, 3], null]) {
+          try {
+            await ctx.datafs.write("bad.bin", { data: bad });
+            errs.push("unexpected-ok");
+          } catch (e) {
+            errs.push(e.name);
+          }
+        }
+        s.out = JSON.stringify({
+          b1: r1.binary, s1: r1.size,
+          b2: r2.binary, s2: r2.size,
+          b3: r3.binary, s3: r3.size,
+          b4: r4.binary, s4: r4.size,
+          b5: r5.binary, s5: r5.size,
+          errs,
+        });
+      },
+      render: (s, ui) => ui.text(s.out),
+    });
+  },
+};`,
+	})
+	r.state("binfs", protocol.PluginWaiting)
+	r.grant("binfs")
+
+	tree := r.watch("plugin:binfs/ui").until("binary roundtrip", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, `"s1":5`)
+	})
+	txt := strings.Join(texts(tree), "\n")
+	for _, want := range []string{
+		`"b1":true,"s1":5`,
+		`"b2":true,"s2":5`,
+		`"b3":true,"s3":3`,
+		`"b4":true,"s4":5`,
+		`"b5":true,"s5":4`,
+		`"errs":["TypeError","TypeError","TypeError"]`,
+	} {
+		if !strings.Contains(txt, want) {
+			t.Fatalf("missing %s in %s", want, txt)
+		}
+	}
+
+	scopeDir := filepath.Join(r.data, "binfs", "files", "global")
+	wantFull := []byte{0x00, 0x01, 0xfe, 0xff, 0x80}
+	for _, name := range []string{"u8.bin", "ab.bin", "direct.bin"} {
+		got, err := os.ReadFile(filepath.Join(scopeDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, wantFull) {
+			t.Fatalf("%s bytes = %x, want %x", name, got, wantFull)
+		}
+	}
+	subGot, err := os.ReadFile(filepath.Join(scopeDir, "sub.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(subGot, []byte{0x01, 0xfe, 0xff}) {
+		t.Fatalf("sub.bin bytes = %x, want 01feff", subGot)
+	}
+	b64Got, err := os.ReadFile(filepath.Join(scopeDir, "b64.bin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(b64Got, []byte{0x00, 0x01, 0x02, 0xff}) {
+		t.Fatalf("b64.bin bytes = %x, want 000102ff", b64Got)
+	}
+}
+
+func TestDatafsIncrementalQuotaAccuracy(t *testing.T) {
+	base := t.TempDir()
+	store := newDatafsStore(filepath.Join(base, "files"), 1<<20)
+
+	assertExact := func(step string) {
+		t.Helper()
+		st, err := store.stats("")
+		if err != nil {
+			t.Fatalf("%s: stats: %v", step, err)
+		}
+		store.mu.Lock()
+		wantBytes, wantFiles := store.walkUsageLocked()
+		store.mu.Unlock()
+		if int64(st.GetUsedBytes()) != wantBytes || int(st.GetFileCount()) != wantFiles {
+			t.Fatalf("%s: cached=(%d,%d), walk=(%d,%d)", step, st.GetUsedBytes(), st.GetFileCount(), wantBytes, wantFiles)
+		}
+	}
+
+	// Perform 60+ operations across multiple scopes without triggering extra full walks.
+	for i := range 20 {
+		name := filepath.Join("dir", string(rune('a'+i))+".txt")
+		if _, err := store.write("", name, strings.Repeat("x", 10+i), nil, true); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.write("project:alpha", name, strings.Repeat("y", 5+i), nil, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Grow and shrink existing file.
+	if _, err := store.write("", "dir/a.txt", strings.Repeat("z", 100), nil, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.write("", "dir/a.txt", "hi", nil, true); err != nil {
+		t.Fatal(err)
+	}
+	// Rename and overwrite existing regular file.
+	if err := store.move("", "dir/b.txt", "dir/c.txt", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.move("", "dir/d.txt", "dir/renamed.txt", true); err != nil {
+		t.Fatal(err)
+	}
+	// Same-path move and case-only rename must preserve exact quota counts.
+	if err := store.move("", "dir/renamed.txt", "dir/renamed.txt", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.move("", "dir/renamed.txt", "dir/Renamed.txt", true); err != nil {
+		t.Fatal(err)
+	}
+	// Remove single file, empty dir, and recursive dir.
+	if ok, err := store.remove("", "dir/a.txt", false); err != nil || !ok {
+		t.Fatalf("remove file: %v %v", ok, err)
+	}
+	if err := store.mkdir("", "empty"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := store.remove("", "empty", false); err != nil || !ok {
+		t.Fatalf("remove empty dir: %v %v", ok, err)
+	}
+	if ok, err := store.remove("project:alpha", "dir", true); err != nil || !ok {
+		t.Fatalf("remove recursive dir: %v %v", ok, err)
+	}
+
+	// Before assertExact calls walkUsageLocked, verify only 1 full WalkDir occurred!
+	if got := store.walkCount.Load(); got != 1 {
+		t.Fatalf("walkCount = %d across 50+ ops; want 1", got)
+	}
+	assertExact("after mutations")
+
+	// Reset clears cached state cleanly.
+	if err := os.RemoveAll(store.base); err != nil {
+		t.Fatal(err)
+	}
+	store.reset()
+	st, err := store.stats("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.GetUsedBytes() != 0 || st.GetFileCount() != 0 {
+		t.Fatalf("after reset stats = (%d,%d), want (0,0)", st.GetUsedBytes(), st.GetFileCount())
 	}
 }

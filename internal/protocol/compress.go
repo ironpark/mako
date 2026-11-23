@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"slices"
 	"sync"
 
 	"github.com/klauspost/compress/zstd"
@@ -52,6 +53,10 @@ func Decompress(b []byte) ([]byte, error) {
 	return decoder().DecodeAll(b, nil)
 }
 
+func decompressTo(dst, b []byte) ([]byte, error) {
+	return decoder().DecodeAll(b, dst)
+}
+
 // packed is b compressed, or false when that does not save an eighth of it.
 func packed(b []byte) ([]byte, bool) {
 	if len(b) < packMin {
@@ -85,11 +90,18 @@ const (
 	streamReadWindow = 1 << 20
 )
 
+var (
+	errPackerClosed   = errors.New("protocol: packer closed")
+	errUnpackerClosed = errors.New("protocol: unpacker closed")
+)
+
 // A Packer packs the frames of one stream as one zstd stream. Its frames
 // are written one at a time, as a stream's are.
 type Packer struct {
-	out bytes.Buffer
-	enc *zstd.Encoder
+	mu     sync.Mutex
+	closed bool
+	out    bytes.Buffer
+	enc    *zstd.Encoder
 }
 
 // NewPacker starts a stream of packed frames.
@@ -100,8 +112,36 @@ func NewPacker() *Packer {
 	return p
 }
 
+// Close releases the encoder and its internal buffer. Safe to call repeatedly.
+func (p *Packer) Close() error {
+	if p == nil {
+		return nil
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return nil
+	}
+	p.closed = true
+	var err error
+	if p.enc != nil {
+		err = p.enc.Close()
+		p.enc = nil
+	}
+	p.out = bytes.Buffer{}
+	return err
+}
+
 // pack appends b, packed as the stream's next piece, to dst.
 func (p *Packer) pack(dst, b []byte) ([]byte, error) {
+	if p == nil {
+		return nil, errPackerClosed
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed || p.enc == nil {
+		return nil, errPackerClosed
+	}
 	p.out.Reset()
 	if _, err := p.enc.Write(b); err != nil {
 		return nil, err
@@ -116,15 +156,48 @@ func (p *Packer) pack(dst, b []byte) ([]byte, error) {
 // An Unpacker reads the frames a Packer packed, in the order it packed
 // them.
 type Unpacker struct {
-	in  bytes.Reader
-	dec *zstd.Decoder
+	mu     sync.Mutex
+	closed bool
+	in     bytes.Reader
+	dec    *zstd.Decoder
+}
+
+// Close releases the decoder and its reader state. Safe to call repeatedly.
+func (u *Unpacker) Close() error {
+	if u == nil {
+		return nil
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.closed {
+		return nil
+	}
+	u.closed = true
+	if u.dec != nil {
+		u.dec.Close()
+		u.dec = nil
+	}
+	u.in.Reset(nil)
+	return nil
 }
 
 // unpack is the envelope a streamed frame's body b carries.
 func (u *Unpacker) unpack(b []byte) ([]byte, error) {
+	return u.unpackTo(nil, b)
+}
+
+func (u *Unpacker) unpackTo(dst, b []byte) ([]byte, error) {
+	if u == nil {
+		return nil, errUnpackerClosed
+	}
 	n, k := binary.Uvarint(b)
 	if k <= 0 || n > MaxFrameSize {
 		return nil, errors.New("a streamed frame's size is out of range")
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.closed {
+		return nil, errUnpackerClosed
 	}
 	if u.dec == nil {
 		var err error
@@ -138,8 +211,9 @@ func (u *Unpacker) unpack(b []byte) ([]byte, error) {
 	// takes all of it and reads no further: the next piece is in the next
 	// frame.
 	u.in.Reset(b[k:])
-	out := make([]byte, n)
-	if _, err := io.ReadFull(u.dec, out); err != nil {
+	base := len(dst)
+	out := slices.Grow(dst, int(n))[:base+int(n)]
+	if _, err := io.ReadFull(u.dec, out[base:]); err != nil {
 		return nil, err
 	}
 	if u.in.Len() != 0 {

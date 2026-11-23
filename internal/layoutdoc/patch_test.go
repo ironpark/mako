@@ -6,9 +6,6 @@ import (
 	"testing"
 )
 
-//go:fix inline
-func ptr[T any](v T) *T { return new(v) }
-
 func ids(d *Doc) string {
 	var out []string
 	d.Root.Walk(nil, func(path []*Node) bool {
@@ -120,6 +117,23 @@ func TestAPatchThatBreaksTheDocumentIsRefused(t *testing.T) {
 		{"both a size and grow", []Op{{Op: "resize", ID: "sidebar", Size: new(1.0), Grow: new(1.0)}}, "one of them"},
 		{"a block not in the stack", []Op{{Op: "select", ID: "details", Block: "mako.header"}}, "holds no"},
 		{"select out of the stack", []Op{{Op: "select", ID: "details", Active: new(7)}}, "active 7"},
+		{"select negative active", []Op{{Op: "select", ID: "details", Active: new(-1)}}, "active -1"},
+		{"select without active or block", []Op{{Op: "select", ID: "details"}}, "give active or block"},
+		{"select by block after emptying stack", []Op{
+			{Op: "remove", ID: "mako.files"},
+			{Op: "remove", ID: "mako.git"},
+			{Op: "remove", ID: "mako.agents"},
+			{Op: "remove", ID: "mako.forge"},
+			{Op: "select", ID: "details", Block: "mako.header"},
+		}, "holds no"},
+		{"select by block after out-of-range active", []Op{
+			{Op: "select", ID: "details", Active: new(99)},
+			{Op: "select", ID: "details", Block: "mako.header"},
+		}, "holds no"},
+		{"select by block after negative active", []Op{
+			{Op: "select", ID: "details", Active: new(-1)},
+			{Op: "select", ID: "details", Block: "mako.header"},
+		}, "holds no"},
 		{"select a row", []Op{{Op: "select", ID: "window", Active: new(0)}}, "no stack"},
 		{"props a block does not take", []Op{{Op: "insert", Parent: "window", Node: json.RawMessage(`{"block":"mako.git","props":{"x":1}}`)}}, `prop "x"`},
 	} {
@@ -127,5 +141,8 @@ func TestAPatchThatBreaksTheDocumentIsRefused(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), c.why) {
 			t.Errorf("%s: %v, want an error saying %q", c.name, err, c.why)
 		}
+	}
+	if _, err := Apply(nil, []Op{{Op: "select", ID: "details", Active: new(0)}}, cat); err == nil || !strings.Contains(err.Error(), "no document") {
+		t.Errorf("nil doc: %v, want no document", err)
 	}
 }

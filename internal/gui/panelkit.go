@@ -20,11 +20,12 @@ func pill(label string, c color.Color) ggui.Widget {
 	return &washed{child: widget.Box(widget.Text(label).Size(10.5).Weight(ggui.WeightMedium).Color(c).NoWrap()).Pad(2, 7), color: c}
 }
 
-// washed fills behind its child, rounded to a pill, with its colour faint.
+// washed fills behind its child, rounded to a pill (or radius when > 0), with its colour faint.
 type washed struct {
-	child ggui.Widget
-	color color.Color
-	tint  color.Color // the wash, under the theme it was laid out in
+	child  ggui.Widget
+	color  color.Color
+	radius float64
+	tint   color.Color // the wash, under the theme it was laid out in
 }
 
 func (w *washed) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
@@ -38,7 +39,11 @@ func (w *washed) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 }
 
 func (w *washed) Paint(dst *ggui.Canvas, r ggui.Rect) {
-	dst.FillRoundRect(r, r.Size.H/2, w.tint)
+	rad := w.radius
+	if rad <= 0 {
+		rad = r.Size.H / 2
+	}
+	dst.FillRoundRect(r, rad, w.tint)
 	dst.Paint(w.child, r)
 }
 

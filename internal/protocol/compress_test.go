@@ -3,6 +3,7 @@ package protocol
 import (
 	"bytes"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -46,4 +47,65 @@ func TestAStreamOfTheOlderWindowIsRead(t *testing.T) {
 			t.Fatalf("piece %d: %d bytes, %v", i, len(got), err)
 		}
 	}
+}
+
+func TestPackerAndUnpackerClose(t *testing.T) {
+	p := NewPacker()
+	var u Unpacker
+
+	for _, msg := range [][]byte{[]byte("hello world"), []byte("hello world again")} {
+		packed, err := p.pack(nil, msg)
+		if err != nil {
+			t.Fatalf("pack: %v", err)
+		}
+		got, err := u.unpack(packed)
+		if err != nil || !bytes.Equal(got, msg) {
+			t.Fatalf("unpack = %q, %v; want %q", got, err, msg)
+		}
+	}
+
+	if err := p.Close(); err != nil {
+		t.Fatalf("first Packer.Close: %v", err)
+	}
+	if err := p.Close(); err != nil {
+		t.Fatalf("second Packer.Close: %v", err)
+	}
+	if _, err := p.pack(nil, []byte("after close")); err == nil {
+		t.Fatal("expected error packing after Close")
+	}
+
+	if err := u.Close(); err != nil {
+		t.Fatalf("first Unpacker.Close: %v", err)
+	}
+	if err := u.Close(); err != nil {
+		t.Fatalf("second Unpacker.Close: %v", err)
+	}
+	p2 := NewPacker()
+	defer p2.Close()
+	sample, err := p2.pack(nil, []byte("sample"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := u.unpack(sample); err == nil {
+		t.Fatal("expected error unpacking after Close")
+	}
+
+	// Concurrent pack and Close must not race or panic.
+	p3 := NewPacker()
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 20 {
+				_, _ = p3.pack(nil, []byte("concurrent frame payload"))
+			}
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = p3.Close()
+	}()
+	wg.Wait()
 }

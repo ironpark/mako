@@ -36,15 +36,21 @@ func TestAReadAskedAgainIsAnsweredFromItsETag(t *testing.T) {
 		out, _ := io.ReadAll(resp.Body)
 		return string(out)
 	}
-	if read() != `{"n":1}` || read() != `{"n":1}` || unchanged != 1 {
-		t.Fatalf("unchanged %d", unchanged)
+	if got := read(); got != `{"n":1}` {
+		t.Fatalf("first read %s", got)
+	}
+	if got := read(); got != `{"n":1}` || unchanged != 1 {
+		t.Fatalf("second read %s, unchanged %d", got, unchanged)
 	}
 	body = `{"n":2}`
 	if got := read(); got != `{"n":2}` || unchanged != 1 {
 		t.Fatalf("after a change read %s, unchanged %d", got, unchanged)
 	}
 	body = strings.Repeat("x", etagBody+1)
-	if read() != body || read() != body || unchanged != 1 {
+	if got := read(); got != body {
+		t.Fatalf("first large read len=%d", len(got))
+	}
+	if got := read(); got != body || unchanged != 1 {
 		t.Fatalf("a large reply was kept: unchanged %d", unchanged)
 	}
 }

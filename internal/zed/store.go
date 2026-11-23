@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -67,11 +68,23 @@ func (s *Store) api() string {
 	return API
 }
 
+var defaultStoreClient = &http.Client{
+	Timeout: 2 * time.Minute,
+	Transport: &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: 10 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		IdleConnTimeout:       30 * time.Second,
+	},
+}
+
 func (s *Store) client() *http.Client {
 	if s.Client != nil {
 		return s.Client
 	}
-	return http.DefaultClient
+	return defaultStoreClient
 }
 
 // Search lists the store's extensions that provide languages or context
@@ -191,19 +204,36 @@ func (s *Store) installArchive(id string, r io.Reader) (Extension, error) {
 // untar unpacks a gzipped tar into dir, refusing anything that would land
 // outside it and anything but files and directories.
 func untar(r io.Reader, dir string) error {
+	return untarLimit(r, dir, maxArchive)
+}
+
+func untarLimit(r io.Reader, dir string, limit int64) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
 	gz, err := gzip.NewReader(r)
 	if err != nil {
 		return err
 	}
 	defer gz.Close()
-	tr := tar.NewReader(gz)
+	streamCap := limit + max(limit, 16<<20)
+	limited := &io.LimitedReader{R: gz, N: streamCap}
+	tr := tar.NewReader(limited)
 	var total int64
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
+			if limited.N == 0 {
+				return errors.New("the extension is too large")
+			}
 			return nil
 		}
 		if err != nil {
+			if limited.N == 0 {
+				return errors.New("the extension is too large")
+			}
 			return err
 		}
 		name := filepath.FromSlash(strings.TrimPrefix(h.Name, "./"))
@@ -213,30 +243,37 @@ func untar(r io.Reader, dir string) error {
 		if !filepath.IsLocal(name) {
 			return fmt.Errorf("%q is outside the extension", h.Name)
 		}
-		path := filepath.Join(dir, name)
 		switch h.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(path, 0o755); err != nil {
+			if err := root.MkdirAll(name, 0o755); err != nil {
 				return err
 			}
 		case tar.TypeReg:
-			total += h.Size
-			if total > maxArchive {
+			if h.Size < 0 {
+				return fmt.Errorf("negative size for %q", h.Name)
+			}
+			if h.Size > limit-total {
 				return errors.New("the extension is too large")
 			}
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return err
+			if dirPart := filepath.Dir(name); dirPart != "." {
+				if err := root.MkdirAll(dirPart, 0o755); err != nil {
+					return err
+				}
 			}
-			f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+			f, err := root.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 			if err != nil {
 				return err
 			}
-			_, err = io.Copy(f, io.LimitReader(tr, h.Size))
+			n, err := io.Copy(f, io.LimitReader(tr, limit-total+1))
 			if cerr := f.Close(); err == nil {
 				err = cerr
 			}
 			if err != nil {
 				return err
+			}
+			total += n
+			if total > limit {
+				return errors.New("the extension is too large")
 			}
 		}
 	}

@@ -5,6 +5,32 @@ export const DOC_TYPES = ["Concept", "Decision", "Architecture", "Procedure", "R
 export const DOC_STATUSES = ["active", "needs_review", "deprecated"];
 export const FOLDERS = ["concepts", "decisions", "architecture", "procedures", "reference"];
 
+let _bm25Ranker = null;
+
+// setSearchRanker wires the BM25F ranker from lib/retrieval.js into searchDocuments
+// without introducing a reverse alphabetical module-load dependency between lib/* files.
+export function setSearchRanker(fn) {
+  _bm25Ranker = typeof fn === "function" ? fn : null;
+}
+
+// isHiddenPath returns true if any path segment starts with "." (e.g. ".okf/...").
+export function isHiddenPath(p) {
+  const clean = String(p || "").trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  if (!clean) return false;
+  return clean.split("/").some((seg) => seg.startsWith("."));
+}
+
+// typeIcon maps an OKF document type to a bundled Lucide icon name.
+export function typeIcon(type) {
+  if (type === "Concept") return "book-open";
+  if (type === "Decision") return "circle-check";
+  if (type === "Architecture") return "layers";
+  if (type === "Procedure") return "list";
+  if (type === "Reference") return "file-text";
+  if (type === "Index") return "layout-grid";
+  return "file-text";
+}
+
 export function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -267,7 +293,15 @@ export function rewriteWikiLinksForMarkdown(body, fromPath = "", docs = []) {
     .join("");
 }
 
-function utf8ByteLength(str) {
+// Matches control characters, bidi reordering controls, and zero-width marks
+// rejected by Mako uiblock's protocol.Spoofing check.
+export const SPOOFING_RE = /[\x00-\x1F\x7F-\x9F\u061C\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g;
+
+export function stripSpoofing(str) {
+  return String(str ?? "").replace(SPOOFING_RE, "");
+}
+
+export function utf8ByteLength(str) {
   let bytes = 0;
   for (const ch of String(str || "")) {
     const cp = ch.codePointAt(0);
@@ -279,23 +313,75 @@ function utf8ByteLength(str) {
   return bytes;
 }
 
-// truncateUtf8Bytes truncates str so its UTF-8 encoding never exceeds maxBytes.
-export function truncateUtf8Bytes(str, maxBytes) {
-  const s = String(str || "").replace(/[\r\n\t]+/g, " ").trim();
-  if (maxBytes <= 0) return "";
+// sliceUtf8Bytes returns the longest prefix of str whose UTF-8 encoding fits
+// within maxBytes without splitting code points or collapsing newlines.
+export function sliceUtf8Bytes(str, maxBytes) {
+  const s = String(str ?? "");
+  if (maxBytes <= 0 || !s) return "";
   if (utf8ByteLength(s) <= maxBytes) return s;
-  const ellipsisBytes = 3; // "…" U+2026
-  const budget = Math.max(0, maxBytes - ellipsisBytes);
   let out = "";
   let used = 0;
   for (const ch of s) {
     const cp = ch.codePointAt(0);
     const b = cp <= 0x7f ? 1 : cp <= 0x7ff ? 2 : cp <= 0xffff ? 3 : 4;
-    if (used + b > budget) break;
+    if (used + b > maxBytes) break;
     out += ch;
     used += b;
   }
+  return out;
+}
+
+// cutUtf8Bytes truncates str to <= maxBytes UTF-8 bytes while preserving
+// newlines (safe for Markdown / code blocks / textarea values).
+export function cutUtf8Bytes(str, maxBytes, suffix = "\n…") {
+  const s = String(str ?? "");
+  if (maxBytes <= 0) return "";
+  if (utf8ByteLength(s) <= maxBytes) return s;
+  const suf = String(suffix ?? "");
+  const sufBytes = utf8ByteLength(suf);
+  if (sufBytes >= maxBytes) {
+    return sliceUtf8Bytes(s, maxBytes);
+  }
+  const head = sliceUtf8Bytes(s, maxBytes - sufBytes);
+  return `${head}${suf}`;
+}
+
+// truncateUtf8Bytes collapses whitespace, strips spoofing chars, and truncates
+// str so its UTF-8 encoding never exceeds maxBytes (for single-line labels).
+export function truncateUtf8Bytes(str, maxBytes) {
+  const s = stripSpoofing(String(str || "").replace(/[\r\n\t]+/g, " ")).trim();
+  if (maxBytes <= 0) return "";
+  if (utf8ByteLength(s) <= maxBytes) return s;
+  const ellipsisBytes = 3; // "…" U+2026
+  const budget = Math.max(0, maxBytes - ellipsisBytes);
+  const out = sliceUtf8Bytes(s, budget);
   return out ? `${out}…` : "";
+}
+
+// stripMarkdownForSnippet strips raw Markdown syntax (#, **, `, [[path|label]])
+// to produce readable plain-text snippets for Browse cards.
+export function stripMarkdownForSnippet(raw) {
+  let s = String(raw || "");
+  if (!s) return "";
+  s = s
+    .replace(/```[a-z0-9_+-]*\s*/gi, " ")
+    .replace(/~~~+/g, " ")
+    .replace(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/g, (_m, target, label) => (label || target || "").trim())
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/`([^`\n]*)`/g, "$1")
+    .replace(/`/g, "")
+    .replace(/(^|\n)\s*#{1,6}\s+/g, "$1")
+    .replace(/(^|\n)\s*>\s*/g, "$1")
+    .replace(/(^|\n)\s*[-*+]\s+/g, "$1")
+    .replace(/\*\*([^*\n]+)\*\*/g, "$1")
+    .replace(/__([^_\n]+)__/g, "$1")
+    .replace(/~~([^~\n]+)~~/g, "$1")
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?:;]|$)/g, "$1$2")
+    .replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,!?:;]|$)/g, "$1$2")
+    .replace(/(^|\s)#{1,6}\s+/g, "$1")
+    .replace(/\*\*|~~/g, "");
+  return stripSpoofing(s.replace(/\s+/g, " ")).trim();
 }
 
 export function parseDocument(path, content, size = 0, modifiedMs = 0) {
@@ -324,7 +410,8 @@ export function parseDocument(path, content, size = 0, modifiedMs = 0) {
 }
 
 // buildVaultIndex resolves links, backlinks, and OKF lint findings across all docs.
-export function buildVaultIndex(docs) {
+export function buildVaultIndex(rawDocs) {
+  const docs = (rawDocs || []).filter((d) => !isHiddenPath(d.path));
   const byPath = new Map();
   const byStem = new Map();
   for (const d of docs) {
@@ -412,8 +499,8 @@ export function buildVaultIndex(docs) {
 }
 
 export function rebuildIndexMarkdown(projectName, docs) {
-  const nonIndex = docs
-    .filter((d) => d.path !== "index.md")
+  const nonIndex = (docs || [])
+    .filter((d) => !isHiddenPath(d.path) && d.path !== "index.md")
     .sort((a, b) => a.path.localeCompare(b.path));
   const byType = new Map();
   for (const d of nonIndex) {
@@ -478,28 +565,58 @@ export function starterOverviewMarkdown(projectName) {
 }
 
 export function searchDocuments(docs, query, typeFilter = "", tagFilter = "") {
-  const q = String(query || "").trim().toLowerCase();
+  const q = String(query || "").trim();
   const tf = String(typeFilter || "").trim().toLowerCase();
   const tgf = String(tagFilter || "").trim().toLowerCase();
-  const results = [];
 
-  for (const d of docs) {
-    if (tf && tf !== "all" && d.type.toLowerCase() !== tf) continue;
-    if (tgf && !d.tags.some((t) => t.toLowerCase() === tgf)) continue;
-    if (!q) {
-      results.push({ doc: d, score: 1, snippet: d.description || firstSnippet(d.body) });
-      continue;
-    }
+  const filtered = (docs || []).filter((d) => {
+    if (isHiddenPath(d.path)) return false;
+    if (tf && tf !== "all" && d.type.toLowerCase() !== tf) return false;
+    if (tgf && !d.tags.some((t) => t.toLowerCase() === tgf)) return false;
+    return true;
+  });
+
+  if (!q) {
+    return filtered
+      .map((d) => ({ doc: d, score: 1, snippet: d.description || firstSnippet(d.body) }))
+      .sort((a, b) => a.doc.path.localeCompare(b.doc.path));
+  }
+
+  if (_bm25Ranker) {
+    return _bm25Ranker(filtered, q).map((r) => ({
+      doc: r.doc,
+      score: r.raw > 0 ? r.raw : r.local,
+      snippet: r.snippet || r.doc.description || firstSnippet(r.doc.body),
+    }));
+  }
+
+  // Fallback multi-token scorer if searchDocuments is invoked standalone.
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const results = [];
+  for (const d of filtered) {
     let score = 0;
-    if (d.title.toLowerCase().includes(q)) score += 10;
-    if (d.path.toLowerCase().includes(q)) score += 6;
-    if (d.description.toLowerCase().includes(q)) score += 5;
-    if (d.tags.some((t) => t.toLowerCase().includes(q))) score += 4;
-    const bodyLower = d.body.toLowerCase();
-    const pos = bodyLower.indexOf(q);
-    if (pos >= 0) score += 2;
+    let firstPos = -1;
+    let firstLen = 0;
+    const titleL = d.title.toLowerCase();
+    const pathL = d.path.toLowerCase();
+    const descL = d.description.toLowerCase();
+    const bodyL = d.body.toLowerCase();
+    for (const term of terms) {
+      if (titleL.includes(term)) score += 10;
+      if (pathL.includes(term)) score += 6;
+      if (descL.includes(term)) score += 5;
+      if (d.tags.some((t) => t.toLowerCase().includes(term))) score += 4;
+      const pos = bodyL.indexOf(term);
+      if (pos >= 0) {
+        score += 2;
+        if (firstPos < 0) {
+          firstPos = pos;
+          firstLen = term.length;
+        }
+      }
+    }
     if (score > 0) {
-      const snippet = pos >= 0 ? excerptAround(d.body, pos, q.length) : (d.description || firstSnippet(d.body));
+      const snippet = firstPos >= 0 ? excerptAround(d.body, firstPos, firstLen) : (d.description || firstSnippet(d.body));
       results.push({ doc: d, score, snippet });
     }
   }
@@ -511,14 +628,16 @@ function firstSnippet(body) {
   const line = String(body || "")
     .split("\n")
     .map((l) => l.trim())
-    .find((l) => l && !l.startsWith("#"));
-  return line ? line.slice(0, 140) : "";
+    .find((l) => l && !l.startsWith("#") && !l.startsWith("```") && !l.startsWith("---"));
+  const clean = stripMarkdownForSnippet(line || "");
+  return clean ? clean.slice(0, 140) : "";
 }
 
 function excerptAround(body, pos, len) {
   const start = Math.max(0, pos - 40);
   const end = Math.min(body.length, pos + len + 80);
-  const slice = body.slice(start, end).replace(/\s+/g, " ").trim();
+  const slice = stripMarkdownForSnippet(body.slice(start, end));
+  if (!slice) return "";
   return (start > 0 ? "…" : "") + slice + (end < body.length ? "…" : "");
 }
 
@@ -543,9 +662,11 @@ export function buildFolderTree(docs, dirs = []) {
   }
 
   for (const d of dirs || []) {
+    if (isHiddenPath(d)) continue;
     ensureDir(d);
   }
   for (const doc of docs || []) {
+    if (isHiddenPath(doc.path)) continue;
     const parts = doc.path.split("/");
     const fileName = parts.pop();
     const dirNode = ensureDir(parts.join("/"));
@@ -765,11 +886,12 @@ export function buildKnowledgeGraph(docs, opts = {}) {
     const tone = typeTone(doc.type);
     for (const targetPath of doc.links || []) {
       if (edges.length >= maxEdges) break;
-      if (!nodeIds.has(targetPath) || fromId === targetPath) continue;
-      const ek = `${fromId}\0${targetPath}\0ok`;
+      const targetId = truncateUtf8Bytes(targetPath, 128);
+      if (!targetId || !nodeIds.has(targetId) || fromId === targetId) continue;
+      const ek = `${fromId}\0${targetId}\0ok`;
       if (edgeKeys.has(ek)) continue;
       edgeKeys.add(ek);
-      edges.push({ from: fromId, to: targetPath, label: "", tone, dashed: false });
+      edges.push({ from: fromId, to: targetId, label: "", tone, dashed: false });
     }
     for (const rawTarget of doc.brokenLinks || []) {
       if (edges.length >= maxEdges) break;

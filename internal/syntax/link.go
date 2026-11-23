@@ -1,6 +1,7 @@
 package syntax
 
 import (
+	"container/list"
 	"crypto/sha256"
 	"fmt"
 	"sync"
@@ -11,14 +12,39 @@ import (
 // Grammars import their glue globals and stub functions from these
 // linker modules. Each LoadLanguage redefines them before instantiating.
 const (
-	glueModule = "mako_glue"
-	stubModule = "mako_stub"
+	glueModule      = "mako_glue"
+	stubModule      = "mako_stub"
+	maxGrammarCache = 64
 )
 
-// grammarCache holds compiled grammar modules by the SHA-256 of the
-// grammar wasm. The import rewrite only depends on the grammar and the
-// (embedded) runtime, so a compiled module is reusable by every Runtime.
-var grammarCache sync.Map // [sha256.Size]byte -> *wasmtime.Module
+type cachedGrammar struct {
+	key     [sha256.Size]byte
+	mod     *wasmtime.Module
+	refs    int // 1 held by cache while present + 1 per active caller
+	evicted bool
+	elem    *list.Element
+}
+
+// grammarModuleCache holds compiled grammar modules by the SHA-256 of the
+// grammar wasm with bounded LRU eviction and reference-counted module closing.
+// The import rewrite only depends on the grammar and the (embedded) runtime, so
+// a compiled module is reusable by every Runtime.
+type grammarModuleCache struct {
+	mu      sync.Mutex
+	cap     int
+	lru     *list.List
+	entries map[[sha256.Size]byte]*cachedGrammar
+}
+
+func newGrammarModuleCache(cap int) *grammarModuleCache {
+	return &grammarModuleCache{
+		cap:     cap,
+		lru:     list.New(),
+		entries: map[[sha256.Size]byte]*cachedGrammar{},
+	}
+}
+
+var grammarCache = newGrammarModuleCache(maxGrammarCache)
 
 // Language is a grammar linked into a Runtime.
 type Language struct {
@@ -78,38 +104,23 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 		return nil, fmt.Errorf("unsupported alignment in dylink.0")
 	}
 
-	// Static data block.
-	memBase, err := r.call1("shim_alloc_zeroed", uint64(1)<<dl.memAlign, uint64(dl.memSize))
-	if err != nil {
-		return nil, err
-	}
-	if memBase == 0 {
-		return nil, fmt.Errorf("out of wasm memory")
-	}
-	// Function table slots.
-	talign := uint32(1) << dl.tableAlign
-	tableBase := (r.table + talign - 1) / talign * talign
-	if tableBase+dl.tableSize > r.tblEnd {
+	// Validate function table capacity and imports before allocating Wasm resources.
+	talign := uint64(1) << dl.tableAlign
+	tableBase64 := (uint64(r.table) + talign - 1) / talign * talign
+	if tableBase64 > uint64(r.tblEnd) || uint64(dl.tableSize) > uint64(r.tblEnd)-tableBase64 {
 		return nil, fmt.Errorf("function table full (%d slots reserved)", tableReserve)
 	}
-	r.table = tableBase + dl.tableSize
-	// Stack, growing down from the top.
-	stack, err := r.malloc(grammarStack)
-	if err != nil {
-		return nil, err
-	}
-	sp := (stack + grammarStack) &^ 15
+	tableBase := uint32(tableBase64)
 
-	glueName, stubName := glueModule, stubModule
-
-	globals := []globalDef{
-		{name: "__stack_pointer", value: sp, mutable: true},
-		{name: "__memory_base", value: memBase},
-		{name: "__table_base", value: tableBase},
+	have := map[string]bool{
+		"__stack_pointer": true,
+		"__memory_base":   true,
+		"__table_base":    true,
 	}
-	have := map[string]bool{}
-	for _, g := range globals {
-		have[g.name] = true
+	var gotImports []struct {
+		name    string
+		val     uint32
+		mutable bool
 	}
 	var stubs []wasmImport
 	for i := range ims {
@@ -122,12 +133,12 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 			im.module = runtimeModule
 			im.desc = []byte{0x70, 0, 0}
 		case im.module == "env" && im.kind == kindGlobal && have[im.name]:
-			im.module = glueName
+			im.module = glueModule
 		case im.module == "env" && im.kind == kindFunc:
 			if r.exports[im.name] {
 				im.module = runtimeModule
 			} else {
-				im.module = stubName
+				im.module = stubModule
 				stubs = append(stubs, *im)
 			}
 		case im.module == "GOT.func" && im.kind == kindGlobal:
@@ -137,15 +148,66 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 			}
 			gn := "GOT.func." + im.name
 			if !have[gn] {
-				globals = append(globals, globalDef{name: gn, value: idx, mutable: im.mutable})
+				gotImports = append(gotImports, struct {
+					name    string
+					val     uint32
+					mutable bool
+				}{name: gn, val: idx, mutable: im.mutable})
 				have[gn] = true
 			}
-			im.module, im.name = glueName, gn
+			im.module, im.name = glueModule, gn
 		default:
 			return nil, fmt.Errorf("unsupported import %s.%s", im.module, im.name)
 		}
 	}
 	replaceSection(secs, secImport, encodeImports(ims))
+
+	prevTable := r.table
+	var memBase, stack uint32
+	ok := false
+	defer func() {
+		if ok {
+			return
+		}
+		r.table = prevTable
+		if r.usable() == nil {
+			if stack != 0 {
+				r.free(stack)
+			}
+			if memBase != 0 {
+				r.free(memBase)
+			}
+		}
+	}()
+
+	// Static data block.
+	memBase, err = r.call1("shim_alloc_zeroed", uint64(1)<<dl.memAlign, uint64(dl.memSize))
+	if err != nil {
+		return nil, err
+	}
+	if memBase == 0 {
+		return nil, fmt.Errorf("out of wasm memory")
+	}
+	// Reserve function table slots.
+	r.table = tableBase + dl.tableSize
+	// Stack, growing down from the top.
+	stack, err = r.malloc(grammarStack)
+	if err != nil {
+		return nil, err
+	}
+	sp := (stack + grammarStack) &^ 15
+
+	glueName, stubName := glueModule, stubModule
+
+	globals := make([]globalDef, 0, 3+len(gotImports))
+	globals = append(globals,
+		globalDef{name: "__stack_pointer", value: sp, mutable: true},
+		globalDef{name: "__memory_base", value: memBase},
+		globalDef{name: "__table_base", value: tableBase},
+	)
+	for _, gi := range gotImports {
+		globals = append(globals, globalDef{name: gi.name, value: gi.val, mutable: gi.mutable})
+	}
 
 	for _, g := range globals {
 		v := wasmtime.ValI32(int32(g.value))
@@ -161,11 +223,12 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 	if err := r.defineStubs(stubName, stubs, types); err != nil {
 		return nil, err
 	}
-	mod, err := grammarModule(bin, secs)
+	modEntry, err := grammarModule(bin, secs)
 	if err != nil {
 		return nil, err
 	}
-	inst, err := r.linker.Instantiate(r.store, mod)
+	defer grammarCache.release(modEntry)
+	inst, err := r.linker.Instantiate(r.store, modEntry.mod)
 	if err != nil {
 		return nil, err
 	}
@@ -207,22 +270,78 @@ func (r *Runtime) link(name string, bin []byte) (*Language, error) {
 	if parser == 0 {
 		return nil, fmt.Errorf("tree-sitter rejected the language")
 	}
+	ok = true
 	return &Language{rt: r, name: name, ptr: ptr, parser: parser, abi: abi}, nil
 }
 
 // grammarModule compiles the rewritten grammar, or returns the copy
 // compiled earlier from the same grammar wasm.
-func grammarModule(orig []byte, secs []section) (*wasmtime.Module, error) {
+func grammarModule(orig []byte, secs []section) (*cachedGrammar, error) {
+	return grammarCache.acquire(orig, func() (*wasmtime.Module, error) {
+		return wasmtime.NewModule(engine, writeSections(secs))
+	})
+}
+
+func (c *grammarModuleCache) acquire(orig []byte, compile func() (*wasmtime.Module, error)) (*cachedGrammar, error) {
 	key := sha256.Sum256(orig)
-	if m, ok := grammarCache.Load(key); ok {
-		return m.(*wasmtime.Module), nil
+	c.mu.Lock()
+	if e, ok := c.entries[key]; ok {
+		c.lru.MoveToFront(e.elem)
+		e.refs++
+		c.mu.Unlock()
+		return e, nil
 	}
-	m, err := wasmtime.NewModule(engine, writeSections(secs))
+	c.mu.Unlock()
+
+	m, err := compile()
 	if err != nil {
 		return nil, err
 	}
-	actual, _ := grammarCache.LoadOrStore(key, m)
-	return actual.(*wasmtime.Module), nil
+
+	var toClose []*wasmtime.Module
+	c.mu.Lock()
+	if existing, ok := c.entries[key]; ok {
+		c.lru.MoveToFront(existing.elem)
+		existing.refs++
+		c.mu.Unlock()
+		m.Close()
+		return existing, nil
+	}
+	e := &cachedGrammar{key: key, mod: m, refs: 2}
+	e.elem = c.lru.PushFront(e)
+	c.entries[key] = e
+	for c.lru.Len() > c.cap {
+		back := c.lru.Back()
+		if back == nil {
+			break
+		}
+		victim := c.lru.Remove(back).(*cachedGrammar)
+		delete(c.entries, victim.key)
+		victim.evicted = true
+		victim.refs--
+		if victim.refs == 0 && victim.mod != nil {
+			toClose = append(toClose, victim.mod)
+		}
+	}
+	c.mu.Unlock()
+
+	for _, cm := range toClose {
+		cm.Close()
+	}
+	return e, nil
+}
+
+func (c *grammarModuleCache) release(e *cachedGrammar) {
+	if e == nil {
+		return
+	}
+	c.mu.Lock()
+	e.refs--
+	closeMod := e.refs == 0 && e.evicted && e.mod != nil
+	c.mu.Unlock()
+	if closeMod {
+		e.mod.Close()
+	}
 }
 
 // defineStubs satisfies function imports the runtime does not provide

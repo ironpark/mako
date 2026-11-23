@@ -17,7 +17,7 @@ import (
 
 // local reports whether nodeID addresses this daemon.
 func (d *Daemon) local(nodeID string) bool {
-	return nodeID == "" || nodeID == d.cfg.NodeID
+	return nodeID == "" || nodeID == d.config().NodeID
 }
 
 func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {

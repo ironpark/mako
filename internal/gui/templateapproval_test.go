@@ -29,7 +29,6 @@ func templateModel(t *testing.T) (*model, *chatState, string) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	dir, _ := config.TemplatesDir()
 	m := newModel(config.Default(), "")
-	m.post = func(func()) {} // no daemon to hear from
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp/p"}})
 	return m, m.chatState("s"), dir
 }

@@ -288,5 +288,5 @@ func (p *plugin) afterCall(scopeKey string, extraKeys ...string) {
 
 // bridge answers a call of the Host API from the runtime.
 func (p *plugin) bridge(ctx context.Context, method string, req []byte) ([]byte, error) {
-	return hostapi.Dispatch(ctx, p.grants(), &host{p: p}, method, req)
+	return hostapi.Dispatch(ctx, pluginGrants{p: p}, &host{p: p}, method, req)
 }

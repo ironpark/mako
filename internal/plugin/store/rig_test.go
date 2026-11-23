@@ -403,12 +403,6 @@ func text(n *protocol.UiNode) string {
 	return b.String()
 }
 
-// get fetches a URL of the server, for the fetcher's own tests.
-func get(t *testing.T, f *registry.Fetcher, url string, max int64, within time.Duration) ([]byte, error) {
-	t.Helper()
-	return f.Get(context.Background(), url, max, within)
-}
-
 // refusalCodes are the codes of the refusals the tests make, by what
 // their message says.
 var refusalCodes = map[string]string{

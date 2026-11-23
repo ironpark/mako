@@ -9,19 +9,45 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ironpark/ggui/pkg/fswatch"
-
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
 )
 
+// PathWatcher watches a dynamic set of file and directory paths and emits
+// changed path batches on out until ctx is canceled.
+type PathWatcher interface {
+	Set(paths []string)
+	Run(ctx context.Context, out chan<- []string)
+}
+
+// TreeWatcher watches a dynamic set of directory trees and emits changed
+// tree roots on out until ctx is canceled or watching fails.
+type TreeWatcher interface {
+	Set(trees []string)
+	Run(ctx context.Context, out chan<- []string) error
+}
+
+// FileWatcher constructs path and tree watchers for handleWatchFiles.
+type FileWatcher interface {
+	NewPathWatcher(logf func(string, ...any)) PathWatcher
+	NewTreeWatcher(settle time.Duration) TreeWatcher
+}
+
+func (d *Daemon) watcher() FileWatcher {
+	if d.fileWatcher != nil {
+		return d.fileWatcher
+	}
+	return defaultFileWatcher()
+}
+
 // A window follows the files it shows with watch_files: the folders it
 // lists, the files open in its editor, the work trees whose changes it
-// shows. What decides that a path changed is ggui's fswatch, which stats
-// what it watches and is woken by the system's notifications; the window
-// then reads what changed again, as it would have on its next poll.
+// shows. What decides that a path changed is the configured FileWatcher
+// (ggui's fswatch on desktop/CLI, which stats what it watches and is woken
+// by the system's notifications); the window then reads what changed again,
+// as it would have on its next poll.
 //
 // A work tree is followed with its git directory's index and HEAD, which
 // what is staged and what is checked out are in: a file staged changes
@@ -32,7 +58,7 @@ import (
 // handleWatchFiles follows the files and folders a front-end names, until
 // it hangs up, telling it of each batch of changes. A WatchFiles it sends
 // later on the stream takes the place of what was followed.
-func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) (err error) {
 	req, err := protocol.Body[*protocol.WatchFiles](env)
 	if err != nil {
 		return err
@@ -40,19 +66,18 @@ func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream,
 	if !d.local(req.GetNodeId()) {
 		return d.relayToPeer(ctx, protocol.TypeWatchFiles, req, stream)
 	}
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	parentCtx := ctx
+	ctx, cancel := context.WithCancel(parentCtx)
 
-	files := fswatch.New(fswatch.Options{Logf: d.fswatchLog})
+	w := d.watcher()
+	files := w.NewPathWatcher(d.fswatchLog)
 	// A tree is followed as the system tells of changes below it, with
 	// nothing kept of each file: what it costs does not grow with the
 	// tree, as a home folder followed as a work tree once had it hold
 	// millions of paths.
-	trees := fswatch.NewTree(fswatch.TreeOptions{
-		Ignore: fswatch.NewIgnore(fswatch.IgnoreConfig{Patterns: fswatch.DefaultPatterns, Git: true}).Match,
-		Settle: treeSettle,
-	})
-	changedFiles, changedTrees := make(chan fswatch.Batch), make(chan []string)
+	trees := w.NewTreeWatcher(treeSettle)
+	changedFiles, changedTrees := make(chan []string), make(chan []string)
+	filesDone := make(chan struct{})
 	// treesEnded says the trees' Run returned; nil while it runs.
 	treesEnded := make(chan error, 1)
 	treesRunning := false
@@ -70,22 +95,33 @@ func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream,
 		}
 	}
 	follow(req)
-	go files.Run(ctx, changedFiles)
-	// What the front-end sends after: what to follow now, until it hangs up.
-	next, gone := make(chan *protocol.WatchFiles), make(chan error, 1)
 	go func() {
-		for {
-			env, err := stream.Recv()
-			if err != nil {
-				gone <- err
-				return
+		defer close(filesDone)
+		files.Run(ctx, changedFiles)
+	}()
+	// What the front-end sends after: what to follow now, until it hangs up.
+	next := make(chan *protocol.WatchFiles)
+	h := watchStreamFrames(stream, func(env *protocol.Envelope) bool {
+		if r, err := protocol.Body[*protocol.WatchFiles](env); err == nil {
+			select {
+			case next <- r:
+			case <-ctx.Done():
+				return false
 			}
-			if r, err := protocol.Body[*protocol.WatchFiles](env); err == nil {
-				select {
-				case next <- r:
-				case <-ctx.Done():
-					return
-				}
+		}
+		return true
+	})
+	defer func() {
+		cancel()
+		err = h.finish(parentCtx, env.GetId(), err)
+		for filesDone != nil || treesRunning {
+			select {
+			case <-changedFiles:
+			case <-changedTrees:
+			case <-filesDone:
+				filesDone = nil
+			case <-treesEnded:
+				treesRunning = false
 			}
 		}
 	}()
@@ -97,8 +133,8 @@ func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream,
 	for {
 		var out *protocol.FilesChanged
 		select {
-		case b := <-changedFiles:
-			paths, trees := names.split(b.Paths())
+		case batch := <-changedFiles:
+			paths, trees := names.split(batch)
 			out = &protocol.FilesChanged{Paths: names.shown(paths), Trees: trees}
 		case changed := <-changedTrees:
 			out = &protocol.FilesChanged{Trees: names.shown(changed)}
@@ -112,7 +148,7 @@ func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream,
 		case r := <-next:
 			follow(r)
 			continue
-		case err := <-gone:
+		case err := <-h.gone:
 			return err
 		case <-ctx.Done():
 			return ctx.Err()

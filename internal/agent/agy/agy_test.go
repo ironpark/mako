@@ -3,11 +3,13 @@ package agy
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -157,6 +159,120 @@ func TestHooksJoinTheUsersOwn(t *testing.T) {
 	_ = os.WriteFile(path, []byte("not json"), 0o644)
 	if writeHooks(path, "/bin/mako hook /s") == nil {
 		t.Error("overwrote a file it could not read")
+	}
+}
+
+func TestWriteHooksPrunesStaleMakoEntries(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config", "hooks.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Empty 0-byte hooks.json is handled cleanly.
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeHooks(path, "/old/mako hook /s"); err != nil {
+		t.Fatalf("empty file writeHooks: %v", err)
+	}
+
+	// Seed a user entry + stale mako entry, then write a new hook command.
+	seed := `{"mine":{"Stop":[{"command":"true"}]},"mako-00000000":{"Stop":[{"command":"/stale/mako hook /s Stop"}]}}`
+	if err := os.WriteFile(path, []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeHooks(path, "/new/mako hook /s"); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, hasStale := doc["mako-00000000"]; hasStale {
+		t.Fatalf("stale mako entry was not pruned: %s", body)
+	}
+	if doc["mine"] == nil || len(doc) != 2 {
+		t.Fatalf("expected user entry + 1 current mako entry, got: %s", body)
+	}
+
+	// Even when the current mako-* entry already matches, stale mako-* entries are pruned.
+	doc["mako-deadbeef"] = json.RawMessage(`{"Stop":[{"command":"/other/mako"}]}`)
+	raw, _ := json.Marshal(doc)
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeHooks(path, "/new/mako hook /s"); err != nil {
+		t.Fatal(err)
+	}
+	body, _ = os.ReadFile(path)
+	doc = nil
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, hasStale := doc["mako-deadbeef"]; hasStale || len(doc) != 2 {
+		t.Fatalf("stale mako-deadbeef not pruned when current entry existed: %s", body)
+	}
+
+	// Repeating without stale entries does not rewrite the file.
+	before, _ := os.Stat(path)
+	if err := writeHooks(path, "/new/mako hook /s"); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := os.Stat(path); !os.SameFile(before, after) {
+		t.Error("rewrote hooks.json unexpectedly")
+	}
+}
+
+func TestWriteHooksConcurrent(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "config")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "hooks.json")
+	if err := os.WriteFile(path, []byte(`{"mine":{"Stop":[{"command":"true"}]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	const n = 16
+	errs := make(chan error, n)
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			errs <- writeHooks(path, fmt.Sprintf("/bin/mako-%d hook /s", i%4))
+		}(i)
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent writeHooks error: %v", err)
+		}
+	}
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatalf("corrupt hooks.json after concurrent writes: %v\n%s", err, body)
+	}
+	if doc["mine"] == nil || len(doc) != 2 {
+		t.Fatalf("expected mine + 1 mako-* entry after concurrent writes, got: %s", body)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() != "hooks.json" {
+			t.Fatalf("unexpected leftover file %q", e.Name())
+		}
 	}
 }
 

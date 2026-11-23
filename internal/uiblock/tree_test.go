@@ -433,8 +433,8 @@ func TestRichUIv2Rejections(t *testing.T) {
 		manyEdges = append(manyEdges, `{"from":"a","to":"b"}`)
 	}
 	cases := map[string]struct{ tree, want string }{
-		"variant-bad":       {`{"kind":"button","text":"x","variant":"neon"}`, "variant"},
-		"variant-text":      {`{"kind":"text","text":"x","variant":"primary"}`, "only a button or card"},
+		"variant-bad":       {`{"kind":"button","text":"x","variant":"neon"}`, "takes no variant"},
+		"variant-text":      {`{"kind":"text","text":"x","variant":"primary"}`, "takes no variant"},
 		"button-blank":      {`{"kind":"button"}`, "text or icon"},
 		"grid-zero":         {`{"kind":"grid","columns":0,"children":[]}`, "1 to 6 columns"},
 		"grid-seven":        {`{"kind":"grid","columns":7,"children":[]}`, "1 to 6 columns"},
@@ -484,6 +484,73 @@ func TestRichUIv2Rejections(t *testing.T) {
 	for name, c := range cases {
 		if _, err := Read([]byte(c.tree)); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: got %v, want substring %q", name, err, c.want)
+		}
+	}
+}
+
+func TestVariantByKind(t *testing.T) {
+	valid := []string{
+		`{"kind":"card","variant":"soft","tone":"accent","children":[]}`,
+		`{"kind":"pill","text":"on","variant":"soft","icon":"sparkles"}`,
+		`{"kind":"pill","text":"on","variant":"solid","tone":"success"}`,
+		`{"kind":"pill","text":"on","variant":"outline","tone":"warning"}`,
+		`{"kind":"chip","text":"tag","variant":"soft","icon":"tag"}`,
+		`{"kind":"chip","text":"tag","variant":"solid"}`,
+		`{"kind":"chip","text":"tag","variant":"outline"}`,
+		`{"kind":"progress","progress":0,"variant":"spinner","text":"Loading..."}`,
+		`{"kind":"scroll","variant":"follow","children":[]}`,
+		`{"kind":"tree","children":[{"kind":"tree_item","text":"docs","value":"3","variant":"badge","icon":"folder"}]}`,
+	}
+	for _, raw := range valid {
+		if _, err := Read([]byte(raw)); err != nil {
+			t.Errorf("valid %s failed: %v", raw, err)
+		}
+	}
+	invalid := map[string]string{
+		"button-soft":     `{"kind":"button","text":"x","variant":"soft"}`,
+		"pill-primary":    `{"kind":"pill","text":"x","variant":"primary"}`,
+		"chip-spinner":    `{"kind":"chip","text":"x","variant":"spinner"}`,
+		"progress-follow": `{"kind":"progress","progress":0,"variant":"follow"}`,
+		"scroll-badge":    `{"kind":"scroll","variant":"badge","children":[]}`,
+		"tree-item-soft":  `{"kind":"tree","children":[{"kind":"tree_item","text":"a","variant":"soft"}]}`,
+		"row-soft":        `{"kind":"row","variant":"soft","children":[]}`,
+	}
+	for name, raw := range invalid {
+		if _, err := Read([]byte(raw)); err == nil || !strings.Contains(err.Error(), "takes no variant") {
+			t.Errorf("%s: got %v, want takes no variant error", name, err)
+		}
+	}
+}
+
+func TestSpoofingChecksAllFieldsAndAllowsMultilineTextarea(t *testing.T) {
+	rejected := map[string]string{
+		"input-placeholder-bidi":      `{"kind":"input","placeholder":"Name\u202e"}`,
+		"input-placeholder-with-text": `{"kind":"input","text":"Name","placeholder":"bad\u001b"}`,
+		"input-placeholder-nul":       `{"kind":"input","placeholder":"bad\u0000"}`,
+		"textarea-placeholder-bidi":   `{"kind":"textarea","placeholder":"Notes\u202e"}`,
+		"input-value-bidi":            `{"kind":"input","value":"v\u202e"}`,
+		"input-value-ctrl":            `{"kind":"input","value":"v\u0007"}`,
+		"textarea-value-bidi":         `{"kind":"textarea","value":"line1\n\u202eline2"}`,
+		"select-value-bidi":           `{"kind":"select","value":"a\u202eb","options":["a","b"]}`,
+		"select-option-bidi":          `{"kind":"select","options":["ok","bad\u202eopt"]}`,
+		"select-option-newline":       `{"kind":"select","options":["ok","bad\nopt"]}`,
+		"tabs-option-bidi":            `{"kind":"tabs","options":["one","two\u202e"]}`,
+	}
+	for name, raw := range rejected {
+		if _, err := Read([]byte(raw)); err == nil || !strings.Contains(err.Error(), "reordering") {
+			t.Errorf("%s: got %v, want reordering error", name, err)
+		}
+	}
+
+	valid := []string{
+		`{"kind":"textarea","value":"line 1\n\tindented line 2","placeholder":"first line\n\tsecond line"}`,
+		`{"kind":"input","placeholder":"Your name","value":"Ada"}`,
+		`{"kind":"select","value":"M","options":["S","M","L"]}`,
+		`{"kind":"tabs","value":"Overview","options":["Overview","Logs"]}`,
+	}
+	for _, raw := range valid {
+		if _, err := Read([]byte(raw)); err != nil {
+			t.Errorf("valid %s failed: %v", raw, err)
 		}
 	}
 }

@@ -161,11 +161,16 @@ func TestProjectMCPSpawnMessageAndStop(t *testing.T) {
 
 func TestProjectMCPDiscoverAndSpawnDescribedProfile(t *testing.T) {
 	d, parent := projectMCPDaemon(t)
-	claudeAgent := d.cfg.Agents["claude"]
+	claudeAgent := cloneAgent(d.config().Agents["claude"])
 	claudeAgent.Profiles = []agentspec.Profile{
 		{Name: "lead", Description: "Coordinator with explicit MCP access", ContextServers: new([]string{"mako"})},
 	}
-	d.cfg.Agents["claude"] = claudeAgent
+	d.updateConfig(func(c *config.Config) {
+		if c.Agents == nil {
+			c.Agents = map[string]agentspec.Agent{}
+		}
+		c.Agents["claude"] = claudeAgent
+	})
 	d.agentFile.mu.Lock()
 	d.agentFile.read = false
 	d.agentFile.mu.Unlock()
@@ -177,7 +182,7 @@ func TestProjectMCPDiscoverAndSpawnDescribedProfile(t *testing.T) {
 	client := projectMCPClient(t, d, lead)
 	path := filepath.Join(t.TempDir(), "config.json")
 	d.FollowAgents(path)
-	specialist := d.cfg.Agents["claude"]
+	specialist := cloneAgent(d.config().Agents["claude"])
 	profileLogs := t.TempDir()
 	specialist.Profiles = []agentspec.Profile{
 		{Name: "reviewer", Description: "Go 동시성 검토\n취소와 경쟁 상태 분석", Args: []string{"--model", "review-model"},
@@ -188,7 +193,7 @@ func TestProjectMCPDiscoverAndSpawnDescribedProfile(t *testing.T) {
 	write := func(description string) {
 		t.Helper()
 		specialist.Profiles[0].Description = description
-		cfg := *d.cfg
+		cfg := *d.config()
 		cfg.Agents = map[string]agentspec.Agent{"claude": claudeAgent, "specialist": specialist}
 		cfg.ContextServers = map[string]mcp.Server{"mako": {Enabled: new(false)}}
 		body, err := json.Marshal(cfg)
@@ -314,7 +319,9 @@ func TestProjectMCPRejectsForgedCredentialsAndRevokesExitedSessions(t *testing.T
 
 func TestProjectMCPRespectsProfilesAndKeepsExternalServers(t *testing.T) {
 	d, _ := projectMCPDaemon(t)
-	d.cfg.ContextServers = map[string]mcp.Server{"custom": {Command: &mcp.Command{Path: "/bin/true"}}}
+	d.updateConfig(func(c *config.Config) {
+		c.ContextServers = map[string]mcp.Server{"custom": {Command: &mcp.Command{Path: "/bin/true"}}}
+	})
 	d.agentFile.mu.Lock()
 	d.agentFile.read = false
 	d.agentFile.mu.Unlock()
@@ -396,7 +403,7 @@ func TestProjectAgentParentSurvivesRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restored := New(d.cfg, slog.New(slog.DiscardHandler))
+	restored := New(d.config(), slog.New(slog.DiscardHandler))
 	if err := restored.loadSessions(d.dir); err != nil {
 		t.Fatal(err)
 	}
@@ -557,11 +564,11 @@ func TestProjectMCPSettingsReflectLiveAcrossSessions(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.json")
 	writeConfig := func(desc string, makoEnabled bool) {
 		t.Helper()
-		claudeAgent := d.cfg.Agents["claude"]
+		claudeAgent := cloneAgent(d.config().Agents["claude"])
 		claudeAgent.Profiles = []agentspec.Profile{
 			{Name: "reviewer", Description: desc},
 		}
-		cfg := *d.cfg
+		cfg := *d.config()
 		cfg.Agents = map[string]agentspec.Agent{"claude": claudeAgent}
 		cfg.ContextServers = map[string]mcp.Server{"mako": {Enabled: &makoEnabled}}
 		body, err := json.Marshal(cfg)

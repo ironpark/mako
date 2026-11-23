@@ -1160,9 +1160,12 @@ func spaceWindowAgentsPanel(m *model, st sidebarState, sw *spaceWindowState) ggu
 				sid := sess.GetId()
 				label := sessionTitle(sess, titles[sid])
 				sel := sid == activeTab
+				titleText := widget.Text(label).Size(pick(v.Compact, 13.0, 13.5)).NoWrap().Ellipsis()
+				if !v.Compact {
+					titleText.Weight(ggui.WeightMedium)
+				}
 				line := []ggui.Widget{
-					sessionAvatar(m, sess, 20),
-					widget.Expanded(widget.Text(label).Size(13).NoWrap().Ellipsis()),
+					widget.Expanded(titleText),
 					widget.Box(widget.Center(&activityDot{state: m.dotFor(sid)})).Size(18, 18),
 				}
 				sub := where[sid]
@@ -1173,9 +1176,13 @@ func spaceWindowAgentsPanel(m *model, st sidebarState, sw *spaceWindowState) ggu
 				if !v.Compact && sub != "" {
 					col = append(col, widget.Text(sub).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis())
 				}
-				btn := ui.ButtonOf(widget.Column(col...).Gap(2).Stretch(), func() {
+				rowContent := widget.Row(
+					sessionProfileAvatar(m, sess, v.Compact),
+					widget.Expanded(widget.Column(col...).Gap(2).Stretch()),
+				).Gap(pick(v.Compact, 8.0, 10.0)).Align(widget.AlignCenter)
+				btn := ui.ButtonOf(rowContent, func() {
 					m.spaceWindowSelectSession(sw, sid)
-				}).Ghost().Pad(6, 10).Radius(8).Name(label)
+				}).Ghost().Pad(pick(v.Compact, 5.0, 7.0), 10).Radius(8).Name(label)
 				var rowW ggui.Widget = btn
 				if sel {
 					rowW = widget.Box(btn).Fill(skin.SidebarSel).Radius(8)

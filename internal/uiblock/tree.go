@@ -69,8 +69,24 @@ var Charts = []string{"line", "bar", "sparkline", "donut", "pie"}
 // Tones are the colour tokens a node may take.
 var Tones = []string{"", "muted", "faint", "accent", "success", "warning", "danger"}
 
-// Variants are the style tokens a button or card may take.
-var Variants = []string{"", "primary", "secondary", "outline", "ghost", "danger"}
+// variantsOf says which variant tokens each node kind accepts (excluding "").
+var variantsOf = map[string][]string{
+	KindButton:   {"primary", "secondary", "outline", "ghost", "danger"},
+	KindCard:     {"primary", "secondary", "outline", "ghost", "danger", "soft"},
+	KindPill:     {"soft", "solid", "outline"},
+	KindChip:     {"soft", "solid", "outline"},
+	KindProgress: {"spinner"},
+	KindScroll:   {"follow"},
+	KindTreeItem: {"badge"},
+}
+
+// Variants are every style variant token, for docs; VariantsOf says which a kind takes.
+var Variants = []string{"", "primary", "secondary", "outline", "ghost", "danger", "soft", "solid", "spinner", "follow", "badge"}
+
+// VariantsOf returns the non-empty variant tokens accepted by kind.
+func VariantsOf(kind string) []string {
+	return slices.Clone(variantsOf[kind])
+}
 
 // The bounds of a tree.
 const (
@@ -245,11 +261,14 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 	if !slices.Contains(Tones, j.Tone) {
 		return nil, fmt.Errorf("%s: tone %q is not a colour token (%s)", where(id), j.Tone, strings.Join(Tones[1:], ", "))
 	}
-	if !slices.Contains(Variants, j.Variant) {
-		return nil, fmt.Errorf("%s: variant %q is not a variant token (%s)", where(id), j.Variant, strings.Join(Variants[1:], ", "))
-	}
-	if j.Variant != "" && j.Kind != KindButton && j.Kind != KindCard {
-		return nil, fmt.Errorf("%s: only a button or card takes variant", where(id))
+	if j.Variant != "" {
+		allowed := variantsOf[j.Kind]
+		if len(allowed) == 0 {
+			return nil, fmt.Errorf("%s: a %s takes no variant", where(id), j.Kind)
+		}
+		if !slices.Contains(allowed, j.Variant) {
+			return nil, fmt.Errorf("%s: a %s takes no variant %q (%s)", where(id), j.Kind, j.Variant, strings.Join(allowed, ", "))
+		}
 	}
 	if j.Weight != "" && j.Weight != "medium" && j.Weight != "semibold" {
 		return nil, fmt.Errorf("%s: weight %q is not medium or semibold", where(id), j.Weight)
@@ -315,8 +334,8 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		if len(o) > maxOption {
 			return nil, fmt.Errorf("%s: an option is too long", where(id))
 		}
-		if j.Kind == KindBreadcrumb && strings.ContainsFunc(o, Spoofing) {
-			return nil, fmt.Errorf("%s: breadcrumb segment holds control or reordering characters", where(id))
+		if strings.ContainsFunc(o, Spoofing) {
+			return nil, fmt.Errorf("%s: option holds control or reordering characters", where(id))
 		}
 		r.text += len(o)
 	}
@@ -326,7 +345,10 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 	if j.Kind != KindMarkdown && j.Kind != KindCode && strings.ContainsFunc(j.Text, spoofingInline) {
 		return nil, fmt.Errorf("%s: text holds control or reordering characters", where(id))
 	}
-	if j.Kind == KindTreeItem && strings.ContainsFunc(j.Value, spoofingInline) {
+	if strings.ContainsFunc(j.Placeholder, spoofingInline) {
+		return nil, fmt.Errorf("%s: placeholder holds control or reordering characters", where(id))
+	}
+	if strings.ContainsFunc(j.Value, spoofingInline) {
 		return nil, fmt.Errorf("%s: value holds control or reordering characters", where(id))
 	}
 	if j.Drag != "" {

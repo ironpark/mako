@@ -153,9 +153,12 @@ func (t *Template) Fill(ctx context.Context, values, builtins map[string]string)
 
 // FillWith fills the template with an optional host bridge for mako.* calls.
 func (t *Template) FillWith(ctx context.Context, values, builtins map[string]string, host Host) (string, error) {
-	nodes, err := t.read()
-	if err != nil {
-		return "", err
+	nodes, comp := t.nodes, t.comp
+	if nodes == nil {
+		var err error
+		if nodes, comp, err = t.prepare(); err != nil {
+			return "", err
+		}
 	}
 	if plain(nodes, t) {
 		var b strings.Builder
@@ -170,8 +173,8 @@ func (t *Template) FillWith(ctx context.Context, values, builtins map[string]str
 		}
 		return strings.TrimRight(b.String(), "\n"), nil
 	}
-	comp := t.comp
 	if comp == nil {
+		var err error
 		if _, comp, err = t.prepare(); err != nil {
 			return "", err
 		}

@@ -158,3 +158,57 @@ func TestFirstLineFindsAScript(t *testing.T) {
 		t.Fatal("first line not matched")
 	}
 }
+
+func TestUntarRejectsNegativeSizeAndTotalLimit(t *testing.T) {
+	t.Run("negative size", func(t *testing.T) {
+		// Craft a tar header with negative size by patching a valid header's size field or raw header.
+		// archive/tar rejects writing negative Size directly, so craft a 512-byte ustar header with "-00000000001".
+		var raw bytes.Buffer
+		var hdr [512]byte
+		copy(hdr[0:], "evil.txt")
+		copy(hdr[100:], "0000644\x00")
+		copy(hdr[108:], "0000000\x00")
+		copy(hdr[116:], "0000000\x00")
+		copy(hdr[124:], "-0000000001\x00")
+		copy(hdr[136:], "00000000000\x00")
+		hdr[156] = '0'
+		copy(hdr[257:], "ustar\x00")
+		copy(hdr[263:], "00")
+		copy(hdr[148:], "        ")
+		var sum int
+		for _, b := range hdr {
+			sum += int(b)
+		}
+		copy(hdr[148:], []byte(strings.ReplaceAll(
+			func() string {
+				return string([]byte{'0' + byte((sum>>15)&7), '0' + byte((sum>>12)&7), '0' + byte((sum>>9)&7), '0' + byte((sum>>6)&7), '0' + byte((sum>>3)&7), '0' + byte(sum&7), 0, ' '})
+			}(),
+			"", "")))
+		gz := gzip.NewWriter(&raw)
+		if _, err := gz.Write(hdr[:]); err != nil {
+			t.Fatal(err)
+		}
+		var zero [1024]byte
+		if _, err := gz.Write(zero[:]); err != nil {
+			t.Fatal(err)
+		}
+		if err := gz.Close(); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := untarLimit(&raw, t.TempDir(), 1024); err == nil {
+			t.Fatal("expected error for negative tar entry size")
+		}
+	})
+
+	t.Run("cumulative limit across files", func(t *testing.T) {
+		data := archive(t, map[string]string{
+			"a.txt": strings.Repeat("a", 40),
+			"b.txt": strings.Repeat("b", 40),
+			"c.txt": strings.Repeat("c", 40),
+		})
+		if err := untarLimit(bytes.NewReader(data), t.TempDir(), 100); err == nil || !strings.Contains(err.Error(), "too large") {
+			t.Fatalf("expected too large error for cumulative 120 > 100, got %v", err)
+		}
+	})
+}

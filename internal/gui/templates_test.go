@@ -1,14 +1,19 @@
 package gui
 
 import (
+	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ironpark/ggui"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/daemon"
 	"github.com/ironpark/mako/internal/prompttmpl"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -274,5 +279,290 @@ func TestTemplateHostRejectsDisallowedProfile(t *testing.T) {
 	}
 	if _, err := host.Ask(t.Context(), prompttmpl.AskRequest{Agent: "claude", Profile: "manual-only", Prompt: "hi"}); err == nil || !strings.Contains(err.Error(), "not enabled for prompt templates") {
 		t.Fatalf("Ask allowed disallowed profile: %v", err)
+	}
+}
+
+func TestReadTemplatesUsesMetadataAndStampCache(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	dir, err := config.TemplatesDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Broken JS in body must not prevent metadata listing (no Wasm startup on refresh),
+	// and only surfaces when Enter runs the template.
+	brokenJS := "---\ndescription: Broken JS\n---\n```js\nconst = ;\n```\n"
+	if err := os.WriteFile(filepath.Join(dir, "brokenjs.md"), []byte(brokenJS), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := newModel(config.Default(), "")
+	link := newFakeLink()
+	conn, err := newTermConn("s", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { close(link.in); conn.close() }()
+	m.conns["s"] = conn
+	m.Attached.Set([]string{"s"})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp/p"}})
+	state := m.chatState("s")
+	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", state) }, ggui.Sz(600, 400))
+	defer p.Close()
+	p.Frame()
+
+	field, ok := p.Semantics().Find(ggui.RoleTextField, T("Message"))
+	if !ok {
+		t.Fatal("no message field")
+	}
+	p.Click(field.Rect.Origin.Add(ggui.Pt(10, field.Rect.Size.H/2)))
+	p.Text("//")
+	p.Frame()
+
+	var names []string
+	ggui.Untrack(func() int {
+		for _, it := range m.menuItems("s", state) {
+			names = append(names, it.name)
+		}
+		return 0
+	})
+	if !strings.Contains(strings.Join(names, ","), "//brokenjs") {
+		t.Fatalf("brokenjs not listed in metadata autocomplete: %v", names)
+	}
+	loadsBefore := state.templates.loads
+	if loadsBefore == 0 {
+		t.Fatal("expected initial LoadAllMetadata load")
+	}
+
+	// Expire stale timer without changing dir: stamp check must skip LoadAllMetadata.
+	state.templates.read = time.Now().Add(-templatesStale - time.Second)
+	m.readTemplates(state, false)
+	if state.templates.loads != loadsBefore {
+		t.Fatalf("unchanged dir reloaded metadata: %d -> %d", loadsBefore, state.templates.loads)
+	}
+
+	// Adding a new file invalidates stamp and reloads.
+	if err := os.WriteFile(filepath.Join(dir, "added.md"), []byte("Hello {{project}}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	state.templates.read = time.Now().Add(-templatesStale - time.Second)
+	m.readTemplates(state, false)
+	if state.templates.loads != loadsBefore+1 {
+		t.Fatalf("changed dir did not reload metadata: %d -> %d", loadsBefore, state.templates.loads)
+	}
+
+	// Submitting //brokenjs still evaluates JS and surfaces the syntax error.
+	m.setComposerDraft("s", "//brokenjs")
+	p.Frame()
+	p.Type(ggui.Mods{}, ggui.KeyEnter)
+	p.Frame()
+	if f := ggui.Peek(state.templates.failed); f.why == "" {
+		t.Fatal("expected JS syntax error on Enter for //brokenjs")
+	}
+}
+
+func TestReadTemplatesAsyncPostAndInvalidation(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	dir, err := config.TemplatesDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "alpha.md"), []byte("Alpha\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp/p"}})
+	state := m.chatState("s")
+	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", state) }, ggui.Sz(600, 400))
+	defer p.Close()
+	m.post = p.Post
+	p.Frame()
+
+	hasTemplate := func(name string) bool {
+		return ggui.Untrack(func() bool {
+			for _, tm := range state.templates.templates.Get() {
+				if tm.Name == name {
+					return true
+				}
+			}
+			return false
+		})
+	}
+
+	m.setComposerDraft("s", "//")
+	probeUntil(t, p, "async alpha template load", func() bool { return hasTemplate("alpha") })
+
+	if err := os.WriteFile(filepath.Join(dir, "beta.md"), []byte("Beta\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m.invalidateSessionTemplates()
+	m.readTemplates(state, false)
+	probeUntil(t, p, "async beta template reload", func() bool { return hasTemplate("beta") })
+}
+
+func TestTemplateHintRespectsAgentAndProfile(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	dir, err := config.TemplatesDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"claudeonly.md":   "---\nagents: [claude]\ndescription: Claude only\nargs:\n  - {name: target, required: true}\n---\n{{target}}\n",
+		"codexonly.md":    "---\nagents: [codex]\ndescription: Codex only\nargs:\n  - {name: target, required: true}\n---\n{{target}}\n",
+		"revieweronly.md": "---\nagents: [claude:reviewer]\ndescription: Reviewer profile only\nargs:\n  - {name: target, required: true}\n---\n{{target}}\n",
+		"universal.md":    "---\ndescription: All agents\nargs:\n  - {name: target, required: true}\n---\n{{target}}\n",
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{
+		{Id: "s-claude-rev", Agent: "claude", Profile: "reviewer", Project: "/tmp/p"},
+		{Id: "s-claude-writer", Agent: "claude", Profile: "writer", Project: "/tmp/p"},
+		{Id: "s-codex", Agent: "codex", Project: "/tmp/p"},
+	})
+
+	loaded, broken := prompttmpl.LoadAllMetadata(dir)
+	if len(broken) != 0 {
+		t.Fatalf("unexpected broken templates: %+v", broken)
+	}
+
+	cases := []struct {
+		sessionID string
+		draft     string
+		wantHint  bool
+	}{
+		{"s-claude-rev", "//claudeonly ", true},
+		{"s-claude-rev", "//revieweronly ", true},
+		{"s-claude-rev", "//codexonly ", false},
+		{"s-claude-rev", "//universal ", true},
+
+		{"s-claude-writer", "//claudeonly ", true},
+		{"s-claude-writer", "//revieweronly ", false},
+		{"s-claude-writer", "//codexonly ", false},
+		{"s-claude-writer", "//universal ", true},
+
+		{"s-codex", "//codexonly ", true},
+		{"s-codex", "//claudeonly ", false},
+		{"s-codex", "//revieweronly ", false},
+		{"s-codex", "//universal ", true},
+
+		{"s-missing", "//claudeonly ", false},
+		{"s-missing", "//universal ", true},
+	}
+
+	for _, tc := range cases {
+		st := m.chatState(tc.sessionID)
+		st.templates.templates.Set(loaded)
+		st.draft.Set(tc.draft)
+		got := ggui.Untrack(func() ggui.Widget {
+			return m.templateHint(tc.sessionID, st)
+		})
+		if (got != nil) != tc.wantHint {
+			t.Errorf("session=%s draft=%q: templateHint != nil is %v, want %v", tc.sessionID, tc.draft, got != nil, tc.wantHint)
+		}
+	}
+
+	// Verify rendered composerMenu hides mismatched agent/profile hints and shows matching ones.
+	stWriter := m.chatState("s-claude-writer")
+	stWriter.templates.templates.Set(loaded)
+	p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s-claude-writer", stWriter) }, ggui.Sz(600, 400))
+	defer p.Close()
+
+	m.setComposerDraft("s-claude-writer", "//revieweronly x")
+	p.Frame()
+	if _, ok := p.Semantics().Find(ggui.RoleText, "//revieweronly"); ok {
+		t.Fatal("composerMenu rendered //revieweronly hint for claude/writer session")
+	}
+
+	m.setComposerDraft("s-claude-writer", "//claudeonly x")
+	p.Frame()
+	if _, ok := p.Semantics().Find(ggui.RoleText, "//claudeonly"); !ok {
+		t.Fatal("composerMenu did not render //claudeonly hint for claude/writer session")
+	}
+}
+
+// Running a template host call (such as //agent-workflow's await mako.agents())
+// uses the GUI's shared daemonLink client and must never close it; closing the
+// shared client cancels its context and tears down every active terminal,
+// watch stream, and poll in the window.
+func TestTemplateHostDoesNotCloseSharedDaemonClient(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("MAKO_HOME", home)
+
+	cfg := config.Default()
+	cfg.P2P.Disabled = true
+	cfg.Discovery = config.Discovery{}
+	cfg.Agents = map[string]agentspec.Agent{
+		"claude": {Command: []string{"claude"}},
+		"codex":  {Command: []string{"codex"}},
+	}
+	d := daemon.New(cfg, slog.New(slog.DiscardHandler))
+	dctx, dcancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- d.Run(dctx) }()
+	t.Cleanup(func() {
+		dcancel()
+		<-done
+	})
+	select {
+	case <-d.Ready():
+	case err := <-done:
+		t.Fatalf("daemon exited before ready: %v", err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("daemon did not become ready")
+	}
+
+	m := newModel(cfg, d.Socket())
+	m.link.setEmbedded(d.Socket())
+	m.link.setLinked(true)
+	t.Cleanup(func() { m.link.hangUp() })
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	shared, err := m.link.client(ctx)
+	if err != nil {
+		t.Fatalf("initial link.client: %v", err)
+	}
+	if _, err := shared.Nodes(ctx); err != nil {
+		t.Fatalf("initial Nodes: %v", err)
+	}
+
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", NodeId: cfg.NodeID, Agent: "claude", Project: home}})
+	m.Nodes.Set([]*protocol.Node{d.Self()})
+	// Empty AgentCatalogs forces guiTemplateHost.Agents to call ListAgentModels
+	// through m.link.client for every offered agent.
+	m.AgentCatalogs.Set(nil)
+
+	host := m.templateHost("s")
+	if _, err := host.Agents(ctx, "", false); err != nil {
+		t.Fatalf("host.Agents: %v", err)
+	}
+	// Decide may return an error when no decision key is configured, but must
+	// still leave the shared daemon client open.
+	_, _ = host.Decide(ctx, []byte(`{}`))
+
+	after, err := m.link.client(ctx)
+	if err != nil {
+		t.Fatalf("link.client after template host calls: %v", err)
+	}
+	if after != shared {
+		t.Fatal("template host replaced the shared daemon client")
+	}
+	if _, err := shared.Nodes(ctx); err != nil {
+		t.Fatalf("shared daemon client was closed by template host: %v", err)
 	}
 }

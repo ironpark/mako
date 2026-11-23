@@ -86,8 +86,7 @@ func TestMarkedAgentMessageRendersMarkdownAndClampsWithExpandAndCollapse(t *test
 	if !ok {
 		t.Fatalf("long agent message missing Show more:\n%s", p.Semantics().String())
 	}
-	collapseBtn, ok := p.Find(T("Collapse"))
-	if !ok {
+	if _, ok := p.Find(T("Collapse")); !ok {
 		t.Fatalf("long agent message missing Collapse:\n%s", p.Semantics().String())
 	}
 	if moreBtn.Rect.Origin.Y > markPreviewMaxHeight+120 {
@@ -104,7 +103,7 @@ func TestMarkedAgentMessageRendersMarkdownAndClampsWithExpandAndCollapse(t *test
 		t.Fatalf("expanding did not grow card: before y=%v, after y=%v", moreBtn.Rect.Origin.Y, lessBtn.Rect.Origin.Y)
 	}
 	// Clicking Collapse completely hides the body.
-	collapseBtn, ok = p.Find(T("Collapse"))
+	collapseBtn, ok := p.Find(T("Collapse"))
 	if !ok {
 		t.Fatalf("expanded agent message missing Collapse:\n%s", p.Semantics().String())
 	}

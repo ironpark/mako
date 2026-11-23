@@ -19,14 +19,29 @@ import (
 // maxDownload caps what download-file writes, unpacked.
 const maxDownload = 1 << 30
 
-// download fetches url to dst as kind says: "uncompressed" and "gzip" are
-// a file, "gzip-tar" and "zip" a directory unpacked into.
-func download(ctx context.Context, rawURL, dst, kind string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+// downloadWithClient fetches url to dst using client while enforcing limit.
+func downloadWithClient(ctx context.Context, client *http.Client, rawURL, dst, kind string, limit int64) error {
+	root, err := openRoot(filepath.Dir(dst))
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	defer root.Close()
+	return downloadToRootLimit(ctx, rawURL, root, filepath.Base(dst), kind, client, filepath.Dir(dst), limit)
+}
+
+func downloadToRootLimit(ctx context.Context, rawURL string, root *os.Root, rel, kind string, client *http.Client, workDir string, limit int64) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return err
+	}
+	if err := checkExternalURL(u); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return err
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -34,49 +49,67 @@ func download(ctx context.Context, rawURL, dst, kind string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("the server answered %s", resp.Status)
 	}
-	body := io.LimitReader(resp.Body, maxDownload)
+	left := limit
+	streamCap := limit + max(limit, 16<<20)
 	switch kind {
 	case "uncompressed":
-		return writeFile(dst, body, 0o644)
+		return writeIn(root, rel, resp.Body, 0o644, &left)
 	case "gzip":
-		gz, err := gzip.NewReader(body)
+		gz, err := gzip.NewReader(io.LimitReader(resp.Body, streamCap))
 		if err != nil {
 			return err
 		}
 		defer gz.Close()
-		return writeFile(dst, gz, 0o644)
+		return writeIn(root, rel, gz, 0o644, &left)
 	case "gzip-tar":
-		gz, err := gzip.NewReader(body)
+		gz, err := gzip.NewReader(io.LimitReader(resp.Body, streamCap))
 		if err != nil {
 			return err
 		}
 		defer gz.Close()
-		return untar(gz, dst)
+		sub, cleanup, err := openTargetRoot(root, rel)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		return untarRootLimit(gz, sub, limit)
 	case "zip":
 		// A zip is read from its end, so it lands in a file first.
-		tmp, err := os.CreateTemp(filepath.Dir(dst), ".download-*.zip")
+		tmp, err := os.CreateTemp(workDir, ".download-*.zip")
 		if err != nil {
 			return err
 		}
 		defer os.Remove(tmp.Name())
 		defer tmp.Close()
-		n, err := io.Copy(tmp, body)
+		n, err := io.Copy(tmp, io.LimitReader(resp.Body, limit+1))
 		if err != nil {
 			return err
 		}
-		return unzip(tmp, n, dst)
+		if n > limit {
+			return errors.New("download exceeds maximum unpacked size")
+		}
+		sub, cleanup, err := openTargetRoot(root, rel)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		return unzipRootLimit(tmp, n, sub, limit)
 	}
 	return fmt.Errorf("unknown file type %q", kind)
 }
 
-// writeFile writes the file at dst, making its directory.
-func writeFile(dst string, r io.Reader, mode os.FileMode) error {
-	root, err := openRoot(filepath.Dir(dst))
-	if err != nil {
-		return err
+func openTargetRoot(root *os.Root, rel string) (*os.Root, func(), error) {
+	if rel == "." || rel == "" {
+		return root, func() {}, nil
 	}
-	defer root.Close()
-	return writeIn(root, filepath.Base(dst), r, mode)
+	if err := root.MkdirAll(rel, 0o755); err != nil {
+		return nil, nil, err
+	}
+	sub, err := root.OpenRoot(rel)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sub, func() { _ = sub.Close() }, nil
 }
 
 // local is an archive entry's name as a path inside the archive, "." for
@@ -103,18 +136,29 @@ func openRoot(dir string) (*os.Root, error) {
 	return os.OpenRoot(dir)
 }
 
-// writeIn writes a file at name within root, making its directory.
-func writeIn(root *os.Root, name string, r io.Reader, mode os.FileMode) error {
-	if err := root.MkdirAll(filepath.Dir(name), 0o755); err != nil {
-		return err
+// writeIn writes a file at name within root, making its directory, while
+// enforcing the cumulative unpacked byte budget left.
+func writeIn(root *os.Root, name string, r io.Reader, mode os.FileMode, left *int64) error {
+	if *left < 0 {
+		return errors.New("download exceeds maximum unpacked size")
+	}
+	if dir := filepath.Dir(name); dir != "." {
+		if err := root.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
 	}
 	f, err := root.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
-	_, err = io.Copy(f, io.LimitReader(r, maxDownload))
+	n, err := io.Copy(f, io.LimitReader(r, *left+1))
 	if cerr := f.Close(); err == nil {
 		err = cerr
+	}
+	*left -= n
+	if *left < 0 {
+		_ = root.Remove(name)
+		return errors.New("download exceeds maximum unpacked size")
 	}
 	return err
 }
@@ -122,18 +166,34 @@ func writeIn(root *os.Root, name string, r io.Reader, mode os.FileMode) error {
 // untar unpacks files, directories and links that stay inside dir,
 // keeping files' permissions, so a binary stays executable.
 func untar(r io.Reader, dir string) error {
+	return untarLimit(r, dir, maxDownload)
+}
+
+func untarLimit(r io.Reader, dir string, limit int64) error {
 	root, err := openRoot(dir)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
-	tr := tar.NewReader(r)
+	return untarRootLimit(r, root, limit)
+}
+
+func untarRootLimit(r io.Reader, root *os.Root, limit int64) error {
+	left := limit
+	limited := &io.LimitedReader{R: r, N: limit + max(limit, 16<<20)}
+	tr := tar.NewReader(limited)
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
+			if limited.N == 0 {
+				return errors.New("download exceeds maximum unpacked size")
+			}
 			return nil
 		}
 		if err != nil {
+			if limited.N == 0 {
+				return errors.New("download exceeds maximum unpacked size")
+			}
 			return err
 		}
 		name, err := local(h.Name)
@@ -142,15 +202,28 @@ func untar(r io.Reader, dir string) error {
 		}
 		switch h.Typeflag {
 		case tar.TypeDir:
-			err = root.MkdirAll(name, 0o755)
+			if name != "." {
+				err = root.MkdirAll(name, 0o755)
+			}
 		case tar.TypeReg:
-			err = writeIn(root, name, tr, os.FileMode(h.Mode).Perm()|0o600)
+			if h.Size < 0 {
+				return fmt.Errorf("negative size for %q", h.Name)
+			}
+			if h.Size > left {
+				return errors.New("download exceeds maximum unpacked size")
+			}
+			err = writeIn(root, name, tr, os.FileMode(h.Mode).Perm()|0o600, &left)
 		case tar.TypeSymlink:
+			if name == "." {
+				continue
+			}
 			link := filepath.FromSlash(h.Linkname)
 			if filepath.IsAbs(link) || !filepath.IsLocal(filepath.Join(filepath.Dir(name), link)) {
 				continue // a link out of the archive is left out
 			}
-			_ = root.MkdirAll(filepath.Dir(name), 0o755)
+			if dir := filepath.Dir(name); dir != "." {
+				_ = root.MkdirAll(dir, 0o755)
+			}
 			_ = root.Remove(name)
 			err = root.Symlink(h.Linkname, name)
 		}
@@ -160,35 +233,45 @@ func untar(r io.Reader, dir string) error {
 	}
 }
 
-func unzip(f io.ReaderAt, size int64, dir string) error {
-	zr, err := zip.NewReader(f, size)
-	if err != nil {
-		return err
-	}
+func unzipLimit(f io.ReaderAt, size int64, dir string, limit int64) error {
 	root, err := openRoot(dir)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
+	return unzipRootLimit(f, size, root, limit)
+}
+
+func unzipRootLimit(f io.ReaderAt, size int64, root *os.Root, limit int64) error {
+	zr, err := zip.NewReader(f, size)
+	if err != nil {
+		return err
+	}
+	left := limit
 	for _, zf := range zr.File {
 		name, err := local(zf.Name)
 		if err != nil {
 			return err
 		}
 		if zf.FileInfo().IsDir() {
-			if err := root.MkdirAll(name, 0o755); err != nil {
-				return err
+			if name != "." {
+				if err := root.MkdirAll(name, 0o755); err != nil {
+					return err
+				}
 			}
 			continue
 		}
 		if !zf.Mode().IsRegular() {
 			continue
 		}
+		if zf.UncompressedSize64 > uint64(max(left, 0)) {
+			return errors.New("download exceeds maximum unpacked size")
+		}
 		rc, err := zf.Open()
 		if err != nil {
 			return err
 		}
-		err = writeIn(root, name, rc, zf.Mode().Perm()|0o600)
+		err = writeIn(root, name, rc, zf.Mode().Perm()|0o600, &left)
 		rc.Close()
 		if err != nil {
 			return err
@@ -221,7 +304,7 @@ func gitHub(ctx context.Context, path string, v any) error {
 	if tok := os.Getenv("GITHUB_TOKEN"); tok != "" {
 		req.Header.Set("Authorization", "Bearer "+tok)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sharedAPIClient.Do(req)
 	if err != nil {
 		return err
 	}

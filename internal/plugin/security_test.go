@@ -128,7 +128,7 @@ func TestTreesOutOfBoundsAreRefused(t *testing.T) {
 		"raw colour": {`({ kind: "text", text: "x", color: "#ff0000" })`, "unknown field"},
 		"raw tone":   {`ui.text("x", { tone: "#ff0000" })`, "not a colour token"},
 		"kind":       {`({ kind: "iframe", text: "https://evil.example" })`, "not a kind of node"},
-		"spoof":      {`ui.text("Allow‮evil")`, "reordering"},
+		"spoof":      {`ui.text("Allow\u202eevil")`, "reordering"},
 		"keys":       {`ui.column([ui.text("a", { key: "k" }), ui.text("b", { key: "k" })])`, "two children have the key"},
 		"slash":      {`ui.column([ui.text("a", { key: "../x" })])`, "holds /"},
 		"tap input":  {`ui.input("x", { onTap: ["go"] })`, "takes onChange"},

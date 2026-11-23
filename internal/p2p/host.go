@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"os"
@@ -89,11 +90,13 @@ type Config struct {
 // every way in, a stream, a state, a relay circuit, goes through the
 // check that it lets the other side in.
 type Host struct {
-	h     host.Host
-	trust *trust
-	log   *slog.Logger
-	done  chan struct{}
-	once  sync.Once
+	h         host.Host
+	trust     *trust
+	log       *slog.Logger
+	done      chan struct{}
+	watchDone chan struct{}
+	once      sync.Once
+	closeErr  error
 }
 
 // New starts a host. It runs until Close.
@@ -110,7 +113,7 @@ func New(ctx context.Context, cfg Config) (*Host, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := &Host{log: log, done: make(chan struct{}),
+	h := &Host{log: log, done: make(chan struct{}), watchDone: make(chan struct{}),
 		trust: newTrust(NewKeys(cfg.Dir), NewSSHKeys(cfg.SSHAuthorizedKeys), intro{Node: cfg.Node, Name: cfg.Name, OS: runtime.GOOS, Arch: runtime.GOARCH}, cfg.Owner, log)}
 	h.trust.changed = cfg.OnPeer
 	h.trust.dropped = cfg.OnDrop
@@ -162,6 +165,7 @@ func New(ctx context.Context, cfg Config) (*Host, error) {
 // watch introduces the host to its peers again when its keys change, and
 // renews its certificate before it runs out, until Close.
 func (h *Host) watch() {
+	defer close(h.watchDone)
 	tick := time.NewTicker(2 * time.Second)
 	defer tick.Stop()
 	for {
@@ -186,8 +190,17 @@ func (h *Host) ID() peer.ID { return h.h.ID() }
 
 // Close stops the host.
 func (h *Host) Close() error {
-	h.once.Do(func() { close(h.done) })
-	return h.h.Close()
+	h.once.Do(func() {
+		close(h.done)
+		<-h.watchDone
+		h.closeErr = h.h.Close()
+		if c, ok := h.trust.owner.(io.Closer); ok {
+			if err := c.Close(); err != nil {
+				h.closeErr = errors.Join(h.closeErr, err)
+			}
+		}
+	})
+	return h.closeErr
 }
 
 // Keys are the keys the host lets in. After changing them, Reconsider.

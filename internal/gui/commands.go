@@ -94,7 +94,7 @@ func (m *model) menuItems(id string, state *chatState) []menuItem {
 	if draft == state.menu.closed.Get() {
 		return nil
 	}
-	if _, ok := prompttmpl.ParseCall(draft); ok {
+	if _, ok := prompttmpl.ParseDraft(draft); ok {
 		return m.templateItems(id, state, draft)
 	}
 	query, ok := commandQuery(draft)
@@ -223,7 +223,7 @@ func composerMenu(m *model, id string, state *chatState) ggui.Widget {
 	// A draft that begins with two slashes reads the templates, one with a
 	// slash the commands, and a new query chooses its first match again.
 	ggui.Watch(state.draft, func(draft string) {
-		if _, ok := prompttmpl.ParseCall(draft); ok {
+		if _, ok := prompttmpl.ParseDraft(draft); ok {
 			m.readTemplates(state, false)
 		} else if _, ok := commandQuery(draft); ok {
 			m.readCommands(id, state)
@@ -240,12 +240,12 @@ func composerMenu(m *model, id string, state *chatState) ggui.Widget {
 				rows[i] = menuRow(it, i == pick)
 			}
 			rowsCol := widget.Column(rows...).Gap(2).Stretch()
-			if hint := templateHint(state); hint != nil {
+			if hint := m.templateHint(id, state); hint != nil {
 				content = widget.Column(hint, hline(), rowsCol).Gap(4).Stretch()
 			} else {
 				content = rowsCol
 			}
-		} else if content = templateHint(state); content == nil {
+		} else if content = m.templateHint(id, state); content == nil {
 			return widget.Box()
 		}
 		return widget.Box(menuPanel(content)).Pad(0, 0, 6, 0)

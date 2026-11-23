@@ -229,7 +229,7 @@ func TestPluginMessagesAndStartsOutOfBoundsAreRefused(t *testing.T) {
 		"project": {`await mako.messages.startAgent({ agent: "claude", project: "p1", root: "/etc", prompt: "x" })`, "knows no project"},
 		"prompt":  {`await mako.messages.startAgent({ agent: "claude", project: "p1", root: "/proj", prompt: "" })`, "a prompt is text"},
 		"noagent": {`await mako.messages.startAgent({ project: "p1", root: "/proj", prompt: "x" })`, "name the agent"},
-		"spoof":   {`await mako.messages.startAgent({ agent: "claude", project: "p1", root: "/proj", prompt: "x", name: "a‮b" })`, "reordering"},
+		"spoof":   {`await mako.messages.startAgent({ agent: "claude", project: "p1", root: "/proj", prompt: "x", name: "a\u202eb" })`, "reordering"},
 		"stop":    {`await mako.messages.stopAgent({ sessionId: "s1" })`, "only the agents it started"},
 		"hourly":  {`for (let i = 0; i < 12; i++) { await mako.messages.startAgent({ agent: "claude", project: "p1", root: "/proj", prompt: "x" }).catch((e) => { if (!/waits for the user/.test(e.message)) throw e }) }`, "in the last hour"},
 	}

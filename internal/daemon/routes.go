@@ -109,12 +109,13 @@ func (d *Daemon) routing() map[string]route {
 		}
 	}
 	reports := d.remote.fresh()
+	nodeID := d.config().NodeID
 	for _, peer := range slices.Sorted(maps.Keys(reports)) {
 		if out[peer] != (route{hops: 1}) {
 			continue // a peer that no longer lets this daemon in
 		}
 		for id, h := range reports[peer].hops {
-			if h+1 > maxHops || id == d.cfg.NodeID {
+			if h+1 > maxHops || id == nodeID {
 				continue
 			}
 			if r, ok := out[id]; !ok || h+1 < r.hops {

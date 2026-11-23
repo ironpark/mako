@@ -77,16 +77,17 @@ func (d *Daemon) handleListDevices(ctx context.Context, stream *transport.Stream
 
 // localDevices are the devices attached to this node, of every kind.
 func (d *Daemon) localDevices(ctx context.Context) *protocol.Devices {
+	cfg := d.config()
 	out := &protocol.Devices{}
 	for _, name := range slices.Sorted(maps.Keys(d.kinds)) {
 		list, err := d.kinds[name].List(ctx)
 		if err != nil {
-			out.Errors = append(out.Errors, fmt.Sprintf("%s: %s: %v", d.cfg.Name, name, err))
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: %s: %v", cfg.Name, name, err))
 			continue
 		}
 		for _, dev := range list {
-			dev.NodeId = d.cfg.NodeID
-			dev.Shared = d.cfg.Devices.Shares(name)
+			dev.NodeId = cfg.NodeID
+			dev.Shared = cfg.Devices.Shares(name)
 			dev.Holders = d.claims.holders(name, dev.GetSerial())
 			out.Devices = append(out.Devices, dev)
 		}
@@ -291,19 +292,20 @@ func (c *claims) holders(kind, serial string) []*protocol.Holder {
 // claimHere holds a device attached to this node for req, and is the
 // device as it is now.
 func (d *Daemon) claimHere(ctx context.Context, req *protocol.Claim) (*protocol.Device, *claim, error) {
+	cfg := d.config()
 	k, err := d.kind(req.GetKind())
 	if err != nil {
 		return nil, nil, err
 	}
-	if !d.cfg.Devices.Shares(req.GetKind()) {
-		return nil, nil, fmt.Errorf("%s does not lend its %s devices: its config's devices.share leaves them out", d.cfg.Name, req.GetKind())
+	if !cfg.Devices.Shares(req.GetKind()) {
+		return nil, nil, fmt.Errorf("%s does not lend its %s devices: its config's devices.share leaves them out", cfg.Name, req.GetKind())
 	}
 	dev, err := d.attached(ctx, k, req.GetKind(), req.GetSerial())
 	if err != nil {
 		return nil, nil, err
 	}
 	if dev == nil {
-		return nil, nil, fmt.Errorf("%s is not attached to %s", req.GetSerial(), d.cfg.Name)
+		return nil, nil, fmt.Errorf("%s is not attached to %s", req.GetSerial(), cfg.Name)
 	}
 	cl, err := d.claims.take(req, k.Exclusive())
 	if err != nil {
@@ -320,9 +322,10 @@ func (d *Daemon) attached(ctx context.Context, k device.Kind, kind, serial strin
 	if err != nil {
 		return nil, err
 	}
+	cfg := d.config()
 	for _, dev := range list {
 		if dev.GetSerial() == serial {
-			dev.NodeId, dev.Shared = d.cfg.NodeID, d.cfg.Devices.Shares(kind)
+			dev.NodeId, dev.Shared = cfg.NodeID, cfg.Devices.Shares(kind)
 			return dev, nil
 		}
 	}
@@ -610,7 +613,7 @@ func (d *Daemon) handleListLeases(ctx context.Context, stream *transport.Stream,
 // nodeName names a node by its ID, for people.
 func (d *Daemon) nodeName(id string) string {
 	if d.local(id) {
-		return d.cfg.Name
+		return d.config().Name
 	}
 	if n, ok := d.peers.get(id); ok && n.GetName() != "" {
 		return n.GetName()
@@ -621,10 +624,11 @@ func (d *Daemon) nodeName(id string) string {
 // resolveDevice is the device a Borrow names: by its node, kind and
 // serial, or by Borrow.device among the devices this node reaches.
 func (d *Daemon) resolveDevice(ctx context.Context, r *protocol.Borrow) (node, kind, serial string, err error) {
+	nodeID := d.config().NodeID
 	if r.GetSerial() != "" {
 		node = r.GetDeviceNodeId()
 		if d.local(node) {
-			node = d.cfg.NodeID
+			node = nodeID
 		}
 		return node, r.GetKind(), r.GetSerial(), nil
 	}
@@ -635,7 +639,7 @@ func (d *Daemon) resolveDevice(ctx context.Context, r *protocol.Borrow) (node, k
 	// A ref names its device without asking the mesh.
 	if node, kind, serial, err := protocol.ParseDeviceRef(name); err == nil {
 		if _, ok := d.peers.get(node); ok || d.local(node) {
-			return cmp.Or(node, d.cfg.NodeID), kind, serial, nil
+			return cmp.Or(node, nodeID), kind, serial, nil
 		}
 	}
 	list := d.meshDevices(ctx)
@@ -666,9 +670,10 @@ func (d *Daemon) borrow(ctx context.Context, r *protocol.Borrow, session string)
 		return info, nil
 	}
 
+	cfg := d.config()
 	req := &protocol.Claim{
 		NodeId: devNode, Kind: kind, Serial: serial,
-		ClaimId: newSessionID() + newSessionID(), HolderId: d.cfg.NodeID, HolderName: d.cfg.Name,
+		ClaimId: newSessionID() + newSessionID(), HolderId: cfg.NodeID, HolderName: cfg.Name,
 	}
 	var (
 		dev    *protocol.Device
@@ -695,7 +700,7 @@ func (d *Daemon) borrow(ctx context.Context, r *protocol.Borrow, session string)
 	lctx, cancel := context.WithCancel(d.ctx)
 	l := &lease{
 		info: &protocol.Lease{
-			Id: newSessionID(), NodeId: d.cfg.NodeID, Device: dev, Addr: addr,
+			Id: newSessionID(), NodeId: cfg.NodeID, Device: dev, Addr: addr,
 			Env: k.Env(addr, dev), State: protocol.LeaseHeld, Warnings: k.Check(ctx, dev),
 		},
 		claim: req, stream: stream, ln: ln, cancel: cancel,

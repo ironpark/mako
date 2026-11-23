@@ -7,17 +7,3 @@
 // on the internet, so only a build with the makotest tag reads them; any
 // other build ignores them, whatever the environment holds (DEVELOP.md).
 package testhooks
-
-import "strings"
-
-// parseNetTest reads MAKO_PLUGIN_NET_TEST's value: host=base URL pairs
-// separated by commas.
-func parseNetTest(v string) map[string]string {
-	out := map[string]string{}
-	for pair := range strings.SplitSeq(v, ",") {
-		if host, base, ok := strings.Cut(strings.TrimSpace(pair), "="); ok && host != "" && base != "" {
-			out[host] = base
-		}
-	}
-	return out
-}

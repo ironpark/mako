@@ -1,8 +1,12 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -10,7 +14,9 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/agentui"
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
 )
 
 // orderForm is a form an agent shows: a select, an input, a toggle and a
@@ -210,4 +216,102 @@ func TestListBlocksNamesThePluginFolder(t *testing.T) {
 
 func callParams(name string, args any) *sdk.CallToolParams {
 	return &sdk.CallToolParams{Name: name, Arguments: args}
+}
+
+// TestDaemonRunWaitsForAgentUIShutdownAndWatchers verifies that Daemon.Run
+// drains closeUIWith watchers after closing sessions and waits for any
+// in-flight agentUI notification callback before returning.
+func TestDaemonRunWaitsForAgentUIShutdownAndWatchers(t *testing.T) {
+	cfg := config.Default()
+	cfg.P2P.Disabled = true
+	d := New(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.dir = t.TempDir()
+	d.hookBinary = ""
+
+	notifyStarted := make(chan struct{})
+	notifyRelease := make(chan struct{})
+	var notifyOnce sync.Once
+	d.agentUI = agentui.New(func() {
+		notifyOnce.Do(func() {
+			close(notifyStarted)
+			<-notifyRelease
+		})
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	runDone := make(chan error, 1)
+	go func() { runDone <- d.Run(ctx) }()
+
+	select {
+	case <-d.Ready():
+	case err := <-runDone:
+		t.Fatalf("Daemon.Run exited early: %v", err)
+	}
+
+	s, err := session.Start(session.Spec{
+		ID: "uis1", NodeID: cfg.NodeID, Agent: "shell", Project: t.TempDir(),
+		Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	d.sessions.add(s)
+
+	if _, err := d.agentUI.Show(s.ID(), "claude", "panel", "Panel", []byte(`{"kind":"text","text":"hi"}`)); err != nil {
+		t.Fatal(err)
+	}
+	d.closeUIWith(s)
+
+	// Also register an orphaned session watcher (not in d.sessions) to verify
+	// stopAndWait unblocks and cleans up blocks instead of deadlocking.
+	orphan, err := session.Start(session.Spec{
+		ID: "uisorphan", NodeID: cfg.NodeID, Agent: "shell", Project: t.TempDir(),
+		Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = orphan.Close() })
+	if _, err := d.agentUI.Show(orphan.ID(), "claude", "orphan", "Orphan", []byte(`{"kind":"text","text":"orphan"}`)); err != nil {
+		t.Fatal(err)
+	}
+	d.closeUIWith(orphan)
+
+	select {
+	case <-notifyStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("agentUI notify callback did not start")
+	}
+
+	cancel()
+	select {
+	case err := <-runDone:
+		t.Fatalf("Daemon.Run returned while agentUI notify callback was still in-flight (err=%v)", err)
+	case <-time.After(80 * time.Millisecond):
+	}
+
+	close(notifyRelease)
+	select {
+	case err := <-runDone:
+		if err != nil {
+			t.Fatalf("Daemon.Run returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Daemon.Run did not return after agentUI notify callback completed")
+	}
+
+	if got := d.agentUI.List(); len(got) != 0 {
+		t.Fatalf("expected all agentUI blocks closed on Daemon.Run exit, got %v", got)
+	}
+	d.uiWatched.mu.Lock()
+	remaining := len(d.uiWatched.keys)
+	d.uiWatched.mu.Unlock()
+	if remaining != 0 {
+		t.Fatalf("expected uiWatched keys drained on Daemon.Run exit, got %d", remaining)
+	}
+
+	// Post-shutdown closeUIWith must be a safe no-op without panicking or leaking.
+	d.closeUIWith(s)
 }

@@ -69,7 +69,7 @@ on = { type = "boolean", default = true }
 		"twice":             {swap(`"storage"`, `"net:api.github.com"`), "twice"},
 		"block id":          {swap(`id = "ui"`, `id = "mako.sidebar"`), "block id"},
 		"block title":       {swap(`title = "Test"`, `title = ""`), "empty"},
-		"spoofed title":     {swap(`title = "Test"`, "title = \"Settings‮\""), "reordering"},
+		"spoofed title":     {swap(`title = "Test"`, "title = \"Settings\u202e\""), "reordering"},
 		"slot":              {swap(`title = "Test"`, "title = \"Test\"\nslots = [\"center\"]"), "slot"},
 		"command id":        {swap(`id = "go"`, `id = "go now"`), "command id"},
 		"setting key":       {swap(`mode = {`, `Mode = {`), "keys are"},

@@ -155,7 +155,7 @@ func View(st *protocol.WorkspaceState) []byte {
 		if d.Looks == nil {
 			d.Looks = map[string]docLook{}
 		}
-		d.Looks[key] = docLook{Icon: l.Icon, Color: l.Color}
+		d.Looks[key] = docLook(l)
 	}
 	for _, key := range PinnedProjects(st) {
 		section, root, _ := strings.Cut(key, "\x00")

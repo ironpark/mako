@@ -20,7 +20,6 @@ import (
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/transport"
-	"google.golang.org/protobuf/proto"
 )
 
 // Front-ends browse the files of a session's project, and its git changes,
@@ -177,32 +176,6 @@ func (d *Daemon) handleGitHubRun(ctx context.Context, stream *transport.Stream, 
 				return &protocol.GitResult{Output: out}, err
 			})
 		})
-}
-
-// serve answers a request this node's own work answers, or a peer does for
-// another node: the decode, forward and reply every routed request shares.
-func serve[Req routed, Reply proto.Message](d *Daemon, ctx context.Context, stream *transport.Stream, env *protocol.Envelope,
-	replyType protocol.Type, work func(Req) (Reply, error)) error {
-	req, err := protocol.Body[Req](env)
-	if err != nil {
-		return err
-	}
-	var reply Reply
-	if d.local(req.GetNodeId()) {
-		reply, err = work(req)
-	} else {
-		// The asker's bound goes on with it.
-		if within := transport.Within(env); within > 0 {
-			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, within)
-			defer cancel()
-		}
-		reply, err = forward[Reply](ctx, d, env.Type(), req)
-	}
-	if err != nil {
-		return err
-	}
-	return stream.Send(replyType, env.GetId(), reply)
 }
 
 func absolute(path string) error {
@@ -454,61 +427,6 @@ func isBinary(data []byte, cut bool) bool {
 		data = data[:len(data)-1]
 	}
 	return !utf8.Valid(data)
-}
-
-// routed is a request addressed to a node.
-type routed interface {
-	proto.Message
-	GetNodeId() string
-}
-
-// forwardWithin bounds the wait for a peer's reply to a request passed on
-// for an asker that set no bound, as an older front-end: a peer that takes
-// the request and never answers would otherwise hold the request, and the
-// stream to it, for as long as the daemon runs.
-const forwardWithin = 2 * time.Minute
-
-// forward makes a request of a peer for the node it is addressed to,
-// telling the peer how long it is waited for.
-func forward[R proto.Message](ctx context.Context, d *Daemon, typ protocol.Type, req routed) (R, error) {
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, forwardWithin)
-		defer cancel()
-	}
-	var zero R
-	stream, err := d.streamFor(ctx, req)
-	if err != nil {
-		return zero, err
-	}
-	defer stream.Close()
-	return transport.Ask[R](ctx, stream, typ, req)
-}
-
-// open sends req to the node it names, as forward does, and keeps the
-// stream for what follows the reply on it, as a claim or a device's
-// connection. ctx bounds the wait for the reply.
-func open[R proto.Message](ctx context.Context, d *Daemon, typ protocol.Type, req routed) (R, *transport.Stream, error) {
-	var zero R
-	stream, err := d.streamFor(ctx, req)
-	if err != nil {
-		return zero, nil, err
-	}
-	reply, err := transport.CallContext[R](ctx, stream, typ, req)
-	if err != nil {
-		stream.Close()
-		return zero, nil, err
-	}
-	return reply, stream, nil
-}
-
-// streamFor opens a stream to a peer for the node req is addressed to.
-func (d *Daemon) streamFor(ctx context.Context, req routed) (*transport.Stream, error) {
-	node, err := d.node(req.GetNodeId())
-	if err != nil {
-		return nil, err
-	}
-	return d.peerStream(ctx, node)
 }
 
 // fileOp makes, renames or deletes a file or folder. None of them replaces

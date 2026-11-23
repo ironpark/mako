@@ -72,5 +72,15 @@ export function hostApi(call) {
     exec: Object.freeze({
       runProcess: (req) => call("exec.runProcess", req),
     }),
+    decision: Object.freeze({
+      status: (req) => call("decision.status", req),
+      evaluate: (req) => call("decision.evaluate", req),
+      submit: (req) => call("decision.submit", req),
+    }),
+    agents: Object.freeze({
+      listAgents: (req) => call("agents.listAgents", req),
+      askAgent: (req) => call("agents.askAgent", req),
+      cancelAsk: (req) => call("agents.cancelAsk", req),
+    }),
   });
 }

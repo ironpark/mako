@@ -4,8 +4,11 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/ironpark/ggui"
+
+	"github.com/ironpark/mako/pkg/rope"
 )
 
 // editorProbe shows an editor over text and focuses it.
@@ -152,4 +155,97 @@ func TestLargeFileNavigationAndEditing(t *testing.T) {
 		t.Fatalf("expected rope lines 1001, got %d", e.rope.Lines())
 	}
 	_ = v
+}
+
+func TestEnsureRopeIncrementalParityAndUTF8Boundaries(t *testing.T) {
+	text := ggui.State("")
+	ed := newCodeEditor(text, defaultPrefs)
+
+	assertParity := func(step, s string) {
+		t.Helper()
+		r := ed.ensureRope(s)
+		want := rope.New(s)
+		if got := r.String(); got != s {
+			t.Fatalf("%s: rope.String() = %q, want %q", step, got, s)
+		}
+		if ed.widest != want.LongestLine() {
+			t.Fatalf("%s: widest = %d, want %d", step, ed.widest, want.LongestLine())
+		}
+		if r.Lines() != want.Lines() {
+			t.Fatalf("%s: lines = %d, want %d", step, r.Lines(), want.Lines())
+		}
+		for i := range want.Lines() {
+			if r.LineStart(i) != want.LineStart(i) || r.LineEnd(i) != want.LineEnd(i) {
+				t.Fatalf("%s: line %d [%d,%d) != [%d,%d)", step, i, r.LineStart(i), r.LineEnd(i), want.LineStart(i), want.LineEnd(i))
+			}
+		}
+		for pos := 0; pos <= len(s); pos++ {
+			if r.LineOf(pos) != want.LineOf(pos) {
+				t.Fatalf("%s: LineOf(%d) = %d, want %d", step, pos, r.LineOf(pos), want.LineOf(pos))
+			}
+		}
+	}
+
+	steps := []struct {
+		name string
+		text string
+	}{
+		{"initial", "alpha\nbeta\ngamma"},
+		{"unchanged", "alpha\nbeta\ngamma"},
+		{"insert-middle", "alpha\nbeta-two\ngamma"},
+		{"repeated-char-insert", "aa"},
+		{"repeated-char-grow", "aaa"},
+		{"repeated-char-shrink", "aa"},
+		{"prepend", "prefix-" + "aa"},
+		{"append", "prefix-aa-suffix"},
+		{"delete-middle", "prefix-suffix"},
+		{"utf8-emoji-init", "hello 👋 world\nline2"},
+		{"utf8-emoji-replace", "hello 🌍 world\nline2"},
+		{"utf8-accent-init", "café"},
+		{"utf8-accent-replace", "cafè"},
+		{"utf8-hangul", "가나다\n라마바사"},
+		{"utf8-hangul-edit", "가나X다\n라마바사"},
+		{"full-replace", "completely different\ncontent\nhere"},
+		{"empty", ""},
+		{"from-empty", "back again\nwith lines"},
+		{"large-prefix-edit", strings.Repeat("line\n", 200) + "middle\n" + strings.Repeat("tail\n", 200)},
+		{"large-prefix-edit-2", strings.Repeat("line\n", 200) + "MIDDLE-UPDATED\n" + strings.Repeat("tail\n", 200)},
+	}
+	for _, st := range steps {
+		assertParity(st.name, st.text)
+	}
+}
+
+func TestRopeEditBoundsNoOverlapAndRuneBoundaries(t *testing.T) {
+	pairs := [][2]string{
+		{"aa", "aaa"},
+		{"aaa", "aa"},
+		{"ababa", "abababa"},
+		{"é", "è"},
+		{"hello 👋 world", "hello 🌍 world"},
+		{"가나다", "가라다"},
+		{"", "abc"},
+		{"abc", ""},
+	}
+	for _, p := range pairs {
+		prev, next := p[0], p[1]
+		pre, suf := ropeEditBounds(prev, next)
+		limit := min(len(prev), len(next))
+		if pre < 0 || suf < 0 || pre+suf > limit {
+			t.Fatalf("overlap for %q -> %q: pre=%d suf=%d limit=%d", prev, next, pre, suf, limit)
+		}
+		if pre < len(prev) && !utf8.RuneStart(prev[pre]) {
+			t.Fatalf("pre=%d not rune start in %q", pre, prev)
+		}
+		if pre < len(next) && !utf8.RuneStart(next[pre]) {
+			t.Fatalf("pre=%d not rune start in %q", pre, next)
+		}
+		if suf > 0 && (!utf8.RuneStart(prev[len(prev)-suf]) || !utf8.RuneStart(next[len(next)-suf])) {
+			t.Fatalf("suf=%d not rune start for %q -> %q", suf, prev, next)
+		}
+		rebuilt := prev[:pre] + next[pre:len(next)-suf] + prev[len(prev)-suf:]
+		if rebuilt != next {
+			t.Fatalf("rebuilt %q != %q (pre=%d suf=%d)", rebuilt, next, pre, suf)
+		}
+	}
 }

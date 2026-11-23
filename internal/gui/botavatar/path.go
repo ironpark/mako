@@ -13,26 +13,26 @@ import (
 
 // Geometry constants matching open-bot-avatar's contract v1.
 const (
-	EyeW          = 4.0
-	EyeH          = 11.0
-	BodyMin       = 6.0
-	BodyMax       = 94.0
-	EyeMargin     = 1.2
-	GazeX         = 1.5
-	GazeY         = 1.1
-	EyeClearance  = 1.5
-	EyeBoost      = 1.45
-	EyeBoostPad   = 3.0
-	HappyHalfW    = 0.72
-	HappyBase     = 0.10
-	HappyPeak     = 0.42
-	HappyStroke   = 0.60
-	pathMaxChars  = 6000
-	pathMaxSegs   = 400
-	pathMaxSubs   = 16
-	pathCoordMin  = -20.0
-	pathCoordMax  = 120.0
-	pathFlatness  = 0.08
+	EyeW         = 4.0
+	EyeH         = 11.0
+	BodyMin      = 6.0
+	BodyMax      = 94.0
+	EyeMargin    = 1.2
+	GazeX        = 1.5
+	GazeY        = 1.1
+	EyeClearance = 1.5
+	EyeBoost     = 1.45
+	EyeBoostPad  = 3.0
+	HappyHalfW   = 0.72
+	HappyBase    = 0.10
+	HappyPeak    = 0.42
+	HappyStroke  = 0.60
+	pathMaxChars = 6000
+	pathMaxSegs  = 400
+	pathMaxSubs  = 16
+	pathCoordMin = -20.0
+	pathCoordMax = 120.0
+	pathFlatness = 0.08
 )
 
 // Point is a 2D coordinate in viewBox units.
@@ -45,11 +45,11 @@ type Bounds struct {
 
 // Segment is one normalized absolute SVG path command.
 type Segment struct {
-	C                      byte // M, L, C, Q, A, Z
-	X, Y                   float64
-	X1, Y1, X2, Y2         float64
-	RX, RY, Rot            float64
-	LargeFlag, SweepFlag   int
+	C                    byte // M, L, C, Q, A, Z
+	X, Y                 float64
+	X1, Y1, X2, Y2       float64
+	RX, RY, Rot          float64
+	LargeFlag, SweepFlag int
 }
 
 // BodyAnalysis caches flattened polygons and bounds of an avatar silhouette.
@@ -134,7 +134,7 @@ func ParsePath(d string) ([]Segment, error) {
 			i++
 			if cmd == 'Z' || cmd == 'z' {
 				if !open {
-					return nil, errors.New("Z without an open subpath")
+					return nil, errors.New("closepath Z without an open subpath")
 				}
 				out = append(out, Segment{C: 'Z'})
 				cx, cy = sx, sy

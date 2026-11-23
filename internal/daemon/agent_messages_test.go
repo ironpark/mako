@@ -3,8 +3,10 @@ package daemon
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -120,5 +122,129 @@ func TestAgentMessagesConcurrentSendsHaveUniqueIDs(t *testing.T) {
 		if msg.ID != uint64(i+1) {
 			t.Fatalf("unordered IDs: %v", got)
 		}
+	}
+}
+
+func TestAgentMessagesAsyncCoalescedFlushAndClose(t *testing.T) {
+	dir := t.TempDir()
+	var store agentMessages
+	if err := store.load(dir); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	store.start(ctx)
+
+	var wg sync.WaitGroup
+	for g := range 5 {
+		wg.Go(func() {
+			for range 10 {
+				if _, err := store.send("a", "b", "burst", "/proj"); err != nil {
+					t.Error(err)
+				}
+				if g == 0 {
+					_, _ = store.monitor("/proj", map[string]bool{"b": true}, 50)
+				}
+			}
+		})
+	}
+	wg.Wait()
+
+	// Acknowledge first 20 messages asynchronously, then close to flush deterministically.
+	if _, err := store.read(t.Context(), "b", 0, 20, 50, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var restored agentMessages
+	if err := restored.load(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, err := restored.read(t.Context(), "b", 0, 0, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 30 {
+		t.Fatalf("restored inbox len = %d, want 30", len(got))
+	}
+	if restored.data.Next != 50 {
+		t.Fatalf("restored Next = %d, want 50", restored.data.Next)
+	}
+}
+
+func TestAgentMessagesSyncFlushDoesNotHoldMuDuringWrite(t *testing.T) {
+	dir := t.TempDir()
+	var store agentMessages
+	if err := store.load(dir); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	store.start(ctx)
+
+	// Hold writeMu (simulating an in-flight disk fsync) and verify send + monitor
+	// complete immediately without blocking on disk I/O.
+	store.writeMu.Lock()
+	var completed atomic.Bool
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := store.send("a", "b", "non-blocking", "/proj"); err != nil {
+			t.Error(err)
+		}
+		_, _ = store.monitor("/proj", map[string]bool{"b": true}, 10)
+		completed.Store(true)
+	}()
+	select {
+	case <-done:
+	case <-time.After(300 * time.Millisecond):
+		store.writeMu.Unlock()
+		t.Fatal("async send/monitor blocked while writeMu was held")
+	}
+	store.writeMu.Unlock()
+	if !completed.Load() {
+		t.Fatal("send/monitor did not complete")
+	}
+	if err := store.close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "agent-messages.json")); err != nil {
+		t.Fatalf("expected agent-messages.json after close: %v", err)
+	}
+}
+
+func TestAgentMessagesPostCloseFallsBackToSync(t *testing.T) {
+	dir := t.TempDir()
+	var store agentMessages
+	if err := store.load(dir); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	store.start(ctx)
+	if err := store.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store.mu.Lock()
+	asyncAfterClose := store.async
+	store.mu.Unlock()
+	if asyncAfterClose {
+		t.Fatal("store.async should be false after close()")
+	}
+
+	// Post-close send must persist synchronously to disk immediately.
+	if _, err := store.send("a", "b", "post-close", "/proj"); err != nil {
+		t.Fatal(err)
+	}
+	var restored agentMessages
+	if err := restored.load(dir); err != nil {
+		t.Fatal(err)
+	}
+	got, err := restored.read(t.Context(), "b", 0, 0, 10, 0)
+	if err != nil || len(got) != 1 || got[0].Text != "post-close" {
+		t.Fatalf("post-close synchronous persistence failed: got=%+v err=%v", got, err)
 	}
 }

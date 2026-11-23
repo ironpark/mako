@@ -74,7 +74,7 @@ func TestWatchAgent(t *testing.T) {
 
 	// 5. Output watch triggers a pushed note when matching terminal text appears.
 	outSess, err := session.Start(session.Spec{
-		ID: "out-peer", NodeID: d.cfg.NodeID, Agent: "claude", Project: parent.Info().GetProject(),
+		ID: "out-peer", NodeID: d.config().NodeID, Agent: "claude", Project: parent.Info().GetProject(),
 		Command: []string{"sh", "-c", `sleep 0.3; printf '\033[1mREADY_TOKEN\033[0m\n'; sleep 5`},
 		Cols:    80, Rows: 10,
 	})

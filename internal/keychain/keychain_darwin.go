@@ -65,7 +65,7 @@ var loadSecurity = sync.OnceValues(func() (*security, error) {
 	}
 	cf, err := purego.Dlopen(frameworkCoreFoundation, purego.RTLD_NOW|purego.RTLD_GLOBAL)
 	if err != nil {
-		return nil, fmt.Errorf("Core Foundation: %w", err)
+		return nil, fmt.Errorf("the Core Foundation framework: %w", err)
 	}
 	s := &security{}
 	purego.RegisterLibFunc(&s.cfStringCreate, cf, "CFStringCreateWithBytes")

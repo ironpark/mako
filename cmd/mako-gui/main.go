@@ -2,12 +2,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime/debug"
+	"sync"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/daemon"
@@ -28,6 +30,14 @@ func main() {
 	// in it take the login shell's PATH, to find the agents it runs.
 	shellenv.Load()
 	keepCrashes()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	stop := func() {
+		cancel()
+		wg.Wait()
+	}
+
 	// A window of busy terminals makes garbage fast, and the collector
 	// lets the heap grow to twice what is live between collections: some
 	// 200 MB for 95 live. A soft limit collects sooner as the heap nears
@@ -35,10 +45,10 @@ func main() {
 	// asks for another.
 	if os.Getenv("GOMEMLIMIT") == "" {
 		debug.SetMemoryLimit(memoryLimit)
-		go fitLimit()
+		wg.Go(func() { fitLimit(ctx) })
 	}
-	go relieve()
-	go diagnose()
+	wg.Go(func() { relieve(ctx) })
+	wg.Go(func() { diagnose(ctx) })
 	daemonAddr := flag.String("daemon", "", "the daemon's socket (default: the configuration directory's)")
 	renderDir := flag.String("render-dir", "", "render the window to PNGs in this directory, then exit (development)")
 	pprofAddr := flag.String("pprof", os.Getenv("MAKO_PPROF"), "serve Go's profiles on this address, as 127.0.0.1:6060 (development)")
@@ -50,16 +60,21 @@ func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "mako-gui:", err)
+		stop()
 		os.Exit(1)
 	}
 	if *renderDir != "" {
 		if err := gui.Preview(cfg, *daemonAddr, *renderDir, 1280, 800); err != nil {
 			fmt.Fprintln(os.Stderr, "mako-gui:", err)
+			stop()
 			os.Exit(1)
 		}
+		stop()
 		return
 	}
 	if err := gui.Run(cfg, *daemonAddr); err != nil {
+		stop()
 		exitWith(err)
 	}
+	stop()
 }

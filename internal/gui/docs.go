@@ -687,7 +687,7 @@ func (m *model) docColors(id string) func(string, skin.Palette) []styleSpan {
 			switch {
 			case !ok:
 				ds = nil
-			case ds == nil || ds.lang.Key != l.Key:
+			case ds == nil || ds.lang.Key != l.Key || !strings.HasPrefix(l.Key, "builtin:"):
 				ds = m.syntaxFor(l)
 			}
 		}

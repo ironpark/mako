@@ -120,7 +120,7 @@ func TestProjectMonitorRoutesToTheSessionsNode(t *testing.T) {
 	var got *protocol.ProjectAgents
 	waitFor(t, "remote project monitor", func() bool {
 		var err error
-		got, err = c.ProjectAgents(ctx, &protocol.ReadProjectAgents{NodeId: b.cfg.NodeID, Path: project})
+		got, err = c.ProjectAgents(ctx, &protocol.ReadProjectAgents{NodeId: b.config().NodeID, Path: project})
 		return err == nil && len(got.GetAgents()) == 1
 	})
 	if got.GetAgents()[0].GetSession().GetId() != "remote-agent" || len(got.GetMessages()) != 1 || got.GetMessages()[0].GetText() != "remote message" {

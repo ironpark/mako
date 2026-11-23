@@ -513,19 +513,23 @@ func (x *PluginLog) GetMessage() string {
 	return ""
 }
 
-// PluginAgentAsk is an agent a plugin asks to start (sessions:write):
-// which agent and profile, in which folder of which project, named what,
-// and the first 2 KiB of the prompt it would start with.
+// PluginAgentAsk is an agent a plugin asks to start (sessions:write) or ask
+// a one-shot question (agents:ask, kind "ask"): which agent and profile, in
+// which folder of which project, named/titled what, and the first 2 KiB of
+// the prompt.
 type PluginAgentAsk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Agent         string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
-	Profile       string                 `protobuf:"bytes,3,opt,name=profile,proto3" json:"profile,omitempty"`
-	Project       string                 `protobuf:"bytes,4,opt,name=project,proto3" json:"project,omitempty"` // the project's name
-	Root          string                 `protobuf:"bytes,5,opt,name=root,proto3" json:"root,omitempty"`       // the folder it would run in
-	Name          string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
-	Prompt        string                 `protobuf:"bytes,7,opt,name=prompt,proto3" json:"prompt,omitempty"`
-	Since         int64                  `protobuf:"varint,8,opt,name=since,proto3" json:"since,omitempty"` // Unix ms
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Id      string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Agent   string                 `protobuf:"bytes,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Profile string                 `protobuf:"bytes,3,opt,name=profile,proto3" json:"profile,omitempty"`
+	Project string                 `protobuf:"bytes,4,opt,name=project,proto3" json:"project,omitempty"` // the project's name
+	Root    string                 `protobuf:"bytes,5,opt,name=root,proto3" json:"root,omitempty"`       // the folder it would run in
+	Name    string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
+	Prompt  string                 `protobuf:"bytes,7,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	Since   int64                  `protobuf:"varint,8,opt,name=since,proto3" json:"since,omitempty"` // Unix ms
+	// kind is "" for an agent to start (sessions:write), "ask" for a question
+	// asked of an agent once (agents:ask; revision 45).
+	Kind          string `protobuf:"bytes,9,opt,name=kind,proto3" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -614,6 +618,13 @@ func (x *PluginAgentAsk) GetSince() int64 {
 		return x.Since
 	}
 	return 0
+}
+
+func (x *PluginAgentAsk) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
 }
 
 // PluginBlock is a block a plugin contributes.
@@ -1442,8 +1453,10 @@ type UiNode struct {
 	// container (0..4000) or graph canvas (120..1200).
 	Direction string  `protobuf:"bytes,26,opt,name=direction,proto3" json:"direction,omitempty"`
 	MaxHeight float64 `protobuf:"fixed64,27,opt,name=max_height,json=maxHeight,proto3" json:"max_height,omitempty"`
-	// variant styles a button or card: "", "primary", "secondary", "outline",
-	// "ghost", "danger" (revision 44).
+	// variant styles a node by kind: button ("primary", "secondary", "outline",
+	// "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+	// "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+	// (revision 44; extended in revision 45).
 	Variant string `protobuf:"bytes,28,opt,name=variant,proto3" json:"variant,omitempty"`
 	// columns is the column count (1..6) of a grid container (revision 44).
 	Columns int32 `protobuf:"varint,29,opt,name=columns,proto3" json:"columns,omitempty"`
@@ -2687,7 +2700,7 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\tPluginLog\x12\x0e\n" +
 	"\x02at\x18\x01 \x01(\x03R\x02at\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\tR\x05level\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"\xc0\x01\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xd4\x01\n" +
 	"\x0ePluginAgentAsk\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\x18\n" +
@@ -2696,7 +2709,8 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\x04root\x18\x05 \x01(\tR\x04root\x12\x12\n" +
 	"\x04name\x18\x06 \x01(\tR\x04name\x12\x16\n" +
 	"\x06prompt\x18\a \x01(\tR\x06prompt\x12\x14\n" +
-	"\x05since\x18\b \x01(\x03R\x05since\"c\n" +
+	"\x05since\x18\b \x01(\x03R\x05since\x12\x12\n" +
+	"\x04kind\x18\t \x01(\tR\x04kind\"c\n" +
 	"\vPluginBlock\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x14\n" +

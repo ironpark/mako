@@ -2,6 +2,7 @@ package gui
 
 import (
 	"image/color"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -9,9 +10,8 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/ui/icons"
+	uitheme "github.com/ironpark/ggui/ui/theme"
 	"github.com/ironpark/ggui/widget"
-
-	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/gui/iconset"
 	"github.com/ironpark/mako/internal/gui/mdview"
@@ -104,22 +104,29 @@ func (v *treeView) send(id, kind, value string) {
 // node draws a node of the tree; inLine says it is a row's child, where
 // text keeps to a line.
 func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
+	return v.nodeWith(n, inLine, false)
+}
+
+// nodeWith draws n; bare suppresses outer Tap/Drag/Drop on n itself (for a
+// tappable list row's inner content) while keeping descendants interactive.
+func (v *treeView) nodeWith(n *protocol.UiNode, inLine, bare bool) ggui.Widget {
 	tap := func() {}
-	if n.GetTap() {
+	isTap := !bare && n.GetTap()
+	if isTap {
 		id := n.GetId()
 		tap = func() { v.send(id, protocol.UiTap, "") }
 	}
 	switch n.GetKind() {
 	case "column", "row", "stack", "card", "scroll", "list", "table", "wrap", "grid", "split":
-		return v.container(n)
+		return v.container(n, bare)
 	case "collapsible":
-		return v.collapsibleNode(n)
+		return v.collapsibleNode(n, bare)
 	case "breadcrumb":
 		return v.breadcrumbNode(n)
 	case "tree":
-		return v.treeNode(n)
+		return v.treeNode(n, bare)
 	case "tree_item":
-		return v.treeItemNode(n, 0)
+		return v.treeItemNode(n, 0, bare)
 	case "graph":
 		return v.graphNode(n)
 	case "text":
@@ -127,15 +134,15 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 		if inLine {
 			t = t.NoWrap().Ellipsis()
 		}
-		return v.dragDrop(tappable(t, n, tap), n)
+		return v.maybeDragDrop(tappableWhen(t, n, isTap, tap), n, bare)
 	case "icon":
-		return v.dragDrop(tappable(pluginIcon(n.GetIcon()).Size(textSize(n.GetSize())+2).Color(toneColor(cmpTone(n.GetTone(), "muted"))), n, tap), n)
+		return v.maybeDragDrop(tappableWhen(pluginIcon(n.GetIcon()).Size(textSize(n.GetSize())+2).Color(toneColor(cmpTone(n.GetTone(), "muted"))), n, isTap, tap), n, bare)
 	case "pill":
-		return v.dragDrop(tappable(pill(n.GetText(), toneColor(cmpTone(n.GetTone(), "muted"))), n, tap), n)
+		return v.maybeDragDrop(tappableWhen(v.pillNode(n), n, isTap, tap), n, bare)
 	case "chip":
-		return v.dragDrop(tappable(chip(n.GetText()), n, tap), n)
+		return v.maybeDragDrop(tappableWhen(v.chipNode(n), n, isTap, tap), n, bare)
 	case "button":
-		return v.buttonNode(n, tap)
+		return v.buttonNode(n, tap, bare)
 	case "input":
 		id := n.GetId()
 		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + "\x00" + v.scope + id).Placeholder(n.GetText()).Name(cmpTone(n.GetText(), T("Input")))
@@ -216,6 +223,15 @@ func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
 	case "code":
 		return toolBlock(n.GetText(), false)
 	case "progress":
+		if n.GetVariant() == "spinner" {
+			if n.GetText() == "" {
+				return ui.Spinner().Size(13)
+			}
+			return widget.Row(
+				ui.Spinner().Size(13),
+				widget.Text(n.GetText()).Size(12).Color(toneColor(cmpTone(n.GetTone(), "muted"))).NoWrap().Ellipsis(),
+			).Gap(6).Align(widget.AlignCenter)
+		}
 		return ui.Progress(ggui.Const(n.GetProgress()))
 	case "divider":
 		return hline()
@@ -241,9 +257,9 @@ func (w looseHeight) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	dst.Paint(w.child, r)
 }
 
-// tappable makes a node that sends a tap answer one.
-func tappable(w ggui.Widget, n *protocol.UiNode, tap func()) ggui.Widget {
-	if !n.GetTap() {
+// tappableWhen makes a node that sends a tap answer one when active is true.
+func tappableWhen(w ggui.Widget, n *protocol.UiNode, active bool, tap func()) ggui.Widget {
+	if !active {
 		return w
 	}
 	return ui.ButtonOf(w, tap).Ghost().Pad(2, 4).Radius(6).Name(n.GetText())
@@ -256,8 +272,132 @@ func cmpTone(a, b string) string {
 	return b
 }
 
+// solidToneColors returns a WCAG AA (>= 4.5:1) solid fill and foreground pair
+// for solid pill and chip badges across both dark and light themes.
+func solidToneColors(tone string) (fill, fg color.Color) {
+	switch tone {
+	case "accent":
+		return skin.AccentBright, contrastInk{bg: skin.AccentBright}
+	case "success":
+		return skin.DiffAdded, contrastInk{bg: skin.DiffAdded}
+	case "warning":
+		return skin.DotWaiting, contrastInk{bg: skin.DotWaiting}
+	case "danger":
+		return uitheme.Destructive, contrastInk{bg: uitheme.Destructive}
+	case "muted":
+		return skin.Surface3, skin.Fg
+	case "faint":
+		return skin.Surface2, skin.Fg
+	default:
+		return uitheme.Primary, uitheme.PrimaryFg
+	}
+}
+
+// contrastInk is an EnvColor that resolves to whichever of white or dark ink
+// yields the higher WCAG contrast ratio against bg in the active theme.
+type contrastInk struct{ bg color.Color }
+
+func (c contrastInk) RGBA() (uint32, uint32, uint32, uint32) {
+	return pickContrastInk(c.bg).RGBA()
+}
+
+func (c contrastInk) Resolve(env ggui.Env) color.Color {
+	return pickContrastInk(ggui.ResolveColor(c.bg, env))
+}
+
+func pickContrastInk(bg color.Color) color.Color {
+	light := skin.Hex(0xFFFFFF)
+	dark := skin.Hex(0x181B1A)
+	if bg == nil {
+		return dark
+	}
+	if wcagContrast(bg, light) >= wcagContrast(bg, dark) {
+		return light
+	}
+	return dark
+}
+
+func wcagContrast(a, b color.Color) float64 {
+	la, lb := relativeLuminance(a), relativeLuminance(b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
+}
+
+func relativeLuminance(c color.Color) float64 {
+	if c == nil {
+		return 0
+	}
+	n := color.NRGBAModel.Convert(c).(color.NRGBA)
+	lin := func(v uint8) float64 {
+		s := float64(v) / 255.0
+		if s <= 0.04045 {
+			return s / 12.92
+		}
+		return math.Pow((s+0.055)/1.055, 2.4)
+	}
+	return 0.2126*lin(n.R) + 0.7152*lin(n.G) + 0.0722*lin(n.B)
+}
+
+// pillNode renders a pill respecting soft (default), solid, and outline variants
+// and an optional leading icon.
+func (v *treeView) pillNode(n *protocol.UiNode) ggui.Widget {
+	c := toneColor(cmpTone(n.GetTone(), "muted"))
+	iconName := n.GetIcon()
+	content := func(fg color.Color) ggui.Widget {
+		lbl := widget.Text(n.GetText()).Size(10.5).Weight(ggui.WeightMedium).Color(fg).NoWrap().Ellipsis()
+		if iconName == "" {
+			return lbl
+		}
+		return widget.Row(pluginIcon(iconName).Size(11).Color(fg), lbl).Gap(4).Align(widget.AlignCenter)
+	}
+	switch n.GetVariant() {
+	case "solid":
+		fill, fg := solidToneColors(n.GetTone())
+		return widget.Box(content(fg)).Pad(2, 8).Radius(999).Fill(fill).Clip().MaxWidth(200)
+	case "outline":
+		return widget.Box(content(c)).Pad(2, 8).Radius(999).Border(1, c).Clip().MaxWidth(200)
+	default: // "" or "soft"
+		return widget.Box(&washed{child: widget.Box(content(c)).Pad(2, 8).Clip(), color: c}).MaxWidth(200)
+	}
+}
+
+// chipNode renders a chip respecting default (mono Surface2), soft, solid, and
+// outline variants and an optional leading icon.
+func (v *treeView) chipNode(n *protocol.UiNode) ggui.Widget {
+	iconName := n.GetIcon()
+	withIcon := func(fg color.Color, lbl ggui.Widget) ggui.Widget {
+		if iconName == "" {
+			return lbl
+		}
+		return widget.Row(pluginIcon(iconName).Size(11).Color(fg), lbl).Gap(4).Align(widget.AlignCenter)
+	}
+	switch n.GetVariant() {
+	case "soft":
+		c := toneColor(cmpTone(n.GetTone(), "muted"))
+		lbl := widget.Text(n.GetText()).Size(11.5).Color(c).NoWrap().Ellipsis()
+		return widget.Box(&washed{child: widget.Box(withIcon(c, lbl)).Pad(2, 8).Clip(), color: c}).MaxWidth(200)
+	case "solid":
+		fill, fg := solidToneColors(n.GetTone())
+		lbl := widget.Text(n.GetText()).Size(11.5).Weight(ggui.WeightMedium).Color(fg).NoWrap().Ellipsis()
+		return widget.Box(withIcon(fg, lbl)).Pad(2, 8).Radius(999).Fill(fill).Clip().MaxWidth(200)
+	case "outline":
+		var border color.Color = skin.Border
+		if n.GetTone() != "" {
+			border = toneColor(n.GetTone())
+		}
+		fg := toneColor(cmpTone(n.GetTone(), "muted"))
+		lbl := widget.Text(n.GetText()).Size(11.5).Color(fg).NoWrap().Ellipsis()
+		return widget.Box(withIcon(fg, lbl)).Pad(2, 8).Radius(999).Border(1, border).Clip().MaxWidth(200)
+	default:
+		lbl := widget.Text(n.GetText()).Size(10.5).Font(ggui.DefaultMonoFont()).Color(skin.Muted).NoWrap().Ellipsis()
+		return widget.Box(withIcon(skin.Muted, lbl)).Pad(1, 5).Radius(4).Fill(skin.Surface2).Clip().MaxWidth(140)
+	}
+}
+
 // buttonNode renders a plugin button respecting variant, size, tone, icon and icon-only layouts.
-func (v *treeView) buttonNode(n *protocol.UiNode, tap func()) ggui.Widget {
+func (v *treeView) buttonNode(n *protocol.UiNode, tap func(), bare bool) ggui.Widget {
 	text := n.GetText()
 	iconName := n.GetIcon()
 	var b *ui.ButtonWidget
@@ -310,12 +450,12 @@ func (v *treeView) buttonNode(n *protocol.UiNode, tap func()) ggui.Widget {
 	if name == "" {
 		name = iconName
 	}
-	return v.dragDrop(b.Disabled(n.GetDisabled() || !n.GetTap()).Name(name), n)
+	return v.maybeDragDrop(b.Disabled(n.GetDisabled() || bare || !n.GetTap()).Name(name), n, bare)
 }
 
 // collapsibleNode renders a native disclosure section whose open state is
 // persisted locally in blockForm and optionally emits UiChange ("true"|"false").
-func (v *treeView) collapsibleNode(n *protocol.UiNode) ggui.Widget {
+func (v *treeView) collapsibleNode(n *protocol.UiNode, bare bool) ggui.Widget {
 	id := n.GetId()
 	st := v.form.local(id, strconv.FormatBool(n.GetChecked()))
 	open := ggui.Bind(
@@ -360,7 +500,7 @@ func (v *treeView) collapsibleNode(n *protocol.UiNode) ggui.Widget {
 	body := widget.Padding(widget.Column(kids...).Gap(gap).Stretch(), 6, 8, 4, 16)
 	cw := ui.CollapsibleOf(open, trigger, body).Disabled(n.GetDisabled())
 	cw.SetName(n.GetText())
-	return v.dragDrop(cw, n)
+	return v.maybeDragDrop(cw, n, bare)
 }
 
 // breadcrumbNode renders clickable path segments separated by chevrons.
@@ -384,19 +524,19 @@ func (v *treeView) breadcrumbNode(n *protocol.UiNode) ggui.Widget {
 }
 
 // treeNode renders a hierarchical list of tree_item nodes.
-func (v *treeView) treeNode(n *protocol.UiNode) ggui.Widget {
+func (v *treeView) treeNode(n *protocol.UiNode, bare bool) ggui.Widget {
 	gap := n.GetGap()
 	kids := make([]ggui.Widget, 0, len(n.GetChildren()))
 	for _, c := range n.GetChildren() {
-		kids = append(kids, v.treeItemNode(c, 0))
+		kids = append(kids, v.treeItemNode(c, 0, false))
 	}
-	return v.dragDrop(widget.Column(kids...).Gap(gap).Stretch(), n)
+	return v.maybeDragDrop(widget.Column(kids...).Gap(gap).Stretch(), n, bare)
 }
 
 // treeItemNode renders a single tree_item row with vertical indent guides,
 // persisted expand/collapse state, icon, primary label, secondary value text,
 // active accent styling, tap handling, and full drag/drop support.
-func (v *treeView) treeItemNode(n *protocol.UiNode, depth int) ggui.Widget {
+func (v *treeView) treeItemNode(n *protocol.UiNode, depth int, bare bool) ggui.Widget {
 	id := n.GetId()
 	hasKids := len(n.GetChildren()) > 0
 	expandable := hasKids || n.GetChange()
@@ -439,6 +579,7 @@ func (v *treeView) treeItemNode(n *protocol.UiNode, depth int) ggui.Widget {
 		}
 
 		// Row body: icon, primary label, optional secondary value text.
+		badgeMode := n.GetVariant() == "badge"
 		var bodyItems []ggui.Widget
 		if n.GetIcon() != "" {
 			bodyItems = append(bodyItems, pluginIcon(n.GetIcon()).Size(14).Color(toneColor(cmpTone(n.GetTone(), "muted"))))
@@ -447,17 +588,26 @@ func (v *treeView) treeItemNode(n *protocol.UiNode, depth int) ggui.Widget {
 		if active && n.GetWeight() == "" {
 			weight = ggui.WeightMedium
 		}
+		labelColor := toneColor(n.GetTone())
+		if badgeMode && !active {
+			labelColor = skin.Fg
+		}
 		bodyItems = append(bodyItems, widget.Expanded(
-			widget.Text(n.GetText()).Size(12.5).Weight(weight).Color(toneColor(n.GetTone())).NoWrap().Ellipsis(),
+			widget.Text(n.GetText()).Size(12.5).Weight(weight).Color(labelColor).NoWrap().Ellipsis(),
 		))
 		if n.GetValue() != "" {
-			bodyItems = append(bodyItems, widget.Text(n.GetValue()).Size(11).Color(skin.Muted).NoWrap())
+			if badgeMode {
+				bodyItems = append(bodyItems, widget.Box(widget.Text(n.GetValue()).Size(10.5).Color(skin.Muted).NoWrap()).
+					Pad(1, 6).Radius(6).Fill(skin.Surface2))
+			} else {
+				bodyItems = append(bodyItems, widget.Text(n.GetValue()).Size(11).Color(skin.Muted).NoWrap())
+			}
 		}
 		body := widget.Row(bodyItems...).Gap(6).Align(widget.AlignCenter)
 
 		var rowContent ggui.Widget = widget.Expanded(widget.Padding(body, 4, 6))
 		switch {
-		case n.GetTap() && !n.GetDisabled():
+		case !bare && n.GetTap() && !n.GetDisabled():
 			rowContent = widget.Expanded(ui.ButtonOf(body, func() { v.send(id, protocol.UiTap, "") }).
 				Ghost().Pad(4, 6).Radius(6).Name(n.GetText()))
 		case expandable && !n.GetDisabled():
@@ -470,7 +620,10 @@ func (v *treeView) treeItemNode(n *protocol.UiNode, depth int) ggui.Widget {
 		if active {
 			rowBox = rowBox.Fill(skin.Surface2)
 		}
-		row := v.treeItemDragDrop(rowBox, n)
+		var row ggui.Widget = rowBox
+		if !bare {
+			row = v.treeItemDragDrop(rowBox, n)
+		}
 
 		if !hasKids || !expanded {
 			return row
@@ -478,7 +631,7 @@ func (v *treeView) treeItemNode(n *protocol.UiNode, depth int) ggui.Widget {
 		sub := make([]ggui.Widget, 0, 1+len(n.GetChildren()))
 		sub = append(sub, row)
 		for _, child := range n.GetChildren() {
-			sub = append(sub, v.treeItemNode(child, depth+1))
+			sub = append(sub, v.treeItemNode(child, depth+1, false))
 		}
 		return widget.Column(sub...).Gap(1).Stretch()
 	})
@@ -528,7 +681,7 @@ func (v *treeView) treeItemDragDrop(w ggui.Widget, n *protocol.UiNode) ggui.Widg
 
 // container draws a column, row, stack, card, scroll, list, table, wrap, grid
 // or split container.
-func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
+func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 	kind := n.GetKind()
 	gap := n.GetGap()
 
@@ -542,7 +695,7 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 		for _, c := range n.GetChildren() {
 			kids = append(kids, v.node(c, true))
 		}
-		return v.dragDrop(v.tappableBox(widget.Wrap(kids...).Gap(gap).RunGap(gap).Align(widget.AlignCenter), n), n)
+		return v.maybeDragDrop(v.tappableBoxWhen(widget.Wrap(kids...).Gap(gap).RunGap(gap).Align(widget.AlignCenter), n, !bare), n, bare)
 
 	case "grid":
 		if gap == 0 {
@@ -568,7 +721,7 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 			}
 			rows = append(rows, widget.Row(rowKids...).Gap(gap).Align(widget.AlignStart))
 		}
-		return v.dragDrop(v.tappableBox(widget.Column(rows...).Gap(gap).Stretch(), n), n)
+		return v.maybeDragDrop(v.tappableBoxWhen(widget.Column(rows...).Gap(gap).Stretch(), n, !bare), n, bare)
 
 	case "split":
 		children := n.GetChildren()
@@ -604,18 +757,28 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 		if h := n.GetMaxHeight(); h > 0 {
 			out = widget.Box(out).MaxHeight(h)
 		}
-		return v.dragDrop(out, n)
+		return v.maybeDragDrop(out, n, bare)
+
+	case "table":
+		return v.tableNode(n, bare)
 	}
 
 	row := kind == "row"
+	hasGrow := false
+	if row {
+		for _, c := range n.GetChildren() {
+			if c.GetGrow() > 0 {
+				hasGrow = true
+				break
+			}
+		}
+	}
 	kids := make([]ggui.Widget, 0, len(n.GetChildren()))
 	for _, c := range n.GetChildren() {
 		var w ggui.Widget
 		if kind == "list" && c.GetTap() {
 			id := c.GetId()
-			inner := proto.CloneOf(c) // drawn as the row's content; the row answers tap/drag/drop
-			inner.Tap, inner.Drag, inner.Drop = false, "", false
-			w = listRow(v.node(inner, false), strings.Join(texts(c), " "), func() { v.send(id, protocol.UiTap, "") })
+			w = listRow(v.nodeWith(c, false, true), strings.Join(texts(c), " "), func() { v.send(id, protocol.UiTap, "") })
 			w = v.dragDrop(w, c)
 		} else {
 			w = v.node(c, row)
@@ -625,6 +788,8 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 			w = widget.Expanded(w)
 		case g > 0:
 			w = widget.Flex(w, g)
+		case row && !hasGrow && (c.GetKind() == "pill" || c.GetKind() == "chip"):
+			w = widget.Flexible(w)
 		}
 		kids = append(kids, w)
 	}
@@ -640,16 +805,16 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 				break
 			}
 		}
-		return v.dragDrop(v.tappableBox(widget.Row(kids...).Gap(gap).Align(align), n), n)
+		return v.maybeDragDrop(v.tappableBoxWhen(widget.Row(kids...).Gap(gap).Align(align), n, !bare), n, bare)
 	case "stack":
-		return v.dragDrop(widget.Stack(kids...), n)
+		return v.maybeDragDrop(widget.Stack(kids...), n, bare)
 	case "card":
 		if gap == 0 {
 			gap = 6
 		}
-		inner := v.tappableBox(widget.Column(kids...).Gap(gap).Stretch(), n)
+		inner := v.tappableBoxWhen(widget.Column(kids...).Gap(gap).Stretch(), n, !bare)
 		// If dragDrop will draw the card frame/highlight, avoid double framing.
-		if n.GetDrag() != "" || n.GetDrop() {
+		if !bare && (n.GetDrag() != "" || n.GetDrop()) {
 			return v.dragDrop(inner, n)
 		}
 		var border color.Color = skin.Border
@@ -667,6 +832,11 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 			return widget.Box(inner).Fill(skin.DiffRemovedBg).Border(1, skin.DiffRemoved).Radius(8).Pad(8, 10)
 		case "primary":
 			return widget.Box(inner).Fill(skin.Surface2).Border(1, skin.AccentBright).Radius(8).Pad(8, 10)
+		case "soft":
+			if n.GetTone() != "" {
+				return &washed{child: widget.Box(inner).Pad(8, 10), color: toneColor(n.GetTone()), radius: 10}
+			}
+			return widget.Box(inner).Fill(skin.Surface2).Radius(10).Pad(8, 10)
 		default:
 			return widget.Box(inner).Fill(skin.Surface1).Border(1, border).Radius(8).Pad(8, 10)
 		}
@@ -685,6 +855,9 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 			body = widget.Column(kids...).Gap(gap).Stretch()
 		}
 		sc := widget.Scroll(body).Shrink().Bar(skin.Surface3)
+		if n.GetVariant() == "follow" {
+			sc = sc.FollowEnd()
+		}
 		var out ggui.Widget = sc
 		if horiz {
 			sc = sc.Horizontal()
@@ -693,30 +866,110 @@ func (v *treeView) container(n *protocol.UiNode) ggui.Widget {
 		if h := n.GetMaxHeight(); h > 0 {
 			out = widget.Box(out).MaxHeight(h)
 		}
-		return v.dragDrop(out, n)
-	case "table":
-		var trows []ggui.Widget
-		if hdrs := n.GetLabels(); len(hdrs) > 0 {
-			cols := make([]ggui.Widget, len(hdrs))
-			for i, h := range hdrs {
-				cols[i] = widget.Expanded(widget.Text(h).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.Muted).NoWrap().Ellipsis())
-			}
-			trows = append(trows, widget.Box(widget.Row(cols...).Gap(8).Align(widget.AlignCenter)).Pad(6, 10).Fill(skin.Surface1), hline())
-		}
-		for i, k := range kids {
-			if i > 0 {
-				trows = append(trows, hline())
-			}
-			trows = append(trows, widget.Box(k).Pad(6, 10))
-		}
-		return v.dragDrop(widget.Box(widget.Column(trows...).Stretch()).Border(1, skin.Border).Radius(8), n)
+		return v.maybeDragDrop(out, n, bare)
 	case "list":
-		return v.dragDrop(widget.Column(kids...).Gap(gap).Stretch(), n)
+		return v.maybeDragDrop(widget.Column(kids...).Gap(gap).Stretch(), n, bare)
 	}
 	if gap == 0 {
 		gap = 6
 	}
-	return v.dragDrop(v.tappableBox(widget.Column(kids...).Gap(gap).Stretch(), n), n)
+	return v.maybeDragDrop(v.tappableBoxWhen(widget.Column(kids...).Gap(gap).Stretch(), n, !bare), n, bare)
+}
+
+// tableNode renders a table whose header and every body row share the exact
+// same column flex weights, gap, horizontal padding, and left-aligned slots.
+func (v *treeView) tableNode(n *protocol.UiNode, bare bool) ggui.Widget {
+	hdrs := n.GetLabels()
+	children := n.GetChildren()
+	numCols := len(hdrs)
+	for _, c := range children {
+		if c.GetKind() == "row" && len(c.GetChildren()) > numCols {
+			numCols = len(c.GetChildren())
+		}
+	}
+	weights := tableColumnWeights(numCols, children)
+
+	const colGap = 8.0
+	var trows []ggui.Widget
+	if len(hdrs) > 0 {
+		cols := make([]ggui.Widget, numCols)
+		for i := range numCols {
+			label := ""
+			if i < len(hdrs) {
+				label = hdrs[i]
+			}
+			hdr := widget.Text(label).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.Muted).NoWrap().Ellipsis()
+			cols[i] = widget.Flex(widget.Align(hdr).At(0, 0.5), weights[i])
+		}
+		trows = append(trows, widget.Box(widget.Row(cols...).Gap(colGap).Align(widget.AlignCenter)).Pad(6, 10).Fill(skin.Surface1), hline())
+	}
+	for i, c := range children {
+		if i > 0 {
+			trows = append(trows, hline())
+		}
+		if c.GetKind() == "row" && numCols > 0 {
+			cols := make([]ggui.Widget, numCols)
+			rowKids := c.GetChildren()
+			for j := range numCols {
+				var cell ggui.Widget = widget.Box()
+				if j < len(rowKids) {
+					cell = v.node(rowKids[j], true)
+				}
+				cols[j] = widget.Flex(widget.Align(cell).At(0, 0.5), weights[j])
+			}
+			rowW := widget.Row(cols...).Gap(colGap).Align(widget.AlignCenter)
+			var wrapped ggui.Widget
+			if c.GetTap() {
+				id := c.GetId()
+				wrapped = ui.ButtonOf(rowW, func() { v.send(id, protocol.UiTap, "") }).Ghost().Pad(6, 10).Radius(0).Name(strings.Join(texts(c), " "))
+			} else {
+				wrapped = widget.Box(rowW).Pad(6, 10)
+			}
+			trows = append(trows, v.dragDrop(wrapped, c))
+			continue
+		}
+		trows = append(trows, widget.Box(v.node(c, false)).Pad(6, 10))
+	}
+	return v.maybeDragDrop(widget.Box(widget.Column(trows...).Stretch()).Border(1, skin.Border).Radius(8), n, bare)
+}
+
+func tableColumnWeights(numCols int, rows []*protocol.UiNode) []float64 {
+	if numCols <= 0 {
+		return nil
+	}
+	maxGrow := make([]float64, numCols)
+	anyGrow, allGrow := false, true
+	for _, r := range rows {
+		if r.GetKind() != "row" {
+			continue
+		}
+		for i, cell := range r.GetChildren() {
+			if i < numCols && cell.GetGrow() > maxGrow[i] {
+				maxGrow[i] = cell.GetGrow()
+			}
+		}
+	}
+	for _, g := range maxGrow {
+		if g > 0 {
+			anyGrow = true
+		} else {
+			allGrow = false
+		}
+	}
+	weights := make([]float64, numCols)
+	for i, g := range maxGrow {
+		switch {
+		case !anyGrow:
+			weights[i] = 1
+		case allGrow:
+			weights[i] = g
+		case g > 0:
+			weights[i] = 1 + g
+		default:
+			weights[i] = 1
+		}
+	}
+	return weights
 }
 
 func isContainerKind(kind string) bool {
@@ -787,8 +1040,15 @@ func (v *treeView) dragDrop(w ggui.Widget, n *protocol.UiNode) ggui.Widget {
 	return w
 }
 
-func (v *treeView) tappableBox(w ggui.Widget, n *protocol.UiNode) ggui.Widget {
-	if !n.GetTap() {
+func (v *treeView) maybeDragDrop(w ggui.Widget, n *protocol.UiNode, bare bool) ggui.Widget {
+	if bare {
+		return w
+	}
+	return v.dragDrop(w, n)
+}
+
+func (v *treeView) tappableBoxWhen(w ggui.Widget, n *protocol.UiNode, active bool) ggui.Widget {
+	if !active || !n.GetTap() {
 		return w
 	}
 	id := n.GetId()

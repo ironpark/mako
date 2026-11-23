@@ -6,10 +6,10 @@ import (
 	"unicode"
 
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/ggui/pkg/hangul"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 
+	"github.com/ironpark/mako/internal/gui/hangul"
 	"github.com/ironpark/mako/internal/gui/skin"
 )
 

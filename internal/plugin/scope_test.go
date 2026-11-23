@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -651,5 +652,69 @@ scope = "project"
 	}
 	if err := layoutdoc.CheckProps(globalProps, map[string]any{"scope": "project:alpha"}); err == nil {
 		t.Fatal("CheckProps accepted props.scope on global block")
+	}
+}
+
+func TestKVStoreDelRollbackAndCorruptJSON(t *testing.T) {
+	t.Run("delScoped rolls back on save failure", func(t *testing.T) {
+		dir := t.TempDir()
+		storePath := filepath.Join(dir, "storage.json")
+		kv := newKVStore(storePath, 1<<20)
+		if _, err := kv.setScoped("", "k1", "v1"); err != nil {
+			t.Fatal(err)
+		}
+		// Replace storage.json with a directory so fsutil.Write/Rename fails.
+		if err := os.Remove(storePath); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(storePath, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		deleted, err := kv.delScoped("", "k1")
+		if err == nil || deleted {
+			t.Fatalf("expected delScoped error with deleted=false, got deleted=%v err=%v", deleted, err)
+		}
+		v, ok, err := kv.getScoped("", "k1")
+		if err != nil || !ok || v != "v1" {
+			t.Fatalf("expected rolled back value v1, got ok=%v v=%q err=%v", ok, v, err)
+		}
+	})
+
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{name: "corrupt json", raw: "{bad-json"},
+		{name: "null json", raw: "null"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storePath := filepath.Join(t.TempDir(), "storage.json")
+			if err := os.WriteFile(storePath, []byte(tc.raw), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			kv := newKVStore(storePath, 1<<20)
+			if _, _, err := kv.getScoped("", "k1"); err == nil {
+				t.Fatal("expected getScoped error on corrupt storage.json")
+			}
+			if _, err := kv.setScoped("", "k1", "v1"); err == nil {
+				t.Fatal("expected setScoped error on corrupt storage.json")
+			}
+			if _, err := kv.delScoped("", "k1"); err == nil {
+				t.Fatal("expected delScoped error on corrupt storage.json")
+			}
+			if _, err := kv.keysScoped("", ""); err == nil {
+				t.Fatal("expected keysScoped error on corrupt storage.json")
+			}
+			if got := kv.used(); got != 0 {
+				t.Fatalf("used() = %d, want 0", got)
+			}
+			after, err := os.ReadFile(storePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != tc.raw {
+				t.Fatalf("corrupt storage.json was overwritten: got %q, want %q", string(after), tc.raw)
+			}
+		})
 	}
 }

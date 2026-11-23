@@ -24,6 +24,7 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 			return nil, errors.New("the plugin's manifest has not been read")
 		}
 		perms := v.man.Permissions
+		var seq uint64
 		err := m.grant.update(p.id, func(e *grantEntry) {
 			for _, perm := range perms {
 				if !contains(e.Granted, perm) {
@@ -31,27 +32,39 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 				}
 			}
 			e.Denied = nil
+			p.denyClose.Store(false)
+			seq = p.permSeq.Add(1)
 		})
 		if err != nil {
 			return nil, err
 		}
 		m.cfg.Log.Info("plugin's permissions granted", "plugin", p.id, "permissions", perms)
 		p.status(func() {})
-		p.post(p.showAll)
+		if !p.post(func() {
+			if p.permSeq.Load() == seq {
+				p.showAll()
+			}
+		}) {
+			p.signalRecheck()
+		}
 	case protocol.PluginDeny:
 		var perms []string
 		if v != nil {
 			perms = v.man.Permissions
 		}
-		if err := m.grant.update(p.id, func(e *grantEntry) { e.Granted, e.Denied, e.AgentsAllowed = nil, perms, false }); err != nil {
+		if err := m.grant.update(p.id, func(e *grantEntry) {
+			e.Granted, e.Denied, e.AgentsAllowed, e.AsksAllowed = nil, perms, false, nil
+			p.denyClose.Store(true)
+			p.permSeq.Add(1)
+		}); err != nil {
 			return nil, err
 		}
-		p.dropAsk("the user refused the plugin's permissions")
+		p.cancelPending("the user refused the plugin's permissions")
 		if m.cfg.Layout != nil {
 			m.cfg.Layout.Forget(p.id)
 		}
 		m.cfg.Log.Info("plugin's permissions refused", "plugin", p.id)
-		p.post(func() { p.closeRuntime(); p.status(func() { p.running = false }) })
+		p.signalRecheck()
 		p.status(func() {})
 	case protocol.PluginDisable, protocol.PluginEnable:
 		off := a.GetOp() == protocol.PluginDisable
@@ -63,26 +76,16 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 			return nil, &protocol.CodedError{Code: protocol.CodePluginBlocked, Args: []string{p.id, version, st.Blocked},
 				Message: fmt.Sprintf("the plugin cannot be enabled while it is blocked: %s", st.Blocked)}
 		}
-		if err := m.grant.update(p.id, func(e *grantEntry) { e.Disabled = off }); err != nil {
+		if err := m.grant.update(p.id, func(e *grantEntry) {
+			e.Disabled = off
+			p.enableReset.Store(!off)
+		}); err != nil {
 			return nil, err
 		}
 		if off {
-			p.dropAsk("the plugin was disabled")
+			p.cancelPending("the plugin was disabled")
 		}
-		p.post(func() {
-			p.failures, p.renderFailures = 0, 0
-			if off {
-				p.sleep("disabled")
-			}
-			p.status(func() {
-				if !off {
-					p.failErr = ""
-				}
-			})
-			if !off {
-				p.showAll()
-			}
-		})
+		p.signalRecheck()
 	case protocol.PluginReload:
 		p.post(p.reload)
 	case protocol.PluginRun:
@@ -157,7 +160,7 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 			return nil, err
 		}
 	case protocol.PluginForgetAgents:
-		if err := m.grant.update(p.id, func(e *grantEntry) { e.AgentsAllowed = false }); err != nil {
+		if err := m.grant.update(p.id, func(e *grantEntry) { e.AgentsAllowed, e.AsksAllowed = false, nil }); err != nil {
 			return nil, err
 		}
 		p.status(func() {})

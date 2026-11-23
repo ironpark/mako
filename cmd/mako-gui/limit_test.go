@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"sync/atomic"
+	"testing"
+	"time"
+)
 
 func TestTheLimitKeepsClearOfTheLiveHeap(t *testing.T) {
 	if got := limitFor(60<<20, 0); got != memoryLimit {
@@ -30,5 +35,49 @@ func TestTheLimitKeepsClearOfWhatTheRuntimeCannotReturn(t *testing.T) {
 func TestBesidesHeapNeverUnderflows(t *testing.T) {
 	if got := besidesHeap(100, 50, 40, 30); got != 0 {
 		t.Errorf("got %d; want 0", got)
+	}
+}
+
+func TestFitLimitLoopAndRelieveLoopExitOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var fitCalls atomic.Int32
+	fitDone := make(chan struct{})
+	go func() {
+		defer close(fitDone)
+		fitLimitLoop(ctx, 5*time.Millisecond, func() {
+			if fitCalls.Add(1) >= 3 {
+				cancel()
+			}
+		})
+	}()
+	select {
+	case <-fitDone:
+	case <-time.After(2 * time.Second):
+		cancel()
+		t.Fatal("fitLimitLoop did not stop on cancel")
+	}
+	if fitCalls.Load() < 3 {
+		t.Fatalf("fitCalls = %d, want >= 3", fitCalls.Load())
+	}
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	var relieveCalls atomic.Int32
+	relieveDone := make(chan struct{})
+	go func() {
+		defer close(relieveDone)
+		relieveLoop(ctx2, 5*time.Millisecond, func() {
+			if relieveCalls.Add(1) >= 2 {
+				cancel2()
+			}
+		})
+	}()
+	select {
+	case <-relieveDone:
+	case <-time.After(2 * time.Second):
+		cancel2()
+		t.Fatal("relieveLoop did not stop on cancel")
+	}
+	if relieveCalls.Load() < 2 {
+		t.Fatalf("relieveCalls = %d, want >= 2", relieveCalls.Load())
 	}
 }

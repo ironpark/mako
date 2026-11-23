@@ -14,6 +14,9 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -24,6 +27,7 @@ import (
 
 	"github.com/ironpark/mako/internal/keychain"
 	"github.com/ironpark/mako/internal/layoutdoc"
+	"github.com/ironpark/mako/internal/plugin/hostapi"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/pkg/fsutil"
 )
@@ -119,6 +123,10 @@ type Config struct {
 	ResolveScope func(scopeKey string) ScopeContext
 	// Agents carries out sessions:write; nil for none.
 	Agents AgentHost
+	// Decisions carries out decision; nil for none (Status: unavailable).
+	Decisions DecisionHost
+	// Asks carries out agents:ask; nil for none.
+	Asks AskHost
 	// Layout carries out layout:write; nil for none.
 	Layout LayoutHost
 	// Changed is told when the list of plugins, or how one stands, changes.
@@ -190,7 +198,7 @@ func New(cfg Config) *Manager {
 	return &Manager{
 		cfg: cfg, lim: lim, ctx: ctx, stop: stop, installs: cfg.Installs,
 		net:       newFetcher(lim, cfg.Log, cfg.NetTest),
-		grant:     loadGrants(filepath.Join(cfg.DataDir, "grants.json")),
+		grant:     loadGrants(filepath.Join(cfg.DataDir, "grants.json"), cfg.Log),
 		plugins:   map[string]*plugin{},
 		syncClock: newSyncClock(cfg.NodeID),
 	}
@@ -373,9 +381,10 @@ func splitBlock(name string) (id, block string, ok bool) {
 // grantStore is what the user allowed each plugin, and refused, kept on
 // this node alone.
 type grantStore struct {
-	mu   sync.Mutex
-	path string
-	data map[string]grantEntry
+	mu      sync.RWMutex
+	path    string
+	data    map[string]grantEntry
+	loadErr error
 }
 
 type grantEntry struct {
@@ -390,30 +399,77 @@ type grantEntry struct {
 	// AgentsAllowed says the user let the plugin start agents without
 	// asking each time.
 	AgentsAllowed bool `json:"agents_allowed,omitempty"`
+	// AsksAllowed lists "agent/profile" pairs the user let the plugin ask
+	// without asking each time.
+	AsksAllowed []string `json:"asks_allowed,omitempty"`
 }
 
-func loadGrants(path string) *grantStore {
+func loadGrants(path string, log *slog.Logger) *grantStore {
 	g := &grantStore{path: path, data: map[string]grantEntry{}}
-	if b, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(b, &g.data)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			g.loadErr = fmt.Errorf("read grants: %w", err)
+			if log != nil {
+				log.Error("plugin grants store could not be read", "path", path, "err", err)
+			}
+		}
+		return g
 	}
+	var data map[string]grantEntry
+	if err := json.Unmarshal(b, &data); err != nil {
+		g.loadErr = fmt.Errorf("parse grants: %w", err)
+		if log != nil {
+			log.Error("plugin grants store is corrupt", "path", path, "err", err)
+		}
+		return g
+	}
+	if data == nil {
+		g.loadErr = errors.New("parse grants: null JSON object")
+		if log != nil {
+			log.Error("plugin grants store is null", "path", path)
+		}
+		return g
+	}
+	g.data = data
 	return g
 }
 
 func (g *grantStore) get(id string) grantEntry {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+	g.mu.RLock()
+	defer g.mu.RUnlock()
 	e := g.data[id]
-	e.Granted, e.Denied = slices.Clone(e.Granted), slices.Clone(e.Denied)
+	e.Granted, e.Denied, e.AsksAllowed = slices.Clone(e.Granted), slices.Clone(e.Denied), slices.Clone(e.AsksAllowed)
 	return e
+}
+
+func (g *grantStore) hasPermission(id, perm string, manifestPerms []string) bool {
+	if perm == hostapi.PermNone {
+		return true
+	}
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	e := g.data[id]
+	if perm == hostapi.PermNet {
+		for _, mp := range manifestPerms {
+			if strings.HasPrefix(mp, hostapi.PermNet+":") && slices.Contains(e.Granted, mp) {
+				return true
+			}
+		}
+		return false
+	}
+	return slices.Contains(manifestPerms, perm) && slices.Contains(e.Granted, perm)
 }
 
 func (g *grantStore) update(id string, fn func(*grantEntry)) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.loadErr != nil {
+		return fmt.Errorf("grants store could not be loaded: %w", g.loadErr)
+	}
 	e := g.data[id]
 	fn(&e)
-	if len(e.Granted) == 0 && len(e.Denied) == 0 && !e.Disabled && !e.AgentsAllowed {
+	if len(e.Granted) == 0 && len(e.Denied) == 0 && !e.Disabled && !e.AgentsAllowed && len(e.AsksAllowed) == 0 {
 		delete(g.data, id)
 	} else {
 		g.data[id] = e

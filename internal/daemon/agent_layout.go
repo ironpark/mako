@@ -110,7 +110,7 @@ func (d *Daemon) addStaticLayoutTools(server *sdk.Server, peer *agentPeer) {
 		if err != nil {
 			return nil, changeLayoutResult{}, err
 		}
-		doc, parsed, err := layoutdoc.Canonical(body, d.blockCatalog())
+		_, parsed, err := layoutdoc.Canonical(body, d.blockCatalog())
 		if err != nil {
 			return nil, changeLayoutResult{}, fmt.Errorf("the document cannot be drawn: %w", err)
 		}
@@ -124,7 +124,8 @@ func (d *Daemon) addStaticLayoutTools(server *sdk.Server, peer *agentPeer) {
 		if in.IfRev != rev {
 			return nil, changeLayoutResult{}, fmt.Errorf("the document's revision is %q, not %q: read it again with get_layout", rev, in.IfRev)
 		}
-		if doc, err = keepVariants(parsed, cur, d.blockCatalog()); err != nil {
+		doc, err := keepVariants(parsed, cur, d.blockCatalog())
+		if err != nil {
 			return nil, changeLayoutResult{}, err
 		}
 		rev, err = d.changeLayout(ctx, s, layoutChange{tool: toolSetLayout, name: name, doc: doc, base: rev, summary: "replace the whole document"})

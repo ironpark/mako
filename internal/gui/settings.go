@@ -46,6 +46,7 @@ var settingsNav = []settingsGroup{
 		{"apikeys", "API keys", "key-round"},
 		{"teams", "Teams", "users"},
 		{"templates", "Templates", "file-text"},
+		{"skills", "Skills", "sparkles"},
 		{"extensions", "Extensions", "layers"},
 	}},
 	{title: "Node & mesh", sections: []settingsSection{
@@ -186,6 +187,8 @@ func settingsContent(m *model, id string) ggui.Widget {
 		return shortcutsSettings(m)
 	case "templates":
 		return templateSettings(m)
+	case "skills":
+		return skillSettings(m)
 	case "teams":
 		return teamSettings(m)
 	case "extensions":

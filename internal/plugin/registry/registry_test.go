@@ -95,7 +95,7 @@ func TestIndexesThatDoNotCheckAreRefused(t *testing.T) {
 		{"exec", mutate(func(i *Index) { i.Plugins[0].Versions[0].Permissions = []string{"exec"} }), "exec is not granted"},
 		{"huge size", mutate(func(i *Index) { i.Plugins[0].Versions[0].Size = 1 << 40 }), "is not of a package"},
 		{"no versions", mutate(func(i *Index) { i.Plugins[0].Versions = nil }), "1 to 64 versions"},
-		{"spoofing", mutate(func(i *Index) { i.Plugins[0].Name = "Hello‮" }), "reordering"},
+		{"spoofing", mutate(func(i *Index) { i.Plugins[0].Name = "Hello\u202e" }), "reordering"},
 		{"blank block", mutate(func(i *Index) { i.Blocklist = []*Block{{Reason: "x"}} }), "names an ID or a key"},
 		{"no reason", mutate(func(i *Index) { i.Blocklist = []*Block{{ID: "x"}} }), "says why"},
 		{"null", []byte(`{"format": "mako-registry/1", "plugins": [null]}`), "null"},

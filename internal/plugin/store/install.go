@@ -1,6 +1,7 @@
 package store
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -164,7 +165,7 @@ func (s *Store) pickLocked(id, registryURL string) (*reg, *registry.Entry, error
 		case r == nil:
 			return nil, nil, fmt.Errorf("%s is not a registry of this node: add it first", registryURL)
 		case r.idx == nil:
-			return nil, nil, coded(protocol.CodeRegistryUnreachable, fmt.Errorf("%s could not be read: %s", r.url, cmpOr(r.err, "not read yet")), r.url)
+			return nil, nil, coded(protocol.CodeRegistryUnreachable, fmt.Errorf("%s could not be read: %s", r.url, cmp.Or(r.err, "not read yet")), r.url)
 		}
 		e := r.idx.Find(id)
 		if e == nil {
@@ -337,13 +338,6 @@ func nonce() string {
 	var b [6]byte
 	_, _ = rand.Read(b[:])
 	return hex.EncodeToString(b[:])
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }
 
 // coded is err with a code and what its sentence names, for a front-end

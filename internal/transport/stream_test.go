@@ -3,7 +3,10 @@ package transport
 import (
 	"context"
 	"errors"
+	"io"
 	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -82,4 +85,143 @@ func TestACallKeepsToItsContext(t *testing.T) {
 	if _, err := a.Write([]byte{0}); err != nil {
 		t.Fatalf("the stream was closed after its reply: %v", err)
 	}
+}
+
+type halfCloseMock struct {
+	r          *io.PipeReader
+	w          *io.PipeWriter
+	closeReads atomic.Int32
+	closes     atomic.Int32
+}
+
+func (m *halfCloseMock) Read(p []byte) (int, error)  { return m.r.Read(p) }
+func (m *halfCloseMock) Write(p []byte) (int, error) { return m.w.Write(p) }
+func (m *halfCloseMock) CloseRead() error {
+	m.closeReads.Add(1)
+	return m.r.Close()
+}
+func (m *halfCloseMock) Close() error {
+	m.closes.Add(1)
+	// Deliberately only closes the write half (like libp2p network.Stream)
+	// so Read only unblocks if Stream.Close() calls CloseRead().
+	return m.w.Close()
+}
+
+type resetOnlyMock struct {
+	r      *io.PipeReader
+	w      *io.PipeWriter
+	resets atomic.Int32
+}
+
+func (m *resetOnlyMock) Read(p []byte) (int, error)  { return m.r.Read(p) }
+func (m *resetOnlyMock) Write(p []byte) (int, error) { return m.w.Write(p) }
+func (m *resetOnlyMock) Reset() error {
+	m.resets.Add(1)
+	_ = m.r.Close()
+	return m.w.Close()
+}
+func (m *resetOnlyMock) Close() error {
+	_ = m.r.Close()
+	return m.w.Close()
+}
+
+func TestStreamCloseUnblocksRecvAndClosesPacker(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	pr2, pw2 := io.Pipe()
+	defer pr2.Close()
+
+	mock := &halfCloseMock{r: pr, w: pw2}
+	s := NewPeerStream(mock)
+	s.PackStream()
+
+	recvErr := make(chan error, 1)
+	go func() {
+		_, err := s.Recv()
+		recvErr <- err
+	}()
+
+	// Drain write pipe so Send succeeds while Recv is blocked.
+	go func() { _, _ = io.Copy(io.Discard, pr2) }()
+	if err := s.Send(protocol.TypeOutput, "", &protocol.Output{SessionId: "s", Data: []byte("hi")}); err != nil {
+		t.Fatalf("Send before Close: %v", err)
+	}
+
+	if err := s.Close(); err != nil {
+		t.Fatalf("first Stream.Close: %v", err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatalf("second Stream.Close: %v", err)
+	}
+
+	select {
+	case err := <-recvErr:
+		if err == nil {
+			t.Fatal("expected Recv to fail after Stream.Close")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Recv stayed blocked after Stream.Close")
+	}
+
+	if mock.closeReads.Load() != 1 || mock.closes.Load() != 1 {
+		t.Fatalf("CloseRead=%d Close=%d, want 1, 1", mock.closeReads.Load(), mock.closes.Load())
+	}
+	if err := s.Send(protocol.TypeOutput, "", &protocol.Output{SessionId: "s", Data: []byte("after")}); err == nil {
+		t.Fatal("expected Send after Stream.Close to fail")
+	}
+}
+
+func TestStreamHangupResetClosesPacker(t *testing.T) {
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	pr2, pw2 := io.Pipe()
+	defer pr2.Close()
+
+	mock := &resetOnlyMock{r: pr, w: pw2}
+	s := NewPeerStream(mock)
+	s.PackStream()
+
+	s.mu.Lock()
+	packer := s.packer
+	s.mu.Unlock()
+	if packer == nil {
+		t.Fatal("expected packer to be initialized")
+	}
+
+	if err := s.Hangup(); err != nil {
+		t.Fatalf("Hangup: %v", err)
+	}
+	if mock.resets.Load() != 1 {
+		t.Fatalf("Reset called %d times, want 1", mock.resets.Load())
+	}
+	// Sending after Hangup must fail because packer and stream were closed.
+	if err := s.Send(protocol.TypeOutput, "", &protocol.Output{SessionId: "s", Data: []byte("after")}); err == nil {
+		t.Fatal("expected Send after Hangup to fail")
+	}
+}
+
+func TestStreamConcurrentSendCloseRace(t *testing.T) {
+	a, b := net.Pipe()
+	defer b.Close()
+	go func() { _, _ = io.Copy(io.Discard, b) }()
+
+	s := NewPeerStream(a)
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		s.PackStream()
+	}()
+	go func() {
+		defer wg.Done()
+		for range 20 {
+			_ = s.Send(protocol.TypeOutput, "", &protocol.Output{SessionId: "s", Data: []byte("payload")})
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		time.Sleep(time.Millisecond)
+		_ = s.Close()
+	}()
+	wg.Wait()
 }

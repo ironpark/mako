@@ -39,8 +39,8 @@ type agentDraft struct {
 	IsProfile bool // a profile's name may be blank while it is typed
 	// PickServers gives a profile's sessions the MCP servers in Servers,
 	// one ID a line, rather than every one enabled.
-	PickServers bool
-	Servers     string
+	PickServers   bool
+	Servers       string
 	Model         string // a profile's; "" for the agent's default
 	Effort        string // a profile's; "" for the agent's default
 	ProfileYolo   string // "", "on", or "off" (profile override of agent Yolo)
@@ -95,7 +95,6 @@ func sameAgents(a, b []agentDraft) bool {
 // cannot read.
 func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 	out := map[string]agentspec.Agent{}
-	var order []string
 	for _, r := range rows {
 		if r.IsProfile {
 			continue
@@ -133,7 +132,6 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			a.AllowTemplate = &off
 		}
 		out[r.Agent] = a
-		order = append(order, r.Agent)
 	}
 	for _, r := range rows {
 		if !r.IsProfile {

@@ -1748,8 +1748,10 @@ public  final class UiNode extends
   private java.lang.String variant_;
   /**
    * <pre>
-   * variant styles a button or card: "", "primary", "secondary", "outline",
-   * "ghost", "danger" (revision 44).
+   * variant styles a node by kind: button ("primary", "secondary", "outline",
+   * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+   * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+   * (revision 44; extended in revision 45).
    * </pre>
    *
    * <code>string variant = 28 [json_name = "variant"];</code>
@@ -1761,8 +1763,10 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * variant styles a button or card: "", "primary", "secondary", "outline",
-   * "ghost", "danger" (revision 44).
+   * variant styles a node by kind: button ("primary", "secondary", "outline",
+   * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+   * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+   * (revision 44; extended in revision 45).
    * </pre>
    *
    * <code>string variant = 28 [json_name = "variant"];</code>
@@ -1775,8 +1779,10 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * variant styles a button or card: "", "primary", "secondary", "outline",
-   * "ghost", "danger" (revision 44).
+   * variant styles a node by kind: button ("primary", "secondary", "outline",
+   * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+   * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+   * (revision 44; extended in revision 45).
    * </pre>
    *
    * <code>string variant = 28 [json_name = "variant"];</code>
@@ -1790,8 +1796,10 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * variant styles a button or card: "", "primary", "secondary", "outline",
-   * "ghost", "danger" (revision 44).
+   * variant styles a node by kind: button ("primary", "secondary", "outline",
+   * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+   * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+   * (revision 44; extended in revision 45).
    * </pre>
    *
    * <code>string variant = 28 [json_name = "variant"];</code>
@@ -1802,8 +1810,10 @@ public  final class UiNode extends
   }
   /**
    * <pre>
-   * variant styles a button or card: "", "primary", "secondary", "outline",
-   * "ghost", "danger" (revision 44).
+   * variant styles a node by kind: button ("primary", "secondary", "outline",
+   * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+   * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+   * (revision 44; extended in revision 45).
    * </pre>
    *
    * <code>string variant = 28 [json_name = "variant"];</code>
@@ -4045,8 +4055,10 @@ public  final class UiNode extends
 
     /**
      * <pre>
-     * variant styles a button or card: "", "primary", "secondary", "outline",
-     * "ghost", "danger" (revision 44).
+     * variant styles a node by kind: button ("primary", "secondary", "outline",
+     * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+     * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+     * (revision 44; extended in revision 45).
      * </pre>
      *
      * <code>string variant = 28 [json_name = "variant"];</code>
@@ -4058,8 +4070,10 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * variant styles a button or card: "", "primary", "secondary", "outline",
-     * "ghost", "danger" (revision 44).
+     * variant styles a node by kind: button ("primary", "secondary", "outline",
+     * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+     * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+     * (revision 44; extended in revision 45).
      * </pre>
      *
      * <code>string variant = 28 [json_name = "variant"];</code>
@@ -4072,8 +4086,10 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * variant styles a button or card: "", "primary", "secondary", "outline",
-     * "ghost", "danger" (revision 44).
+     * variant styles a node by kind: button ("primary", "secondary", "outline",
+     * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+     * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+     * (revision 44; extended in revision 45).
      * </pre>
      *
      * <code>string variant = 28 [json_name = "variant"];</code>
@@ -4088,8 +4104,10 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * variant styles a button or card: "", "primary", "secondary", "outline",
-     * "ghost", "danger" (revision 44).
+     * variant styles a node by kind: button ("primary", "secondary", "outline",
+     * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+     * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+     * (revision 44; extended in revision 45).
      * </pre>
      *
      * <code>string variant = 28 [json_name = "variant"];</code>
@@ -4102,8 +4120,10 @@ public  final class UiNode extends
     }
     /**
      * <pre>
-     * variant styles a button or card: "", "primary", "secondary", "outline",
-     * "ghost", "danger" (revision 44).
+     * variant styles a node by kind: button ("primary", "secondary", "outline",
+     * "ghost", "danger"), card (same plus "soft"), pill/chip ("soft", "solid",
+     * "outline"), progress ("spinner"), scroll ("follow"), tree_item ("badge")
+     * (revision 44; extended in revision 45).
      * </pre>
      *
      * <code>string variant = 28 [json_name = "variant"];</code>

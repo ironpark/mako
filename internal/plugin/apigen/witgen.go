@@ -100,8 +100,7 @@ func genWIT(a *api) []byte {
 func (s *service) uses() []string {
 	var out []string
 	seen := map[string]bool{}
-	var add func(m *message)
-	add = func(m *message) {
+	add := func(m *message) {
 		if len(m.fields) == 0 || seen[m.name] {
 			return
 		}

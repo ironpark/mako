@@ -1,9 +1,9 @@
 id = "okf"
-version = "0.2.0"
+version = "0.3.0"
 publisher = "ironpark"
 api = 1
 entry = "main.js"
-permissions = ["fs:data"]
+permissions = ["fs:data", "decision", "agents:ask"]
 
 [[contributes.block]]
 id = "vault"
@@ -32,6 +32,15 @@ scope = "project"
 query = { type = "string", description = "Search query", required = true }
 type = { type = "string", description = "Optional OKF type filter" }
 tag = { type = "string", description = "Optional tag filter" }
+
+[[contributes.tool]]
+id = "explore"
+description = "Find the OKF documents most relevant to a natural-language question: local BM25 ranking refined by the decision model in one batch when available, with the entry point, 1-hop neighbors, and an ASCII subgraph"
+scope = "project"
+[contributes.tool.params]
+query = { type = "string", description = "Natural-language question", required = true }
+max_docs = { type = "string", description = "How many documents to select (1-12, default 5)" }
+use_decision = { type = "string", description = "\"false\" to skip the decision model (default true)" }
 
 [[contributes.tool]]
 id = "read_doc"
@@ -78,3 +87,6 @@ scope = "project"
 [contributes.settings]
 default_folder = { type = "select", label = "Default folder", description = "Folder suggested when creating a new OKF document.", options = ["concepts", "decisions", "architecture", "procedures", "reference"], default = "concepts", scope = "project" }
 auto_index = { type = "boolean", label = "Auto-update index.md", description = "Automatically regenerate index.md whenever a document is saved, moved, or deleted.", default = true }
+ask_accelerate = { type = "boolean", label = "Decision model acceleration", description = "Rank candidate documents with the decision model (Settings ▸ API keys) before asking the exploration agent. Off, local ranking alone is used.", default = true, scope = "project" }
+ask_max_docs = { type = "number", label = "Documents per answer", description = "How many documents the exploration agent reads in full per question (1-12).", default = 5, scope = "project" }
+ask_timeout = { type = "number", label = "Answer timeout (seconds)", description = "How long the exploration agent may take (15-300).", default = 120, scope = "project" }

@@ -73,7 +73,7 @@ Mako 프로젝트는 크로스 플랫폼 단일 바이너리 배포와 `gomobile
 | **`ipfs/go-ds-crdt`** | **배제** | 1. IPLD, Bitswap, DAGService, Blockstore 등 IPFS 전체 스택 의존성 유입.<br/>2. 수정마다 Merkle-DAG 블록이 누적되어 모바일 메모리/배터리 및 디스크 GC 부담 심각.<br/>3. **Key-Value 수준의 LWW**일 뿐, 문서 내부 필드 병합이나 동시 편집을 지원하지 않음. |
 | **`automerge-go` / `loro`** | **배제** | Rust 코어를 C FFI(CGO)로 바인딩하므로 Mako의 Pure-Go 빌드 원칙 및 `gomobile` 파이프라인과 충돌함. |
 | **범용 Text CRDT (`ygo` 등)** | **배제 (현 단계)** | 글자 단위 Sequence CRDT(YATA)는 메타데이터·트리 구조 동기화에는 불필요한 메모리 오버헤드를 가짐. (추후 실시간 공동 노트 기능 도입 시에만 텍스트 필드에 한해 부분 도입 가능) |
-| **Pure-Go Delta-State CRDT 직접 구현 (`internal/crdt`)** | **채택** | 1. **외부 의존성 0** (표준 라이브러리와 `protobuf`만 사용).<br/>2. 코드 규모 500~700줄 내외로 완벽한 통제 및 테스트 가능.<br/>3. Mako의 도메인(Map, Set, LWW-Register, Fractional Ordering)에 정확히 맞춘 필드 단위 동시 편집 병합 보장. |
+| **Pure-Go Delta-State CRDT 직접 구현 (`pkg/crdt`)** | **채택** | 1. **외부 의존성 0** (표준 라이브러리와 `protobuf`만 사용).<br/>2. 코드 규모 500~700줄 내외로 완벽한 통제 및 테스트 가능.<br/>3. Mako의 도메인(Map, Set, LWW-Register, Fractional Ordering)에 정확히 맞춘 필드 단위 동시 편집 병합 보장. |
 
 ### 2.2 왜 Delta-State CRDT ($\delta$-CRDT)인가?
 
@@ -104,7 +104,7 @@ flowchart TD
         LayoutStore["Layout Store (기기/창 레이아웃 분리)<br/>레이아웃 변경이 Space/Project 버전과 무관하게 동작"]
     end
 
-    subgraph CRDTLayer ["Pure-Go CRDT 패키지 (internal/crdt)"]
+    subgraph CRDTLayer ["Pure-Go CRDT 패키지 (pkg/crdt)"]
         HLC["HLC (Hybrid Logical Clock)<br/>물리시간 + 논리카운터 + NodeID<br/>MaxDrift(60s) 미래 시간 방어"]
         LWWReg["LWWRegister[T]<br/>개별 속성 단위 병합"]
         AWSet["ORSet / LWWElementSet<br/>집합 항목 추가/삭제 병합"]
@@ -119,7 +119,7 @@ flowchart TD
 
 ---
 
-### 3.2 계층 1: 하이브리드 논리 시계 (HLC) 설계 (`internal/crdt/hlc.go`)
+### 3.2 계층 1: 하이브리드 논리 시계 (HLC) 설계 (`pkg/crdt/hlc.go`)
 
 물리적 시계(`time.Now()`)의 직관성과 Lamport 논리 시계의 인과성 보장, 그리고 **시계 오차 방어(Drift Bounding)**를 결합한다.
 
@@ -159,7 +159,7 @@ type HLC struct {
 
 ---
 
-### 3.3 계층 2: 필드 단위 Delta-State CRDT 모델 (`internal/crdt`)
+### 3.3 계층 2: 필드 단위 Delta-State CRDT 모델 (`pkg/crdt`)
 
 기존의 `workspaceDoc`을 **독립적으로 병합 가능한 원자적 필드와 엔티티 맵**으로 분해한다.
 
@@ -428,10 +428,10 @@ sequenceDiagram
 
 기존 사용자의 `workspace.json`과 `workspace.pb` 데이터를 유실 없이 승격하고, 구버전 데몬과의 호환성을 유지하기 위해 4단계로 나누어 구현한다.
 
-### Phase 1: CRDT 코어, 스키마, 워크스페이스 병합기 (`internal/crdt`, `internal/workspace`)
+### Phase 1: CRDT 코어, 스키마, 워크스페이스 병합기 (`pkg/crdt`, `internal/workspace`)
 * **목표**: 동작 변화 없이, 이후 단계가 모두 올라설 순수 Go 엔진과 스키마를 만들고 불변식을 검증한다. 데몬·GUI는 건드리지 않는다.
 * **작업 파일**:
-  * `internal/crdt` (`protocol`을 import하지 않는 범용 기본형):
+  * `pkg/crdt` (`protocol`을 import하지 않는 범용 기본형):
     * `hlc.go`: `HLC`, `Clock`(`Now`, `Observe`, 격리 판정, unanchored 모드, 자가 복구 감지), `After(other, key)` 전순서 비교.
     * `register.go`: 제네릭 `Register[T]`.
     * `set.go`: LWW-Element-Set 병합과 활성 원소 조회.
@@ -484,7 +484,7 @@ sequenceDiagram
   * `app/android/app/src/main/java/dev/ironpark/mako/net/Daemon.kt`:
     * `workspace(): WorkspaceState` 및 `updateWorkspace(delta: WorkspaceState)` API 추가. 시계는 데몬이 찍으므로 Kotlin에 HLC 구현은 두지 않는다.
     * `Watch` 스트림에서 `changed.workspace` 수신 시 상태 갱신 Flow 연결.
-  * `app/android/app/src/main/java/dev/ironpark/mako/ui/SessionGroups.kt` 및 `SessionsScreen.kt`:
+  * `app/android/app/src/main/java/dev/ironpark/mako/ui/SessionGroups.kt`, `HomeScreen.kt`, `ProjectScreen.kt`:
     * `WorkspaceState`의 `Spaces`, `Projects`, `Names`, `Looks`, `Pinned`를 반영하여 데스크탑 사이드바와 동일한 프로젝트 그룹핑 및 스페이스 필터 탭 제공.
 * **검증**:
   * `SessionGroupsTest.kt`에 `WorkspaceState` 기반 다중 루트 프로젝트 병합 및 스페이스 필터링 유닛 테스트 추가.
@@ -506,7 +506,7 @@ sequenceDiagram
 | 편집 주체 | GUI, Android, MCP 툴, 플러그인이 모두 쓴다 | 모두 같은 경로(Delta → 데몬 `Stamp` → `Merge`)를 쓴다. HLC는 데몬만 발급 |
 | 동기화 스위치 | 창의 설정이면 데몬에 문서가 없을 수 있다 | 데몬은 항상 상태를 가진다. 스위치는 노드 설정(§3.4) |
 | Android | 패인 트리 JSON이 "GUI 내부 형식"이면 P7이 레이아웃에서 되풀이된다 | 두 레이아웃 JSON 모두 `docs/protocol.md`에 형식을 적는다 |
-| 플러그인 KV 저장소의 노드 간 동기화 | `WorkspaceState`에 넣을지 | 넣지 않는다. 플러그인별 문서를 따로 두고 `internal/crdt` 기본형만 재사용한다 |
+| 플러그인 KV 저장소의 노드 간 동기화 | `WorkspaceState`에 넣을지 | 넣지 않는다. 플러그인별 문서를 따로 두고 `pkg/crdt` 기본형만 재사용한다 |
 
 ### 두 계획을 합친 구현 순서
 

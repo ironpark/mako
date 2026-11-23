@@ -134,7 +134,7 @@ func cloneSession(t *testing.T, d *Daemon, id, remote string) *agentPeer {
 		}
 	}
 	s, err := session.Start(session.Spec{
-		ID: id, NodeID: d.cfg.NodeID, Agent: "claude", Project: dir,
+		ID: id, NodeID: d.config().NodeID, Agent: "claude", Project: dir,
 		Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
 	})
 	if err != nil {

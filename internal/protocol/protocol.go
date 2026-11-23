@@ -235,14 +235,28 @@ func WriteFrame(w io.Writer, env *Envelope, pack bool) error {
 // WriteStreamed writes one frame packed as p's next piece, for a reader
 // that asked for its stream so packed.
 func WriteStreamed(w io.Writer, env *Envelope, p *Packer) error {
-	plain, err := proto.Marshal(env)
+	size := proto.Size(env)
+	if size > MaxFrameSize {
+		return fmt.Errorf("frame too large: %d bytes", size)
+	}
+	plainBuf := getFrame()
+	defer putFrame(plainBuf)
+	plain, err := proto.MarshalOptions{UseCachedSize: true}.MarshalAppend(slices.Grow((*plainBuf)[:0], size), env)
+	*plainBuf = plain
 	if err != nil {
 		return err
 	}
 	if len(plain) > MaxFrameSize {
 		return fmt.Errorf("frame too large: %d bytes", len(plain))
 	}
-	frame, err := p.pack(make([]byte, 4, 4+len(plain)/4), plain)
+	frameBuf := getFrame()
+	defer putFrame(frameBuf)
+	frame := slices.Grow((*frameBuf)[:0], 4+len(plain)/4)[:4]
+	*frameBuf = frame
+	frame, err = p.pack(frame, plain)
+	if frame != nil {
+		*frameBuf = frame
+	}
 	if err != nil {
 		return err
 	}
@@ -316,6 +330,7 @@ func putFrame(b *[]byte) {
 func UnpackFrames(dst io.Writer, src io.Reader) error {
 	var hdr [4]byte
 	var stream Unpacker
+	defer stream.Close()
 	for {
 		if _, err := io.ReadFull(src, hdr[:]); err != nil {
 			if err == io.EOF {
@@ -323,37 +338,66 @@ func UnpackFrames(dst io.Writer, src io.Reader) error {
 			}
 			return err
 		}
-		n := binary.BigEndian.Uint32(hdr[:])
-		packed, streamed := n&packedBit != 0, n&streamedBit != 0
-		n &^= packedBit | streamedBit
-		if n > MaxFrameSize {
-			return fmt.Errorf("frame too large: %d bytes", n)
-		}
-		buf := make([]byte, 4+n)
-		if _, err := io.ReadFull(src, buf[4:]); err != nil {
-			return err
-		}
-		switch {
-		case packed && streamed:
-			return errors.New("frame: both packed and streamed")
-		case packed:
-			body, err := Decompress(buf[4:])
-			if err != nil {
-				return fmt.Errorf("frame: %w", err)
-			}
-			buf = append(buf[:4], body...)
-		case streamed:
-			body, err := stream.unpack(buf[4:])
-			if err != nil {
-				return fmt.Errorf("frame: %w", err)
-			}
-			buf = append(buf[:4], body...)
-		}
-		binary.BigEndian.PutUint32(buf, uint32(len(buf)-4))
-		if _, err := dst.Write(buf); err != nil {
+		if err := unpackOneFrame(dst, src, &hdr, &stream); err != nil {
 			return err
 		}
 	}
+}
+
+func unpackOneFrame(dst io.Writer, src io.Reader, hdr *[4]byte, stream *Unpacker) error {
+	n := binary.BigEndian.Uint32(hdr[:])
+	packed, streamed := n&packedBit != 0, n&streamedBit != 0
+	n &^= packedBit | streamedBit
+	if n > MaxFrameSize {
+		return fmt.Errorf("frame too large: %d bytes", n)
+	}
+	inRoom := getFrame()
+	defer putFrame(inRoom)
+	*inRoom = slices.Grow((*inRoom)[:0], 4+int(n))[:4+int(n)]
+	in := *inRoom
+	if _, err := io.ReadFull(src, in[4:]); err != nil {
+		return err
+	}
+	out := in
+	switch {
+	case packed && streamed:
+		return errors.New("frame: both packed and streamed")
+	case packed:
+		outRoom := getFrame()
+		defer putFrame(outRoom)
+		prefix := slices.Grow((*outRoom)[:0], 4)[:4]
+		*outRoom = prefix
+		body, err := decompressTo(prefix, in[4:])
+		if body != nil {
+			*outRoom = body
+		}
+		if err != nil {
+			return fmt.Errorf("frame: %w", err)
+		}
+		if len(body)-4 > MaxFrameSize {
+			return fmt.Errorf("frame too large: %d bytes", len(body)-4)
+		}
+		out = body
+	case streamed:
+		outRoom := getFrame()
+		defer putFrame(outRoom)
+		prefix := slices.Grow((*outRoom)[:0], 4)[:4]
+		*outRoom = prefix
+		body, err := stream.unpackTo(prefix, in[4:])
+		if body != nil {
+			*outRoom = body
+		}
+		if err != nil {
+			return fmt.Errorf("frame: %w", err)
+		}
+		if len(body)-4 > MaxFrameSize {
+			return fmt.Errorf("frame too large: %d bytes", len(body)-4)
+		}
+		out = body
+	}
+	binary.BigEndian.PutUint32(out, uint32(len(out)-4))
+	_, err := dst.Write(out)
+	return err
 }
 
 // CodedError is a failure a requester may act on by its Code, which

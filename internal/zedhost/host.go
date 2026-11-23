@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -82,12 +83,14 @@ type Command struct {
 // Extension is an extension's component, instantiated. Calls into it are
 // serialized; Close frees it.
 type Extension struct {
-	Manifest zed.Manifest
-	api      apiVersion
-	dir      string
-	work     string
-	host     *Host
-	log      *slog.Logger
+	Manifest   zed.Manifest
+	api        apiVersion
+	dir        string
+	work       string
+	workRoot   *os.Root
+	httpClient *http.Client // nil uses shared SSRF-hardened clients
+	host       *Host
+	log        *slog.Logger
 
 	mu     sync.Mutex
 	ctx    context.Context // the call in progress, for host imports
@@ -118,12 +121,16 @@ func (h *Host) Load(ctx context.Context, ext zed.Extension) (*Extension, error) 
 	if err != nil {
 		return nil, err
 	}
+	workRoot, err := os.OpenRoot(work)
+	if err != nil {
+		return nil, err
+	}
 	log := h.Log
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
 	e := &Extension{
-		Manifest: ext.Manifest, api: api, dir: ext.Dir, work: work, host: h,
+		Manifest: ext.Manifest, api: api, dir: ext.Dir, work: work, workRoot: workRoot, host: h,
 		log: log.With("extension", ext.ID),
 	}
 	compiled, err := h.compiledDir(ext.ID)
@@ -283,6 +290,9 @@ func (e *Extension) Close() {
 	}
 	if e.comp != nil {
 		e.comp.Close()
+	}
+	if e.workRoot != nil {
+		_ = e.workRoot.Close()
 	}
 }
 

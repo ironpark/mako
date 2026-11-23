@@ -228,6 +228,25 @@ func IsBuiltin(name string) bool { return slices.Contains(Builtins, name) }
 
 // Parse reads a template named name from its file's content.
 func Parse(name string, content []byte) (*Template, error) {
+	t, err := parseRaw(name, content)
+	if err != nil {
+		return nil, err
+	}
+	nodes, comp, err := t.prepare()
+	if err != nil {
+		return nil, err
+	}
+	t.nodes, t.comp = nodes, comp
+	return t, nil
+}
+
+// ParseMetadata reads a template's front matter, metadata, and raw body
+// without compiling expressions or instantiating a JavaScript runtime.
+func ParseMetadata(name string, content []byte) (*Template, error) {
+	return parseRaw(name, content)
+}
+
+func parseRaw(name string, content []byte) (*Template, error) {
 	t := &Template{Name: name}
 	front, body, err := split(content)
 	if err != nil {
@@ -241,7 +260,7 @@ func Parse(name string, content []byte) (*Template, error) {
 		}
 	}
 	t.Body = body
-	return t, t.check()
+	return t, t.checkMetadata()
 }
 
 // split parts a file into its front matter and the body after it.
@@ -267,9 +286,9 @@ func split(content []byte) (front []byte, body string, err error) {
 	return front, strings.TrimPrefix(body, "\n"), nil
 }
 
-// check finds what is wrong with a template as it was read, and fills in
-// what an argument leaves out.
-func (t *Template) check() error {
+// checkMetadata validates front matter arguments and fills in defaults
+// without parsing or compiling the template body.
+func (t *Template) checkMetadata() error {
 	seen := map[string]bool{}
 	for i := range t.Args {
 		a := &t.Args[i]
@@ -315,11 +334,6 @@ func (t *Template) check() error {
 			a.Default = &v
 		}
 	}
-	nodes, comp, err := t.prepare()
-	if err != nil {
-		return err
-	}
-	t.nodes, t.comp = nodes, comp
 	return nil
 }
 
@@ -446,8 +460,16 @@ type Call struct {
 }
 
 // ParseCall reads a draft that calls a template: two slashes, the name,
-// then its arguments. It reports false for any other draft.
+// then its arguments. It reports false for any other draft, including bare "//".
 func ParseCall(draft string) (Call, bool) {
+	c, ok := ParseDraft(draft)
+	return c, ok && c.Name != ""
+}
+
+// ParseDraft reads a composer draft that calls or begins calling a template
+// (including bare "//" for autocomplete prefix matching). It reports false for
+// any other draft.
+func ParseDraft(draft string) (Call, bool) {
 	if !strings.HasPrefix(draft, "//") {
 		return Call{}, false
 	}
@@ -629,6 +651,16 @@ type Broken struct {
 
 // Load reads the template name from dir.
 func Load(dir, name string) (*Template, error) {
+	return loadWith(dir, name, Parse)
+}
+
+// LoadMetadata reads the template name's front matter and raw body from dir
+// without compiling expressions or instantiating a JavaScript runtime.
+func LoadMetadata(dir, name string) (*Template, error) {
+	return loadWith(dir, name, ParseMetadata)
+}
+
+func loadWith(dir, name string, parse func(string, []byte) (*Template, error)) (*Template, error) {
 	if !ValidName(name) {
 		return nil, errors.New("a template's name has no spaces, slashes or colons")
 	}
@@ -637,7 +669,7 @@ func Load(dir, name string) (*Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, err := Parse(name, body)
+	t, err := parse(name, body)
 	if err != nil {
 		return nil, err
 	}
@@ -648,13 +680,24 @@ func Load(dir, name string) (*Template, error) {
 // LoadDir reads the templates in dir, by name in order, and those of its
 // files that did not read. A missing dir has none.
 func LoadDir(dir string) ([]*Template, []Broken) {
+	return loadDirWith(dir, Load)
+}
+
+// LoadDirMetadata reads the templates' metadata in dir, by name in order, and
+// those of its files whose front matter did not read, without compiling bodies
+// or instantiating a JavaScript runtime. A missing dir has none.
+func LoadDirMetadata(dir string) ([]*Template, []Broken) {
+	return loadDirWith(dir, LoadMetadata)
+}
+
+func loadDirWith(dir string, load func(string, string) (*Template, error)) ([]*Template, []Broken) {
 	paths, _ := filepath.Glob(filepath.Join(dir, "*.md"))
 	slices.Sort(paths)
 	var out []*Template
 	var broken []Broken
 	for _, path := range paths {
 		name := strings.TrimSuffix(filepath.Base(path), ".md")
-		t, err := Load(dir, name)
+		t, err := load(dir, name)
 		if err != nil {
 			broken = append(broken, Broken{name, path, err})
 			continue

@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/ironpark/mako/internal/plugin/hostapi"
@@ -34,9 +35,13 @@ const (
 )
 
 type datafsStore struct {
-	mu    sync.Mutex
-	base  string // plugin-data/<id>/files
-	quota int
+	mu          sync.Mutex
+	base        string // plugin-data/<id>/files
+	quota       int
+	usageLoaded bool
+	usedBytes   int64
+	fileCount   int
+	walkCount   atomic.Int64
 }
 
 func newDatafsStore(base string, quota int) *datafsStore {
@@ -44,6 +49,14 @@ func newDatafsStore(base string, quota int) *datafsStore {
 		quota = defaultDataFSQuota
 	}
 	return &datafsStore{base: base, quota: quota}
+}
+
+func (s *datafsStore) reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.usageLoaded = false
+	s.usedBytes = 0
+	s.fileCount = 0
 }
 
 // scopeDirName maps a validated canonical scopeKey to a deterministic,
@@ -129,12 +142,21 @@ func (s *datafsStore) openRootLocked(scopeKey string, create bool) (*os.Root, er
 	return os.OpenRoot(dir)
 }
 
-// usageLocked totals regular file bytes and file count across all scopes of
+func (s *datafsStore) ensureUsageLocked() (int64, int) {
+	if !s.usageLoaded {
+		s.usedBytes, s.fileCount = s.walkUsageLocked()
+		s.usageLoaded = true
+	}
+	return s.usedBytes, s.fileCount
+}
+
+// walkUsageLocked totals regular file bytes and file count across all scopes of
 // this plugin.
-func (s *datafsStore) usageLocked() (usedBytes int64, fileCount int) {
+func (s *datafsStore) walkUsageLocked() (usedBytes int64, fileCount int) {
 	if _, err := os.Stat(s.base); err != nil {
 		return 0, 0
 	}
+	s.walkCount.Add(1)
 	_ = filepath.WalkDir(s.base, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -254,12 +276,16 @@ func (s *datafsStore) write(scopeKey, rawPath, text string, rawData []byte, make
 		return nil, pathError(err)
 	}
 
-	used, count := s.usageLocked()
+	used, count := s.ensureUsageLocked()
 	nextUsed := used - existingSize + int64(len(data))
 	if nextUsed > int64(s.quota) {
 		return nil, fmt.Errorf("plugin data file quota of %d MiB reached", s.quota>>20)
 	}
-	if !existed && count+1 > maxDataFiles {
+	nextCount := count
+	if !existed {
+		nextCount++
+	}
+	if nextCount > maxDataFiles {
 		return nil, fmt.Errorf("plugin data file limit of %d files reached", maxDataFiles)
 	}
 
@@ -289,6 +315,9 @@ func (s *datafsStore) write(scopeKey, rawPath, text string, rawData []byte, make
 		_ = r.Remove(tmp)
 		return nil, pathError(err)
 	}
+	s.usedBytes = nextUsed
+	s.fileCount = nextCount
+	s.usageLoaded = true
 	return &hostapi.WriteDataResponse{
 		Size:       float64(len(data)),
 		UsedBytes:  uint32(min(nextUsed, math.MaxUint32)),
@@ -473,13 +502,54 @@ func (s *datafsStore) remove(scopeKey, rawPath string, recursive bool) (bool, er
 		return false, fmt.Errorf("%s is a symbolic link", rawPath)
 	}
 	if info.IsDir() && recursive {
+		var subBytes int64
+		var subFiles int
+		var walkErr error
+		if s.usageLoaded {
+			walkErr = fs.WalkDir(r.FS(), filepath.ToSlash(rel), func(_ string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
+				}
+				if d.IsDir() || strings.HasPrefix(d.Name(), datafsTmpPrefix) || d.Type()&fs.ModeSymlink != 0 {
+					return nil
+				}
+				fi, err := d.Info()
+				if err != nil {
+					return err
+				}
+				if fi.Mode().IsRegular() {
+					subBytes += fi.Size()
+					subFiles++
+				}
+				return nil
+			})
+		}
 		if err := r.RemoveAll(rel); err != nil {
+			s.usageLoaded = false
 			return false, pathError(err)
+		}
+		if s.usageLoaded {
+			if walkErr != nil {
+				s.usageLoaded = false
+			} else {
+				s.usedBytes -= subBytes
+				s.fileCount -= subFiles
+				if s.usedBytes < 0 || s.fileCount < 0 {
+					s.usageLoaded = false
+				}
+			}
 		}
 		return true, nil
 	}
 	if err := r.Remove(rel); err != nil {
 		return false, pathError(err)
+	}
+	if s.usageLoaded && info.Mode().IsRegular() {
+		s.usedBytes -= info.Size()
+		s.fileCount--
+		if s.usedBytes < 0 || s.fileCount < 0 {
+			s.usageLoaded = false
+		}
 	}
 	return true, nil
 }
@@ -493,10 +563,10 @@ func (s *datafsStore) move(scopeKey, fromRaw, toRaw string, makeDirs bool) error
 	if err != nil {
 		return err
 	}
-	if fromRaw == toRaw {
+	if fromRel == toRel {
 		return nil
 	}
-	if strings.HasPrefix(toRaw+"/", fromRaw+"/") {
+	if strings.HasPrefix(filepath.ToSlash(toRel)+"/", filepath.ToSlash(fromRel)+"/") {
 		return errors.New("cannot move a folder inside itself")
 	}
 
@@ -515,12 +585,18 @@ func (s *datafsStore) move(scopeKey, fromRaw, toRaw string, makeDirs bool) error
 	if srcInfo.Mode()&fs.ModeSymlink != 0 {
 		return fmt.Errorf("%s is a symbolic link", fromRaw)
 	}
+	var dstSize int64
+	var dstRegular bool
 	if dstInfo, err := r.Lstat(toRel); err == nil {
 		if dstInfo.Mode()&fs.ModeSymlink != 0 {
 			return fmt.Errorf("%s is a symbolic link", toRaw)
 		}
 		if dstInfo.IsDir() != srcInfo.IsDir() {
 			return fmt.Errorf("cannot replace %s with a different entry type", toRaw)
+		}
+		if dstInfo.Mode().IsRegular() && !os.SameFile(srcInfo, dstInfo) {
+			dstSize = dstInfo.Size()
+			dstRegular = true
 		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return pathError(err)
@@ -536,6 +612,13 @@ func (s *datafsStore) move(scopeKey, fromRaw, toRaw string, makeDirs bool) error
 	if err := r.Rename(fromRel, toRel); err != nil {
 		return pathError(err)
 	}
+	if s.usageLoaded && dstRegular {
+		s.usedBytes -= dstSize
+		s.fileCount--
+		if s.usedBytes < 0 || s.fileCount < 0 {
+			s.usageLoaded = false
+		}
+	}
 	return nil
 }
 
@@ -545,7 +628,7 @@ func (s *datafsStore) stats(scopeKey string) (*hostapi.DataStatsResponse, error)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	used, count := s.usageLocked()
+	used, count := s.ensureUsageLocked()
 	return &hostapi.DataStatsResponse{
 		UsedBytes:  uint32(min(used, math.MaxUint32)),
 		QuotaBytes: uint32(min(int64(s.quota), math.MaxUint32)),

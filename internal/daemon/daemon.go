@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -36,9 +37,10 @@ const peerTTL = 5 * time.Minute
 
 // Daemon serves front-ends on its Unix socket, and peers over libp2p.
 type Daemon struct {
-	cfg *config.Config
-	log *slog.Logger
-	dir string // the configuration directory, config.Dir() when empty
+	cfgMu   sync.Mutex
+	cfgSnap atomic.Pointer[config.Config]
+	log     *slog.Logger
+	dir     string // the configuration directory, config.Dir() when empty
 
 	loggedCommands loggedCommands // the commands agents' logs name
 	live           liveHub        // the replies streaming, by session
@@ -86,6 +88,7 @@ type Daemon struct {
 	syncingPluginDB      map[string]bool     // the peers whose plugin DB sync is in flight
 	projects             projectStore        // the projects of several folders; see projects.go
 	linking              map[string]*linkTry // peer ID -> how its link is being made, until one holds
+	stateSenders         stateSenders        // coalesced per-peer state senders; see mesh.go
 	ctx                  context.Context     // Run's, for work that outlasts a request
 
 	kinds  map[string]device.Kind // the kinds of device; see devices.go
@@ -111,6 +114,8 @@ type Daemon struct {
 	// clipTools is the folder of the clipboard tools put first in a
 	// session's PATH; see clipboard.go. "" for none.
 	clipTools string
+
+	fileWatcher FileWatcher
 }
 
 // New builds a daemon from configuration.
@@ -118,24 +123,41 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 	if log == nil {
 		log = slog.Default()
 	}
+	snap := cloneConfig(cfg)
 	d := &Daemon{
-		cfg:      cfg,
-		log:      log,
-		sessions: newRegistry(),
-		peers:    newPeerTable(),
-		linking:  map[string]*linkTry{},
-		ctx:      context.Background(),
-		ready:    make(chan struct{}),
-		mcp:      newResolver(log),
-		kinds:    deviceKinds(cfg),
+		log:         log,
+		sessions:    newRegistry(),
+		peers:       newPeerTable(),
+		linking:     map[string]*linkTry{},
+		ctx:         context.Background(),
+		ready:       make(chan struct{}),
+		mcp:         newResolver(log),
+		kinds:       deviceKinds(snap),
+		fileWatcher: defaultFileWatcher(),
 		// One poke waits however many sessions change before watchState
 		// takes it.
 		statusPoke: make(chan struct{}, 1),
 
 		hookBinary: hookProgram,
 	}
+	d.cfgSnap.Store(snap)
 	d.agentUI = agentui.New(d.changes.fireAgentBlocks)
 	return d
+}
+
+func (d *Daemon) config() *config.Config {
+	if cfg := d.cfgSnap.Load(); cfg != nil {
+		return cfg
+	}
+	return config.Default()
+}
+
+func (d *Daemon) updateConfig(fn func(*config.Config)) {
+	d.cfgMu.Lock()
+	defer d.cfgMu.Unlock()
+	next := cloneConfig(d.cfgSnap.Load())
+	fn(next)
+	d.cfgSnap.Store(next)
 }
 
 // Ready is closed once Run is listening, after which Addr is valid. A Run
@@ -147,9 +169,10 @@ func (d *Daemon) Socket() string { return d.socket }
 
 // Self describes this daemon as a node record.
 func (d *Daemon) Self() *protocol.Node {
+	cfg := d.config()
 	return &protocol.Node{
-		Id:         d.cfg.NodeID,
-		Name:       d.cfg.Name,
+		Id:         cfg.NodeID,
+		Name:       cfg.Name,
 		Addr:       d.addr(),
 		Os:         runtime.GOOS,
 		Arch:       runtime.GOARCH,
@@ -200,10 +223,17 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err := d.loadSessions(dir); err != nil {
 		return err
 	}
-	d.workspace.load(dir, d.cfg.NodeID)
+	cfg := d.config()
+	d.workspace.load(dir, cfg.NodeID)
 	d.layouts.load(dir)
 	d.projects.load(dir)
 	d.syncWorkspaceProjects()
+	defer func() {
+		if d.agentUI != nil {
+			d.agentUI.Shutdown()
+		}
+	}()
+	defer d.uiWatched.stopAndWait()
 	defer d.sessions.closeAll()
 	defer d.closeAllCodexBridges()
 
@@ -215,6 +245,12 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err := d.projectAgents.messages.load(dir); err != nil {
 		return err
 	}
+	d.projectAgents.messages.start(ctx)
+	defer func() {
+		if err := d.projectAgents.messages.close(); err != nil {
+			d.log.Warn("agent messages flush failed", "err", err)
+		}
+	}()
 	if err := d.listenAgentMCP(ctx, run); err != nil {
 		return err
 	}
@@ -222,26 +258,25 @@ func (d *Daemon) Run(ctx context.Context) error {
 	defer func() {
 		cancel()
 		<-pluginsDone
+		d.conversations.stopAndWait()
 	}()
-	if !d.cfg.P2P.Disabled {
+	if !cfg.P2P.Disabled {
 		if err := d.startP2P(ctx, dir); err != nil {
 			d.log.Warn("libp2p did not start; this daemon has no peers", "err", err)
 		} else {
 			defer d.p2p.Close()
 		}
 	}
-	d.log.Info("daemon listening", "socket", socket, "node", d.cfg.NodeID, "name", d.cfg.Name)
+	d.log.Info("daemon listening", "socket", socket, "node", cfg.NodeID, "name", cfg.Name)
 	close(d.ready)
 
-	go d.syncBuiltinSkills()
-	go d.warmContextServers(ctx)
-
 	var wg sync.WaitGroup
-	wg.Add(4)
-	go func() { defer wg.Done(); d.serve(ctx) }()
-	go func() { defer wg.Done(); d.discover(ctx) }()
-	go func() { defer wg.Done(); d.maintain(ctx) }()
-	go func() { defer wg.Done(); d.watchState(ctx) }()
+	wg.Go(func() { d.syncBuiltinSkills(ctx) })
+	wg.Go(func() { d.warmContextServers(ctx) })
+	wg.Go(func() { d.serve(ctx) })
+	wg.Go(func() { d.discover(ctx) })
+	wg.Go(func() { d.maintain(ctx) })
+	wg.Go(func() { d.watchState(ctx) })
 
 	<-ctx.Done()
 	_ = d.ln.Close()
@@ -524,12 +559,18 @@ func isClosed(err error) bool {
 // syncBuiltinSkills registers Mako's built-in authoring skills (mako-template,
 // mako-plugin) into the skill directories of agents already configured or
 // isolated on this node so slash commands and skill loaders find them at once.
-func (d *Daemon) syncBuiltinSkills() {
+func (d *Daemon) syncBuiltinSkills(ctx context.Context) {
 	agentsMap := d.agents()
 	isolate := d.isolateHome()
-	for _, name := range []string{"agy", "claude", "codex", "pi", "opencode"} {
+	for _, name := range skills.SupportedAgents {
+		if ctx.Err() != nil {
+			return
+		}
 		env := agentspec.IsolatedHomeEnvForAgent(name, isolate, agentsMap)
 		for _, dir := range skills.AgentSkillsDirs(name, env) {
+			if ctx.Err() != nil {
+				return
+			}
 			parent := filepath.Dir(dir)
 			if _, err := os.Stat(parent); err != nil {
 				continue // skip agents not initialized on this machine

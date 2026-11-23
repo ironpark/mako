@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"runtime/debug"
 	"runtime/metrics"
 	"time"
@@ -35,17 +36,30 @@ var limitSamples = []string{
 
 // fitLimit sets the soft limit to memoryLimit, or where the live heap
 // and what the runtime holds besides need more, above it.
-func fitLimit() {
+func fitLimit(ctx context.Context) {
 	s := make([]metrics.Sample, len(limitSamples))
 	for i, name := range limitSamples {
 		s[i].Name = name
 	}
-	for {
+	fitLimitLoop(ctx, limitEvery, func() {
 		metrics.Read(s)
 		live := int64(s[0].Value.Uint64())
 		debug.SetMemoryLimit(limitFor(live, besidesHeap(s[1].Value.Uint64(),
 			s[2].Value.Uint64(), s[3].Value.Uint64(), s[4].Value.Uint64())))
-		time.Sleep(limitEvery)
+	})
+}
+
+func fitLimitLoop(ctx context.Context, every time.Duration, step func()) {
+	step()
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			step()
+		}
 	}
 }
 

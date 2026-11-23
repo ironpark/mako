@@ -35,13 +35,21 @@ var builtinSources = map[string]string{
 // builtins are the built-in templates read, by name in order. One that
 // does not read is left out, which the tests catch.
 var builtins = sync.OnceValue(func() []*Template {
+	return loadBuiltins(Parse)
+})
+
+var builtinsMetadata = sync.OnceValue(func() []*Template {
+	return loadBuiltins(ParseMetadata)
+})
+
+func loadBuiltins(parse func(string, []byte) (*Template, error)) []*Template {
 	var out []*Template
 	for name, path := range builtinSources {
 		data, err := builtinFiles.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		t, err := Parse(name, data)
+		t, err := parse(name, data)
 		if err != nil {
 			continue
 		}
@@ -50,7 +58,7 @@ var builtins = sync.OnceValue(func() []*Template {
 	}
 	slices.SortFunc(out, func(a, b *Template) int { return strings.Compare(a.Name, b.Name) })
 	return out
-})
+}
 
 // BuiltinTemplates are the templates mako comes with, by name in order.
 func BuiltinTemplates() []*Template { return slices.Clone(builtins()) }
@@ -105,7 +113,19 @@ func Find(dir, name string) (*Template, error) {
 // templates no file of dir stands in for, by name in order.
 func LoadAll(dir string) ([]*Template, []Broken) {
 	out, broken := LoadDir(dir)
-	for _, b := range builtins() {
+	return mergeWithBuiltins(out, broken, builtins())
+}
+
+// LoadAllMetadata reads the templates' metadata in dir, as LoadDirMetadata
+// does, with the built-in templates' metadata no file of dir stands in for, by
+// name in order, without instantiating a JavaScript runtime.
+func LoadAllMetadata(dir string) ([]*Template, []Broken) {
+	out, broken := LoadDirMetadata(dir)
+	return mergeWithBuiltins(out, broken, builtinsMetadata())
+}
+
+func mergeWithBuiltins(out []*Template, broken []Broken, built []*Template) ([]*Template, []Broken) {
+	for _, b := range built {
 		taken := slices.ContainsFunc(out, func(t *Template) bool { return t.Name == b.Name }) ||
 			slices.ContainsFunc(broken, func(x Broken) bool { return x.Name == b.Name })
 		if !taken {

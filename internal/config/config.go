@@ -210,6 +210,7 @@ func ExtensionsWorkDir() (string, error) { return subdir("extension-work") }
 
 // TemplatesDir is where the window's prompt templates are kept.
 func TemplatesDir() (string, error) { return subdir("templates") }
+func SkillsDir() (string, error)    { return subdir("skills") }
 
 func subdir(name string) (string, error) {
 	dir, err := Dir()

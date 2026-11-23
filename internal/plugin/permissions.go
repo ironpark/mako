@@ -114,9 +114,6 @@ func (g grants) Has(perm string) bool {
 	return g[perm]
 }
 
-// net says the plugin may reach host.
-func (g grants) net(host string) bool { return g[hostapi.PermNet+":"+host] }
-
 // asked are the permissions m asks for that the user has not allowed.
 func asked(m *Manifest, allowed []string) []string {
 	var out []string

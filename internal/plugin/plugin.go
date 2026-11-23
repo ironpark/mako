@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/ironpark/mako/internal/plugin/hostapi"
 	"github.com/ironpark/mako/internal/uiblock"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -27,35 +29,46 @@ const minRefresh = 15 * time.Second
 var errGone = errors.New("the plugin was removed")
 
 type plugin struct {
-	m           *Manager
-	id          string
-	jobs        chan func()
-	recheck     chan struct{} // how the plugin stands as installed may have changed
-	done        chan struct{}
-	exited      chan struct{} // closed once the actor has stopped
-	quitOnce    sync.Once
-	settings    *settingsStore
-	vault       *vault
-	store       *kvStore
-	db          *dbStore
-	datafs      *datafsStore
-	logRate     *rateLimit
-	netRate     *rateLimit
-	evRate      *rateLimit
-	secRate     *rateLimit
-	dbRate      *rateLimit
-	datafsRate  *rateLimit
-	trRate      *rateLimit
-	fsRate      *rateLimit
-	fsWriteRate *rateLimit
-	subRate     *rateLimit
-	dropLog     *rateLimit
-	subs        *subscriptions
-	asks        asks
-	msgRate     *rateLimit
-	startRate   *rateLimit
-	layoutRate  *rateLimit
-	layoutBusy  atomic.Bool // a change of the layout of the plugin's is under way
+	m            *Manager
+	id           string
+	jobs         chan func()
+	recheck      chan struct{} // how the plugin stands as installed may have changed
+	denyClose    atomic.Bool   // PluginDeny requested immediate runtime teardown
+	enableReset  atomic.Bool   // PluginEnable requested clearing failErr on fallback
+	permSeq      atomic.Uint64 // monotonic counter ordering PluginGrant/PluginDeny inside grantStore.mu
+	dbSyncMu     sync.Mutex
+	dbSyncPend   map[string]*dbSyncPending
+	dbSyncCh     chan struct{} // coalesced DB sync delivery signal (cap 1)
+	done         chan struct{}
+	exited       chan struct{} // closed once the actor has stopped
+	quitOnce     sync.Once
+	settings     *settingsStore
+	vault        *vault
+	store        *kvStore
+	db           *dbStore
+	datafs       *datafsStore
+	logRate      *rateLimit
+	netRate      *rateLimit
+	evRate       *rateLimit
+	secRate      *rateLimit
+	dbRate       *rateLimit
+	datafsRate   *rateLimit
+	trRate       *rateLimit
+	fsRate       *rateLimit
+	fsWriteRate  *rateLimit
+	subRate      *rateLimit
+	dropLog      *rateLimit
+	subs         *subscriptions
+	asks         asks
+	msgRate      *rateLimit
+	startRate    *rateLimit
+	layoutRate   *rateLimit
+	layoutBusy   atomic.Bool // a change of the layout of the plugin's is under way
+	decisionRate *rateLimit
+	askRate      *rateLimit
+	pendingMu    sync.Mutex
+	decJobs      map[string]context.CancelFunc
+	askJobs      map[string]context.CancelFunc
 
 	mu      sync.Mutex
 	folder  string // the folder's fingerprint last seen
@@ -172,33 +185,38 @@ func newPlugin(m *Manager, id string) *plugin {
 	v := newVault(m, id)
 	return &plugin{
 		m: m, id: id,
-		jobs:        make(chan func(), 32),
-		recheck:     make(chan struct{}, 1),
-		done:        make(chan struct{}),
-		exited:      make(chan struct{}),
-		settings:    newSettingsStore(filepath.Join(data, "settings.json"), v),
-		vault:       v,
-		store:       newKVStore(filepath.Join(data, "storage.json"), m.lim.Storage),
-		db:          newDBStore(filepath.Join(data, "db"), m.lim.DBQuota, m.syncClock, func() { m.invalidateSyncDigest(true) }),
-		datafs:      newDatafsStore(filepath.Join(data, "files"), m.lim.DataFSQuota),
-		logRate:     newRateLimit(m.lim.Logs, time.Minute),
-		netRate:     newRateLimit(m.lim.HTTPPerMinute, time.Minute),
-		evRate:      newRateLimit(m.lim.Events, time.Second),
-		secRate:     newRateLimit(secretsPerMinute, time.Minute),
-		dbRate:      newRateLimit(dbOpsPerMinute, time.Minute),
-		datafsRate:  newRateLimit(datafsOpsPerMinute, time.Minute),
-		trRate:      newRateLimit(transcriptsPerMin, time.Minute),
-		fsRate:      newRateLimit(fsReadsPerMin, time.Minute),
-		fsWriteRate: newRateLimit(fsWritesPerMin, time.Minute),
-		subRate:     newRateLimit(eventsPerSecond, time.Second),
-		dropLog:     newRateLimit(1, time.Minute),
-		msgRate:     newRateLimit(messagesPerMin, time.Minute),
-		startRate:   newRateLimit(agentStartsPerHr, time.Hour),
-		layoutRate:  newRateLimit(layoutPatchesPerMin, time.Minute),
-		subs:        &subscriptions{path: filepath.Join(data, "subscriptions.json")},
-		inst:        map[string]*instance{},
-		changed:     make(chan struct{}),
-		saved:       map[string]string{},
+		jobs:         make(chan func(), 32),
+		recheck:      make(chan struct{}, 1),
+		dbSyncCh:     make(chan struct{}, 1),
+		done:         make(chan struct{}),
+		exited:       make(chan struct{}),
+		settings:     newSettingsStore(filepath.Join(data, "settings.json"), v),
+		vault:        v,
+		store:        newKVStore(filepath.Join(data, "storage.json"), m.lim.Storage),
+		db:           newDBStore(filepath.Join(data, "db"), m.lim.DBQuota, m.syncClock, func() { m.invalidateSyncDigest(true) }),
+		datafs:       newDatafsStore(filepath.Join(data, "files"), m.lim.DataFSQuota),
+		logRate:      newRateLimit(m.lim.Logs, time.Minute),
+		netRate:      newRateLimit(m.lim.HTTPPerMinute, time.Minute),
+		evRate:       newRateLimit(m.lim.Events, time.Second),
+		secRate:      newRateLimit(secretsPerMinute, time.Minute),
+		dbRate:       newRateLimit(dbOpsPerMinute, time.Minute),
+		datafsRate:   newRateLimit(datafsOpsPerMinute, time.Minute),
+		trRate:       newRateLimit(transcriptsPerMin, time.Minute),
+		fsRate:       newRateLimit(fsReadsPerMin, time.Minute),
+		fsWriteRate:  newRateLimit(fsWritesPerMin, time.Minute),
+		subRate:      newRateLimit(eventsPerSecond, time.Second),
+		dropLog:      newRateLimit(1, time.Minute),
+		msgRate:      newRateLimit(messagesPerMin, time.Minute),
+		startRate:    newRateLimit(agentStartsPerHr, time.Hour),
+		layoutRate:   newRateLimit(layoutPatchesPerMin, time.Minute),
+		decisionRate: newRateLimit(decisionsPerMin, time.Minute),
+		askRate:      newRateLimit(asksPerHour, time.Hour),
+		decJobs:      map[string]context.CancelFunc{},
+		askJobs:      map[string]context.CancelFunc{},
+		subs:         &subscriptions{path: filepath.Join(data, "subscriptions.json")},
+		inst:         map[string]*instance{},
+		changed:      make(chan struct{}),
+		saved:        map[string]string{},
 	}
 }
 
@@ -212,10 +230,18 @@ func (p *plugin) run(ctx context.Context) {
 	defer p.db.closeAll()
 	for {
 		select {
+		case <-p.recheck:
+			p.restand()
+			continue
+		default:
+		}
+		select {
 		case job := <-p.jobs:
 			job()
 		case <-p.recheck:
 			p.restand()
+		case <-p.dbSyncCh:
+			p.flushDBSync()
 		case <-tick.C:
 			p.tick()
 		case <-p.done:
@@ -223,6 +249,19 @@ func (p *plugin) run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+// signalRecheck nudges the actor via its non-droppable cap-1 recheck channel.
+func (p *plugin) signalRecheck() {
+	select {
+	case <-p.done:
+		return
+	default:
+	}
+	select {
+	case p.recheck <- struct{}{}:
+	default:
 	}
 }
 
@@ -263,6 +302,7 @@ func (p *plugin) do(ctx context.Context, job func() error) error {
 
 func (p *plugin) quit() {
 	p.quitOnce.Do(func() {
+		p.cancelPending("the plugin was removed")
 		close(p.done)
 		p.bump()
 	})
@@ -317,7 +357,7 @@ func (p *plugin) current() *version {
 func (p *plugin) stateLocked(g grantEntry, st InstallStatus) (string, string) {
 	switch {
 	case p.v == nil:
-		return protocol.PluginFailed, cmpOr(p.loadErr, "its folder has not been read")
+		return protocol.PluginFailed, cmp.Or(p.loadErr, "its folder has not been read")
 	case st.Blocked != "":
 		return protocol.PluginBlocked, st.Blocked
 	case g.Disabled:
@@ -367,7 +407,7 @@ func (p *plugin) info() *protocol.PluginInfo {
 	out.Version, out.Publisher = man.Version, man.Publisher
 	out.Permissions = man.Permissions
 	out.Granted = grantsOf(man, g.Granted).list(man)
-	out.AgentAsk, out.AgentsAllowed = p.asks.get().info(), g.AgentsAllowed
+	out.AgentAsk, out.AgentsAllowed = p.asks.get().info(), g.AgentsAllowed || len(g.AsksAllowed) > 0
 	out.Asked = asked(man, g.Granted)
 	for _, b := range man.Blocks {
 		out.Blocks = append(out.Blocks, &protocol.PluginBlock{Name: blockName(p.id, b.ID), Title: b.Title, Slots: b.Slots, Scope: b.Scope})
@@ -402,11 +442,18 @@ func (g grants) list(m *Manifest) []string {
 	return out
 }
 
-// grants are what the plugin holds now.
-func (p *plugin) grants() grants {
+// hasGrant reports whether the plugin currently holds perm without allocating.
+func (p *plugin) hasGrant(perm string) bool {
+	if perm == hostapi.PermNone {
+		return true
+	}
 	v := p.current()
 	if v == nil {
-		return grants{}
+		return false
 	}
-	return grantsOf(v.man, p.m.grant.get(p.id).Granted)
+	return p.m.grant.hasPermission(p.id, perm, v.man.Permissions)
 }
+
+type pluginGrants struct{ p *plugin }
+
+func (g pluginGrants) Has(perm string) bool { return g.p.hasGrant(perm) }

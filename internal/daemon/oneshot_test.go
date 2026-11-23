@@ -166,7 +166,7 @@ printf 'proj=%s;mode=%s;node=%s;prof=%s;parent=%s' "$AGENT_MAKO_PROJECT" "$AGENT
 	if err != nil {
 		t.Fatalf("RunAgentPrompt: %v", err)
 	}
-	want := "proj=" + workDir + ";mode=subagent;node=" + d.cfg.NodeID + ";prof=tmpl-ok;parent=sess-parent-1"
+	want := "proj=" + workDir + ";mode=subagent;node=" + d.config().NodeID + ";prof=tmpl-ok;parent=sess-parent-1"
 	if res.GetOutput() != want {
 		t.Fatalf("output = %q, want %q", res.GetOutput(), want)
 	}

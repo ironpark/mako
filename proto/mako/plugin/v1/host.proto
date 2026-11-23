@@ -277,7 +277,10 @@ message UnsubscribeResponse {
 message SessionEvent {
   // kind is "sessionStarted", "sessionEnded", "sessionSlept" (its
   // program stopped, to start again on its conversation),
-  // "sessionStatus" (its agent's status changed) or "agentMessage".
+  // "sessionStatus" (its agent's status changed), "agentMessage",
+  // "agentStarted", "agentRefused", "layoutChanged", "layoutRefused",
+  // "decisionAnswered", "decisionFailed", "agentAskStarted",
+  // "agentAnswered", or "agentAskFailed".
   string kind = 1;
   // session is the session, as it stands after.
   Session session = 2;
@@ -297,6 +300,24 @@ message SessionEvent {
   // to a plugin that asked, without a subscription.
   string document = 7;
   string revision = 8;
+  // output is, for "agentAnswered", the agent's answer (JSON text when the
+  // ask's format was json), at most 64 KiB; truncated says it was cut.
+  string output = 9;
+  bool truncated = 10;
+  // response_json is, for "decisionAnswered", the normalized response.
+  string response_json = 11;
+  // elapsed_ms is how long an ask or a decision took.
+  uint32 elapsed_ms = 12;
+  // tag is the tag the ask or Submit gave.
+  string tag = 13;
+  // code says why, for "agentAskFailed" and "decisionFailed": "refused",
+  // "canceled", "timeout", "unavailable" or "failed". These kinds
+  // come to a plugin that asked, without a subscription.
+  string code = 14;
+  // agent and profile name the agent running an ask, for "agentAskStarted"
+  // (emitted when a previously pending ask is approved and starts running).
+  string agent = 15;
+  string profile = 16;
 }
 
 // AgentMessage is a message one agent sent another of this node's, as

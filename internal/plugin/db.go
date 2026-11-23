@@ -1122,7 +1122,7 @@ func (m *Manager) ExportSyncBundle() *protocol.PluginSyncBundle {
 
 	var buckets []*protocol.PluginSyncBucket
 	for _, p := range ps {
-		if !p.grants()[hostapi.PermDbSync] {
+		if !p.hasGrant(hostapi.PermDbSync) {
 			continue
 		}
 		buckets = append(buckets, p.db.exportBuckets(p.id)...)
@@ -1150,7 +1150,7 @@ func (m *Manager) MergeSyncBundle(bundle *protocol.PluginSyncBundle) bool {
 			continue
 		}
 		p, ok := m.plugin(pid)
-		if !ok || !p.grants()[hostapi.PermDbSync] {
+		if !ok || !p.hasGrant(hostapi.PermDbSync) {
 			continue
 		}
 		tables, count, err := p.db.mergeBucket(pid, bucket)
@@ -1169,37 +1169,95 @@ func (m *Manager) MergeSyncBundle(bundle *protocol.PluginSyncBundle) bool {
 	return anyChanged
 }
 
-// deliverDBSync notifies a plugin's runtime of merged remote rows and refreshes
-// any watched blocks in scopeKey.
+type dbSyncPending struct {
+	tables map[string]struct{}
+	rows   int
+}
+
+// deliverDBSync coalesces merged remote rows per scopeKey and signals the
+// plugin's actor via a non-droppable cap-1 channel.
 func (p *plugin) deliverDBSync(scopeKey string, tables []string, count int) {
-	scopeKind := protocol.ScopeGlobal
-	if k, _, err := parseScopeKey(scopeKey); err == nil {
-		scopeKind = k
-	}
-	payload, err := json.Marshal(struct {
-		Scope    string   `json:"scope"`
-		ScopeKey string   `json:"scopeKey"`
-		Tables   []string `json:"tables"`
-		Rows     int      `json:"rows"`
-	}{
-		Scope:    scopeKind,
-		ScopeKey: scopeKey,
-		Tables:   tables,
-		Rows:     count,
-	})
-	if err != nil {
+	if count <= 0 {
 		return
 	}
-	p.post(func() {
+	select {
+	case <-p.done:
+		return
+	default:
+	}
+	p.dbSyncMu.Lock()
+	if p.dbSyncPend == nil {
+		p.dbSyncPend = map[string]*dbSyncPending{}
+	}
+	pend, ok := p.dbSyncPend[scopeKey]
+	if !ok {
+		pend = &dbSyncPending{tables: map[string]struct{}{}}
+		p.dbSyncPend[scopeKey] = pend
+	}
+	for _, t := range tables {
+		if t != "" {
+			pend.tables[t] = struct{}{}
+		}
+	}
+	pend.rows += count
+	p.dbSyncMu.Unlock()
+
+	select {
+	case p.dbSyncCh <- struct{}{}:
+	default:
+	}
+}
+
+func (p *plugin) flushDBSync() {
+	p.dbSyncMu.Lock()
+	pend := p.dbSyncPend
+	p.dbSyncPend = nil
+	p.dbSyncMu.Unlock()
+	if len(pend) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(pend))
+	for k := range pend {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, scopeKey := range keys {
+		item := pend[scopeKey]
+		if item == nil || item.rows <= 0 {
+			continue
+		}
 		if !p.watched() && p.rt == nil {
-			return
+			continue
 		}
 		if err := p.ensure(); err != nil {
 			return
 		}
+		tables := make([]string, 0, len(item.tables))
+		for t := range item.tables {
+			tables = append(tables, t)
+		}
+		slices.Sort(tables)
+		scopeKind := protocol.ScopeGlobal
+		if k, _, err := parseScopeKey(scopeKey); err == nil {
+			scopeKind = k
+		}
+		payload, err := json.Marshal(struct {
+			Scope    string   `json:"scope"`
+			ScopeKey string   `json:"scopeKey"`
+			Tables   []string `json:"tables"`
+			Rows     int      `json:"rows"`
+		}{
+			Scope:    scopeKind,
+			ScopeKey: scopeKey,
+			Tables:   tables,
+			Rows:     item.rows,
+		})
+		if err != nil {
+			continue
+		}
 		_, _ = p.invoke("dbSyncEvent", false, string(payload))
 		p.reloadWatchedScope(scopeKey)
-	})
+	}
 }
 
 // reloadWatchedScope runs load+render for watched block instances matching

@@ -139,7 +139,7 @@ func (p *pairing) use(token string) bool {
 // answer, and tells the watching ones. A peer asking with the token of
 // this node's pairing code is let in at once.
 func (d *Daemon) takeAccessRequest(from p2p.Peer, note, token string) {
-	if from.Trusts || from.Node == "" || from.Node == d.cfg.NodeID {
+	if from.Trusts || from.Node == "" || from.Node == d.config().NodeID {
 		return
 	}
 	if token != "" && d.pairing.use(token) {
@@ -183,13 +183,14 @@ func accessKey(key ssh.PublicKey, comment string) *protocol.AccessKey {
 // accessInfo is this daemon's keys, the requests waiting and the keys it
 // lets in.
 func (d *Daemon) accessInfo() *protocol.AccessInfo {
+	cfg := d.config()
 	info := &protocol.AccessInfo{
-		Key:      accessKey(d.p2p.Key(), nodeComment(d.cfg.Name)),
+		Key:      accessKey(d.p2p.Key(), nodeComment(cfg.Name)),
 		Owner:    accessKey(d.p2p.Owner(), ""),
 		Requests: d.access.list(),
 	}
 	if token, expires := d.pairing.current(); token != "" {
-		code := p2p.Pairing{ID: d.peerID(), Name: d.cfg.Name, Token: token, Addrs: d.multiaddrs()}
+		code := p2p.Pairing{ID: d.peerID(), Name: cfg.Name, Token: token, Addrs: d.multiaddrs()}
 		info.Pairing = &protocol.Pairing{Link: code.Link(), Expires: timestamppb.New(expires)}
 	}
 	for _, keys := range []*p2p.Keys{d.p2p.Keys(), d.p2p.SSHKeys()} {

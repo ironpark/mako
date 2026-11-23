@@ -7,9 +7,10 @@ package dev.ironpark.mako.v2;
 
 /**
  * <pre>
- * PluginAgentAsk is an agent a plugin asks to start (sessions:write):
- * which agent and profile, in which folder of which project, named what,
- * and the first 2 KiB of the prompt it would start with.
+ * PluginAgentAsk is an agent a plugin asks to start (sessions:write) or ask
+ * a one-shot question (agents:ask, kind "ask"): which agent and profile, in
+ * which folder of which project, named/titled what, and the first 2 KiB of
+ * the prompt.
  * </pre>
  *
  * Protobuf type {@code mako.v2.PluginAgentAsk}
@@ -28,6 +29,7 @@ public  final class PluginAgentAsk extends
     root_ = "";
     name_ = "";
     prompt_ = "";
+    kind_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -436,6 +438,78 @@ public  final class PluginAgentAsk extends
     since_ = 0L;
   }
 
+  public static final int KIND_FIELD_NUMBER = 9;
+  private java.lang.String kind_;
+  /**
+   * <pre>
+   * kind is "" for an agent to start (sessions:write), "ask" for a question
+   * asked of an agent once (agents:ask; revision 45).
+   * </pre>
+   *
+   * <code>string kind = 9 [json_name = "kind"];</code>
+   * @return The kind.
+   */
+  @java.lang.Override
+  public java.lang.String getKind() {
+    return kind_;
+  }
+  /**
+   * <pre>
+   * kind is "" for an agent to start (sessions:write), "ask" for a question
+   * asked of an agent once (agents:ask; revision 45).
+   * </pre>
+   *
+   * <code>string kind = 9 [json_name = "kind"];</code>
+   * @return The bytes for kind.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getKindBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(kind_);
+  }
+  /**
+   * <pre>
+   * kind is "" for an agent to start (sessions:write), "ask" for a question
+   * asked of an agent once (agents:ask; revision 45).
+   * </pre>
+   *
+   * <code>string kind = 9 [json_name = "kind"];</code>
+   * @param value The kind to set.
+   */
+  private void setKind(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    kind_ = value;
+  }
+  /**
+   * <pre>
+   * kind is "" for an agent to start (sessions:write), "ask" for a question
+   * asked of an agent once (agents:ask; revision 45).
+   * </pre>
+   *
+   * <code>string kind = 9 [json_name = "kind"];</code>
+   */
+  private void clearKind() {
+
+    kind_ = getDefaultInstance().getKind();
+  }
+  /**
+   * <pre>
+   * kind is "" for an agent to start (sessions:write), "ask" for a question
+   * asked of an agent once (agents:ask; revision 45).
+   * </pre>
+   *
+   * <code>string kind = 9 [json_name = "kind"];</code>
+   * @param value The bytes for kind to set.
+   */
+  private void setKindBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    kind_ = value.toStringUtf8();
+
+  }
+
   public static dev.ironpark.mako.v2.PluginAgentAsk parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -521,9 +595,10 @@ public  final class PluginAgentAsk extends
 
   /**
    * <pre>
-   * PluginAgentAsk is an agent a plugin asks to start (sessions:write):
-   * which agent and profile, in which folder of which project, named what,
-   * and the first 2 KiB of the prompt it would start with.
+   * PluginAgentAsk is an agent a plugin asks to start (sessions:write) or ask
+   * a one-shot question (agents:ask, kind "ask"): which agent and profile, in
+   * which folder of which project, named/titled what, and the first 2 KiB of
+   * the prompt.
    * </pre>
    *
    * Protobuf type {@code mako.v2.PluginAgentAsk}
@@ -962,6 +1037,80 @@ public  final class PluginAgentAsk extends
       return this;
     }
 
+    /**
+     * <pre>
+     * kind is "" for an agent to start (sessions:write), "ask" for a question
+     * asked of an agent once (agents:ask; revision 45).
+     * </pre>
+     *
+     * <code>string kind = 9 [json_name = "kind"];</code>
+     * @return The kind.
+     */
+    @java.lang.Override
+    public java.lang.String getKind() {
+      return instance.getKind();
+    }
+    /**
+     * <pre>
+     * kind is "" for an agent to start (sessions:write), "ask" for a question
+     * asked of an agent once (agents:ask; revision 45).
+     * </pre>
+     *
+     * <code>string kind = 9 [json_name = "kind"];</code>
+     * @return The bytes for kind.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getKindBytes() {
+      return instance.getKindBytes();
+    }
+    /**
+     * <pre>
+     * kind is "" for an agent to start (sessions:write), "ask" for a question
+     * asked of an agent once (agents:ask; revision 45).
+     * </pre>
+     *
+     * <code>string kind = 9 [json_name = "kind"];</code>
+     * @param value The kind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKind(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setKind(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * kind is "" for an agent to start (sessions:write), "ask" for a question
+     * asked of an agent once (agents:ask; revision 45).
+     * </pre>
+     *
+     * <code>string kind = 9 [json_name = "kind"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKind() {
+      copyOnWrite();
+      instance.clearKind();
+      return this;
+    }
+    /**
+     * <pre>
+     * kind is "" for an agent to start (sessions:write), "ask" for a question
+     * asked of an agent once (agents:ask; revision 45).
+     * </pre>
+     *
+     * <code>string kind = 9 [json_name = "kind"];</code>
+     * @param value The bytes for kind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKindBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setKindBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginAgentAsk)
   }
   @java.lang.Override
@@ -986,10 +1135,11 @@ public  final class PluginAgentAsk extends
             "name_",
             "prompt_",
             "since_",
+            "kind_",
           };
           java.lang.String info =
-              "\u0000\b\u0000\u0000\u0001\b\b\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
-              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0002";
+              "\u0000\t\u0000\u0000\u0001\t\t\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0002\t\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -17,6 +17,9 @@ import (
 
 const defaultHTTPTimeout = 45 * time.Second
 
+// ErrNoKey is returned when no decision model provider has an API key configured.
+var ErrNoKey = errors.New("no decision model API key is configured; add one in Settings ▸ API keys")
+
 // Request describes a decision evaluation call from a prompt template or caller.
 type Request struct {
 	Provider  string              `json:"provider,omitempty"`
@@ -182,6 +185,13 @@ func (s *Store) EvaluateRequest(ctx context.Context, req Request, cfg config.Dec
 	return resp, nil
 }
 
+// Resolve says which provider and model an evaluation would use now, without
+// returning the API key. Returns ErrNoKey when no provider has a key.
+func (s *Store) Resolve(cfg config.Decision) (provider, model string, err error) {
+	p, m, _, err := s.resolveProvider(Request{}, cfg)
+	return p, m, err
+}
+
 func (s *Store) resolveProvider(req Request, cfg config.Decision) (provider, model, apiKey string, err error) {
 	if strings.TrimSpace(req.Provider) != "" {
 		p := NormalizeProvider(req.Provider)
@@ -219,7 +229,7 @@ func (s *Store) resolveProvider(req Request, cfg config.Decision) (provider, mod
 			return p, pickModel(p, req.Model, cfg), key, nil
 		}
 	}
-	return "", "", "", errors.New("no decision model API key is configured; add one in Settings ▸ API keys")
+	return "", "", "", ErrNoKey
 }
 
 func inferProviderFromModel(model string) string {
@@ -398,7 +408,7 @@ func normalizeOneQuestion(key string, q Question) (normQuestion, error) {
 func stringMap(v any) (map[string]string, error) {
 	switch m := v.(type) {
 	case map[string]string:
-		return mapsClone(m), nil
+		return maps.Clone(m), nil
 	case map[string]any:
 		out := make(map[string]string, len(m))
 		for k, val := range m {

@@ -301,21 +301,21 @@ Tool arguments can never override or specify another scope:
 | Kind | Builder | |
 |---|---|---|
 | `column`, `row`, `stack` | `ui.column(children, opts)` | Children one over another, side by side, or over each other. A child with `grow` shares the room left. Set `fill: true` on a root `column`, `row`, or `split` to skip outer auto-scroll and let inner `ui.scroll(..., { grow: 1 })` panes scroll independently. |
-| `card` | `ui.card(children, opts)` | A bordered surface container for grouping items (such as a Kanban card or summary tile); supports `variant` (`primary`, `secondary`, `outline`, `ghost`, `danger`). |
-| `scroll` | `ui.scroll(children, opts)` | Scrollable container: `direction` (`vertical` default, or `horizontal`) and `maxHeight` (px, up to 4000) for vertical scroll areas. |
+| `card` | `ui.card(children, opts)` | A bordered surface container for grouping items (such as a Kanban card or summary tile); supports `variant` (`primary`, `secondary`, `outline`, `ghost`, `danger`, `soft`). |
+| `scroll` | `ui.scroll(children, opts)` | Scrollable container: `direction` (`vertical` default, or `horizontal`), `maxHeight` (px, up to 4000) for vertical scroll areas, and `variant: "follow"` to keep the scroll pinned to the end (revision 45). |
 | `wrap` | `ui.wrap(children, opts)` | Flex-wrap container that flows children onto multiple lines with `gap`. |
 | `grid` | `ui.grid(columns, children, opts)` | N-column grid (`columns` 1 to 6, `gap`). |
 | `split` | `ui.split(first, second, opts)` | Resizable 2-pane split container: `direction` (`horizontal` default, or `vertical`), `ratio` (0.1 to 0.9, default 0.5), `fill` when at root, and exactly 2 children. |
 | `collapsible` | `ui.collapsible(title, children, opts)` | Disclosure/accordion section: `text` (title), `icon`, `tone`, `checked` (initially expanded), optional `onChange` (receives boolean), and nested children. |
 | `breadcrumb` | `ui.breadcrumb(segments, opts)` | Clickable path trail (`options`: segment labels); `onChange` fires with the clicked segment's 0-based index as a decimal string (`"0"`, `"1"`, ...). |
 | `tree` | `ui.tree(items, opts)` | Native hierarchical tree container holding `tree_item` children. |
-| `tree_item` | `ui.treeItem(label, [children], opts)` | Hierarchical tree node inside `tree` or `tree_item`: `text` (primary label), `value` (optional secondary/meta text), `icon`, `tone`, `checked` (expanded/selected state), `onTap`, optional `onChange` (boolean expand/collapse), `drag`, `dragGroup`, `onDrop`, `dropAccept`, and optional nested `tree_item` children. |
+| `tree_item` | `ui.treeItem(label, [children], opts)` | Hierarchical tree node inside `tree` or `tree_item`: `text` (primary label), `value` (optional secondary/meta text), `icon`, `tone`, `variant` (`badge` applies tone to icon only and renders `value` as a rounded badge, revision 45), `checked` (expanded/selected state), `onTap`, optional `onChange` (boolean expand/collapse), `drag`, `dragGroup`, `onDrop`, `dropAccept`, and optional nested `tree_item` children. |
 | `list` | `ui.list(items, (item, i) => node, opts)` | A column of rows; a row that sends a tap lights up under the pointer, as the window's lists do. |
 | `table` | `ui.table(headers, rows, opts)` | Structured rows with optional header columns (`labels`). |
 | `text` | `ui.text(text, opts)` | `weight` (`medium`, `semibold`), `size` (`small`, `large`), `tone`. |
 | `icon` | `ui.icon(name, opts)` | A [bundled icon](../internal/gui/iconset/icons)'s name; another is drawn as a square. |
-| `pill` | `ui.pill(text, opts)` | A state in a word, on a wash of its tone. |
-| `chip` | `ui.chip(text, opts)` | A name of the machine's kind: a hash, a branch. |
+| `pill` | `ui.pill(text, opts)` | A state in a word, on a wash of its tone; supports `icon` and `variant` (`soft`, `solid`, `outline`, revision 45). |
+| `chip` | `ui.chip(text, opts)` | A name of the machine's kind: a hash, a branch, or a tag; supports `icon` and `variant` (`soft`, `solid`, `outline`, revision 45). |
 | `button` | `ui.button(text, opts)` | `icon` beside the text (or empty `text` with `icon` for compact icon-only buttons); `size` (`small`, `large`); `variant` (`primary`, `secondary`, `outline`, `ghost`, `danger`); tone `accent` fills it, `danger` warns. |
 | `input` | `ui.input(value, opts)` | `placeholder`; `onChange` on leaving it, `onSubmit` on Return. |
 | `textarea` | `ui.textarea(value, opts)` | Multi-line text input; `placeholder`, `size` (`small`, `large`); `onChange` on leaving it, `onSubmit` on shortcut. |
@@ -324,7 +324,7 @@ Tool arguments can never override or specify another scope:
 | `tabs` | `ui.tabs(value, options, opts)` | Horizontal tab strip; `onChange` with the chosen option. |
 | `markdown` | `ui.markdown(text, opts)` | Drawn as the window draws Markdown; optional `onLink` fires with the clicked link target. |
 | `code` | `ui.code(text, language, opts)` | Monospaced. |
-| `progress` | `ui.progress(value, opts)` | From 0 to 1. |
+| `progress` | `ui.progress(value, opts)` | From 0 to 1, or `variant: "spinner"` with optional `text` for an indeterminate spinner (revision 45). |
 | `divider` | `ui.divider(opts)` | A hairline. |
 | `chart` | `ui.chart(type, series, opts)` | `type` `line`, `bar`, `sparkline` (1 to 4 series of up to 200 finite numbers, 600 in all), or `donut` / `pie` (revision 44: 1 series of 1 to 16 non-negative values with matching `opts.labels`); `opts.caption` titles the chart. A series's colour is its `tone`, or the theme's chart colours in order. It sends no messages. |
 | `graph` | `ui.graph(nodes, edges, opts)` | Declarative interactive node-edge graph canvas (revision 44): up to 120 nodes (`{id, label, group, tone, subtitle, weight}`) and 400 edges (`{from, to, label, tone, dashed}`), `value` for the focused/selected node ID, optional `maxHeight` (120 to 1200 px), `caption`, and `onChange` firing with the clicked node ID. |
@@ -435,6 +435,12 @@ plugin lacks the permission. The schema, with every field, is
 | `secrets.deleteSecret({name})` | `secrets` | `{found}`. |
 | `secrets.listSecrets()` | `secrets` | `{names}`, sorted; never the values. |
 | `layout.patchLayout({ops, document, ifRev})` | `layout:write` | `{requestId, asked}`: changes a window layout document as `patch_layout` does, as the user allows; its outcome comes to `on.layoutChanged` or `on.layoutRefused`. See [The layout](#the-layout). |
+| `decision.status()` | `decision` | `{available, provider, model}`: reports whether this node has a decision model configured (never exposes API keys). See [Decision model & Agent questions](#decision-and-agent-asks). |
+| `decision.evaluate({requestJson, timeoutMs})` | `decision` | `{responseJson, provider, model, elapsedMs}`: synchronously evaluates typed decision questions (`choice`, `score`, `noul`), up to 20 s, 256 KiB and 32 questions. Prelude exposes `mako.decision.evaluate(req, opts)`, `tryEvaluate`, `score`, `choice`, and `yes`. |
+| `decision.submit({requestJson, timeoutMs, tag})` | `decision` | `{requestId}`: asynchronously evaluates decision questions (up to 45 s, at most 2 in flight); results arrive at `on.decisionAnswered` or `on.decisionFailed`. |
+| `agents.listAgents()` | `agents:ask` | `{agents}`: lists this node's agents and profiles with `installed`, `askable`, `reason`, and `alwaysAllowed`. Prelude exposes `mako.agents.list()`. |
+| `agents.askAgent({agent, profile, project, root, prompt, format, jsonSchema, timeoutMs, title, tag})` | `agents:ask` | `{requestId, asked}`: asks an agent a non-interactive, one-shot question without YOLO in a project folder (up to 96 KiB prompt, 64 KiB output); when a waiting ask is approved, `on.agentAskStarted` fires as it starts, and results arrive at `on.agentAnswered` or `on.agentAskFailed`. Prelude exposes `mako.agents.ask(...)` and `ctx.agents.ask(...)`. |
+| `agents.cancelAsk({requestId})` | `agents:ask` | `{found}`: cancels a waiting or running agent question. Prelude exposes `mako.agents.cancel(requestId)`. |
 | `exec.runProcess` | `exec` | Not available: no manifest may ask for `exec` in this version. |
 
 ### Transcripts and events
@@ -509,6 +515,8 @@ the user allows, all of them at once, before the plugin runs at all:
 | `fs:project:write` | Write them too: asked for on its own, beside `fs:project`. A plugin that writes a project's files can change what its builds and scripts run. |
 | `sessions:write` | Send this node's agents messages, start agents (each first one as the user allows) and stop those it started; see [Agents](#agents). |
 | `layout:write` | Change the window's layout, as the user allows each change or allowed this plugin such changes; see [The layout](#the-layout). |
+| `decision` | Ask this node's configured decision model short typed questions (`choice`, `score`, `noul`) using the user's Settings ▸ API keys defaults; see [Decision model & Agent questions](#decision-and-agent-asks). |
+| `agents:ask` | List this node's agents and ask them one-shot questions without YOLO (user-approved per agent/profile pair); see [Decision model & Agent questions](#decision-and-agent-asks). |
 
 **Asking.** A plugin that asks for what the user has not allowed waits:
 the window shows a bar over itself, which no layout can cover, and the
@@ -565,6 +573,10 @@ with `error` (refused, unanswered for 10 minutes, the plugin disabled
 or refused meanwhile, or the agent not starting). One ask waits at a
 time; at most 3 of a plugin's agents run at once, and it may try 10
 starts an hour, asks included.
+
+<a id="decision-and-agent-asks"></a>**Decision model & Agent questions (revision 45).**
+- **Decision (`decision`)**: Uses the provider, model, and API keys configured in Settings ▸ API keys; any `provider` or `model` in the plugin's request is ignored, and API keys are never exposed. Up to 60 calls a minute (`evaluate` and `submit` combined), 256 KiB and 32 questions per request, 20 s max for synchronous `evaluate`, 45 s max and 2 concurrent for asynchronous `submit`. Prelude helpers: `mako.decision.status()`, `evaluate(req, opts)`, `tryEvaluate(req, opts)`, `submit(req, {timeoutMs, tag})`, `score(state, instructions, levels, opts)`, `choice(state, instructions, options, opts)`, and `yes(state, instructions, opts)`. Asynchronous outcomes arrive at `on.decisionAnswered(ev)` (`requestId`, `tag`, `responseJson`, `elapsedMs`) or `on.decisionFailed(ev)` (`requestId`, `tag`, `code`, `error`, `elapsedMs`) without a subscription.
+- **Agent questions (`agents:ask`)**: Lists this node's offered agents/profiles (`mako.agents.list()`) and runs one-shot, non-interactive questions (`mako.agents.ask(...)` / `ctx.agents.ask(...)`) with YOLO forcibly disabled and any YOLO flags stripped from profile arguments, inside a verified project folder (`root`, defaulting to the project's first folder), with a plugin-origin prompt header. Only installed native one-shot agents with `allow_template` enabled are askable. The first ask for an `(agent, profile)` pair prompts the user in the window bar (**Allow once**, **Always allow this agent**, or **Deny**); **Ask again** (`forget_agents`) or revoking permissions clears all saved pairs. At most 2 asks wait or run at once, 30 asks an hour, prompt 1–96 KiB, optional `jsonSchema` ≤16 KiB, output cut at 64 KiB (`truncated: true`), timeout 15–300 s (default 120 s). When a pending ask (`asked: true`) is approved and begins executing, `on.agentAskStarted(ev)` (`requestId`, `tag`, `agent`, `profile`) fires without a subscription; outcomes arrive at `on.agentAnswered(ev)` (`requestId`, `tag`, `output`, `truncated`, `elapsedMs`) or `on.agentAskFailed(ev)` (`requestId`, `tag`, `code` in `refused|canceled|timeout|unavailable|failed`, `error`, `elapsedMs`) without a subscription; `mako.agents.cancel(requestId)` cancels a waiting or running ask.
 
 <a id="the-layout"></a>**The layout.** `layout.patchLayout` takes `ops`, the JSON of
 `patch_layout`'s operations ([agent-mcp.md](agent-mcp.md#the-windows-layout)),

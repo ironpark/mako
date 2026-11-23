@@ -2,12 +2,15 @@ package gui
 
 import (
 	"image/color"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ironpark/ggui"
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/zed"
 )
@@ -201,5 +204,74 @@ func TestCutSpanLeavesTheHoles(t *testing.T) {
 	got := cutSpan(0, 10, [][2]int{{2, 4}, {6, 7}}, &from)
 	if len(got) != 3 || got[0] != [2]int{0, 2} || got[1] != [2]int{4, 6} || got[2] != [2]int{7, 10} {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestSetLanguagesInvalidatesZedExtensionCache(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	dir := t.TempDir()
+	installTOML(t, dir)
+
+	m := newModel(config.Default(), "")
+	defer m.hl.close()
+	woke := make(chan struct{}, 16)
+	m.post = func(fn func()) {
+		fn()
+		select {
+		case woke <- struct{}{}:
+		default:
+		}
+	}
+
+	exts, err := (&zed.Store{Dir: dir}).Installed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.hl.setLanguages(zed.Languages(exts))
+	m.ext.langGen = 1
+
+	id := docTabID("local", "/p/Cargo.lock")
+	m.Docs.Set(maps.Clone(map[string]docInfo{id: {Node: "local", Path: "/p/Cargo.lock"}}))
+
+	colors := m.docColors(id)
+	text := "name = \"mako\" # hi\n"
+	colors(text, skin.Dark)
+	select {
+	case <-woke:
+	case <-time.After(10 * time.Second):
+		t.Fatal("initial highlight did not complete")
+	}
+	spans := colors(text, skin.Dark)
+	if c := colorAt(spans, text, "mako"); c != captureColor("string", skin.Dark) {
+		t.Fatalf("initial string color = %v, want string capture", c)
+	}
+
+	// Update the extension's query on disk so strings map to @comment instead.
+	writeFile(t, filepath.Join(dir, "toml", "languages", "toml", "highlights.scm"), []byte("(string) @comment\n"))
+	exts, err = (&zed.Store{Dir: dir}).Installed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.hl.setLanguages(zed.Languages(exts))
+	m.ext.langGen++
+
+	// Trigger docColors again; non-builtin docSyntax must refresh and pick up the new query.
+	_ = colors(text, skin.Dark)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		spans = colors(text, skin.Dark)
+		if colorAt(spans, text, "mako") == captureColor("comment", skin.Dark) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("updated extension query did not take effect: %+v", spans)
+		}
+		select {
+		case <-woke:
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if ggui.Peek(m.Docs)[id].Path != "/p/Cargo.lock" {
+		t.Fatal("unexpected doc state")
 	}
 }

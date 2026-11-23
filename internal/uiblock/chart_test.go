@@ -57,7 +57,7 @@ func TestChartsOutOfBoundsAreRefused(t *testing.T) {
 		"color":     {`{"kind":"chart","chart":"bar","series":[{"color":"#ff0000","values":[1]}]}`, "unknown field"},
 		"labels":    {`{"kind":"chart","chart":"bar","labels":["a"],"series":[{"values":[1,2]}]}`, "2 values for 1 labels"},
 		"label":     {`{"kind":"chart","chart":"bar","labels":["` + strings.Repeat("x", 33) + `"],"series":[{"values":[1]}]}`, "a label is at most"},
-		"spoof":     {`{"kind":"chart","chart":"bar","labels":["a‮b"],"series":[{"values":[1]}]}`, "reordering"},
+		"spoof":     {`{"kind":"chart","chart":"bar","labels":["a\u202eb"],"series":[{"values":[1]}]}`, "reordering"},
 		"name":      {`{"kind":"chart","chart":"bar","series":[{"name":"a\u0007","values":[1]}]}`, "reordering"},
 		"elsewhere": {`{"kind":"text","text":"x","series":[{"values":[1]}]}`, "only a chart"},
 		"tap":       {`{"kind":"chart","chart":"line","series":[{"values":[1]}],"onTap":["x"]}`, "sends no messages"},

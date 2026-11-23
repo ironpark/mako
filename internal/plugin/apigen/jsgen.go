@@ -158,13 +158,27 @@ export interface Plugin {
   on?: PluginEvents;
 }
 
-/** What a plugin does on each kind of event it subscribed to. */
+/** What a plugin does on each kind of event it subscribed to or requested. */
 export interface PluginEvents {
   sessionStarted?(event: SessionEvent): void | Promise<void>;
   sessionEnded?(event: SessionEvent): void | Promise<void>;
   sessionSlept?(event: SessionEvent): void | Promise<void>;
   sessionStatus?(event: SessionEvent): void | Promise<void>;
   agentMessage?(event: SessionEvent): void | Promise<void>;
+  agentStarted?(event: SessionEvent): void | Promise<void>;
+  agentRefused?(event: SessionEvent): void | Promise<void>;
+  layoutChanged?(event: SessionEvent): void | Promise<void>;
+  layoutRefused?(event: SessionEvent): void | Promise<void>;
+  /** Fired when an asynchronous mako.decision.submit evaluation completes. */
+  decisionAnswered?(event: SessionEvent): void | Promise<void>;
+  /** Fired when an asynchronous mako.decision.submit evaluation fails. */
+  decisionFailed?(event: SessionEvent): void | Promise<void>;
+  /** Fired when a previously pending mako.agents.ask question is approved by the user and starts running. */
+  agentAskStarted?(event: SessionEvent): void | Promise<void>;
+  /** Fired when an asynchronous mako.agents.ask question completes. */
+  agentAnswered?(event: SessionEvent): void | Promise<void>;
+  /** Fired when an asynchronous mako.agents.ask question fails, is refused, or is canceled. */
+  agentAskFailed?(event: SessionEvent): void | Promise<void>;
   /** Fired when CRDT-synced SQLite rows arrive from a trusted peer node. */
   dbSync?(event: DbSyncEvent): void | Promise<void>;
 }
@@ -188,12 +202,41 @@ export interface I18nApi {
   t(key: string, params?: Record<string, string | number | boolean>, locale?: string): string;
 }
 
+/** Decision model helper exposed on mako.decision (needs decision permission). */
+export interface DecisionHelpers {
+  status(): Promise<StatusResponse>;
+  evaluate(request: Record<string, any> | string, opts?: { timeoutMs?: number }): Promise<Record<string, any>>;
+  tryEvaluate(request: Record<string, any> | string, opts?: { timeoutMs?: number }): Promise<
+    { ok: true; result: Record<string, any> } | { ok: false; unavailable: boolean; error: string }
+  >;
+  submit(request: Record<string, any> | string, opts?: { timeoutMs?: number; tag?: string }): Promise<SubmitResponse>;
+  score(state: any, instructions: string, levels: readonly string[], opts?: { timeoutMs?: number }): Promise<Record<string, any>>;
+  choice(state: any, instructions: string, options: readonly string[], opts?: { timeoutMs?: number }): Promise<Record<string, any>>;
+  yes(state: any, instructions: string, opts?: { timeoutMs?: number }): Promise<boolean>;
+}
+
+/** One-shot agent ask helper exposed on mako.agents (needs agents:ask permission). */
+export interface AgentsHelpers {
+  list(): Promise<AgentProfile[]>;
+  ask(req: Omit<AskAgentRequest, "jsonSchema"> & { jsonSchema?: string | Record<string, any> }): Promise<AskAgentResponse>;
+  cancel(requestId: string | CancelAskRequest): Promise<CancelAskResponse>;
+}
+
+/** Scoped one-shot agent ask helper bound to a ScopeContext's projectId and first root. */
+export interface ScopedAgentsApi {
+  list(): Promise<AgentProfile[]>;
+  ask(req: Omit<AskAgentRequest, "jsonSchema"> & { jsonSchema?: string | Record<string, any> }): Promise<AskAgentResponse>;
+  cancel(requestId: string | CancelAskRequest): Promise<CancelAskResponse>;
+}
+
 /** What activate is given: the Host API, and the plugin's blocks, commands, tools, and i18n. */
-export interface Mako extends HostApi {
+export interface Mako extends Omit<HostApi, "decision" | "agents"> {
   readonly blocks: Blocks;
   readonly commands: CommandsApi & Commands;
   readonly tools: Tools;
   readonly i18n: I18nApi;
+  readonly decision: DecisionHelpers;
+  readonly agents: AgentsApi & AgentsHelpers;
 }
 
 /** Declared scope kind of a plugin block, tool, or setting. */
@@ -261,6 +304,7 @@ export interface ScopeContext {
   readonly settings: ScopedSettingsApi;
   readonly db: ScopedDbApi;
   readonly datafs: ScopedDatafsApi;
+  readonly agents: ScopedAgentsApi;
 }
 
 export interface Blocks {
@@ -303,8 +347,8 @@ export interface Block<S extends object> {
 /** A colour, as a token of the theme; never a value. */
 export type Tone = "" | "muted" | "faint" | "accent" | "success" | "warning" | "danger";
 
-/** Visual style variant for button or card nodes. */
-export type Variant = "" | "primary" | "secondary" | "outline" | "ghost" | "danger";
+/** Visual style variant token, interpreted by node kind. */
+export type Variant = "" | "primary" | "secondary" | "outline" | "ghost" | "danger" | "soft" | "solid" | "spinner" | "follow" | "badge";
 
 /** A message a node sends: its name in on, then arguments, JSON. */
 export type Message = [string, ...any[]];
@@ -312,6 +356,8 @@ export type Message = [string, ...any[]];
 export interface NodeOptions {
   /** Tells siblings apart across renders; a node's id is its keys' path. */
   key?: string | number;
+  /** Optional label text (e.g. beside a progress spinner). */
+  text?: string;
   tone?: Tone;
   /** Style variant for button or card nodes. */
   variant?: Variant;
@@ -444,6 +490,7 @@ export interface Ui {
   markdown(text: string, opts?: NodeOptions): UiNode;
   code(text: string, language?: string, opts?: NodeOptions): UiNode;
   progress(value: number, opts?: NodeOptions): UiNode;
+  progress(opts?: NodeOptions): UiNode;
   divider(opts?: NodeOptions): UiNode;
   /** A line, bar, sparkline, donut or pie chart; up to 4 series (600 points), or 1 series of 1..16 non-negative slices with matching labels for donut/pie. */
   chart(type: "line" | "bar" | "sparkline" | "donut" | "pie", series: ChartSeries[], opts?: NodeOptions): UiNode;

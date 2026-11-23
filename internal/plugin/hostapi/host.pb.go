@@ -1276,7 +1276,10 @@ type SessionEvent struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// kind is "sessionStarted", "sessionEnded", "sessionSlept" (its
 	// program stopped, to start again on its conversation),
-	// "sessionStatus" (its agent's status changed) or "agentMessage".
+	// "sessionStatus" (its agent's status changed), "agentMessage",
+	// "agentStarted", "agentRefused", "layoutChanged", "layoutRefused",
+	// "decisionAnswered", "decisionFailed", "agentAskStarted",
+	// "agentAnswered", or "agentAskFailed".
 	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
 	// session is the session, as it stands after.
 	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
@@ -1294,8 +1297,26 @@ type SessionEvent struct {
 	// document a PatchLayout changed and its revision after; a
 	// "layoutRefused" tells why it did not change in error. These two come
 	// to a plugin that asked, without a subscription.
-	Document      string `protobuf:"bytes,7,opt,name=document,proto3" json:"document,omitempty"`
-	Revision      string `protobuf:"bytes,8,opt,name=revision,proto3" json:"revision,omitempty"`
+	Document string `protobuf:"bytes,7,opt,name=document,proto3" json:"document,omitempty"`
+	Revision string `protobuf:"bytes,8,opt,name=revision,proto3" json:"revision,omitempty"`
+	// output is, for "agentAnswered", the agent's answer (JSON text when the
+	// ask's format was json), at most 64 KiB; truncated says it was cut.
+	Output    string `protobuf:"bytes,9,opt,name=output,proto3" json:"output,omitempty"`
+	Truncated bool   `protobuf:"varint,10,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	// response_json is, for "decisionAnswered", the normalized response.
+	ResponseJson string `protobuf:"bytes,11,opt,name=response_json,json=responseJson,proto3" json:"response_json,omitempty"`
+	// elapsed_ms is how long an ask or a decision took.
+	ElapsedMs uint32 `protobuf:"varint,12,opt,name=elapsed_ms,json=elapsedMs,proto3" json:"elapsed_ms,omitempty"`
+	// tag is the tag the ask or Submit gave.
+	Tag string `protobuf:"bytes,13,opt,name=tag,proto3" json:"tag,omitempty"`
+	// code says why, for "agentAskFailed" and "decisionFailed": "refused",
+	// "canceled", "timeout", "unavailable" or "failed". These kinds
+	// come to a plugin that asked, without a subscription.
+	Code string `protobuf:"bytes,14,opt,name=code,proto3" json:"code,omitempty"`
+	// agent and profile name the agent running an ask, for "agentAskStarted"
+	// (emitted when a previously pending ask is approved and starts running).
+	Agent         string `protobuf:"bytes,15,opt,name=agent,proto3" json:"agent,omitempty"`
+	Profile       string `protobuf:"bytes,16,opt,name=profile,proto3" json:"profile,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1382,6 +1403,62 @@ func (x *SessionEvent) GetDocument() string {
 func (x *SessionEvent) GetRevision() string {
 	if x != nil {
 		return x.Revision
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetOutput() string {
+	if x != nil {
+		return x.Output
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *SessionEvent) GetResponseJson() string {
+	if x != nil {
+		return x.ResponseJson
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetElapsedMs() uint32 {
+	if x != nil {
+		return x.ElapsedMs
+	}
+	return 0
+}
+
+func (x *SessionEvent) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *SessionEvent) GetProfile() string {
+	if x != nil {
+		return x.Profile
 	}
 	return ""
 }
@@ -3884,7 +3961,7 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"\x12UnsubscribeRequest\x12\x16\n" +
 	"\x06events\x18\x01 \x03(\tR\x06events\"-\n" +
 	"\x13UnsubscribeResponse\x12\x16\n" +
-	"\x06events\x18\x01 \x03(\tR\x06events\"\xa3\x02\n" +
+	"\x06events\x18\x01 \x03(\tR\x06events\"\xf3\x03\n" +
 	"\fSessionEvent\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x121\n" +
 	"\asession\x18\x02 \x01(\v2\x17.mako.plugin.v1.SessionR\asession\x12'\n" +
@@ -3894,7 +3971,17 @@ const file_mako_plugin_v1_host_proto_rawDesc = "" +
 	"request_id\x18\x05 \x01(\tR\trequestId\x12\x14\n" +
 	"\x05error\x18\x06 \x01(\tR\x05error\x12\x1a\n" +
 	"\bdocument\x18\a \x01(\tR\bdocument\x12\x1a\n" +
-	"\brevision\x18\b \x01(\tR\brevision\"\x92\x01\n" +
+	"\brevision\x18\b \x01(\tR\brevision\x12\x16\n" +
+	"\x06output\x18\t \x01(\tR\x06output\x12\x1c\n" +
+	"\ttruncated\x18\n" +
+	" \x01(\bR\ttruncated\x12#\n" +
+	"\rresponse_json\x18\v \x01(\tR\fresponseJson\x12\x1d\n" +
+	"\n" +
+	"elapsed_ms\x18\f \x01(\rR\telapsedMs\x12\x10\n" +
+	"\x03tag\x18\r \x01(\tR\x03tag\x12\x12\n" +
+	"\x04code\x18\x0e \x01(\tR\x04code\x12\x14\n" +
+	"\x05agent\x18\x0f \x01(\tR\x05agent\x12\x18\n" +
+	"\aprofile\x18\x10 \x01(\tR\aprofile\"\x92\x01\n" +
 	"\fAgentMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12&\n" +
 	"\x0ffrom_session_id\x18\x02 \x01(\tR\rfromSessionId\x12\"\n" +

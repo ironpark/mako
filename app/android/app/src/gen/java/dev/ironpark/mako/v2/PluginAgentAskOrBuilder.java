@@ -119,4 +119,26 @@ public interface PluginAgentAskOrBuilder extends
    * @return The since.
    */
   long getSince();
+
+  /**
+   * <pre>
+   * kind is "" for an agent to start (sessions:write), "ask" for a question
+   * asked of an agent once (agents:ask; revision 45).
+   * </pre>
+   *
+   * <code>string kind = 9 [json_name = "kind"];</code>
+   * @return The kind.
+   */
+  java.lang.String getKind();
+  /**
+   * <pre>
+   * kind is "" for an agent to start (sessions:write), "ask" for a question
+   * asked of an agent once (agents:ask; revision 45).
+   * </pre>
+   *
+   * <code>string kind = 9 [json_name = "kind"];</code>
+   * @return The bytes for kind.
+   */
+  com.google.protobuf.ByteString
+      getKindBytes();
 }

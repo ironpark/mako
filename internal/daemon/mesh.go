@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"io"
 	"maps"
 	"net"
 	"slices"
@@ -40,33 +41,37 @@ const (
 
 // startP2P starts the libp2p host and serves the mako protocol on it.
 func (d *Daemon) startP2P(ctx context.Context, dir string) error {
-	host, port, err := d.cfg.P2P.HostPort()
+	cfg := d.config()
+	host, port, err := cfg.P2P.HostPort()
 	if err != nil {
 		return err
 	}
 	var owner ssh.Signer
-	if d.cfg.SSHKey != "" {
-		if owner, err = p2p.LoadSigner(mcp.ExpandHome(d.cfg.SSHKey)); err != nil {
-			d.log.Warn("the SSH key cannot vouch for this node; it is let in by its own key alone", "key", d.cfg.SSHKey, "err", err)
+	if cfg.SSHKey != "" {
+		if owner, err = p2p.LoadSigner(mcp.ExpandHome(cfg.SSHKey)); err != nil {
+			d.log.Warn("the SSH key cannot vouch for this node; it is let in by its own key alone", "key", cfg.SSHKey, "err", err)
 		}
 	}
 	h, err := p2p.New(ctx, p2p.Config{
 		Dir:               dir,
 		Host:              host,
 		Port:              port,
-		Node:              d.cfg.NodeID,
-		Name:              d.cfg.Name,
+		Node:              cfg.NodeID,
+		Name:              cfg.Name,
 		Owner:             owner,
 		SSHAuthorizedKeys: mcp.ExpandHome("~/.ssh/authorized_keys"), // a key that logs in here by SSH vouches
 		OnPeer:            d.onPeer,
 		OnDrop:            d.onDrop,
-		Relays:            d.cfg.P2P.Relays,
-		RelayService:      d.cfg.P2P.Relay,
+		Relays:            cfg.P2P.Relays,
+		RelayService:      cfg.P2P.Relay,
 		UserAgent:         "mako/" + config.Version,
 		NoNAT:             host != "" && net.ParseIP(host).IsLoopback(),
 		Log:               d.log,
 	})
 	if err != nil {
+		if c, ok := owner.(io.Closer); ok {
+			_ = c.Close()
+		}
 		return err
 	}
 	d.p2p = h
@@ -145,7 +150,7 @@ func fingerprint(key ssh.PublicKey) string {
 // the watching front-ends of one new. It reports whether the node was new
 // or moved.
 func (d *Daemon) notePeer(node *protocol.Node) bool {
-	if node.GetId() == "" || node.GetId() == d.cfg.NodeID {
+	if node.GetId() == "" || node.GetId() == d.config().NodeID {
 		return false
 	}
 	moved := d.peers.upsert(node)
@@ -160,7 +165,7 @@ func (d *Daemon) notePeer(node *protocol.Node) bool {
 // introduce themselves: it records the node, sends it this daemon's state
 // at once, and forgets the sessions of a peer that no longer lets it in.
 func (d *Daemon) onPeer(p p2p.Peer) {
-	if p.Node == "" || p.Node == d.cfg.NodeID {
+	if p.Node == "" || p.Node == d.config().NodeID {
 		return
 	}
 	node, ok := d.peers.get(p.Node)
@@ -185,7 +190,7 @@ func (d *Daemon) onPeer(p p2p.Peer) {
 	// A peer just linked is sent the workspace whole: it is likely to hold
 	// another.
 	shared, full, public := d.encodeState(d.state(), routes, d.meshSessions(routes), true)
-	go d.sendState(d.ctx, p, shared, full, public)
+	d.enqueueState(d.ctx, p, shared, full, public)
 }
 
 // A failed link to a peer is tried again after relinkFirst, then after
@@ -262,6 +267,7 @@ func (d *Daemon) link(node *protocol.Node) {
 // onDrop links again at once to a peer whose link dropped, as a laptop
 // waking or a network changing drops them.
 func (d *Daemon) onDrop(id string) {
+	d.stateSenders.drop(id)
 	if d.ctx.Err() != nil {
 		return
 	}
@@ -326,6 +332,7 @@ func (d *Daemon) state() *protocol.NodeState {
 // front-ends when its own sessions change. Without libp2p it does the
 // latter alone, and nothing while no one watches.
 func (d *Daemon) watchState(ctx context.Context) {
+	defer d.stateSenders.closeAndWait()
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	settle := time.NewTimer(0)
@@ -364,7 +371,7 @@ func (d *Daemon) watchState(ctx context.Context) {
 					sentDigest = digest
 				}
 				for _, p := range d.p2p.Peers() {
-					go d.sendState(ctx, p, shared, full, public)
+					d.enqueueState(ctx, p, shared, full, public)
 				}
 				sent = time.Now()
 			}
@@ -440,21 +447,140 @@ func marshalState(st *protocol.NodeState) []byte {
 	return protocol.Compress(b)
 }
 
-// sendState sends p as much of this daemon's state as it may have: shared,
-// with the workspace, to a peer the two let each other in; full to a peer
-// this daemon lets in; public to one that only lets it in.
-func (d *Daemon) sendState(ctx context.Context, p p2p.Peer, shared, full, public []byte) {
-	data := public
+type peerStateItem struct {
+	peer p2p.Peer
+	data []byte
+}
+
+type peerStateWorker struct {
+	mu      sync.Mutex
+	pending *peerStateItem
+	notify  chan struct{}
+	cancel  context.CancelFunc
+}
+
+type stateSenders struct {
+	mu      sync.Mutex
+	closed  bool
+	workers map[string]*peerStateWorker
+	wg      sync.WaitGroup
+	sendFn  func(context.Context, p2p.Peer, []byte)
+}
+
+func statePayload(p p2p.Peer, shared, full, public []byte) []byte {
 	switch {
 	case p.Trusts && p.TrustedBy:
-		data = shared
+		return shared
 	case p.Trusts:
-		data = full
-	case !p.TrustedBy:
+		return full
+	case p.TrustedBy:
+		return public
+	default:
+		return nil
+	}
+}
+
+func (s *stateSenders) enqueue(ctx context.Context, p p2p.Peer, data []byte, defaultSend func(context.Context, p2p.Peer, []byte)) {
+	id := p.ID.String()
+	if data == nil {
+		s.drop(id)
 		return
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.mu.Lock()
+	if s.closed || ctx.Err() != nil {
+		s.mu.Unlock()
+		return
+	}
+	if s.workers == nil {
+		s.workers = map[string]*peerStateWorker{}
+	}
+	sendFn := s.sendFn
+	if sendFn == nil {
+		sendFn = defaultSend
+	}
+	w := s.workers[id]
+	if w == nil {
+		wctx, cancel := context.WithCancel(ctx)
+		w = &peerStateWorker{
+			notify: make(chan struct{}, 1),
+			cancel: cancel,
+		}
+		s.workers[id] = w
+		s.wg.Add(1)
+		go s.runWorker(wctx, w, sendFn)
+	}
+	w.mu.Lock()
+	w.pending = &peerStateItem{peer: p, data: data}
+	w.mu.Unlock()
+	s.mu.Unlock()
+	select {
+	case w.notify <- struct{}{}:
+	default:
+	}
+}
+
+func (s *stateSenders) runWorker(ctx context.Context, w *peerStateWorker, sendFn func(context.Context, p2p.Peer, []byte)) {
+	defer s.wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-w.notify:
+		}
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			w.mu.Lock()
+			item := w.pending
+			w.pending = nil
+			w.mu.Unlock()
+			if item == nil {
+				break
+			}
+			sendCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			sendFn(sendCtx, item.peer, item.data)
+			cancel()
+		}
+	}
+}
+
+func (s *stateSenders) drop(id string) {
+	s.mu.Lock()
+	w := s.workers[id]
+	if w != nil {
+		delete(s.workers, id)
+	}
+	s.mu.Unlock()
+	if w != nil {
+		w.cancel()
+	}
+}
+
+func (s *stateSenders) closeAndWait() {
+	s.mu.Lock()
+	s.closed = true
+	workers := make([]*peerStateWorker, 0, len(s.workers))
+	for _, w := range s.workers {
+		workers = append(workers, w)
+	}
+	clear(s.workers)
+	s.mu.Unlock()
+	for _, w := range workers {
+		w.cancel()
+	}
+	s.wg.Wait()
+}
+
+func (d *Daemon) enqueueState(ctx context.Context, p p2p.Peer, shared, full, public []byte) {
+	d.stateSenders.enqueue(ctx, p, statePayload(p, shared, full, public), d.sendStatePayload)
+}
+
+// sendStatePayload sends p the preselected state payload.
+func (d *Daemon) sendStatePayload(ctx context.Context, p p2p.Peer, data []byte) {
 	if err := d.p2p.SendState(ctx, p.ID, data); err != nil && ctx.Err() == nil {
 		d.log.Debug("state send failed", "node", p.Name, "err", err)
 	}
@@ -497,7 +623,8 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 		return
 	}
 	node := st.GetNode()
-	if node.GetId() == "" || node.GetId() == d.cfg.NodeID || node.GetId() != from.Node || node.GetPeerId() != from.ID.String() {
+	nodeID := d.config().NodeID
+	if node.GetId() == "" || node.GetId() == nodeID || node.GetId() != from.Node || node.GetPeerId() != from.ID.String() {
 		return
 	}
 	node.Source = "mesh"
@@ -520,7 +647,7 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 	}
 	if from.TrustedBy {
 		for _, other := range st.GetPeers() {
-			if other.GetId() == d.cfg.NodeID || other.GetPeerId() == "" || other.GetPeerId() == d.peerID() {
+			if other.GetId() == nodeID || other.GetPeerId() == "" || other.GetPeerId() == d.peerID() {
 				continue
 			}
 			d.peers.merge(other)
@@ -528,7 +655,7 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 		}
 		// Its sessions, its own and those of the nodes it reaches, which
 		// are read as this daemon routes.
-		sessionsChanged, routesChanged := d.remote.put(node.GetId(), st.GetSessions(), reach(st.GetPeers(), d.cfg.NodeID))
+		sessionsChanged, routesChanged := d.remote.put(node.GetId(), st.GetSessions(), reach(st.GetPeers(), nodeID))
 		if sessionsChanged || routesChanged {
 			d.changes.fire(routesChanged, sessionsChanged)
 		}
@@ -613,21 +740,10 @@ func (n *notifier) watch() (feed <-chan *protocol.Changed, stop func()) {
 	}
 }
 
-// hungUp says, with the error that ended it, when the front-end that
-// watches over stream closes it: it sends nothing more.
-func hungUp(stream *transport.Stream) <-chan error {
-	gone := make(chan error, 1)
-	go func() {
-		_, err := stream.Recv()
-		gone <- err
-	}()
-	return gone
-}
-
 // handleWatch sends a front-end a Changed whenever the mesh's nodes or
 // sessions change, until it hangs up, and counts it as watching for
 // approvals meanwhile if it asks.
-func (d *Daemon) handleWatch(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
+func (d *Daemon) handleWatch(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) (err error) {
 	req, _ := protocol.Body[*protocol.Watch](env) // older front-ends send nothing
 	if req.GetApprovals() && !fromPeer {
 		defer d.approvals.hold()()
@@ -645,14 +761,17 @@ func (d *Daemon) handleWatch(ctx context.Context, stream *transport.Stream, env 
 	}); err != nil {
 		return err
 	}
-	gone := hungUp(stream)
+	h := watchStreamHangup(stream, nil)
+	defer func() {
+		err = h.finish(ctx, env.GetId(), err)
+	}()
 	for {
 		select {
 		case c := <-feed:
 			if err := stream.Send(protocol.TypeChanged, env.GetId(), c); err != nil {
 				return err
 			}
-		case err := <-gone:
+		case err := <-h.gone:
 			return err
 		case <-ctx.Done():
 			return ctx.Err()

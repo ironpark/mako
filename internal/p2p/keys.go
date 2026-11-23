@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -334,6 +335,22 @@ func (c *Cert) Verify(id peer.ID) (ssh.PublicKey, error) {
 	return owner, nil
 }
 
+type agentSigner struct {
+	ssh.Signer
+	conn io.Closer
+	once sync.Once
+	err  error
+}
+
+func (a *agentSigner) Close() error {
+	a.once.Do(func() {
+		if a.conn != nil {
+			a.err = a.conn.Close()
+		}
+	})
+	return a.err
+}
+
 // LoadSigner finds the private half of the SSH public key at pubPath: in
 // the SSH agent, or else in the file beside it without the .pub, which
 // must not have a passphrase.
@@ -350,8 +367,8 @@ func LoadSigner(pubPath string) (ssh.Signer, error) {
 		signers, _ := agent.NewClient(conn).Signers()
 		for _, s := range signers {
 			if sameKey(s.PublicKey(), pub) {
-				// The agent's connection stays open for the signer.
-				return s, nil
+				// The agent's connection stays open for the signer until closed.
+				return &agentSigner{Signer: s, conn: conn}, nil
 			}
 		}
 		conn.Close()

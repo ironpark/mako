@@ -141,7 +141,7 @@ func (h *host) SessionsGetSession(_ context.Context, req *hostapi.GetSessionRequ
 }
 
 func (h *host) HttpFetch(ctx context.Context, req *hostapi.FetchRequest) (*hostapi.FetchResponse, error) {
-	return h.p.m.net.fetch(ctx, h.p.id, h.p.grants(), h.p.netRate, req)
+	return h.p.m.net.fetch(ctx, h.p.id, pluginGrants{p: h.p}, h.p.netRate, req)
 }
 
 // The window's commands a plugin may run.

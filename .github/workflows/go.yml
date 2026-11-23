@@ -1,0 +1,68 @@
+name: Go
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            app/mobile/go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Unformatted Go files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet and build root packages
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          go vet ./...
+          go build ./cmd/...
+
+      - name: Test root packages
+        env:
+          CGO_ENABLED: '0'
+        run: go test -count=1 ./...
+
+      - name: Vet and test mobile module
+        working-directory: app/mobile
+        env:
+          GOWORK: off
+        run: |
+          go vet ./...
+          go test -count=1 ./...
+
+      - name: Install and run staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+          staticcheck ./...
+          (cd app/mobile && GOWORK=off staticcheck ./...)
+
+      - name: Lint protobuf schemas
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: '1.75.0'
+      - run: buf lint

@@ -1140,7 +1140,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 44) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 45) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -1397,6 +1397,14 @@ declarative `graph` canvases (`graph_nodes` of `UiGraphNode` up to 120,
 `value` focused node ID, `change = true` firing clicked node ID), and optional
 BCP-47 `locale` fields on `WatchBlock` (field 4), `BlockEvent` (field 8), and
 `PluginAction` (field 7) for plugin localization (empty defaults to `"en"`).
+
+Revision 45 (`RevisionPluginAssist`) adds `PluginAgentAsk.kind` (field 9: `""` for
+`sessions:write` agent starts, `"ask"` for `agents:ask` one-shot questions),
+expands `UiNode.variant` tokens per node kind (`card`: `"soft"`; `pill` and
+`chip`: `"soft"`, `"solid"`, `"outline"` with optional `icon`; `progress`:
+`"spinner"` with optional `text`; `scroll`: `"follow"`; `tree_item`: `"badge"`),
+and adds the `decision` and `agents:ask` Host API services with `SessionEvent`
+fields 9–14 (`output`, `truncated`, `response_json`, `elapsed_ms`, `tag`, `code`).
 
 `watch_block` answers with a `block_update` holding the `tree`, then one
 whenever the block changes, holding `ops` that make the tree the last

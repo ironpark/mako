@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 44
+const Revision = 45
+
+// RevisionPluginAssist adds the decision and agents:ask Host API groups,
+// PluginAgentAsk.kind, and the pill/chip/progress/scroll/tree_item/card
+// variant tokens.
+const RevisionPluginAssist = 45
 
 // RevisionPluginRichUIv2 adds rich layout primitives (wrap, grid, split,
 // collapsible, breadcrumb, tree, tree_item), declarative graph canvases

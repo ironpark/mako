@@ -55,7 +55,7 @@ const (
 
 // subscriptions are the kinds a plugin subscribed to.
 type subscriptions struct {
-	mu     sync.Mutex
+	mu     sync.RWMutex
 	path   string
 	kinds  []string
 	loaded bool
@@ -79,6 +79,13 @@ func (s *subscriptions) loadLocked() {
 }
 
 func (s *subscriptions) has(kind string) bool {
+	s.mu.RLock()
+	if s.loaded {
+		ok := slices.Contains(s.kinds, kind)
+		s.mu.RUnlock()
+		return ok
+	}
+	s.mu.RUnlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loadLocked()
@@ -86,6 +93,13 @@ func (s *subscriptions) has(kind string) bool {
 }
 
 func (s *subscriptions) any() bool {
+	s.mu.RLock()
+	if s.loaded {
+		ok := len(s.kinds) > 0
+		s.mu.RUnlock()
+		return ok
+	}
+	s.mu.RUnlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loadLocked()
@@ -261,7 +275,7 @@ func (m *Manager) sessionOf(id string) *hostapi.Session {
 // read sessions, within its rate: on its actor, started if need be.
 func (m *Manager) publish(ev *hostapi.SessionEvent) {
 	for _, p := range m.all() {
-		if !p.subs.has(ev.GetKind()) || !p.grants().Has(hostapi.PermSessionsRead) {
+		if !p.subs.has(ev.GetKind()) || !p.hasGrant(hostapi.PermSessionsRead) {
 			continue
 		}
 		if !p.subRate.take() {
@@ -285,7 +299,7 @@ func (p *plugin) dropped() {
 // deliver tells the plugin of an event, if it holds perm, starting it if
 // it may run.
 func (p *plugin) deliver(ev *hostapi.SessionEvent, perm string) {
-	if !p.grants().Has(perm) || p.ensure() != nil {
+	if !p.hasGrant(perm) || p.ensure() != nil {
 		return
 	}
 	b, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(ev)

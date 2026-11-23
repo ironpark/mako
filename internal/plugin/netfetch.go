@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -103,7 +104,7 @@ func newFetcher(lim Limits, log *slog.Logger, testMap map[string]string) *fetche
 
 // checkURL reads a request's URL and says which granted host it is for,
 // or why it may not be made.
-func checkURL(raw string, g grants) (*url.URL, string, error) {
+func checkURL(raw string, g hostapi.Grants) (*url.URL, string, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return nil, "", fmt.Errorf("the URL does not read: %v", err)
@@ -120,20 +121,20 @@ func checkURL(raw string, g grants) (*url.URL, string, error) {
 		return nil, "", fmt.Errorf("only the default port may be fetched")
 	case net.ParseIP(host) != nil || strings.HasPrefix(u.Host, "["):
 		return nil, "", fmt.Errorf("an IP address is refused for a host: a plugin reaches hosts by name")
-	case !validHost(host) || !g.net(host):
+	case !validHost(host) || !g.Has(hostapi.PermNet+":"+host):
 		return nil, "", &hostapi.DeniedError{Method: "http.fetch", Permission: hostapi.PermNet + ":" + host}
 	}
 	return u, host, nil
 }
 
 // fetch makes a plugin's request.
-func (f *fetcher) fetch(ctx context.Context, plugin string, g grants, rate *rateLimit, req *hostapi.FetchRequest) (*hostapi.FetchResponse, error) {
+func (f *fetcher) fetch(ctx context.Context, plugin string, g hostapi.Grants, rate *rateLimit, req *hostapi.FetchRequest) (*hostapi.FetchResponse, error) {
 	u, host, err := checkURL(req.GetUrl(), g)
 	if err != nil {
 		f.log.Warn("plugin net refused", "plugin", plugin, "url", trimURL(req.GetUrl()), "err", err)
 		return nil, err
 	}
-	method := strings.ToUpper(cmpOr(req.GetMethod(), http.MethodGet))
+	method := strings.ToUpper(cmp.Or(req.GetMethod(), http.MethodGet))
 	if !slices.Contains(fetchMethods, method) {
 		return nil, fmt.Errorf("method %q is not one of %s", method, strings.Join(fetchMethods, ", "))
 	}
@@ -240,11 +241,4 @@ func (r *rateLimit) take() bool {
 	}
 	r.times = append(r.times, now)
 	return true
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-	return b
 }

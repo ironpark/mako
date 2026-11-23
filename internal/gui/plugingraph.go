@@ -36,11 +36,11 @@ func (s *graphViewState) reset() {
 
 // graphLayout holds deterministic world-space coordinates for every node.
 type graphLayout struct {
-	pos                 map[string]ggui.Point
-	minX, maxX          float64
-	minY, maxY          float64
-	centerX, centerY    float64
-	spanW, spanH        float64
+	pos              map[string]ggui.Point
+	minX, maxX       float64
+	minY, maxY       float64
+	centerX, centerY float64
+	spanW, spanH     float64
 }
 
 // graphSignature hashes the topology and weights so layout is recomputed only
@@ -345,10 +345,10 @@ type pluginGraphCanvas struct {
 	colGridDot  color.Color
 
 	// Pointer drag tracking for pan vs click.
-	dragging    bool
-	moved       bool
-	downPos     ggui.Point
-	lastPos     ggui.Point
+	dragging bool
+	moved    bool
+	downPos  ggui.Point
+	lastPos  ggui.Point
 }
 
 func (g *pluginGraphCanvas) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
@@ -714,6 +714,11 @@ func (g *pluginGraphCanvas) HandlePointer(ev ggui.PointerEvent) bool {
 		}
 		return g.Pointer(ev, nil)
 	case ggui.PointerScroll:
+		// Let plain mouse-wheel / trackpad scroll bubble up to ancestor scroll
+		// containers; only Ctrl/Cmd/Meta/Shift + wheel zooms the graph canvas.
+		if !(ev.Mods.Ctrl || ev.Mods.Meta || ev.Mods.Shift) {
+			return false
+		}
 		if ev.Scroll.Y != 0 {
 			factor := 1.0 - ev.Scroll.Y*0.08
 			if factor < 0.75 {

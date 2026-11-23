@@ -74,15 +74,20 @@ type AgentHost interface {
 // session's ID, so that no agent passes for it, nor it for an agent.
 func ParentOf(plugin string) string { return "plugin:" + plugin }
 
-// agentAsk is a start that waits for the user.
+// agentAsk is a start or one-shot ask that waits for the user.
 type agentAsk struct {
-	id    string
-	req   AgentStart
-	name  string // the project's
-	since time.Time
+	id      string
+	kind    string // "" for start (sessions:write), "ask" for one-shot ask (agents:ask)
+	req     AgentStart
+	q       AgentQuestion
+	title   string
+	tag     string
+	project string
+	name    string // the project's
+	since   time.Time
 }
 
-// asks are a plugin's starts waiting for the user: one at a time.
+// asks are a plugin's starts or questions waiting for the user: one at a time.
 type asks struct {
 	mu  sync.Mutex
 	ask *agentAsk
@@ -99,6 +104,18 @@ func (a *asks) take(id string) *agentAsk {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.ask == nil || a.ask.id != id {
+		return nil
+	}
+	ask := a.ask
+	a.ask = nil
+	return ask
+}
+
+// takeKind takes the ask of the ID and kind off, if it is the one waiting.
+func (a *asks) takeKind(id, kind string) *agentAsk {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.ask == nil || a.ask.id != id || a.ask.kind != kind {
 		return nil
 	}
 	ask := a.ask
@@ -202,7 +219,7 @@ func (m *Manager) project(id, root string) (ProjectRoots, bool) {
 func (p *plugin) startAgent(ask *agentAsk) {
 	// Whatever was allowed, a plugin refused, disabled, blocked or removed
 	// since it asked starts nothing.
-	if state, _ := p.state(); (state != protocol.PluginReady && state != protocol.PluginRunning) || !p.grants().Has(hostapi.PermSessionsWrite) {
+	if state, _ := p.state(); (state != protocol.PluginReady && state != protocol.PluginRunning) || !p.hasGrant(hostapi.PermSessionsWrite) {
 		p.tellAsk(ask, "", "the plugin may not run now")
 		return
 	}
@@ -251,6 +268,27 @@ func (p *plugin) answerAgent(id, op, value string) error {
 		return errors.New("the ask was answered already")
 	}
 	defer p.status(func() {})
+	if ask.kind == "ask" {
+		if op != protocol.PluginAllowAgent {
+			p.m.cfg.Log.Info("plugin's agent ask refused by the user", "plugin", p.id)
+			p.tellAskFailed(ask, "refused", "the user refused the ask", 0)
+			return nil
+		}
+		if value == protocol.AgentAlways {
+			key := askKey(ask.q.Agent, ask.q.Profile)
+			if err := p.m.grant.update(p.id, func(e *grantEntry) {
+				if !slices.Contains(e.AsksAllowed, key) {
+					e.AsksAllowed = append(e.AsksAllowed, key)
+				}
+			}); err != nil {
+				return err
+			}
+		}
+		if err := p.startAskJob(ask, true); err != nil {
+			p.tellAskFailed(ask, "failed", err.Error(), 0)
+		}
+		return nil
+	}
 	if op != protocol.PluginAllowAgent {
 		p.m.cfg.Log.Info("plugin's agent refused by the user", "plugin", p.id)
 		p.tellAsk(ask, "", "the user refused to start the agent")
@@ -269,7 +307,11 @@ func (p *plugin) answerAgent(id, op, value string) error {
 // disabled or blocked.
 func (p *plugin) dropAsk(why string) {
 	if ask := p.asks.get(); ask != nil && p.asks.take(ask.id) != nil {
-		p.tellAsk(ask, "", why)
+		if ask.kind == "ask" {
+			p.tellAskFailed(ask, "canceled", why, 0)
+		} else {
+			p.tellAsk(ask, "", why)
+		}
 	}
 }
 
@@ -280,7 +322,12 @@ func (p *plugin) expireAsk(now time.Time) {
 		return
 	}
 	if p.asks.take(ask.id) != nil {
-		p.tellAsk(ask, "", fmt.Sprintf("the user did not answer within %v", agentAskFor))
+		why := fmt.Sprintf("the user did not answer within %v", agentAskFor)
+		if ask.kind == "ask" {
+			p.tellAskFailed(ask, "refused", why, 0)
+		} else {
+			p.tellAsk(ask, "", why)
+		}
 		p.status(func() {})
 	}
 }
@@ -289,6 +336,18 @@ func (p *plugin) expireAsk(now time.Time) {
 func (a *agentAsk) info() *protocol.PluginAgentAsk {
 	if a == nil {
 		return nil
+	}
+	if a.kind == "ask" {
+		promptSrc := a.title
+		if promptSrc == "" {
+			promptSrc = a.q.Prompt
+		}
+		prompt, _ := cut(promptSrc, maxAskPrompt)
+		return &protocol.PluginAgentAsk{
+			Id: a.id, Kind: a.kind, Agent: a.q.Agent, Profile: a.q.Profile,
+			Project: a.name, Root: a.q.Root, Name: a.title,
+			Prompt: protocol.Printable(prompt), Since: a.since.UnixMilli(),
+		}
 	}
 	prompt, _ := cut(a.req.Prompt, maxAskPrompt)
 	return &protocol.PluginAgentAsk{Id: a.id, Agent: a.req.Agent, Profile: a.req.Profile, Project: a.name,

@@ -319,7 +319,13 @@ func (m *model) followBlockScoped(ctx context.Context, name, scope, locale strin
 // opened again at once, for a whole tree. A stream that breaks is opened
 // again after retry.
 func followStream(ctx context.Context, watch func(context.Context, func(*protocol.BlockUpdate)) error, retry time.Duration, fn func(*protocol.BlockUpdate)) {
+	const (
+		lostBaseDelay = 50 * time.Millisecond
+		lostMaxDelay  = 2 * time.Second
+	)
+	lostStreak := 0
 	for ctx.Err() == nil {
+		started := time.Now()
 		var tree *protocol.UiNode
 		stream, restart := context.WithCancel(ctx)
 		lost := false
@@ -346,14 +352,36 @@ func followStream(ctx context.Context, watch func(context.Context, func(*protoco
 		})
 		restart()
 		if lost {
+			if time.Since(started) >= time.Second {
+				lostStreak = 0
+			}
+			var delay time.Duration
+			if lostStreak > 0 {
+				delay = min(lostBaseDelay<<min(lostStreak-1, 6), lostMaxDelay)
+			}
+			lostStreak++
+			if delay == 0 {
+				continue
+			}
+			t := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+				return
+			case <-t.C:
+			}
 			continue
 		}
+		lostStreak = 0
 		if err != nil && ctx.Err() == nil && tree == nil {
 			fn(&protocol.BlockUpdate{State: protocol.PluginFailed, Error: err.Error()})
 		}
+		t := time.NewTimer(retry)
 		select {
 		case <-ctx.Done():
-		case <-time.After(retry):
+			t.Stop()
+			return
+		case <-t.C:
 		}
 	}
 }
@@ -361,11 +389,6 @@ func followStream(ctx context.Context, watch func(context.Context, func(*protoco
 // pluginFrame is a plugin's block's frame, for a tree drawn once.
 func pluginFrame(m *model, name, id, title string, u *protocol.BlockUpdate) ggui.Widget {
 	return blockFrame(m, name, blockOrigin{plugin: id}, title, blockScopeState{}, u, newBlockForm())
-}
-
-// pluginFrameScoped is a scoped plugin block's frame, for a tree drawn once.
-func pluginFrameScoped(m *model, name, id, title string, st blockScopeState, u *protocol.BlockUpdate) ggui.Widget {
-	return blockFrame(m, name, blockOrigin{plugin: id}, title, st, u, newBlockForm())
 }
 
 // blockFrame is a block's frame: a strip naming it and where it comes

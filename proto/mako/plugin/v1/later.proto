@@ -322,3 +322,166 @@ message RunProcessResponse {
   string output = 1;
   int32 exit_code = 2;
 }
+
+// DecisionService asks this node's decision model typed questions (choice,
+// score, noul) about a state, as mako.decide does in a prompt template, with
+// the provider, model and API keys the user set in Settings ▸ API keys: a
+// request's own provider and model are ignored. No key is ever told. The
+// plugin evaluates 60 times a minute, Evaluate and Submit together.
+service DecisionService {
+  // Status says whether a decision model is set up, and which.
+  rpc Status(StatusRequest) returns (StatusResponse) {
+    option (permission) = "decision";
+  }
+  // Evaluate evaluates a request and waits for its answers, at most 20 s.
+  rpc Evaluate(EvaluateRequest) returns (EvaluateResponse) {
+    option (permission) = "decision";
+  }
+  // Submit evaluates a request after the call returns, at most 45 s; its
+  // answers come to the default export's on.decisionAnswered, or why not
+  // to on.decisionFailed, as a SessionEvent with the request's id and tag.
+  // At most 2 of a plugin's wait at once.
+  rpc Submit(SubmitRequest) returns (SubmitResponse) {
+    option (permission) = "decision";
+  }
+}
+
+// StatusRequest asks whether a decision model is configured.
+message StatusRequest {}
+
+// StatusResponse tells whether a decision model is available.
+message StatusResponse {
+  // available says a provider has a key; provider and model are what an
+  // evaluation would use now ("" when not available).
+  bool available = 1;
+  string provider = 2;
+  string model = 3;
+}
+
+// EvaluateRequest asks the decision model typed questions synchronously.
+message EvaluateRequest {
+  // request_json is a decision request: {"state": any, "questions": {key:
+  // {"type": "choice"|"score"|"noul", "instructions", "options"|"levels"|
+  // "criteria"}}}, or one question's fields at the top. At most 256 KiB
+  // and 32 questions.
+  string request_json = 1;
+  // timeout_ms bounds it: 0 for 15 s, at most 20000.
+  uint32 timeout_ms = 2;
+}
+
+// EvaluateResponse holds the normalized decision answers.
+message EvaluateResponse {
+  // response_json is the normalized response: {"provider","model",
+  // "answers": {key: {"type","choice","score","level","label","probability",
+  // "yes","confidence","probabilities","refusal"}}, and the sole answer's
+  // fields at the top for one question}.
+  string response_json = 1;
+  string provider = 2;
+  string model = 3;
+  uint32 elapsed_ms = 4;
+}
+
+// SubmitRequest asks the decision model typed questions asynchronously.
+message SubmitRequest {
+  string request_json = 1;
+  // timeout_ms: 0 for 30 s, at most 45000.
+  uint32 timeout_ms = 2;
+  // tag is the plugin's own, at most 512 bytes, given back in the event.
+  string tag = 3;
+}
+
+// SubmitResponse identifies the pending asynchronous decision evaluation.
+message SubmitResponse {
+  string request_id = 1;
+}
+
+// AgentsService lists the agents of this node a plugin may ask, and asks
+// one a question: the agent runs once, not interactively, without YOLO, in
+// a folder of a project of this node's, and its answer comes back to the
+// plugin. The first ask of an agent and profile is asked of the user, who
+// may allow that one alone or every ask of that agent and profile from then
+// on. At most 2 of a plugin's asks wait or run at once, and it asks 30 times
+// an hour.
+service AgentsService {
+  // ListAgents lists this node's agents and their profiles, and whether
+  // each may be asked.
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse) {
+    option (permission) = "agents:ask";
+  }
+  // AskAgent asks an agent a question after the call returns; its answer
+  // comes to the default export's on.agentAnswered, or why none to
+  // on.agentAskFailed, as a SessionEvent with the request's id and tag.
+  rpc AskAgent(AskAgentRequest) returns (AskAgentResponse) {
+    option (permission) = "agents:ask";
+  }
+  // CancelAsk cancels an ask of the plugin's that waits or runs.
+  rpc CancelAsk(CancelAskRequest) returns (CancelAskResponse) {
+    option (permission) = "agents:ask";
+  }
+}
+
+// ListAgentsRequest asks for the node's agents and profiles.
+message ListAgentsRequest {}
+
+// ListAgentsResponse lists the node's agents and profiles.
+message ListAgentsResponse {
+  repeated AgentProfile agents = 1;
+}
+
+// AgentProfile is an agent's configuration, its default ("" profile) or one
+// of its profiles.
+message AgentProfile {
+  string agent = 1;
+  string profile = 2;
+  // label is "agent" or "agent · profile".
+  string label = 3;
+  string description = 4;
+  string model = 5;
+  string effort = 6;
+  // installed says its program is found; askable that it may be asked now;
+  // reason why not, when it may not.
+  bool installed = 7;
+  bool askable = 8;
+  string reason = 9;
+  // always_allowed says the user lets the plugin ask it without asking.
+  bool always_allowed = 10;
+}
+
+// AskAgentRequest asks an agent a one-shot question in a project folder.
+message AskAgentRequest {
+  string agent = 1;
+  string profile = 2;
+  // project is a project's ID and root one of its folders ("" for its
+  // first), as the block's context gives them: where the agent runs.
+  string project = 3;
+  string root = 4;
+  // prompt is the question with its context, at most 96 KiB.
+  string prompt = 5;
+  // format is "text" (default) or "json"; json_schema, at most 16 KiB, the
+  // JSON Schema a json answer follows, where the agent takes one.
+  string format = 6;
+  string json_schema = 7;
+  // timeout_ms bounds the run: 0 for 120 s, from 15000 to 300000.
+  uint32 timeout_ms = 8;
+  // title is what the user is shown when asked, at most 200 bytes.
+  string title = 9;
+  // tag is the plugin's own, at most 512 bytes, given back in the event.
+  string tag = 10;
+}
+
+// AskAgentResponse says the ask was accepted.
+message AskAgentResponse {
+  string request_id = 1;
+  // asked says the user is asked first; else it runs at once.
+  bool asked = 2;
+}
+
+// CancelAskRequest names an ask to cancel.
+message CancelAskRequest {
+  string request_id = 1;
+}
+
+// CancelAskResponse says whether the ask was found and canceled.
+message CancelAskResponse {
+  bool found = 1;
+}

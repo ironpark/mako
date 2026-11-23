@@ -1571,6 +1571,818 @@ func (x *RunProcessResponse) GetExitCode() int32 {
 	return 0
 }
 
+// StatusRequest asks whether a decision model is configured.
+type StatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusRequest) Reset() {
+	*x = StatusRequest{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusRequest) ProtoMessage() {}
+
+func (x *StatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
+func (*StatusRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{28}
+}
+
+// StatusResponse tells whether a decision model is available.
+type StatusResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// available says a provider has a key; provider and model are what an
+	// evaluation would use now ("" when not available).
+	Available     bool   `protobuf:"varint,1,opt,name=available,proto3" json:"available,omitempty"`
+	Provider      string `protobuf:"bytes,2,opt,name=provider,proto3" json:"provider,omitempty"`
+	Model         string `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StatusResponse) Reset() {
+	*x = StatusResponse{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StatusResponse) ProtoMessage() {}
+
+func (x *StatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
+func (*StatusResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *StatusResponse) GetAvailable() bool {
+	if x != nil {
+		return x.Available
+	}
+	return false
+}
+
+func (x *StatusResponse) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *StatusResponse) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+// EvaluateRequest asks the decision model typed questions synchronously.
+type EvaluateRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// request_json is a decision request: {"state": any, "questions": {key:
+	// {"type": "choice"|"score"|"noul", "instructions", "options"|"levels"|
+	// "criteria"}}}, or one question's fields at the top. At most 256 KiB
+	// and 32 questions.
+	RequestJson string `protobuf:"bytes,1,opt,name=request_json,json=requestJson,proto3" json:"request_json,omitempty"`
+	// timeout_ms bounds it: 0 for 15 s, at most 20000.
+	TimeoutMs     uint32 `protobuf:"varint,2,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EvaluateRequest) Reset() {
+	*x = EvaluateRequest{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EvaluateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EvaluateRequest) ProtoMessage() {}
+
+func (x *EvaluateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EvaluateRequest.ProtoReflect.Descriptor instead.
+func (*EvaluateRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *EvaluateRequest) GetRequestJson() string {
+	if x != nil {
+		return x.RequestJson
+	}
+	return ""
+}
+
+func (x *EvaluateRequest) GetTimeoutMs() uint32 {
+	if x != nil {
+		return x.TimeoutMs
+	}
+	return 0
+}
+
+// EvaluateResponse holds the normalized decision answers.
+type EvaluateResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// response_json is the normalized response: {"provider","model",
+	// "answers": {key: {"type","choice","score","level","label","probability",
+	// "yes","confidence","probabilities","refusal"}}, and the sole answer's
+	// fields at the top for one question}.
+	ResponseJson  string `protobuf:"bytes,1,opt,name=response_json,json=responseJson,proto3" json:"response_json,omitempty"`
+	Provider      string `protobuf:"bytes,2,opt,name=provider,proto3" json:"provider,omitempty"`
+	Model         string `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	ElapsedMs     uint32 `protobuf:"varint,4,opt,name=elapsed_ms,json=elapsedMs,proto3" json:"elapsed_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EvaluateResponse) Reset() {
+	*x = EvaluateResponse{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EvaluateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EvaluateResponse) ProtoMessage() {}
+
+func (x *EvaluateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EvaluateResponse.ProtoReflect.Descriptor instead.
+func (*EvaluateResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *EvaluateResponse) GetResponseJson() string {
+	if x != nil {
+		return x.ResponseJson
+	}
+	return ""
+}
+
+func (x *EvaluateResponse) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *EvaluateResponse) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *EvaluateResponse) GetElapsedMs() uint32 {
+	if x != nil {
+		return x.ElapsedMs
+	}
+	return 0
+}
+
+// SubmitRequest asks the decision model typed questions asynchronously.
+type SubmitRequest struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	RequestJson string                 `protobuf:"bytes,1,opt,name=request_json,json=requestJson,proto3" json:"request_json,omitempty"`
+	// timeout_ms: 0 for 30 s, at most 45000.
+	TimeoutMs uint32 `protobuf:"varint,2,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
+	// tag is the plugin's own, at most 512 bytes, given back in the event.
+	Tag           string `protobuf:"bytes,3,opt,name=tag,proto3" json:"tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitRequest) Reset() {
+	*x = SubmitRequest{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitRequest) ProtoMessage() {}
+
+func (x *SubmitRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitRequest.ProtoReflect.Descriptor instead.
+func (*SubmitRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *SubmitRequest) GetRequestJson() string {
+	if x != nil {
+		return x.RequestJson
+	}
+	return ""
+}
+
+func (x *SubmitRequest) GetTimeoutMs() uint32 {
+	if x != nil {
+		return x.TimeoutMs
+	}
+	return 0
+}
+
+func (x *SubmitRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+// SubmitResponse identifies the pending asynchronous decision evaluation.
+type SubmitResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitResponse) Reset() {
+	*x = SubmitResponse{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitResponse) ProtoMessage() {}
+
+func (x *SubmitResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitResponse.ProtoReflect.Descriptor instead.
+func (*SubmitResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *SubmitResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+// ListAgentsRequest asks for the node's agents and profiles.
+type ListAgentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentsRequest) Reset() {
+	*x = ListAgentsRequest{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentsRequest) ProtoMessage() {}
+
+func (x *ListAgentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentsRequest.ProtoReflect.Descriptor instead.
+func (*ListAgentsRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{34}
+}
+
+// ListAgentsResponse lists the node's agents and profiles.
+type ListAgentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Agents        []*AgentProfile        `protobuf:"bytes,1,rep,name=agents,proto3" json:"agents,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAgentsResponse) Reset() {
+	*x = ListAgentsResponse{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAgentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAgentsResponse) ProtoMessage() {}
+
+func (x *ListAgentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAgentsResponse.ProtoReflect.Descriptor instead.
+func (*ListAgentsResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ListAgentsResponse) GetAgents() []*AgentProfile {
+	if x != nil {
+		return x.Agents
+	}
+	return nil
+}
+
+// AgentProfile is an agent's configuration, its default ("" profile) or one
+// of its profiles.
+type AgentProfile struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Agent   string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	Profile string                 `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	// label is "agent" or "agent · profile".
+	Label       string `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`
+	Description string `protobuf:"bytes,4,opt,name=description,proto3" json:"description,omitempty"`
+	Model       string `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`
+	Effort      string `protobuf:"bytes,6,opt,name=effort,proto3" json:"effort,omitempty"`
+	// installed says its program is found; askable that it may be asked now;
+	// reason why not, when it may not.
+	Installed bool   `protobuf:"varint,7,opt,name=installed,proto3" json:"installed,omitempty"`
+	Askable   bool   `protobuf:"varint,8,opt,name=askable,proto3" json:"askable,omitempty"`
+	Reason    string `protobuf:"bytes,9,opt,name=reason,proto3" json:"reason,omitempty"`
+	// always_allowed says the user lets the plugin ask it without asking.
+	AlwaysAllowed bool `protobuf:"varint,10,opt,name=always_allowed,json=alwaysAllowed,proto3" json:"always_allowed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentProfile) Reset() {
+	*x = AgentProfile{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentProfile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentProfile) ProtoMessage() {}
+
+func (x *AgentProfile) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentProfile.ProtoReflect.Descriptor instead.
+func (*AgentProfile) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *AgentProfile) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetProfile() string {
+	if x != nil {
+		return x.Profile
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetEffort() string {
+	if x != nil {
+		return x.Effort
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetInstalled() bool {
+	if x != nil {
+		return x.Installed
+	}
+	return false
+}
+
+func (x *AgentProfile) GetAskable() bool {
+	if x != nil {
+		return x.Askable
+	}
+	return false
+}
+
+func (x *AgentProfile) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *AgentProfile) GetAlwaysAllowed() bool {
+	if x != nil {
+		return x.AlwaysAllowed
+	}
+	return false
+}
+
+// AskAgentRequest asks an agent a one-shot question in a project folder.
+type AskAgentRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Agent   string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	Profile string                 `protobuf:"bytes,2,opt,name=profile,proto3" json:"profile,omitempty"`
+	// project is a project's ID and root one of its folders ("" for its
+	// first), as the block's context gives them: where the agent runs.
+	Project string `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
+	Root    string `protobuf:"bytes,4,opt,name=root,proto3" json:"root,omitempty"`
+	// prompt is the question with its context, at most 96 KiB.
+	Prompt string `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	// format is "text" (default) or "json"; json_schema, at most 16 KiB, the
+	// JSON Schema a json answer follows, where the agent takes one.
+	Format     string `protobuf:"bytes,6,opt,name=format,proto3" json:"format,omitempty"`
+	JsonSchema string `protobuf:"bytes,7,opt,name=json_schema,json=jsonSchema,proto3" json:"json_schema,omitempty"`
+	// timeout_ms bounds the run: 0 for 120 s, from 15000 to 300000.
+	TimeoutMs uint32 `protobuf:"varint,8,opt,name=timeout_ms,json=timeoutMs,proto3" json:"timeout_ms,omitempty"`
+	// title is what the user is shown when asked, at most 200 bytes.
+	Title string `protobuf:"bytes,9,opt,name=title,proto3" json:"title,omitempty"`
+	// tag is the plugin's own, at most 512 bytes, given back in the event.
+	Tag           string `protobuf:"bytes,10,opt,name=tag,proto3" json:"tag,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AskAgentRequest) Reset() {
+	*x = AskAgentRequest{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AskAgentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AskAgentRequest) ProtoMessage() {}
+
+func (x *AskAgentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AskAgentRequest.ProtoReflect.Descriptor instead.
+func (*AskAgentRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *AskAgentRequest) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *AskAgentRequest) GetProfile() string {
+	if x != nil {
+		return x.Profile
+	}
+	return ""
+}
+
+func (x *AskAgentRequest) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *AskAgentRequest) GetRoot() string {
+	if x != nil {
+		return x.Root
+	}
+	return ""
+}
+
+func (x *AskAgentRequest) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *AskAgentRequest) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
+func (x *AskAgentRequest) GetJsonSchema() string {
+	if x != nil {
+		return x.JsonSchema
+	}
+	return ""
+}
+
+func (x *AskAgentRequest) GetTimeoutMs() uint32 {
+	if x != nil {
+		return x.TimeoutMs
+	}
+	return 0
+}
+
+func (x *AskAgentRequest) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *AskAgentRequest) GetTag() string {
+	if x != nil {
+		return x.Tag
+	}
+	return ""
+}
+
+// AskAgentResponse says the ask was accepted.
+type AskAgentResponse struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// asked says the user is asked first; else it runs at once.
+	Asked         bool `protobuf:"varint,2,opt,name=asked,proto3" json:"asked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AskAgentResponse) Reset() {
+	*x = AskAgentResponse{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AskAgentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AskAgentResponse) ProtoMessage() {}
+
+func (x *AskAgentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AskAgentResponse.ProtoReflect.Descriptor instead.
+func (*AskAgentResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *AskAgentResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *AskAgentResponse) GetAsked() bool {
+	if x != nil {
+		return x.Asked
+	}
+	return false
+}
+
+// CancelAskRequest names an ask to cancel.
+type CancelAskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelAskRequest) Reset() {
+	*x = CancelAskRequest{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelAskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelAskRequest) ProtoMessage() {}
+
+func (x *CancelAskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelAskRequest.ProtoReflect.Descriptor instead.
+func (*CancelAskRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *CancelAskRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+// CancelAskResponse says whether the ask was found and canceled.
+type CancelAskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelAskResponse) Reset() {
+	*x = CancelAskResponse{}
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelAskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelAskResponse) ProtoMessage() {}
+
+func (x *CancelAskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_later_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelAskResponse.ProtoReflect.Descriptor instead.
+func (*CancelAskResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_later_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *CancelAskResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
 var File_mako_plugin_v1_later_proto protoreflect.FileDescriptor
 
 const file_mako_plugin_v1_later_proto_rawDesc = "" +
@@ -1666,7 +2478,68 @@ const file_mako_plugin_v1_later_proto_rawDesc = "" +
 	"\x04argv\x18\x01 \x03(\tR\x04argv\"I\n" +
 	"\x12RunProcessResponse\x12\x16\n" +
 	"\x06output\x18\x01 \x01(\tR\x06output\x12\x1b\n" +
-	"\texit_code\x18\x02 \x01(\x05R\bexitCode2\xcc\x02\n" +
+	"\texit_code\x18\x02 \x01(\x05R\bexitCode\"\x0f\n" +
+	"\rStatusRequest\"`\n" +
+	"\x0eStatusResponse\x12\x1c\n" +
+	"\tavailable\x18\x01 \x01(\bR\tavailable\x12\x1a\n" +
+	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\"S\n" +
+	"\x0fEvaluateRequest\x12!\n" +
+	"\frequest_json\x18\x01 \x01(\tR\vrequestJson\x12\x1d\n" +
+	"\n" +
+	"timeout_ms\x18\x02 \x01(\rR\ttimeoutMs\"\x88\x01\n" +
+	"\x10EvaluateResponse\x12#\n" +
+	"\rresponse_json\x18\x01 \x01(\tR\fresponseJson\x12\x1a\n" +
+	"\bprovider\x18\x02 \x01(\tR\bprovider\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12\x1d\n" +
+	"\n" +
+	"elapsed_ms\x18\x04 \x01(\rR\telapsedMs\"c\n" +
+	"\rSubmitRequest\x12!\n" +
+	"\frequest_json\x18\x01 \x01(\tR\vrequestJson\x12\x1d\n" +
+	"\n" +
+	"timeout_ms\x18\x02 \x01(\rR\ttimeoutMs\x12\x10\n" +
+	"\x03tag\x18\x03 \x01(\tR\x03tag\"/\n" +
+	"\x0eSubmitResponse\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\"\x13\n" +
+	"\x11ListAgentsRequest\"J\n" +
+	"\x12ListAgentsResponse\x124\n" +
+	"\x06agents\x18\x01 \x03(\v2\x1c.mako.plugin.v1.AgentProfileR\x06agents\"\x9b\x02\n" +
+	"\fAgentProfile\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x18\n" +
+	"\aprofile\x18\x02 \x01(\tR\aprofile\x12\x14\n" +
+	"\x05label\x18\x03 \x01(\tR\x05label\x12 \n" +
+	"\vdescription\x18\x04 \x01(\tR\vdescription\x12\x14\n" +
+	"\x05model\x18\x05 \x01(\tR\x05model\x12\x16\n" +
+	"\x06effort\x18\x06 \x01(\tR\x06effort\x12\x1c\n" +
+	"\tinstalled\x18\a \x01(\bR\tinstalled\x12\x18\n" +
+	"\aaskable\x18\b \x01(\bR\aaskable\x12\x16\n" +
+	"\x06reason\x18\t \x01(\tR\x06reason\x12%\n" +
+	"\x0ealways_allowed\x18\n" +
+	" \x01(\bR\ralwaysAllowed\"\x87\x02\n" +
+	"\x0fAskAgentRequest\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x18\n" +
+	"\aprofile\x18\x02 \x01(\tR\aprofile\x12\x18\n" +
+	"\aproject\x18\x03 \x01(\tR\aproject\x12\x12\n" +
+	"\x04root\x18\x04 \x01(\tR\x04root\x12\x16\n" +
+	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12\x16\n" +
+	"\x06format\x18\x06 \x01(\tR\x06format\x12\x1f\n" +
+	"\vjson_schema\x18\a \x01(\tR\n" +
+	"jsonSchema\x12\x1d\n" +
+	"\n" +
+	"timeout_ms\x18\b \x01(\rR\ttimeoutMs\x12\x14\n" +
+	"\x05title\x18\t \x01(\tR\x05title\x12\x10\n" +
+	"\x03tag\x18\n" +
+	" \x01(\tR\x03tag\"G\n" +
+	"\x10AskAgentResponse\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x14\n" +
+	"\x05asked\x18\x02 \x01(\bR\x05asked\"1\n" +
+	"\x10CancelAskRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\")\n" +
+	"\x11CancelAskResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found2\xcc\x02\n" +
 	"\x0fMessagesService\x12j\n" +
 	"\vSendMessage\x12\".mako.plugin.v1.SendMessageRequest\x1a#.mako.plugin.v1.SendMessageResponse\"\x12\xca\xf3\x18\x0esessions:write\x12g\n" +
 	"\n" +
@@ -1689,7 +2562,19 @@ const file_mako_plugin_v1_later_proto_rawDesc = "" +
 	"\vPatchLayout\x12\".mako.plugin.v1.PatchLayoutRequest\x1a#.mako.plugin.v1.PatchLayoutResponse\"\x10\xca\xf3\x18\flayout:write2p\n" +
 	"\vExecService\x12a\n" +
 	"\n" +
-	"RunProcess\x12!.mako.plugin.v1.RunProcessRequest\x1a\".mako.plugin.v1.RunProcessResponse\"\f\xca\xf3\x18\x04exec\xd0\xf3\x18\x01B2Z0github.com/ironpark/mako/internal/plugin/hostapib\x06proto3"
+	"RunProcess\x12!.mako.plugin.v1.RunProcessRequest\x1a\".mako.plugin.v1.RunProcessResponse\"\f\xca\xf3\x18\x04exec\xd0\xf3\x18\x012\x9c\x02\n" +
+	"\x0fDecisionService\x12U\n" +
+	"\x06Status\x12\x1d.mako.plugin.v1.StatusRequest\x1a\x1e.mako.plugin.v1.StatusResponse\"\f\xca\xf3\x18\bdecision\x12[\n" +
+	"\bEvaluate\x12\x1f.mako.plugin.v1.EvaluateRequest\x1a .mako.plugin.v1.EvaluateResponse\"\f\xca\xf3\x18\bdecision\x12U\n" +
+	"\x06Submit\x12\x1d.mako.plugin.v1.SubmitRequest\x1a\x1e.mako.plugin.v1.SubmitResponse\"\f\xca\xf3\x18\bdecision2\xb5\x02\n" +
+	"\rAgentsService\x12c\n" +
+	"\n" +
+	"ListAgents\x12!.mako.plugin.v1.ListAgentsRequest\x1a\".mako.plugin.v1.ListAgentsResponse\"\x0e\xca\xf3\x18\n" +
+	"agents:ask\x12]\n" +
+	"\bAskAgent\x12\x1f.mako.plugin.v1.AskAgentRequest\x1a .mako.plugin.v1.AskAgentResponse\"\x0e\xca\xf3\x18\n" +
+	"agents:ask\x12`\n" +
+	"\tCancelAsk\x12 .mako.plugin.v1.CancelAskRequest\x1a!.mako.plugin.v1.CancelAskResponse\"\x0e\xca\xf3\x18\n" +
+	"agents:askB2Z0github.com/ironpark/mako/internal/plugin/hostapib\x06proto3"
 
 var (
 	file_mako_plugin_v1_later_proto_rawDescOnce sync.Once
@@ -1703,7 +2588,7 @@ func file_mako_plugin_v1_later_proto_rawDescGZIP() []byte {
 	return file_mako_plugin_v1_later_proto_rawDescData
 }
 
-var file_mako_plugin_v1_later_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_mako_plugin_v1_later_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
 var file_mako_plugin_v1_later_proto_goTypes = []any{
 	(*SendMessageRequest)(nil),   // 0: mako.plugin.v1.SendMessageRequest
 	(*SendMessageResponse)(nil),  // 1: mako.plugin.v1.SendMessageResponse
@@ -1733,41 +2618,67 @@ var file_mako_plugin_v1_later_proto_goTypes = []any{
 	(*PatchLayoutResponse)(nil),  // 25: mako.plugin.v1.PatchLayoutResponse
 	(*RunProcessRequest)(nil),    // 26: mako.plugin.v1.RunProcessRequest
 	(*RunProcessResponse)(nil),   // 27: mako.plugin.v1.RunProcessResponse
+	(*StatusRequest)(nil),        // 28: mako.plugin.v1.StatusRequest
+	(*StatusResponse)(nil),       // 29: mako.plugin.v1.StatusResponse
+	(*EvaluateRequest)(nil),      // 30: mako.plugin.v1.EvaluateRequest
+	(*EvaluateResponse)(nil),     // 31: mako.plugin.v1.EvaluateResponse
+	(*SubmitRequest)(nil),        // 32: mako.plugin.v1.SubmitRequest
+	(*SubmitResponse)(nil),       // 33: mako.plugin.v1.SubmitResponse
+	(*ListAgentsRequest)(nil),    // 34: mako.plugin.v1.ListAgentsRequest
+	(*ListAgentsResponse)(nil),   // 35: mako.plugin.v1.ListAgentsResponse
+	(*AgentProfile)(nil),         // 36: mako.plugin.v1.AgentProfile
+	(*AskAgentRequest)(nil),      // 37: mako.plugin.v1.AskAgentRequest
+	(*AskAgentResponse)(nil),     // 38: mako.plugin.v1.AskAgentResponse
+	(*CancelAskRequest)(nil),     // 39: mako.plugin.v1.CancelAskRequest
+	(*CancelAskResponse)(nil),    // 40: mako.plugin.v1.CancelAskResponse
 }
 var file_mako_plugin_v1_later_proto_depIdxs = []int32{
 	10, // 0: mako.plugin.v1.ListProjectsResponse.projects:type_name -> mako.plugin.v1.Project
 	13, // 1: mako.plugin.v1.ListDirResponse.entries:type_name -> mako.plugin.v1.DirEntry
-	0,  // 2: mako.plugin.v1.MessagesService.SendMessage:input_type -> mako.plugin.v1.SendMessageRequest
-	2,  // 3: mako.plugin.v1.MessagesService.StartAgent:input_type -> mako.plugin.v1.StartAgentRequest
-	4,  // 4: mako.plugin.v1.MessagesService.StopAgent:input_type -> mako.plugin.v1.StopAgentRequest
-	6,  // 5: mako.plugin.v1.FilesService.ReadFile:input_type -> mako.plugin.v1.ReadFileRequest
-	8,  // 6: mako.plugin.v1.FilesService.ListProjects:input_type -> mako.plugin.v1.ListProjectsRequest
-	11, // 7: mako.plugin.v1.FilesService.ListDir:input_type -> mako.plugin.v1.ListDirRequest
-	14, // 8: mako.plugin.v1.FilesService.WriteFile:input_type -> mako.plugin.v1.WriteFileRequest
-	16, // 9: mako.plugin.v1.SecretsService.GetSecret:input_type -> mako.plugin.v1.GetSecretRequest
-	18, // 10: mako.plugin.v1.SecretsService.SetSecret:input_type -> mako.plugin.v1.SetSecretRequest
-	20, // 11: mako.plugin.v1.SecretsService.DeleteSecret:input_type -> mako.plugin.v1.DeleteSecretRequest
-	22, // 12: mako.plugin.v1.SecretsService.ListSecrets:input_type -> mako.plugin.v1.ListSecretsRequest
-	24, // 13: mako.plugin.v1.LayoutService.PatchLayout:input_type -> mako.plugin.v1.PatchLayoutRequest
-	26, // 14: mako.plugin.v1.ExecService.RunProcess:input_type -> mako.plugin.v1.RunProcessRequest
-	1,  // 15: mako.plugin.v1.MessagesService.SendMessage:output_type -> mako.plugin.v1.SendMessageResponse
-	3,  // 16: mako.plugin.v1.MessagesService.StartAgent:output_type -> mako.plugin.v1.StartAgentResponse
-	5,  // 17: mako.plugin.v1.MessagesService.StopAgent:output_type -> mako.plugin.v1.StopAgentResponse
-	7,  // 18: mako.plugin.v1.FilesService.ReadFile:output_type -> mako.plugin.v1.ReadFileResponse
-	9,  // 19: mako.plugin.v1.FilesService.ListProjects:output_type -> mako.plugin.v1.ListProjectsResponse
-	12, // 20: mako.plugin.v1.FilesService.ListDir:output_type -> mako.plugin.v1.ListDirResponse
-	15, // 21: mako.plugin.v1.FilesService.WriteFile:output_type -> mako.plugin.v1.WriteFileResponse
-	17, // 22: mako.plugin.v1.SecretsService.GetSecret:output_type -> mako.plugin.v1.GetSecretResponse
-	19, // 23: mako.plugin.v1.SecretsService.SetSecret:output_type -> mako.plugin.v1.SetSecretResponse
-	21, // 24: mako.plugin.v1.SecretsService.DeleteSecret:output_type -> mako.plugin.v1.DeleteSecretResponse
-	23, // 25: mako.plugin.v1.SecretsService.ListSecrets:output_type -> mako.plugin.v1.ListSecretsResponse
-	25, // 26: mako.plugin.v1.LayoutService.PatchLayout:output_type -> mako.plugin.v1.PatchLayoutResponse
-	27, // 27: mako.plugin.v1.ExecService.RunProcess:output_type -> mako.plugin.v1.RunProcessResponse
-	15, // [15:28] is the sub-list for method output_type
-	2,  // [2:15] is the sub-list for method input_type
-	2,  // [2:2] is the sub-list for extension type_name
-	2,  // [2:2] is the sub-list for extension extendee
-	0,  // [0:2] is the sub-list for field type_name
+	36, // 2: mako.plugin.v1.ListAgentsResponse.agents:type_name -> mako.plugin.v1.AgentProfile
+	0,  // 3: mako.plugin.v1.MessagesService.SendMessage:input_type -> mako.plugin.v1.SendMessageRequest
+	2,  // 4: mako.plugin.v1.MessagesService.StartAgent:input_type -> mako.plugin.v1.StartAgentRequest
+	4,  // 5: mako.plugin.v1.MessagesService.StopAgent:input_type -> mako.plugin.v1.StopAgentRequest
+	6,  // 6: mako.plugin.v1.FilesService.ReadFile:input_type -> mako.plugin.v1.ReadFileRequest
+	8,  // 7: mako.plugin.v1.FilesService.ListProjects:input_type -> mako.plugin.v1.ListProjectsRequest
+	11, // 8: mako.plugin.v1.FilesService.ListDir:input_type -> mako.plugin.v1.ListDirRequest
+	14, // 9: mako.plugin.v1.FilesService.WriteFile:input_type -> mako.plugin.v1.WriteFileRequest
+	16, // 10: mako.plugin.v1.SecretsService.GetSecret:input_type -> mako.plugin.v1.GetSecretRequest
+	18, // 11: mako.plugin.v1.SecretsService.SetSecret:input_type -> mako.plugin.v1.SetSecretRequest
+	20, // 12: mako.plugin.v1.SecretsService.DeleteSecret:input_type -> mako.plugin.v1.DeleteSecretRequest
+	22, // 13: mako.plugin.v1.SecretsService.ListSecrets:input_type -> mako.plugin.v1.ListSecretsRequest
+	24, // 14: mako.plugin.v1.LayoutService.PatchLayout:input_type -> mako.plugin.v1.PatchLayoutRequest
+	26, // 15: mako.plugin.v1.ExecService.RunProcess:input_type -> mako.plugin.v1.RunProcessRequest
+	28, // 16: mako.plugin.v1.DecisionService.Status:input_type -> mako.plugin.v1.StatusRequest
+	30, // 17: mako.plugin.v1.DecisionService.Evaluate:input_type -> mako.plugin.v1.EvaluateRequest
+	32, // 18: mako.plugin.v1.DecisionService.Submit:input_type -> mako.plugin.v1.SubmitRequest
+	34, // 19: mako.plugin.v1.AgentsService.ListAgents:input_type -> mako.plugin.v1.ListAgentsRequest
+	37, // 20: mako.plugin.v1.AgentsService.AskAgent:input_type -> mako.plugin.v1.AskAgentRequest
+	39, // 21: mako.plugin.v1.AgentsService.CancelAsk:input_type -> mako.plugin.v1.CancelAskRequest
+	1,  // 22: mako.plugin.v1.MessagesService.SendMessage:output_type -> mako.plugin.v1.SendMessageResponse
+	3,  // 23: mako.plugin.v1.MessagesService.StartAgent:output_type -> mako.plugin.v1.StartAgentResponse
+	5,  // 24: mako.plugin.v1.MessagesService.StopAgent:output_type -> mako.plugin.v1.StopAgentResponse
+	7,  // 25: mako.plugin.v1.FilesService.ReadFile:output_type -> mako.plugin.v1.ReadFileResponse
+	9,  // 26: mako.plugin.v1.FilesService.ListProjects:output_type -> mako.plugin.v1.ListProjectsResponse
+	12, // 27: mako.plugin.v1.FilesService.ListDir:output_type -> mako.plugin.v1.ListDirResponse
+	15, // 28: mako.plugin.v1.FilesService.WriteFile:output_type -> mako.plugin.v1.WriteFileResponse
+	17, // 29: mako.plugin.v1.SecretsService.GetSecret:output_type -> mako.plugin.v1.GetSecretResponse
+	19, // 30: mako.plugin.v1.SecretsService.SetSecret:output_type -> mako.plugin.v1.SetSecretResponse
+	21, // 31: mako.plugin.v1.SecretsService.DeleteSecret:output_type -> mako.plugin.v1.DeleteSecretResponse
+	23, // 32: mako.plugin.v1.SecretsService.ListSecrets:output_type -> mako.plugin.v1.ListSecretsResponse
+	25, // 33: mako.plugin.v1.LayoutService.PatchLayout:output_type -> mako.plugin.v1.PatchLayoutResponse
+	27, // 34: mako.plugin.v1.ExecService.RunProcess:output_type -> mako.plugin.v1.RunProcessResponse
+	29, // 35: mako.plugin.v1.DecisionService.Status:output_type -> mako.plugin.v1.StatusResponse
+	31, // 36: mako.plugin.v1.DecisionService.Evaluate:output_type -> mako.plugin.v1.EvaluateResponse
+	33, // 37: mako.plugin.v1.DecisionService.Submit:output_type -> mako.plugin.v1.SubmitResponse
+	35, // 38: mako.plugin.v1.AgentsService.ListAgents:output_type -> mako.plugin.v1.ListAgentsResponse
+	38, // 39: mako.plugin.v1.AgentsService.AskAgent:output_type -> mako.plugin.v1.AskAgentResponse
+	40, // 40: mako.plugin.v1.AgentsService.CancelAsk:output_type -> mako.plugin.v1.CancelAskResponse
+	22, // [22:41] is the sub-list for method output_type
+	3,  // [3:22] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_mako_plugin_v1_later_proto_init() }
@@ -1782,9 +2693,9 @@ func file_mako_plugin_v1_later_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_plugin_v1_later_proto_rawDesc), len(file_mako_plugin_v1_later_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   41,
 			NumExtensions: 0,
-			NumServices:   5,
+			NumServices:   7,
 		},
 		GoTypes:           file_mako_plugin_v1_later_proto_goTypes,
 		DependencyIndexes: file_mako_plugin_v1_later_proto_depIdxs,

@@ -140,15 +140,6 @@ func (l *daemonLink) waitLinked(ctx context.Context) error {
 	}
 }
 
-// target is the daemon the GUI talks through: the app's own when it runs
-// one, else the external one the settings or the -daemon flag name, else
-// the local default.
-func (l *daemonLink) target() string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.targetLocked()
-}
-
 func (l *daemonLink) targetLocked() string {
 	switch {
 	case l.embedAddr != "":

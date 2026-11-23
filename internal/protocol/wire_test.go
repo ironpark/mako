@@ -360,6 +360,88 @@ func TestFramesRoundTripInRoomUsedAgain(t *testing.T) {
 	}
 }
 
+func TestStreamedAndUnpackFramesPoolCap(t *testing.T) {
+	incompressible := make([]byte, 200<<10)
+	_, _ = rand.Read(incompressible)
+	compressible := bytes.Repeat([]byte("line of repeated terminal output\r\n"), 6000)
+
+	p := NewPacker()
+	defer p.Close()
+
+	var wire bytes.Buffer
+	inputs := []struct {
+		data     []byte
+		streamed bool
+		pack     bool
+	}{
+		{[]byte("tiny"), true, false},
+		{incompressible, true, false},
+		{compressible, false, true},
+		{incompressible[:80<<10], false, false},
+		{compressible, true, false},
+		{[]byte("end"), true, false},
+	}
+	for _, in := range inputs {
+		env, err := Encode(TypeOutput, "", &Output{SessionId: "s", Data: in.data})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if in.streamed {
+			err = WriteStreamed(&wire, env, p)
+		} else {
+			err = WriteFrame(&wire, env, in.pack)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var plain bytes.Buffer
+	if err := UnpackFrames(&plain, &wire); err != nil {
+		t.Fatalf("UnpackFrames: %v", err)
+	}
+	for i, in := range inputs {
+		env, err := ReadFrame(&plain)
+		if err != nil {
+			t.Fatalf("frame %d ReadFrame: %v", i, err)
+		}
+		if got := env.GetOutput().GetData(); !bytes.Equal(got, in.data) {
+			t.Fatalf("frame %d len=%d, want %d", i, len(got), len(in.data))
+		}
+	}
+	if plain.Len() != 0 {
+		t.Fatalf("leftover bytes: %d", plain.Len())
+	}
+
+	for range 16 {
+		b := getFrame()
+		if cap(*b) > maxPooledFrame {
+			t.Fatalf("pooled frame cap %d exceeds maxPooledFrame %d", cap(*b), maxPooledFrame)
+		}
+		defer putFrame(b)
+	}
+}
+
+func BenchmarkUnpackFrames(b *testing.B) {
+	ticks := spinner(200)
+	p := NewPacker()
+	defer p.Close()
+	var wire bytes.Buffer
+	for _, data := range ticks {
+		env, _ := Encode(TypeOutput, "", &Output{SessionId: "s", Data: data})
+		if err := WriteStreamed(&wire, env, p); err != nil {
+			b.Fatal(err)
+		}
+	}
+	raw := wire.Bytes()
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := UnpackFrames(io.Discard, bytes.NewReader(raw)); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkFrameRoundTrip(b *testing.B) {
 	env, err := Encode(TypeOutput, "", &Output{SessionId: "s", Data: bytes.Repeat([]byte("\x1b[0mls -la\r\n"), 200)})
 	if err != nil {

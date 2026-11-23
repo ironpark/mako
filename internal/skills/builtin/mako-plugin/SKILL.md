@@ -76,6 +76,8 @@ api_token = { type = "string", label = "API Token", secret = true }
 - `secrets` — OS keychain secrets (`mako.secrets`)
 - `layout` — propose window layout patches (`mako.layout`)
 - `agents` — request spawning agent sessions (user-approved)
+- `decision` — ask this node's configured decision model typed questions (`mako.decision`: `status`, `evaluate`, `tryEvaluate`, `submit`, `score`, `choice`, `yes`; events `on.decisionAnswered` / `on.decisionFailed`)
+- `agents:ask` — list and ask one-shot questions of installed, `allow_template`-enabled agents without YOLO (`mako.agents`: `list`, `ask`, `cancel`; `ctx.agents.ask`; events `on.agentAnswered` / `on.agentAskFailed`, user-approved per agent/profile pair)
 
 **Important**: Tool parameter types MUST be `"string"`, `"number"`, or `"boolean"` (never `"integer"` or `"array"`).
 
@@ -107,25 +109,25 @@ All trees are validated strictly by `internal/uiblock`. Raw hex colors are forbi
 - `ui.wrap(children, { gap })` — flex-wrap container (use for tags, chips, and link pills so they never clip horizontally).
 - `ui.grid(columns, children, { gap })` — 1..6 equal columns per row (great for KPI stat cards).
 - `ui.split(first, second, { direction: "horizontal"|"vertical", ratio: 0.35 })` — resizable 2-pane split (`ratio` 0.1..0.9).
-- `ui.card(children, { gap, tone, variant, onTap, drag, dragGroup, onDrop, dropAccept })` — `variant`: `"" | "primary" | "secondary" | "outline" | "ghost" | "danger"`.
-- `ui.scroll(children, { direction: "vertical"|"horizontal", maxHeight, grow, gap })`
+- `ui.card(children, { gap, tone, variant, onTap, drag, dragGroup, onDrop, dropAccept })` — `variant`: `"" | "primary" | "secondary" | "outline" | "ghost" | "danger" | "soft"`.
+- `ui.scroll(children, { direction: "vertical"|"horizontal", maxHeight, grow, gap, variant })` — `variant: "follow"` pins scroll to the end (Revision 45).
 - `ui.list(items, (item, i) => node, { gap })` / `ui.table(headers, rowNodes)` (every table child must be `ui.row`).
 
 ### Navigation & Disclosure
 - `ui.tabs(activeValue, options, { key, onChange })`
 - `ui.breadcrumb(segments, { key, onChange })` — clicking an ancestor fires `onChange` with its 0-based index string (`"0"`, `"1"`, ...).
 - `ui.collapsible(title, children, { key, icon, tone, checked, onChange })` — `checked` = initial open state; `onChange` receives boolean.
-- `ui.tree(items, { key, gap })` + `ui.treeItem(label, children?, { key, value, icon, tone, checked, onTap, onChange, drag, dragGroup, onDrop, dropAccept })` — native tree with vertical indent guides, expand/collapse chevrons (`onChange` receives boolean), tap, and drag-and-drop!
+- `ui.tree(items, { key, gap })` + `ui.treeItem(label, children?, { key, value, icon, tone, variant, checked, onTap, onChange, drag, dragGroup, onDrop, dropAccept })` — native tree with vertical indent guides, expand/collapse chevrons (`onChange` receives boolean), tap, `variant: "badge"` (tone on icon only + badge pill for `value`, Revision 45), and drag-and-drop!
 
 ### Controls, Text & Markdown
 - `ui.text(str, { size: "small"|""|"large", weight: ""|"medium"|"semibold", tone, grow, onTap })`
 - `ui.icon(name, { size, tone })` — use bundled Lucide names only (e.g. `book-open`, `folder`, `folder-open`, `folder-plus`, `file-text`, `search`, `plus`, `x`, `check`, `circle-check`, `shield-alert`, `network`, `tag`, `layers`, `sparkles`, `refresh-cw`, `arrow-left`, `chevron-right`, `chevron-down`, `git-branch`, `external-link`). Avoid unbundled names like `alert-triangle`.
-- `ui.pill(text, { tone })` / `ui.chip(text, { tone, onTap })`
+- `ui.pill(text, { tone, icon, variant })` / `ui.chip(text, { tone, icon, variant, onTap })` — `variant`: `"soft" | "solid" | "outline"`, plus optional leading `icon` (Revision 45).
 - `ui.button(text, { key, icon, size: "small"|""|"large", variant: "primary"|"secondary"|"outline"|"ghost"|"danger", tone, disabled, onTap })` — `text: ""` with `icon` renders a compact icon-only button!
 - `ui.input(val, { key, placeholder, grow, onChange, onSubmit })`
 - `ui.textarea(val, { key, placeholder, size: "small"|""|"large", onChange })` (`size: "large"` gives 14 lines!)
 - `ui.toggle(checked, label, { key, onChange })` / `ui.select(val, options, { key, onChange })`
-- `ui.progress(0..1)` / `ui.divider()` / `ui.code(text, lang)`
+- `ui.progress(0..1)` or `ui.progress(0, { variant: "spinner", text })` (Revision 45) / `ui.divider()` / `ui.code(text, lang)`
 - `ui.markdown(md, { key, onLink })`:
   - Renders Markdown + local pure-Go Mermaid diagrams (zero network).
   - `onLink: ["handler"]` intercepts non-`http(s)://` links (e.g. `[Target](myplugin:path)`) and passes the target string to your handler, while `http(s)://` links open externally.

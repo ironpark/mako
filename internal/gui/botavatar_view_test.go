@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/botavatar"
@@ -33,6 +34,7 @@ func TestSessionAvatarStateMapping(t *testing.T) {
 }
 
 func TestBotAvatarBlockAndSettingsRender(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(&config.Config{NodeID: "n1"}, "")
 	m.Sessions.Set([]*protocol.SessionInfo{
 		{Id: "s1", NodeId: "n1", Agent: "claude", Project: "/work/mako", State: protocol.StateRunning, Status: protocol.AgentWorking},
@@ -69,5 +71,65 @@ func TestBotAvatarBlockAndSettingsRender(t *testing.T) {
 	}
 	if _, ok := settingsProbe.Find("Mug"); !ok {
 		t.Fatal("expected Mug avatar button in settings gallery")
+	}
+}
+
+func TestAgentRowRendersProfileBotAvatar(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(&config.Config{NodeID: "n1"}, "")
+	sess := &protocol.SessionInfo{
+		Id:      "b293a229",
+		NodeId:  "n1",
+		Agent:   "agy",
+		Project: "/work/mako",
+		State:   protocol.StateRunning,
+	}
+	tag := agentTag{Host: "studio.local", OS: "darwin", Here: true}
+
+	// Detailed profile avatar renders a 28px bot SVG inside a 36×36 badge.
+	detailedAvatar := ggui.ProbeBuilder(func() ggui.Widget {
+		return sessionProfileAvatar(m, sess, false)
+	}, ggui.Sz(80, 80))
+	defer detailedAvatar.Close()
+	img, ok := detailedAvatar.Semantics().Find(ggui.RoleImage, "Cloud")
+	if !ok {
+		t.Fatalf("expected Cloud bot avatar image in detailed sessionProfileAvatar:\n%s", detailedAvatar.Semantics().String())
+	}
+	if img.Rect.Size.W < 26 || img.Rect.Size.H < 26 {
+		t.Fatalf("expected profile-sized bot avatar (>=26px), got %.1f×%.1f", img.Rect.Size.W, img.Rect.Size.H)
+	}
+
+	// Compact profile avatar renders a smaller single-line avatar.
+	compactAvatar := ggui.ProbeBuilder(func() ggui.Widget {
+		return sessionProfileAvatar(m, sess, true)
+	}, ggui.Sz(80, 80))
+	defer compactAvatar.Close()
+	cimg, ok := compactAvatar.Semantics().Find(ggui.RoleImage, "Cloud")
+	if !ok {
+		t.Fatalf("expected Cloud bot avatar image in compact sessionProfileAvatar:\n%s", compactAvatar.Semantics().String())
+	}
+	if cimg.Rect.Size.W >= img.Rect.Size.W {
+		t.Fatalf("expected compact avatar (%.1f) smaller than detailed avatar (%.1f)", cimg.Rect.Size.W, img.Rect.Size.W)
+	}
+
+	// Full agentRow renders cleanly with the profile avatar beside the 2-line column.
+	detailedRow := ggui.ProbeBuilder(func() ggui.Widget {
+		return widget.Column(agentRow(m, sess, false, "agy session", tag, false)).Stretch()
+	}, ggui.Sz(300, 120))
+	defer detailedRow.Close()
+	dBtn, ok := detailedRow.Semantics().Find(ggui.RoleButton, "agy session")
+	if !ok {
+		t.Fatalf("expected agy session row button:\n%s", detailedRow.Semantics().String())
+	}
+	compactRow := ggui.ProbeBuilder(func() ggui.Widget {
+		return widget.Column(agentRow(m, sess, false, "agy session", tag, true)).Stretch()
+	}, ggui.Sz(300, 120))
+	defer compactRow.Close()
+	cBtn, ok := compactRow.Semantics().Find(ggui.RoleButton, "agy session")
+	if !ok {
+		t.Fatalf("expected compact agy session row button:\n%s", compactRow.Semantics().String())
+	}
+	if dBtn.Rect.Size.H <= cBtn.Rect.Size.H {
+		t.Fatalf("expected detailed row height (%.1f) > compact row height (%.1f)", dBtn.Rect.Size.H, cBtn.Rect.Size.H)
 	}
 }

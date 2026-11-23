@@ -2,7 +2,9 @@ package gui
 
 import (
 	"context"
+	"math"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/i18n"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -709,5 +712,345 @@ func TestPluginTabsAndHorizontalScrollInsideFillRootKeepCompactHeight(t *testing
 	}
 	if bodyText.Rect.Size.H <= 0 || bodyText.Rect.Origin.Y > 220 {
 		t.Fatalf("body content pushed down or hidden by topbar/hscroll: body=%v browse=%v", bodyText.Rect, browseBtn.Rect)
+	}
+}
+
+func TestPluginAssistVariantsAndAskBar(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	i18n.Set("en")
+	m := newModel(config.Default(), "")
+
+	tree := &protocol.UiNode{
+		Kind: "column",
+		Gap:  6,
+		Children: []*protocol.UiNode{
+			{Id: "/c1", Kind: "card", Variant: "soft", Tone: "accent", Children: []*protocol.UiNode{
+				{Id: "/c1/t", Kind: "text", Text: "Soft Accent Card"},
+			}},
+			{Id: "/c2", Kind: "card", Variant: "soft", Children: []*protocol.UiNode{
+				{Id: "/c2/t", Kind: "text", Text: "Soft Neutral Card"},
+			}},
+			{Id: "/r", Kind: "row", Children: []*protocol.UiNode{
+				{Id: "/r/p1", Kind: "pill", Text: "Soft Pill", Variant: "soft", Tone: "success", Icon: "sparkles"},
+				{Id: "/r/p2", Kind: "pill", Text: "Solid Pill", Variant: "solid", Tone: "accent"},
+				{Id: "/r/p3", Kind: "pill", Text: "Outline Pill", Variant: "outline", Tone: "warning"},
+			}},
+			{Id: "/w", Kind: "wrap", Children: []*protocol.UiNode{
+				{Id: "/w/c1", Kind: "chip", Text: "Soft Chip", Variant: "soft", Icon: "tag", Tap: true},
+				{Id: "/w/c2", Kind: "chip", Text: "Solid Chip", Variant: "solid", Tone: "accent"},
+				{Id: "/w/c3", Kind: "chip", Text: "Outline Chip", Variant: "outline"},
+			}},
+			{Id: "/sp", Kind: "progress", Variant: "spinner", Text: "Selecting candidates..."},
+			{Id: "/sp2", Kind: "progress", Variant: "spinner"},
+			{Id: "/tr", Kind: "tree", Children: []*protocol.UiNode{
+				{Id: "/tr/d", Kind: "tree_item", Text: "decisions", Value: "3", Variant: "badge", Icon: "folder", Tone: "warning"},
+			}},
+			{Id: "/sc", Kind: "scroll", Variant: "follow", MaxHeight: 120, Children: []*protocol.UiNode{
+				{Id: "/sc/m", Kind: "text", Text: "Follow message"},
+			}},
+		},
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return pluginFrame(m, "plugin:okf/vault", "okf", "OKF", &protocol.BlockUpdate{Title: "OKF", State: protocol.PluginRunning, Tree: tree})
+	}, ggui.Sz(460, 800))
+	defer p.Close()
+	for range 3 {
+		p.Frame()
+	}
+	sem := p.Semantics().String()
+	for _, want := range []string{"Soft Accent Card", "Soft Neutral Card", "Soft Pill", "Solid Pill", "Outline Pill", "Soft Chip", "Solid Chip", "Outline Chip", "Selecting candidates...", "decisions", "3", "Follow message"} {
+		if !strings.Contains(sem, want) {
+			t.Errorf("missing %q in:\n%s", want, sem)
+		}
+	}
+
+	// Verify permission labels.
+	if got := permissionText("decision"); !strings.Contains(got, "decision model") {
+		t.Errorf("permissionText(decision) = %q", got)
+	}
+	if got := permissionText("agents:ask"); !strings.Contains(got, "ask them questions") {
+		t.Errorf("permissionText(agents:ask) = %q", got)
+	}
+
+	// Verify ask bar kind="ask".
+	m.setPlugins([]*protocol.PluginInfo{{
+		Id: "okf", Version: "0.3.0", State: protocol.PluginRunning,
+		AgentAsk: &protocol.PluginAgentAsk{
+			Id: "q1", Kind: "ask", Agent: "claude", Profile: "explorer",
+			Project: "Alpha", Root: "/alpha", Name: "OKF: Why storage?", Prompt: "OKF: Why storage?",
+		},
+	}})
+	ap := ggui.ProbeBuilder(func() ggui.Widget {
+		return ggui.Provide(ggui.ReducedMotionKey, true, pluginAgentBar(m))
+	}, ggui.Sz(900, 300))
+	defer ap.Close()
+	for range 3 {
+		ap.Frame()
+	}
+	asem := ap.Semantics().String()
+	for _, want := range []string{"The plugin okf asks an agent a question", "Always allow this agent", "without YOLO", "Allow once", "Deny"} {
+		if !strings.Contains(asem, want) {
+			t.Errorf("ask bar missing %q in:\n%s", want, asem)
+		}
+	}
+}
+
+// Regression test [QA-2]: table header cells and body row cells (including
+// tappable rows and rows where column 0 has Grow > 0) must share identical X
+// coordinates at narrow (420px) and wide (720px) viewports.
+func TestPluginTableColumnAlignment(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	i18n.Set("en")
+
+	tree := &protocol.UiNode{
+		Id:     "/tbl",
+		Kind:   "table",
+		Labels: []string{"Doc", "Local", "Decision", "Final"},
+		Children: []*protocol.UiNode{
+			{Id: "/tbl/r1", Kind: "row", Gap: 6, Children: []*protocol.UiNode{
+				{Id: "/tbl/r1/c0", Kind: "text", Text: "Doc Alpha", Grow: 1},
+				{Id: "/tbl/r1/c1", Kind: "text", Text: "0.84"},
+				{Id: "/tbl/r1/c2", Kind: "text", Text: "High"},
+				{Id: "/tbl/r1/c3", Kind: "text", Text: "0.91"},
+			}},
+			{Id: "/tbl/r2", Kind: "row", Gap: 6, Tap: true, Children: []*protocol.UiNode{
+				{Id: "/tbl/r2/c0", Kind: "text", Text: "Doc Beta", Grow: 1},
+				{Id: "/tbl/r2/c1", Kind: "text", Text: "0.62"},
+				{Id: "/tbl/r2/c2", Kind: "text", Text: "Medium"},
+				{Id: "/tbl/r2/c3", Kind: "text", Text: "0.70"},
+			}},
+		},
+	}
+
+	headers := []string{"Doc", "Local", "Decision", "Final"}
+	rows := [][]string{
+		{"Doc Alpha", "0.84", "High", "0.91"},
+		{"Doc Beta", "0.62", "Medium", "0.70"},
+	}
+
+	for _, width := range []float64{420, 720} {
+		form := newBlockForm()
+		p := ggui.ProbeBuilder(func() ggui.Widget {
+			form.redraw()
+			v := &treeView{block: "plugin:okf/vault", form: form}
+			return v.node(tree, false)
+		}, ggui.Sz(width, 300))
+		for range 3 {
+			p.Frame()
+		}
+
+		hdrX := make([]float64, len(headers))
+		for i, h := range headers {
+			nd, ok := p.Semantics().Find(ggui.RoleText, h)
+			if !ok {
+				p.Close()
+				t.Fatalf("width=%.0f: missing header %q:\n%s", width, h, p.Semantics().String())
+			}
+			hdrX[i] = nd.Rect.Origin.X
+		}
+		for rIdx, cells := range rows {
+			for cIdx, label := range cells {
+				nd, ok := p.Semantics().Find(ggui.RoleText, label)
+				if !ok {
+					p.Close()
+					t.Fatalf("width=%.0f row=%d: missing cell %q:\n%s", width, rIdx, label, p.Semantics().String())
+				}
+				if diff := math.Abs(nd.Rect.Origin.X - hdrX[cIdx]); diff > 1.0 {
+					p.Close()
+					t.Fatalf("width=%.0f row=%d col=%d (%s): cell X=%.1f != header %q X=%.1f (diff=%.1f)",
+						width, rIdx, cIdx, label, nd.Rect.Origin.X, headers[cIdx], hdrX[cIdx], diff)
+				}
+			}
+		}
+		p.Close()
+	}
+}
+
+// Regression test [QA-3]: long pill/chip labels inside a narrow (300px) ui.row
+// must truncate cleanly within their bounds without collapsing a trailing button
+// to 0x0.
+func TestPluginLongPillChipInRowKeepsTrailingButtonVisible(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	i18n.Set("en")
+
+	longLabel := "Very long status badge label that definitely exceeds three hundred pixels in a narrow row"
+	cases := []struct {
+		kind    string
+		variant string
+	}{
+		{"pill", "soft"},
+		{"pill", "solid"},
+		{"pill", "outline"},
+		{"chip", ""},
+		{"chip", "soft"},
+		{"chip", "solid"},
+		{"chip", "outline"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.kind+"-"+tc.variant, func(t *testing.T) {
+			tree := &protocol.UiNode{
+				Id:   "/r",
+				Kind: "row",
+				Gap:  8,
+				Children: []*protocol.UiNode{
+					{Id: "/r/badge", Kind: tc.kind, Variant: tc.variant, Tone: "accent", Icon: "sparkles", Text: longLabel},
+					{Id: "/r/btn", Kind: "button", Text: "Open", Size: "small", Tap: true},
+				},
+			}
+			form := newBlockForm()
+			p := ggui.ProbeBuilder(func() ggui.Widget {
+				form.redraw()
+				v := &treeView{block: "plugin:test/ui", form: form}
+				return v.node(tree, false)
+			}, ggui.Sz(300, 120))
+			defer p.Close()
+			for range 3 {
+				p.Frame()
+			}
+
+			btn, ok := p.Semantics().Find(ggui.RoleButton, "Open")
+			if !ok {
+				t.Fatalf("missing Open button:\n%s", p.Semantics().String())
+			}
+			if btn.Rect.Size.W <= 20 || btn.Rect.Size.H <= 10 {
+				t.Fatalf("trailing button collapsed: rect=%v", btn.Rect)
+			}
+			if btn.Rect.Origin.X+btn.Rect.Size.W > 300.5 {
+				t.Fatalf("trailing button overflowed 300px viewport: rect=%v", btn.Rect)
+			}
+
+			lbl, ok := p.Semantics().Find(ggui.RoleText, longLabel)
+			if !ok {
+				t.Fatalf("missing badge text:\n%s", p.Semantics().String())
+			}
+			if lbl.Rect.Size.W > 200 {
+				t.Fatalf("badge label exceeded 200px max width: rect=%v", lbl.Rect)
+			}
+			if lbl.Rect.Origin.X+lbl.Rect.Size.W > btn.Rect.Origin.X+0.5 {
+				t.Fatalf("badge label %v overlapped trailing button %v", lbl.Rect, btn.Rect)
+			}
+		})
+	}
+}
+
+// Regression test [QA-4]: every tone of solid pill/chip badges must achieve
+// WCAG AA contrast (>= 4.5:1) under both skin.Dark and skin.Light themes.
+func TestSolidPillChipWCAGContrast(t *testing.T) {
+	tones := []string{"", "accent", "success", "warning", "danger", "muted", "faint"}
+	palettes := []skin.Palette{skin.Dark, skin.Light}
+	for _, pal := range palettes {
+		env := skin.Theme(pal).Apply(ggui.Env{})
+		for _, tone := range tones {
+			fillTok, fgTok := solidToneColors(tone)
+			fill := ggui.ResolveColor(fillTok, env)
+			fg := ggui.ResolveColor(fgTok, env)
+			ratio := wcagContrast(fill, fg)
+			if ratio < 4.5 {
+				t.Errorf("palette=%s tone=%q: solid contrast %.2f:1 < 4.5:1 (fill=%v fg=%v)",
+					pal.Name, tone, ratio, fill, fg)
+			}
+		}
+	}
+}
+
+func TestFollowStreamBacksOffOnRepeatedLost(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	var attempts atomic.Int32
+	watch := func(streamCtx context.Context, each func(*protocol.BlockUpdate)) error {
+		attempts.Add(1)
+		// Send an op without a tree so ApplyUi immediately triggers lost=true.
+		each(&protocol.BlockUpdate{Ops: []*protocol.UiOp{{Op: protocol.UiRemove, Id: "/missing"}}})
+		<-streamCtx.Done()
+		return streamCtx.Err()
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		followStream(ctx, watch, time.Hour, func(*protocol.BlockUpdate) {})
+	}()
+
+	// Over 120ms, exponential backoff (0ms, 50ms, 100ms, ...) must keep attempts tightly bounded.
+	time.Sleep(120 * time.Millisecond)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("followStream did not exit promptly on context cancel")
+	}
+	got := attempts.Load()
+	if got < 2 || got > 6 {
+		t.Fatalf("attempts during 120ms backoff window = %d, want between 2 and 6", got)
+	}
+}
+
+func TestListTappableRowAvoidsCloningAndKeepsChildInteractive(t *testing.T) {
+	rowChild := &protocol.UiNode{
+		Id:   "/row1",
+		Kind: "row",
+		Tap:  true,
+		Drag: "drag-row1",
+		Drop: true,
+		Children: []*protocol.UiNode{
+			{Id: "/row1/lbl", Kind: "text", Text: "Item One"},
+			{Id: "/row1/btn", Kind: "button", Text: "Action", Tap: true},
+		},
+	}
+	tree := &protocol.UiNode{
+		Kind:     "list",
+		Children: []*protocol.UiNode{rowChild},
+	}
+
+	type ev struct{ node, kind string }
+	var events []ev
+	form := newBlockForm()
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		form.redraw()
+		v := &treeView{
+			block: "plugin:test/ui",
+			form:  form,
+			onEvent: func(_ string, node, kind, _ string, _ map[string]string) {
+				events = append(events, ev{node, kind})
+			},
+		}
+		return v.node(tree, false)
+	}, ggui.Sz(420, 160))
+	defer p.Close()
+	p.Frame()
+
+	// Input node must remain unmutated.
+	if !rowChild.Tap || rowChild.Drag != "drag-row1" || !rowChild.Drop {
+		t.Fatalf("input UiNode was mutated: Tap=%v Drag=%q Drop=%v", rowChild.Tap, rowChild.Drag, rowChild.Drop)
+	}
+
+	// Clicking the nested child button invokes the button's tap handler.
+	p.Tap("Action")
+	p.Frame()
+	if len(events) != 1 || events[0] != (ev{"/row1/btn", protocol.UiTap}) {
+		t.Fatalf("tapping nested button produced %+v", events)
+	}
+
+	// Clicking the outer listRow invokes /row1's tap once (not duplicated).
+	events = nil
+	rowBtn, ok := p.Semantics().Find(ggui.RoleButton, "Item One Action")
+	if !ok {
+		t.Fatalf("missing outer listRow button:\n%s", p.Semantics().String())
+	}
+	// Click near the left edge of the row, clear of the trailing Action button.
+	p.Click(ggui.Pt(rowBtn.Rect.Origin.X+12, rowBtn.Rect.Origin.Y+rowBtn.Rect.Size.H/2))
+	p.Frame()
+	if len(events) != 1 || events[0] != (ev{"/row1", protocol.UiTap}) {
+		t.Fatalf("tapping list row produced %+v", events)
+	}
+
+	// Verify bare rendering emits zero duplicate inner tap buttons on the row itself.
+	bareForm := newBlockForm()
+	v := &treeView{block: "plugin:test/ui", form: bareForm}
+	_ = v.nodeWith(rowChild, false, true)
+	if !rowChild.Tap || rowChild.Drag != "drag-row1" || !rowChild.Drop {
+		t.Fatal("nodeWith(..., bare=true) mutated input node")
 	}
 }

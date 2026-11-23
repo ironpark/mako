@@ -525,9 +525,12 @@ func agentTagOf(m *model, l agentList, s *protocol.SessionInfo, nodes []*protoco
 func agentRow(m *model, s *protocol.SessionInfo, selected bool, title string, tag agentTag, compact bool) ggui.Widget {
 	id := s.GetId()
 	label := sessionTitle(s, title)
+	titleText := widget.Text(label).Size(pick(compact, 13.0, 13.5)).NoWrap().Ellipsis()
+	if !compact {
+		titleText.Weight(ggui.WeightMedium)
+	}
 	head := []ggui.Widget{
-		sessionAvatar(m, s, 20),
-		widget.Expanded(widget.Text(label).Size(pick(compact, 13.0, 13.5)).NoWrap().Ellipsis()),
+		widget.Expanded(titleText),
 	}
 	if compact {
 		switch {
@@ -564,9 +567,10 @@ func agentRow(m *model, s *protocol.SessionInfo, selected bool, title string, ta
 		return widget.Box(widget.Center(&activityDot{state: m.dotFor(id)})).Size(19, 19)
 	})
 	content := widget.Row(
+		sessionProfileAvatar(m, s, compact),
 		widget.Expanded(widget.Column(lines...).Gap(3).Stretch()),
 		end,
-	).Gap(6).Align(widget.AlignCenter)
+	).Gap(pick(compact, 8.0, 10.0)).Align(widget.AlignCenter)
 	btn := ui.ButtonOf(content, func() { m.selectSession(id) }).Ghost().Pad(pick(compact, 5.0, 8.0), 10).Radius(8).Name(label)
 	var w ggui.Widget = sessionMenu(m, btn, id, label, false)
 	if selected {
@@ -600,7 +604,7 @@ func agentMeta(s *protocol.SessionInfo, tag agentTag) ggui.Widget {
 	if badge := tasksBadge(s); badge != nil {
 		line = append(line, badge)
 	}
-	return widget.Box(widget.Row(line...).Gap(8).Align(widget.AlignCenter)).Pad(0, 0, 0, 2)
+	return widget.Row(line...).Gap(8).Align(widget.AlignCenter)
 }
 
 // bottomFade paints its child faded out over its last width pixels, so

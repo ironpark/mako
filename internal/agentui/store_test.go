@@ -3,7 +3,10 @@ package agentui
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -114,7 +117,7 @@ func TestBounds(t *testing.T) {
 	if _, err := s.Show("s2", "a", "", strings.Repeat("t", 100), json.RawMessage(form)); err == nil {
 		t.Fatal("a long title was taken")
 	}
-	if _, err := s.Show("s2", "a", "", "Allow‮", json.RawMessage(form)); err == nil {
+	if _, err := s.Show("s2", "a", "", "Allow\u202e", json.RawMessage(form)); err == nil {
 		t.Fatal("a reordering title was taken")
 	}
 }
@@ -129,7 +132,7 @@ func TestHostileTreesAreRefused(t *testing.T) {
 		"raw colour":   `{"kind":"text","text":"x","color":"#f00"}`,
 		"raw tone":     `{"kind":"text","text":"x","tone":"#ff0000"}`,
 		"unknown kind": `{"kind":"iframe","text":"https://evil.example"}`,
-		"spoof":        `{"kind":"text","text":"Allow‮evil"}`,
+		"spoof":        `{"kind":"text","text":"Allow\u202eevil"}`,
 		"not json":     `{"kind":`,
 	} {
 		if _, err := s.Show("s1", "a", "", "", json.RawMessage(tree)); err == nil {
@@ -233,4 +236,148 @@ func TestWatch(t *testing.T) {
 	if err := s.Watch(context.Background(), "agent:s1/none", func(*protocol.BlockUpdate) error { return nil }); err == nil {
 		t.Fatal("a block not shown was watched")
 	}
+}
+
+func TestNotificationsAreSerializedAndCausallyConsistent(t *testing.T) {
+	var inFlight atomic.Int32
+	var maxInFlight atomic.Int32
+	var snapMu sync.Mutex
+	var lastSnap []*protocol.AgentBlock
+	var calls atomic.Int32
+
+	var s *Store
+	s = New(func() {
+		n := inFlight.Add(1)
+		for {
+			cur := maxInFlight.Load()
+			if n <= cur || maxInFlight.CompareAndSwap(cur, n) {
+				break
+			}
+		}
+		time.Sleep(time.Millisecond)
+		list := s.List()
+		snapMu.Lock()
+		lastSnap = list
+		snapMu.Unlock()
+		calls.Add(1)
+		inFlight.Add(-1)
+	})
+
+	var wg sync.WaitGroup
+	for g := range 8 {
+		wg.Go(func() {
+			sess := fmt.Sprintf("s%d", g)
+			for i := range 3 {
+				id := fmt.Sprintf("b%d", i)
+				if _, err := s.Show(sess, "claude", id, "T1", json.RawMessage(form)); err != nil {
+					t.Errorf("Show: %v", err)
+				}
+				title := "T2"
+				_ = s.Update(sess, id, &title, json.RawMessage(form))
+				_ = s.Place(sess, id, Place{Parent: "main", Index: i})
+				if i%2 == 0 {
+					_ = s.Close(sess, id)
+				}
+			}
+		})
+	}
+	wg.Wait()
+	s.Shutdown()
+
+	if got := maxInFlight.Load(); got != 1 {
+		t.Fatalf("max concurrent notify calls = %d, want 1", got)
+	}
+	if calls.Load() == 0 {
+		t.Fatal("notify was never called")
+	}
+	want := s.List()
+	snapMu.Lock()
+	got := lastSnap
+	snapMu.Unlock()
+	if len(got) != len(want) {
+		t.Fatalf("last notify snapshot len = %d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].GetName() != want[i].GetName() || got[i].GetTitle() != want[i].GetTitle() || got[i].GetParent() != want[i].GetParent() {
+			t.Fatalf("snapshot[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+
+	// Mutations after Shutdown do not invoke notify.
+	before := calls.Load()
+	if _, err := s.Show("s99", "claude", "after", "After", json.RawMessage(form)); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	if calls.Load() != before {
+		t.Fatalf("notify ran after Shutdown: %d -> %d", before, calls.Load())
+	}
+}
+
+func TestNotifyReentrancyAndShutdownWait(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var count atomic.Int32
+	var s *Store
+	s = New(func() {
+		n := count.Add(1)
+		if n == 1 {
+			close(started)
+			<-release
+			// Re-entrant reads and mutation from inside notify must not deadlock.
+			_ = s.List()
+			_ = s.Has("s1", "b1")
+			_ = s.Place("s1", "b1", Place{Parent: "sidebar"})
+		}
+	})
+	if _, err := s.Show("s1", "claude", "b1", "T", json.RawMessage(form)); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	done := make(chan struct{})
+	go func() {
+		s.Shutdown()
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Fatal("Shutdown returned while notify was still in flight")
+	case <-time.After(15 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Shutdown did not return after notify finished")
+	}
+	if list := s.List(); len(list) != 1 || list[0].GetParent() != "sidebar" {
+		t.Fatalf("unexpected list after re-entrant Place: %+v", list)
+	}
+}
+
+func TestConcurrentUpdateAndEventNoRace(t *testing.T) {
+	s := New(nil)
+	defer s.Shutdown()
+	s.now = func() time.Time { return time.Unix(1_700_000_000, 0) }
+	if _, err := s.Show("s1", "claude", "order", "Order", json.RawMessage(form)); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range 50 {
+			title := fmt.Sprintf("Order-%d", i)
+			_ = s.Update("s1", "order", &title, json.RawMessage(form))
+		}
+	})
+	wg.Go(func() {
+		for range 50 {
+			_, _, _ = s.Event(&protocol.BlockEvent{
+				Block:  "agent:s1/order",
+				Node:   "/send",
+				Kind:   protocol.UiTap,
+				Values: map[string]string{"/size": "M", "/name": "Ada", "/gift": "false"},
+			})
+		}
+	})
+	wg.Wait()
 }

@@ -563,7 +563,7 @@ func TestAgySubagentHooksDoNotHijackParentConversation(t *testing.T) {
 
 	d := meshDaemon(t, "agy-subagent-hook")
 	s, err := session.Start(session.Spec{
-		ID: "agy-coord", NodeID: d.cfg.NodeID, Agent: "agy", Project: project,
+		ID: "agy-coord", NodeID: d.config().NodeID, Agent: "agy", Project: project,
 		Command: []string{"/bin/sh", "-c", "sleep 30"},
 		Env:     map[string]string{"HOME": home},
 		Cols:    80, Rows: 24,
@@ -573,7 +573,12 @@ func TestAgySubagentHooksDoNotHijackParentConversation(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	d.sessions.add(s)
+	d.sessionMu.Lock()
+	if d.saved == nil {
+		d.saved = map[string]savedSession{}
+	}
 	d.saved[s.ID()] = savedSession{Info: s.Info(), Request: &protocol.OpenSession{Agent: "agy", Project: project}}
+	d.sessionMu.Unlock()
 	d.trackConversation(s)
 
 	send := func(seq int64, payload string) {
@@ -634,5 +639,53 @@ func TestAgySubagentHooksDoNotHijackParentConversation(t *testing.T) {
 	send(8, `{"hook_event_name":"SessionStart","conversationId":"`+newConvID+`","transcriptPath":"`+newLog+`"}`)
 	if gotID, gotLog := s.Info().GetConversationId(), s.TranscriptPath(); gotID != newConvID || gotLog != newLog {
 		t.Fatalf("genuine /new did not rebind: got (%q, %q), want (%q, %q)", gotID, gotLog, newConvID, newLog)
+	}
+}
+
+func TestServeHookDoesNotStallWhenSessionMuHeld(t *testing.T) {
+	d := New(&config.Config{NodeID: "node"}, nil)
+	s, err := session.Start(session.Spec{
+		ID: "hook-fast", NodeID: "node", Agent: "claude", Project: t.TempDir(),
+		Command: []string{"/bin/sh", "-c", "sleep 30"}, Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	d.sessions.add(s)
+
+	d.sessionMu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			d.sessionMu.Unlock()
+		}
+	}()
+
+	client, server := net.Pipe()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.serveHook(t.Context(), server)
+	}()
+	if err := json.NewEncoder(client).Encode(hookMessage{
+		Session: s.ID(),
+		Seq:     1,
+		Input:   json.RawMessage(`{"hook_event_name":"UserPromptSubmit"}`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = client.Close()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("serveHook stalled while d.sessionMu was held")
+	}
+	locked = false
+	d.sessionMu.Unlock()
+
+	if got := s.Info().GetStatus(); got != protocol.AgentWorking {
+		t.Fatalf("session status = %s, want %s", got, protocol.AgentWorking)
 	}
 }

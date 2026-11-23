@@ -169,7 +169,7 @@ func (d *Daemon) saveTemplate(ctx context.Context, s *session.Session, in saveTe
 	id := approvalID()
 	answers := d.templateAsks.open(id)
 	defer d.templateAsks.close(id)
-	input, _ := json.Marshal(templateInput{Name: in.Name, Content: in.Content, Replace: in.Replace})
+	input, _ := json.Marshal(templateInput(in))
 	call := "//" + t.Name
 	if u := t.Usage(); u != "" {
 		call += " " + u

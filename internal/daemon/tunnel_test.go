@@ -40,9 +40,9 @@ func TestATunnelReachesAPeersLoopback(t *testing.T) {
 	c := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.cfg.NodeID); return n != nil && n.GetTrustsUs() })
+	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.config().NodeID); return n != nil && n.GetTrustsUs() })
 
-	for _, node := range []string{"", b.cfg.NodeID} { // on a itself, then relayed to b
+	for _, node := range []string{"", b.config().NodeID} { // on a itself, then relayed to b
 		conn, err := c.Tunnel(ctx, &protocol.Tunnel{NodeId: node, Port: int32(port)})
 		if err != nil {
 			t.Fatalf("tunnel to %q: %v", node, err)
@@ -60,7 +60,7 @@ func TestATunnelReachesAPeersLoopback(t *testing.T) {
 	}
 
 	ln.Close()
-	if _, err := c.Tunnel(ctx, &protocol.Tunnel{NodeId: b.cfg.NodeID, Port: int32(port)}); err == nil {
+	if _, err := c.Tunnel(ctx, &protocol.Tunnel{NodeId: b.config().NodeID, Port: int32(port)}); err == nil {
 		t.Fatal("a tunnel to a port nothing answers on opened")
 	}
 	if _, err := c.Tunnel(ctx, &protocol.Tunnel{Port: 70000}); err == nil {

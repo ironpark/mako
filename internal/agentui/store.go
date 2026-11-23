@@ -57,11 +57,16 @@ type Place struct {
 
 // Store is the node's agents' blocks.
 type Store struct {
-	mu      sync.Mutex
-	blocks  map[string]*block // by name
-	changed chan struct{}     // closed when any block next changes
-	notify  func()            // tells the front-ends the list changed
-	now     func() time.Time
+	mu            sync.Mutex
+	blocks        map[string]*block // by name
+	changed       chan struct{}     // closed when any block next changes
+	notify        func()            // tells the front-ends the list changed
+	hasNotify     bool
+	notifyDirty   bool
+	notifyRunning bool
+	notifyDone    chan struct{}
+	closed        bool
+	now           func() time.Time
 }
 
 type block struct {
@@ -75,10 +80,11 @@ type block struct {
 
 // New is a store that calls notify whenever a block comes, goes or moves.
 func New(notify func()) *Store {
+	hasNotify := notify != nil
 	if notify == nil {
 		notify = func() {}
 	}
-	return &Store{blocks: map[string]*block{}, changed: make(chan struct{}), notify: notify, now: time.Now}
+	return &Store{blocks: map[string]*block{}, changed: make(chan struct{}), notify: notify, hasNotify: hasNotify, now: time.Now}
 }
 
 // Name is the block of a session's ID.
@@ -98,6 +104,59 @@ func split(name string) (session, id string, ok bool) {
 func (s *Store) bumpLocked() {
 	close(s.changed)
 	s.changed = make(chan struct{})
+}
+
+func (s *Store) scheduleNotifyLocked() {
+	if !s.hasNotify || s.closed {
+		return
+	}
+	s.notifyDirty = true
+	if s.notifyRunning {
+		return
+	}
+	s.notifyRunning = true
+	done := make(chan struct{})
+	s.notifyDone = done
+	go s.runNotify(done)
+}
+
+func (s *Store) runNotify(done chan struct{}) {
+	defer func() {
+		s.mu.Lock()
+		if s.notifyDone == done {
+			s.notifyRunning = false
+			s.notifyDone = nil
+		}
+		s.mu.Unlock()
+		close(done)
+	}()
+	for {
+		s.mu.Lock()
+		if !s.notifyDirty || s.closed {
+			s.notifyRunning = false
+			if s.notifyDone == done {
+				s.notifyDone = nil
+			}
+			s.mu.Unlock()
+			return
+		}
+		s.notifyDirty = false
+		s.mu.Unlock()
+		s.notify()
+	}
+}
+
+// Shutdown stops future notifications and waits for any in-flight notify call
+// to finish.
+func (s *Store) Shutdown() {
+	s.mu.Lock()
+	s.closed = true
+	s.notifyDirty = false
+	done := s.notifyDone
+	s.mu.Unlock()
+	if done != nil {
+		<-done
+	}
 }
 
 // Show shows a block of the session's: its tree as JSON, which is read as
@@ -145,7 +204,7 @@ func (s *Store) Show(session, agent, id, title string, tree json.RawMessage) (st
 	s.blocks[name] = &block{name: name, session: session, id: id, agent: agent, title: title, tree: t, order: next + 1,
 		updates: newRate(updatesPerSecond, time.Second), events: newRate(eventsPerSecond, time.Second)}
 	s.bumpLocked()
-	go s.notify()
+	s.scheduleNotifyLocked()
 	return id, nil
 }
 
@@ -173,7 +232,7 @@ func (s *Store) Update(session, id string, title *string, tree json.RawMessage) 
 	b.tree = t
 	if title != nil && *title != b.title {
 		b.title = *title
-		go s.notify()
+		s.scheduleNotifyLocked()
 	}
 	s.bumpLocked()
 	return nil
@@ -189,7 +248,7 @@ func (s *Store) Place(session, id string, p Place) error {
 	}
 	b.place = p
 	s.bumpLocked()
-	go s.notify()
+	s.scheduleNotifyLocked()
 	return nil
 }
 
@@ -203,7 +262,7 @@ func (s *Store) Close(session, id string) error {
 	}
 	delete(s.blocks, name)
 	s.bumpLocked()
-	go s.notify()
+	s.scheduleNotifyLocked()
 	return nil
 }
 
@@ -220,7 +279,7 @@ func (s *Store) CloseSession(session string) {
 	}
 	if closed {
 		s.bumpLocked()
-		go s.notify()
+		s.scheduleNotifyLocked()
 	}
 }
 

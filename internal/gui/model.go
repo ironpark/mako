@@ -129,18 +129,18 @@ type model struct {
 	Sessions  *ggui.StateValue[[]*protocol.SessionInfo]
 	Agents    *ggui.StateValue[[]string] // what this node can launch, as agent:profile targets
 
-	Selected   *ggui.StateValue[string]      // the tab the current pane shows
-	Tabs       *ggui.StateValue[[]string]    // every pane's tabs, in order
-	Layout     *ggui.StateValue[*layoutNode] // the panes; see layout.go
-	FocusGroup *ggui.StateValue[int]         // the current pane
+	Selected      *ggui.StateValue[string]      // the tab the current pane shows
+	Tabs          *ggui.StateValue[[]string]    // every pane's tabs, in order
+	Layout        *ggui.StateValue[*layoutNode] // the panes; see layout.go
+	FocusGroup    *ggui.StateValue[int]         // the current pane
 	Dragging      *ggui.StateValue[bool]        // a tab is being dragged
 	StackDragging *ggui.StateValue[bool]        // a right-panel / stack tab is being dragged
-	DragItem   *ggui.StateValue[tabDrag]     // tab or project chip currently dragged from a tab bar
-	DragGhost  *ggui.StateValue[*dragGhost]  // floating preview of the dragged tab or chip
-	ChipHeld   *ggui.StateValue[string]      // foldKey of a project chip currently held down
-	TabHint    *ggui.StateValue[tabHint]     // where in a tab bar it would drop
-	Attached   *ggui.StateValue[[]string]    // tabs whose terminal is connected
-	Titles     *ggui.StateValue[map[string]string]
+	DragItem      *ggui.StateValue[tabDrag]     // tab or project chip currently dragged from a tab bar
+	DragGhost     *ggui.StateValue[*dragGhost]  // floating preview of the dragged tab or chip
+	ChipHeld      *ggui.StateValue[string]      // foldKey of a project chip currently held down
+	TabHint       *ggui.StateValue[tabHint]     // where in a tab bar it would drop
+	Attached      *ggui.StateValue[[]string]    // tabs whose terminal is connected
+	Titles        *ggui.StateValue[map[string]string]
 	// Unread are the sessions that finished or asked out of view; see
 	// attention.go.
 	Unread *ggui.StateValue[map[string]bool]

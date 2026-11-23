@@ -254,7 +254,7 @@ func (d *Daemon) workspaceChanged() {
 // holds, once it holds any, and tells the front-ends watching when they
 // changed, as a front-end's SetProjects does.
 func (d *Daemon) syncWorkspaceProjects() {
-	scopes, ok := d.workspace.scopes(d.cfg.NodeID)
+	scopes, ok := d.workspace.scopes(d.config().NodeID)
 	if !ok {
 		return
 	}

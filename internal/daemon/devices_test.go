@@ -24,7 +24,9 @@ func withADB(t *testing.T, d *Daemon, share bool, devices ...string) *adbfake.Se
 	srv := adbfake.Start(t, devices...)
 	d.kinds[protocol.DeviceADB] = &device.ADB{Server: srv.Addr}
 	if share {
-		d.cfg.Devices.Share = []string{protocol.DeviceADB}
+		d.updateConfig(func(c *config.Config) {
+			c.Devices.Share = []string{protocol.DeviceADB}
+		})
 	}
 	return srv
 }
@@ -42,21 +44,21 @@ func TestANodeBorrowsAnothersDevice(t *testing.T) {
 	c := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.cfg.NodeID); return n != nil && n.GetTrustsUs() })
+	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.config().NodeID); return n != nil && n.GetTrustsUs() })
 
 	list, err := c.Devices(ctx, &protocol.ListDevices{Mesh: true})
-	if err != nil || len(list.GetDevices()) != 2 || list.GetDevices()[1].Ref() != protocol.DeviceRef(b.cfg.NodeID, "adb", "S1") || !list.GetDevices()[1].GetShared() {
+	if err != nil || len(list.GetDevices()) != 2 || list.GetDevices()[1].Ref() != protocol.DeviceRef(b.config().NodeID, "adb", "S1") || !list.GetDevices()[1].GetShared() {
 		t.Fatalf("listed %v, %v", list, err)
 	}
 
-	lease, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.cfg.NodeID, Kind: "adb", Serial: "S1"})
+	lease, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.config().NodeID, Kind: "adb", Serial: "S1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if lease.GetEnv()["ANDROID_SERIAL"] != "S1" || lease.GetEnv()["ADB_SERVER_SOCKET"] != "tcp:"+lease.GetAddr() {
 		t.Fatalf("lent with %v", lease.GetEnv())
 	}
-	again, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.cfg.NodeID, Kind: "adb", Serial: "S1"})
+	again, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.config().NodeID, Kind: "adb", Serial: "S1"})
 	if err != nil || again.GetId() != lease.GetId() {
 		t.Fatalf("borrowed again as %v, %v", again, err)
 	}
@@ -135,14 +137,16 @@ func TestANodeLendsOnlyWhatItShares(t *testing.T) {
 	c := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.cfg.NodeID); return n != nil && n.GetTrustsUs() })
+	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.config().NodeID); return n != nil && n.GetTrustsUs() })
 
-	_, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.cfg.NodeID, Kind: "adb", Serial: "S1"})
+	_, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.config().NodeID, Kind: "adb", Serial: "S1"})
 	if err == nil || !strings.Contains(err.Error(), "devices.share") {
 		t.Fatalf("borrowed what b does not share: %v", err)
 	}
-	b.cfg.Devices.Share = []string{protocol.DeviceADB}
-	if _, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.cfg.NodeID, Kind: "adb", Serial: "S9"}); err == nil {
+	b.updateConfig(func(c *config.Config) {
+		c.Devices.Share = []string{protocol.DeviceADB}
+	})
+	if _, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.config().NodeID, Kind: "adb", Serial: "S9"}); err == nil {
 		t.Fatal("borrowed a device not attached")
 	}
 }
@@ -185,7 +189,7 @@ func TestForwardsListenWhereTheBorrowerIs(t *testing.T) {
 	c := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.cfg.NodeID); return n != nil && n.GetTrustsUs() })
+	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.config().NodeID); return n != nil && n.GetTrustsUs() })
 
 	lease, err := c.Borrow(ctx, &protocol.Borrow{Device: "b/S1"})
 	if err != nil {
@@ -265,8 +269,8 @@ func TestALeaseFollowsItsDevice(t *testing.T) {
 	c := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.cfg.NodeID); return n != nil && n.GetTrustsUs() })
-	if _, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.cfg.NodeID, Kind: protocol.DeviceADB, Serial: "S1"}); err != nil {
+	waitFor(t, "a linked to b", func() bool { n := nodeOf(ctx, t, c, b.config().NodeID); return n != nil && n.GetTrustsUs() })
+	if _, err := c.Borrow(ctx, &protocol.Borrow{DeviceNodeId: b.config().NodeID, Kind: protocol.DeviceADB, Serial: "S1"}); err != nil {
 		t.Fatal(err)
 	}
 	state := func() string {

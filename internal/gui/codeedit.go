@@ -55,7 +55,6 @@ type codeEditor struct {
 	blinkFrom time.Time // the caret stays lit from here, after a key or a click
 
 	rope      *rope.Rope
-	lines     []int // where each line of linesText starts, lazily built if asked
 	linesText string
 	widest    int // the longest line's length in bytes, which bounds its cells
 
@@ -165,45 +164,46 @@ func (e *codeEditor) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	return c.Max()
 }
 
-// ensureRope maintains a balanced SumTree rope of text, avoiding full-text
-// scans and slice allocations on every keystroke or frame.
+// ensureRope maintains a balanced SumTree rope of text using incremental
+// structural edits, avoiding O(N) rebuilds on every keystroke or frame.
 func (e *codeEditor) ensureRope(s string) *rope.Rope {
 	if e.rope != nil && s == e.linesText {
 		return e.rope
 	}
-	e.rope = rope.New(s)
+	prev := e.linesText
+	if e.rope == nil {
+		e.rope = rope.New(s)
+	} else {
+		pre, suf := ropeEditBounds(prev, s)
+		if pre == 0 && suf == 0 {
+			e.rope = rope.New(s)
+		} else {
+			e.rope = e.rope.Replace(pre, len(prev)-suf, s[pre:len(s)-suf])
+		}
+	}
 	e.linesText = s
 	e.widest = e.rope.LongestLine()
-	e.lines = nil
 	return e.rope
 }
 
-// lineStarts are where the lines of s start.
-func (e *codeEditor) lineStarts(s string) []int {
-	if e.lines != nil && s == e.linesText {
-		return e.lines
+// ropeEditBounds finds non-overlapping common prefix and suffix byte lengths of
+// prev and next aligned to valid UTF-8 rune boundaries.
+func ropeEditBounds(prev, next string) (pre, suf int) {
+	limit := min(len(prev), len(next))
+	for pre < limit && prev[pre] == next[pre] {
+		pre++
 	}
-	r := e.ensureRope(s)
-	n := r.Lines()
-	starts := make([]int, n)
-	for i := range n {
-		starts[i] = r.LineStart(i)
+	for pre > 0 && ((pre < len(prev) && !utf8.RuneStart(prev[pre])) || (pre < len(next) && !utf8.RuneStart(next[pre]))) {
+		pre--
 	}
-	e.lines = starts
-	return starts
-}
-
-// lineOf is the line holding byte offset at.
-func lineOf(starts []int, at int) int {
-	return max(sort.SearchInts(starts, at+1)-1, 0)
-}
-
-// lineEnd is where line i ends, before its break.
-func lineEnd(s string, starts []int, i int) int {
-	if i+1 < len(starts) {
-		return starts[i+1] - 1
+	maxSuf := limit - pre
+	for suf < maxSuf && prev[len(prev)-1-suf] == next[len(next)-1-suf] {
+		suf++
 	}
-	return len(s)
+	for suf > 0 && (!utf8.RuneStart(prev[len(prev)-suf]) || !utf8.RuneStart(next[len(next)-suf])) {
+		suf--
+	}
+	return pre, suf
 }
 
 // runeCells is how many cells r takes: two for a wide character, none for

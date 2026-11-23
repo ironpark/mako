@@ -1,8 +1,10 @@
 package plugin
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"time"
 
@@ -42,6 +44,7 @@ func (p *plugin) reload() {
 		return
 	}
 	wasRunning := p.rt != nil
+	p.cancelPending("the plugin reloaded")
 	p.sleep("its folder changed")
 	p.status(func() {
 		p.v, p.loadErr, p.stale, p.failErr, p.read = next, "", false, "", true
@@ -144,7 +147,7 @@ func (p *plugin) ensure() error {
 	case protocol.PluginBlocked:
 		return errors.New(why)
 	default:
-		return errors.New(cmpOr(why, "the plugin cannot run"))
+		return errors.New(cmp.Or(why, "the plugin cannot run"))
 	}
 	v := p.current()
 	b := newBudget(p.m.ctx, p.m.lim.CPU, p.m.lim.Wall)
@@ -164,11 +167,24 @@ func (p *plugin) ensure() error {
 		in.loaded = false
 	}
 	p.mu.Unlock()
-	for key, state := range p.saved {
+	var restoreErr error
+	for _, key := range slices.Sorted(maps.Keys(p.saved)) {
 		blockID, scopeKey := splitInstanceKey(key)
-		if _, err := p.invoke("restore", false, blockID, scopeKey, state); err != nil {
+		if _, err := p.invoke("restore", false, blockID, scopeKey, p.saved[key]); err != nil {
+			restoreErr = err
 			break
 		}
+	}
+	if restoreErr != nil || p.rt == nil {
+		if p.rt != nil {
+			p.kill("restore: " + restoreErr.Error())
+		} else {
+			p.status(func() { p.running = false })
+		}
+		if restoreErr == nil {
+			restoreErr = errors.New("the plugin stopped during restore")
+		}
+		return restoreErr
 	}
 	p.saved = map[string]string{}
 	p.status(func() { p.running = true })
@@ -180,6 +196,7 @@ func (p *plugin) ensure() error {
 // changes or the user enables the plugin again.
 func (p *plugin) kill(why string) {
 	p.closeRuntime()
+	p.cancelPending("the plugin stopped: " + why)
 	p.m.cfg.Log.Warn("plugin stopped", "plugin", p.id, "why", why)
 	p.status(func() { p.failErr, p.running = why, false })
 }

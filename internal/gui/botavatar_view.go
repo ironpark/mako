@@ -142,10 +142,7 @@ func newLiveBotAvatar(def botavatar.Definition, opts botavatar.Options, size flo
 		return widget.Box().Size(size, size)
 	}
 	ctrl := &widget.SVGController{}
-	svgW := widget.SVG(doc).Size(size, size).MaxFPS(fps).Key(key).Controller(ctrl)
-	if followPointer {
-		svgW = svgW.Alt(def.Name)
-	}
+	svgW := widget.SVG(doc).Size(size, size).MaxFPS(fps).Key(key).Controller(ctrl).Alt(def.Name)
 	if !followPointer {
 		return svgW
 	}
@@ -187,16 +184,25 @@ func (a *liveBotAvatar) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	dst.Paint(a.svg, r)
 }
 
-// sessionAvatar draws an animated Open Bot Avatar for an AI agent session row,
-// or falls back to the classic busyGlyph for shell sessions or when disabled.
-func sessionAvatar(m *model, s *protocol.SessionInfo, size float64) ggui.Widget {
+// sessionProfileAvatar draws a profile-style circular avatar for a session row
+// in the agent list. In detailed (two-line) mode it renders a 36×36 circular
+// badge with a 28px live animated bot avatar; in compact (single-line) mode it
+// renders a 24×24 circular badge with a 19px bot avatar. Shell sessions and
+// users with bot avatars disabled get the classic busyGlyph inside the same
+// aligned circular badge.
+func sessionProfileAvatar(m *model, s *protocol.SessionInfo, compact bool) ggui.Widget {
 	id := s.GetId()
 	agent := s.GetAgent()
+	frame := pick(compact, 24.0, 36.0)
+	svgSize := pick(compact, 19.0, 28.0)
+	iconSize := pick(compact, 13.5, 17.0)
+	radius := frame / 2
+
 	fallback := func() ggui.Widget {
-		return widget.Padding(&busyGlyph{
-			icon: agentGlyph(agent, skin.Muted).Size(15),
+		return widget.Box(widget.Center(&busyGlyph{
+			icon: agentGlyph(agent, skin.Muted).Size(iconSize),
 			busy: func() bool { return m.busy(id) },
-		}, 0, 2.5, 0, 2.5)
+		})).Size(frame, frame).Radius(radius).Fill(skin.Surface1).Border(1, skin.Border)
 	}
 	if agent == "" || agent == "shell" {
 		return fallback()
@@ -215,7 +221,15 @@ func sessionAvatar(m *model, s *protocol.SessionInfo, size float64) ggui.Widget 
 			Mood:  mood,
 			Seed:  botavatar.HashString(id),
 		}
-		return newLiveBotAvatar(def, opts, size, 20, false, fmt.Sprintf("sess-avatar:%s:%s:%s", id, def.ID, st))
+		var fill color.Color = skin.Surface1
+		var border color.Color = skin.Border
+		if rgb, ok := botavatar.ParseHex(col); ok {
+			r, g, b := uint8(math.Round(rgb[0])), uint8(math.Round(rgb[1])), uint8(math.Round(rgb[2]))
+			fill = color.NRGBA{R: r, G: g, B: b, A: 0x22}
+			border = color.NRGBA{R: r, G: g, B: b, A: 0x40}
+		}
+		bot := newLiveBotAvatar(def, opts, svgSize, 20, false, fmt.Sprintf("sess-avatar:%s:%s:%s:%.0f", id, def.ID, st, frame))
+		return widget.Box(widget.Center(bot)).Size(frame, frame).Radius(radius).Fill(fill).Border(1, border)
 	})
 }
 

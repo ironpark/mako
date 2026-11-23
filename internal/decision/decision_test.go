@@ -2,6 +2,7 @@ package decision
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -317,5 +318,22 @@ func TestOpenAIAndGoogleProviders(t *testing.T) {
 	}
 	if gemGenCalls != 1 || res.Level == nil || *res.Level != 1 || res.Label != "moderate" {
 		t.Fatalf("google generative fallback = %+v (calls=%d)", res, gemGenCalls)
+	}
+}
+
+func TestStoreResolveAndErrNoKey(t *testing.T) {
+	for _, env := range []string{"TYPESAFE_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY"} {
+		t.Setenv(env, "")
+	}
+	store := NewStore(t.TempDir(), &keychain.Fake{}, "")
+	if prov, model, err := store.Resolve(config.Decision{}); !errors.Is(err, ErrNoKey) || prov != "" || model != "" {
+		t.Fatalf("empty vault Resolve = (%q, %q, %v), want ErrNoKey", prov, model, err)
+	}
+	if err := store.Vault.Set(ProviderTypeSafe, "ts-secret"); err != nil {
+		t.Fatal(err)
+	}
+	prov, model, err := store.Resolve(config.Decision{})
+	if err != nil || prov != ProviderTypeSafe || model != DefaultModels[ProviderTypeSafe] {
+		t.Fatalf("configured vault Resolve = (%q, %q, %v)", prov, model, err)
 	}
 }

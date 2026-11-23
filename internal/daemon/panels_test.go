@@ -55,7 +55,7 @@ func TestANodeLetInListsTheComputersPanels(t *testing.T) {
 	if _, err := server.agentUI.Show("s1", "claude", "board", "Board", []byte(`{"kind":"text","text":"x"}`)); err != nil {
 		t.Fatal(err)
 	}
-	got, err := p.c.Panels(ctx, server.cfg.NodeID)
+	got, err := p.c.Panels(ctx, server.config().NodeID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,10 +87,10 @@ func TestANodeLetInListsTheComputersPanels(t *testing.T) {
 func TestANodeNotLetInListsNoPanels(t *testing.T) {
 	phone := meshDaemon(t, "phone")
 	stranger := meshDaemon(t, "stranger", p2pAddr(phone))
-	waitFor(t, "the stranger among the phone's peers", func() bool { _, ok := phone.peers.get(stranger.cfg.NodeID); return ok })
+	waitFor(t, "the stranger among the phone's peers", func() bool { _, ok := phone.peers.get(stranger.config().NodeID); return ok })
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if list, err := dialDaemon(t, phone).Panels(ctx, stranger.cfg.NodeID); err == nil {
+	if list, err := dialDaemon(t, phone).Panels(ctx, stranger.config().NodeID); err == nil {
 		t.Fatalf("listed a stranger's panels: %v", list)
 	}
 }

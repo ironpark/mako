@@ -275,9 +275,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	if err := json.NewDecoder(io.LimitReader(conn, hookLimit+4096)).Decode(&msg); err != nil {
 		return
 	}
-	d.sessionMu.Lock()
 	s, ok := d.sessions.get(msg.Session)
-	d.sessionMu.Unlock()
 	if !ok {
 		return
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"maps"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"runtime/pprof"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ironpark/ggfx"
@@ -61,7 +63,7 @@ var diagSamples = []string{
 }
 
 // diagnose keeps the app's diagnostics for as long as it runs.
-func diagnose() {
+func diagnose(ctx context.Context) {
 	if os.Getenv("MAKO_DIAG") == "off" {
 		return
 	}
@@ -73,10 +75,15 @@ func diagnose() {
 	if os.MkdirAll(dir, 0o700) != nil {
 		return
 	}
+	diagnoseDir(ctx, dir, diagEvery, burstTick)
+}
+
+func diagnoseDir(ctx context.Context, dir string, every, burstEvery time.Duration) {
 	log := openStatsLog(filepath.Join(dir, "stats.log"))
 	if log == nil {
 		return
 	}
+	defer log.Close()
 	fmt.Fprintf(log, "# mako-gui %s, pid %d, started %s\n", revision(), os.Getpid(), time.Now().Format(time.RFC3339))
 	fmt.Fprintln(log, "# time live_mb goal_mb go_mb limit_mb goroutines gcs_per_s gc_cpu_share cpu_cores"+
 		" footprint_mb gpu_images_mb gpu_queue_mb fps frame_ms_per_s flushes_per_s commands_per_s vertices_per_s"+
@@ -87,33 +94,42 @@ func diagnose() {
 	}
 	var last diagReading
 	var lastHeap, lastIncident time.Time
-	go watchBursts(dir)
-	for now := range time.Tick(diagEvery) {
-		metrics.Read(samples)
-		r := readDiag(samples, now)
-		if !last.at.IsZero() {
-			d := r.since(last)
-			fmt.Fprintf(log, "%s %.1f %.1f %.1f %.1f %d %.2f %.2f %.2f %.1f %.1f %.1f %.1f %.1f %.1f %.0f %.0f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n", now.Format(time.RFC3339),
-				mb(r.live), mb(r.goal), mb(r.total), mb(r.limit), r.goroutines, d.gcRate, d.gcShare, d.cores,
-				mb(r.footprint), mb(r.gpuImages), mb(r.gpuQueue), d.fps, d.frameMS, d.flushes, d.commands, d.vertices,
-				d.fpsFor[0], d.fpsFor[1], d.fpsFor[2], d.fpsFor[3], d.fpsFor[4], d.partialFPS, d.skippedFPS, d.containedFPS)
-			if d.fps >= 1 {
-				fmt.Fprintln(log, "# moving:", motionLine(inspect.ReadMotionReport()))
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	wg.Go(func() { watchBursts(ctx, dir, burstEvery) })
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			metrics.Read(samples)
+			r := readDiag(samples, now)
+			if !last.at.IsZero() {
+				d := r.since(last)
+				fmt.Fprintf(log, "%s %.1f %.1f %.1f %.1f %d %.2f %.2f %.2f %.1f %.1f %.1f %.1f %.1f %.1f %.0f %.0f %.1f %.1f %.1f %.1f %.1f %.1f %.1f %.1f\n", now.Format(time.RFC3339),
+					mb(r.live), mb(r.goal), mb(r.total), mb(r.limit), r.goroutines, d.gcRate, d.gcShare, d.cores,
+					mb(r.footprint), mb(r.gpuImages), mb(r.gpuQueue), d.fps, d.frameMS, d.flushes, d.commands, d.vertices,
+					d.fpsFor[0], d.fpsFor[1], d.fpsFor[2], d.fpsFor[3], d.fpsFor[4], d.partialFPS, d.skippedFPS, d.containedFPS)
+				if d.fps >= 1 {
+					fmt.Fprintln(log, "# moving:", motionLine(inspect.ReadMotionReport()))
+				}
+				fmt.Fprintln(log, "# atlas:", r.atlas)
+				fmt.Fprintln(log, "# textures:", texturesLine(r.textures, r.screen))
+				fmt.Fprintln(log, "# terminals:", terminalLine(r.terms))
+				if d.troubled() && now.Sub(lastIncident) >= incidentGap {
+					lastIncident = now
+					fmt.Fprintf(log, "# incident: %.1f collections a second, %.0f%% of the CPU used, %.1f cores, %.1f frames a second\n",
+						d.gcRate, 100*d.gcShare, d.cores, d.fps)
+					wg.Go(func() { keepIncident(ctx, dir, now) })
+				}
 			}
-			fmt.Fprintln(log, "# atlas:", r.atlas)
-			fmt.Fprintln(log, "# textures:", texturesLine(r.textures, r.screen))
-			fmt.Fprintln(log, "# terminals:", terminalLine(r.terms))
-			if d.troubled() && now.Sub(lastIncident) >= incidentGap {
-				lastIncident = now
-				fmt.Fprintf(log, "# incident: %.1f collections a second, %.0f%% of the CPU used, %.1f cores, %.1f frames a second\n",
-					d.gcRate, 100*d.gcShare, d.cores, d.fps)
-				go keepIncident(dir, now)
+			last = r
+			if now.Sub(lastHeap) >= heapEvery {
+				lastHeap = now
+				keepHeap(dir, now)
 			}
-		}
-		last = r
-		if now.Sub(lastHeap) >= heapEvery {
-			lastHeap = now
-			keepHeap(dir, now)
 		}
 	}
 }
@@ -291,7 +307,7 @@ func keepHeap(dir string, now time.Time) {
 // keepIncident writes, to incident-<time>, the CPU's profile over
 // incidentCPU, then the heap's, the goroutines' and the runtime's own
 // numbers, keeping the newest incidentsKept incidents.
-func keepIncident(dir string, now time.Time) {
+func keepIncident(ctx context.Context, dir string, now time.Time) {
 	at := filepath.Join(dir, "incident-"+now.Format("20060102-150405"))
 	if os.MkdirAll(at, 0o700) != nil {
 		return
@@ -300,7 +316,12 @@ func keepIncident(dir string, now time.Time) {
 	// Not while another CPU profile runs, as one from pprof's server may.
 	if f, err := os.Create(filepath.Join(at, "cpu.pb.gz")); err == nil {
 		if pprof.StartCPUProfile(f) == nil {
-			time.Sleep(incidentCPU)
+			t := time.NewTimer(incidentCPU)
+			select {
+			case <-ctx.Done():
+				t.Stop()
+			case <-t.C:
+			}
 			pprof.StopCPUProfile()
 		}
 		f.Close()
@@ -397,29 +418,36 @@ const (
 	burstsKept = 6
 )
 
-func watchBursts(dir string) {
+func watchBursts(ctx context.Context, dir string, every time.Duration) {
 	var window [4]time.Duration // the CPU used in each of the last ticks
 	last, i := processCPU(), 0
 	lastBurst := time.Now().Add(burstAfter - burstGap)
-	for now := range time.Tick(burstTick) {
-		used := processCPU()
-		window[i%len(window)], last = used-last, used
-		i++
-		var sum time.Duration
-		for _, d := range window {
-			sum += d
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			used := processCPU()
+			window[i%len(window)], last = used-last, used
+			i++
+			var sum time.Duration
+			for _, d := range window {
+				sum += d
+			}
+			if i < len(window) || sum.Seconds() < burstCores*every.Seconds()*float64(len(window)) || now.Sub(lastBurst) < burstGap {
+				continue
+			}
+			lastBurst = now
+			keepBurst(ctx, dir, now)
+			last, i = processCPU(), 0
 		}
-		if i < len(window) || sum.Seconds() < burstCores*burstTick.Seconds()*float64(len(window)) || now.Sub(lastBurst) < burstGap {
-			continue
-		}
-		lastBurst = now
-		keepBurst(dir, now)
-		last, i = processCPU(), 0
 	}
 }
 
 // keepBurst profiles the CPU over burstCPU, and notes how the frames went.
-func keepBurst(dir string, now time.Time) {
+func keepBurst(ctx context.Context, dir string, now time.Time) {
 	name := filepath.Join(dir, "burst-"+now.Format("20060102-150405"))
 	f, err := os.Create(name + ".pb.gz")
 	if err != nil {
@@ -432,7 +460,12 @@ func keepBurst(dir string, now time.Time) {
 		os.Remove(name + ".pb.gz")
 		return
 	}
-	time.Sleep(burstCPU)
+	t := time.NewTimer(burstCPU)
+	select {
+	case <-ctx.Done():
+		t.Stop()
+	case <-t.C:
+	}
 	pprof.StopCPUProfile()
 	f.Close()
 	after, motion2 := inspect.ReadFrameStats(), inspect.ReadMotionReport()

@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"github.com/ironpark/ggui"
-	"github.com/ironpark/ggui/pkg/hangul"
+	"github.com/ironpark/mako/internal/gui/hangul"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -182,6 +182,8 @@ func (m *model) commands() []command {
 			Run: m.openCurrentSpaceWindow},
 		command{ID: "Extensions…", Category: "App", Keys: []string{"zed", "language", "grammar", "highlight", "mcp"},
 			Run: func() { m.ext.Open.Set(true) }},
+		command{ID: "Built-in skills", Category: "App", Keys: []string{"skill", "mako-plugin", "mako-template", "edit", "settings"},
+			Run: func() { m.openSettings("skills") }},
 		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: m.shortcutChord("open_settings"), Run: func() { m.openSettings("") }},
 	)
 	for _, by := range agentGroups {

@@ -12,7 +12,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -271,7 +270,10 @@ func (v *Vault) Set(provider, value string) error {
 	defer v.mu.Unlock()
 	v.loadLocked()
 	if v.kc == nil {
-		next := mapsClone(v.values)
+		next := maps.Clone(v.values)
+		if next == nil {
+			next = map[string]string{}
+		}
 		next[acct] = value
 		if err := v.writeFileLocked(next); err != nil {
 			return err
@@ -310,7 +312,7 @@ func (v *Vault) Delete(provider string) error {
 	defer v.mu.Unlock()
 	v.loadLocked()
 	if v.kc == nil {
-		next := mapsClone(v.values)
+		next := maps.Clone(v.values)
 		delete(next, acct)
 		if err := v.writeFileLocked(next); err != nil {
 			return err
@@ -366,14 +368,4 @@ func (v *Vault) ListStatuses(customDefaults map[string]string) []Status {
 		}
 	}
 	return out
-}
-
-func mapsClone(in map[string]string) map[string]string {
-	out := make(map[string]string, len(in))
-	maps.Copy(out, in)
-	return out
-}
-
-func isValidProvider(id string) bool {
-	return slices.Contains(Providers, id)
 }

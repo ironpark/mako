@@ -12,9 +12,9 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.0.0-20261122131222-c9829636a084
-	github.com/ironpark/ggui v0.6.3
-	github.com/ironpark/ggui/pkg/fswatch v0.2.2
-	github.com/ironpark/ggwd v0.0.0-20261120121552-0b5175d66b9d
+	github.com/ironpark/ggui v0.7.1
+	github.com/ironpark/ggui/pkg/fswatch v0.2.3
+	github.com/ironpark/ggwd v0.0.0-20261123061616-b9247f21d6b7
 	github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291
 	github.com/ironpark/qngg v0.0.0-20261030173357-5bb022c263f0
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202

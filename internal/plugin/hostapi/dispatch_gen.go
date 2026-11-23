@@ -8,8 +8,10 @@ import "context"
 // PermNet stands for net:<host>, the host the call names.
 const (
 	PermNone           = "none"
+	PermAgentsAsk      = "agents:ask"
 	PermDb             = "db"
 	PermDbSync         = "db:sync"
+	PermDecision       = "decision"
 	PermExec           = "exec"
 	PermFsData         = "fs:data"
 	PermFsProject      = "fs:project"
@@ -23,7 +25,7 @@ const (
 )
 
 // Permissions are those a manifest may ask for, by the names above.
-var Permissions = []string{PermDb, PermDbSync, PermExec, PermFsData, PermFsProject, PermFsProjectWrite, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
+var Permissions = []string{PermAgentsAsk, PermDb, PermDbSync, PermDecision, PermExec, PermFsData, PermFsProject, PermFsProjectWrite, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
 
 // Handler carries out the Host API's methods that are available; Dispatch
 // calls one only once the caller's permission for it is checked.
@@ -179,6 +181,30 @@ type Handler interface {
 	// PatchLayout changes a window layout document by node id, as
 	// patch_layout does. 10 a minute, one waiting at a time.
 	LayoutPatchLayout(ctx context.Context, req *PatchLayoutRequest) (*PatchLayoutResponse, error)
+	// DecisionStatus carries out decision.status.
+	// Status says whether a decision model is set up, and which.
+	DecisionStatus(ctx context.Context, req *StatusRequest) (*StatusResponse, error)
+	// DecisionEvaluate carries out decision.evaluate.
+	// Evaluate evaluates a request and waits for its answers, at most 20 s.
+	DecisionEvaluate(ctx context.Context, req *EvaluateRequest) (*EvaluateResponse, error)
+	// DecisionSubmit carries out decision.submit.
+	// Submit evaluates a request after the call returns, at most 45 s; its
+	// answers come to the default export's on.decisionAnswered, or why not
+	// to on.decisionFailed, as a SessionEvent with the request's id and tag.
+	// At most 2 of a plugin's wait at once.
+	DecisionSubmit(ctx context.Context, req *SubmitRequest) (*SubmitResponse, error)
+	// AgentsListAgents carries out agents.listAgents.
+	// ListAgents lists this node's agents and their profiles, and whether
+	// each may be asked.
+	AgentsListAgents(ctx context.Context, req *ListAgentsRequest) (*ListAgentsResponse, error)
+	// AgentsAskAgent carries out agents.askAgent.
+	// AskAgent asks an agent a question after the call returns; its answer
+	// comes to the default export's on.agentAnswered, or why none to
+	// on.agentAskFailed, as a SessionEvent with the request's id and tag.
+	AgentsAskAgent(ctx context.Context, req *AskAgentRequest) (*AskAgentResponse, error)
+	// AgentsCancelAsk carries out agents.cancelAsk.
+	// CancelAsk cancels an ask of the plugin's that waits or runs.
+	AgentsCancelAsk(ctx context.Context, req *CancelAskRequest) (*CancelAskResponse, error)
 }
 
 // Methods are the Host API's methods, as the bindings name them, in the
@@ -226,6 +252,12 @@ var Methods = []Method{
 	{Name: "secrets.listSecrets", Permission: PermSecrets},
 	{Name: "layout.patchLayout", Permission: PermLayoutWrite},
 	{Name: "exec.runProcess", Permission: PermExec, Unavailable: true},
+	{Name: "decision.status", Permission: PermDecision},
+	{Name: "decision.evaluate", Permission: PermDecision},
+	{Name: "decision.submit", Permission: PermDecision},
+	{Name: "agents.listAgents", Permission: PermAgentsAsk},
+	{Name: "agents.askAgent", Permission: PermAgentsAsk},
+	{Name: "agents.cancelAsk", Permission: PermAgentsAsk},
 }
 
 // Dispatch carries out the method called name with req, its request as
@@ -432,6 +464,36 @@ func Dispatch(ctx context.Context, grants Grants, h Handler, name string, req []
 			return nil, &DeniedError{Method: name, Permission: PermExec}
 		}
 		return nil, &UnavailableError{Method: name}
+	case "decision.status":
+		if !grants.Has(PermDecision) {
+			return nil, &DeniedError{Method: name, Permission: PermDecision}
+		}
+		return call(ctx, req, new(StatusRequest), h.DecisionStatus)
+	case "decision.evaluate":
+		if !grants.Has(PermDecision) {
+			return nil, &DeniedError{Method: name, Permission: PermDecision}
+		}
+		return call(ctx, req, new(EvaluateRequest), h.DecisionEvaluate)
+	case "decision.submit":
+		if !grants.Has(PermDecision) {
+			return nil, &DeniedError{Method: name, Permission: PermDecision}
+		}
+		return call(ctx, req, new(SubmitRequest), h.DecisionSubmit)
+	case "agents.listAgents":
+		if !grants.Has(PermAgentsAsk) {
+			return nil, &DeniedError{Method: name, Permission: PermAgentsAsk}
+		}
+		return call(ctx, req, new(ListAgentsRequest), h.AgentsListAgents)
+	case "agents.askAgent":
+		if !grants.Has(PermAgentsAsk) {
+			return nil, &DeniedError{Method: name, Permission: PermAgentsAsk}
+		}
+		return call(ctx, req, new(AskAgentRequest), h.AgentsAskAgent)
+	case "agents.cancelAsk":
+		if !grants.Has(PermAgentsAsk) {
+			return nil, &DeniedError{Method: name, Permission: PermAgentsAsk}
+		}
+		return call(ctx, req, new(CancelAskRequest), h.AgentsCancelAsk)
 	}
 	return nil, &UnknownError{Method: name}
 }

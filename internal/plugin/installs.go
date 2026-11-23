@@ -168,12 +168,21 @@ func (m *Manager) Disown(id string) error {
 
 // disown is Disown on the plugin's actor.
 func (p *plugin) disown() error {
+	p.cancelPending("the plugin was disowned")
 	p.closeRuntime()
 	p.saved = map[string]string{}
+	p.dbSyncMu.Lock()
+	p.dbSyncPend = nil
+	p.dbSyncMu.Unlock()
+	select {
+	case <-p.dbSyncCh:
+	default:
+	}
 	err := p.m.forget(p.id)
 	p.store.reset()
 	p.settings.reset()
 	p.vault.reset()
+	p.datafs.reset()
 	p.subs.reset()
 	p.m.subsChanged()
 	p.status(func() { p.running = false })
@@ -203,23 +212,47 @@ func (m *Manager) forget(id string) error {
 // first is taken joins.
 func (m *Manager) Recheck() {
 	for _, p := range m.all() {
-		select {
-		case p.recheck <- struct{}{}:
-		default:
-		}
+		p.signalRecheck()
 	}
 	m.cfg.Changed()
 }
 
 // restand is a Recheck on the plugin's actor.
 func (p *plugin) restand() {
-	if state, _ := p.state(); state == protocol.PluginBlocked {
+	if p.enableReset.Swap(false) {
+		p.failures, p.renderFailures = 0, 0
+		p.status(func() { p.failErr = "" })
+	}
+	deny := p.denyClose.Swap(false)
+	state, _ := p.state()
+	switch state {
+	case protocol.PluginBlocked:
+		p.cancelPending("the plugin is blocked")
 		if p.rt != nil {
 			p.closeRuntime()
 			p.m.cfg.Log.Warn("plugin stopped: blocked", "plugin", p.id)
 		}
 		p.status(func() { p.running = false })
 		return
+	case protocol.PluginDenied:
+		if p.rt != nil {
+			p.closeRuntime()
+		}
+		p.status(func() { p.running = false })
+		return
+	case protocol.PluginDisabled:
+		p.failures, p.renderFailures = 0, 0
+		p.sleep("disabled")
+		p.status(func() {})
+		return
+	}
+	if deny {
+		v := p.current()
+		if v == nil || len(v.man.Permissions) == 0 {
+			p.closeRuntime()
+			p.status(func() { p.running = false })
+			return
+		}
 	}
 	p.status(func() {})
 	p.showAll()

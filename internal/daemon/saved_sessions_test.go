@@ -106,7 +106,7 @@ func TestSavedSessionFailureRetainsEntry(t *testing.T) {
 	if _, err := d.renameSession("missing", "try later"); err != nil {
 		t.Fatal(err)
 	}
-	other := New(d.cfg, nil)
+	other := New(d.config(), nil)
 	if err := other.loadSessions(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -224,6 +224,7 @@ func TestAStartUnderWayHoldsOffOnlyItsOwnSession(t *testing.T) {
 	locked := make(chan struct{})
 	go func() {
 		d.sessionMu.Lock()
+		_ = d.starting["a"]
 		d.sessionMu.Unlock()
 		close(locked)
 	}()

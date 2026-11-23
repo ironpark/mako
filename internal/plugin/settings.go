@@ -57,7 +57,7 @@ func (s *settingsStore) loadLocked() {
 	s.scoped = map[string]map[string]any{}
 	if b, err := os.ReadFile(s.path); err == nil {
 		raw := map[string]any{}
-		if json.Unmarshal(b, &raw) == nil {
+		if json.Unmarshal(b, &raw) == nil && raw != nil {
 			if scRaw, ok := raw[settingsScopedKey].(map[string]any); ok {
 				for scopeKey, entries := range scRaw {
 					if _, _, err := parseScopeKey(scopeKey); err != nil || scopeKey == "" {
@@ -72,12 +72,6 @@ func (s *settingsStore) loadLocked() {
 			s.values = raw
 		}
 	}
-}
-
-// value is the global setting's value, of its type, and whether the user set it:
-// else its default, else the type's zero. A secret's is read from the vault.
-func (s *settingsStore) value(d SettingDecl) (any, bool, error) {
-	return s.valueScoped(d, "")
 }
 
 // valueScoped returns the setting's effective value in scopeKey: scoped override
@@ -176,11 +170,6 @@ func fits(d SettingDecl, v any) bool {
 	return false
 }
 
-// set sets d to text as its type reads it; "" unsets it.
-func (s *settingsStore) set(d SettingDecl, text string) error {
-	return s.setScoped(d, "", text)
-}
-
 // setScoped writes a global (scopeKey == "") or scoped override for d; ""
 // unsets the value (or deletes the scoped override so it falls back to global).
 func (s *settingsStore) setScoped(d SettingDecl, scopeKey, text string) error {
@@ -273,11 +262,6 @@ func (s *settingsStore) saveLocked() error {
 		return err
 	}
 	return fsutil.Write(s.path, b)
-}
-
-// forHost is a setting as the plugin reads it.
-func (s *settingsStore) forHost(d SettingDecl) (*hostapi.Setting, error) {
-	return s.forHostScoped(d, "")
 }
 
 // forHostScoped is a setting as the plugin reads it in scopeKey.

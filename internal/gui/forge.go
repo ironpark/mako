@@ -744,20 +744,6 @@ func rollupIcon(checks string) ggui.Widget {
 	return widget.Box()
 }
 
-// forgeMeta is an item's line under its title.
-func forgeMeta(it *protocol.ForgeItem) string {
-	var parts []string
-	if it.GetKind() == protocol.ForgeRuns {
-		if it.GetWorkflow() != it.GetTitle() { // a scheduled run is titled by its workflow
-			parts = append(parts, it.GetWorkflow())
-		}
-		parts = append(parts, it.GetHead(), it.GetEvent())
-	} else {
-		parts = append(parts, fmt.Sprintf("#%d", it.GetNumber()), it.GetAuthor())
-	}
-	return metaLine(it, parts...)
-}
-
 // metaLine joins what is said of an item, and when it was last updated,
 // leaving out what is empty.
 func metaLine(it *protocol.ForgeItem, parts ...string) string {

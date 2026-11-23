@@ -706,7 +706,7 @@ func (d *Daemon) liveLog(s *session.Session, agent string) string {
 
 // handleWatchChat follows a session's conversation for a front-end, on its
 // node, until the front-end hangs up.
-func (d *Daemon) handleWatchChat(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
+func (d *Daemon) handleWatchChat(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) (err error) {
 	req, err := protocol.Body[*protocol.WatchChat](env)
 	if err != nil {
 		return err
@@ -733,14 +733,17 @@ func (d *Daemon) handleWatchChat(ctx context.Context, stream *transport.Stream, 
 	}
 	feed, stop := d.live.followWith(key, size, makePoll)
 	defer stop()
-	gone := hungUp(stream)
+	h := watchStreamHangup(stream, nil)
+	defer func() {
+		err = h.finish(ctx, env.GetId(), err)
+	}()
 	for {
 		select {
 		case l := <-feed:
 			if err := stream.Send(protocol.TypeChatLive, env.GetId(), l); err != nil {
 				return err
 			}
-		case err := <-gone:
+		case err := <-h.gone:
 			return err
 		case <-ctx.Done():
 			return ctx.Err()

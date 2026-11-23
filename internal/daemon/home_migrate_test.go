@@ -3,15 +3,16 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/session"
 )
 
 func TestMigrateAgentHomeClaudeAndReverse(t *testing.T) {
@@ -167,9 +168,6 @@ func TestMigrateAgentHomeClaudeAndReverse(t *testing.T) {
 }
 
 func TestMigrateAgentHomeAgyHistoryAndSymlinks(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("agy HOME isolation is unix-only")
-	}
 	realHome := t.TempDir()
 	makoHome := t.TempDir()
 	t.Setenv("HOME", realHome)
@@ -354,5 +352,409 @@ func TestMigrateGlobalHomeMigratesAllAgentsTogether(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(makoHome, "home", "codex", "config.toml")); err != nil {
 		t.Fatalf("codex config not copied: %v", err)
+	}
+}
+
+func TestMigrateRollbackOnSaveSessionsFailure(t *testing.T) {
+	realHome := t.TempDir()
+	makoHome := t.TempDir()
+	t.Setenv("HOME", realHome)
+	t.Setenv("MAKO_HOME", makoHome)
+
+	agyDefault := filepath.Join(realHome, ".gemini", "antigravity-cli")
+	agyLog := filepath.Join(agyDefault, "brain", "conv-rb1", ".system_generated", "logs", "transcript_full.jsonl")
+	claudeLog := filepath.Join(realHome, ".claude", "projects", "-w-rb", "c-rb2.jsonl")
+	claudeSub := filepath.Join(realHome, ".claude", "projects", "-w-rb", "c-rb2", "agent-a1.jsonl")
+	for _, p := range []string{agyLog, claudeLog, claudeSub} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	origHist := `{"display":"keep","conversationId":"conv-ext"}` + "\n" +
+		`{"display":"move","conversationId":"conv-rb1"}` + "\n"
+	srcHistPath := filepath.Join(agyDefault, "history.jsonl")
+	if err := os.WriteFile(srcHistPath, []byte(origHist), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	d := meshDaemon(t, "rb-save")
+	// Point sessionPath inside a regular file so saveSessionsLocked() fails deterministically.
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d.sessionPath = filepath.Join(blocker, "sessions.json")
+
+	liveSess, err := session.Start(session.Spec{
+		ID: "s-claude", NodeID: d.config().NodeID, Agent: "claude", Project: t.TempDir(),
+		Command: []string{"/bin/sh", "-c", "sleep 30"}, Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = liveSess.Close() })
+	liveSess.SetConversation("c-rb2", claudeLog)
+
+	d.sessionMu.Lock()
+	d.saved["s-agy"] = savedSession{
+		Info:           &protocol.SessionInfo{Id: "s-agy", Agent: "agy", ConversationId: "conv-rb1", State: protocol.StateStopped},
+		Request:        &protocol.OpenSession{Agent: "agy"},
+		TranscriptPath: agyLog,
+	}
+	d.saved["s-claude"] = savedSession{
+		Info:           &protocol.SessionInfo{Id: "s-claude", Agent: "claude", ConversationId: "c-rb2", State: protocol.StateStopped},
+		Request:        &protocol.OpenSession{Agent: "claude"},
+		TranscriptPath: claudeLog,
+	}
+	d.sessionMu.Unlock()
+
+	if _, err := d.migrateGlobalHome(true, false, true); err == nil {
+		t.Fatal("expected migrateGlobalHome to fail when saveSessionsLocked fails")
+	}
+
+	// Verify all files and history.jsonl rolled back to their original paths and contents.
+	for _, p := range []string{agyLog, claudeLog, claudeSub} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("expected rolled-back file at %s: %v", p, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(makoHome, "home", "agy", ".gemini", "antigravity-cli", "brain", "conv-rb1")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected leftover agy brain dir after rollback: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(makoHome, "home", "claude", "projects", "-w-rb", "c-rb2.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected leftover claude log after rollback: %v", err)
+	}
+	gotHist, err := os.ReadFile(srcHistPath)
+	if err != nil || string(gotHist) != origHist {
+		t.Fatalf("history.jsonl after rollback = %q (%v), want %q", gotHist, err, origHist)
+	}
+	if _, err := os.Stat(filepath.Join(makoHome, "home", "agy", ".gemini", "antigravity-cli", "history.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected destination history.jsonl after rollback: %v", err)
+	}
+	d.sessionMu.Lock()
+	agySaved := d.saved["s-agy"].TranscriptPath
+	claudeSaved := d.saved["s-claude"].TranscriptPath
+	d.sessionMu.Unlock()
+	if agySaved != agyLog || claudeSaved != claudeLog {
+		t.Fatalf("saved transcript paths not rolled back: agy=%q claude=%q", agySaved, claudeSaved)
+	}
+	if gotLive := liveSess.TranscriptPath(); gotLive != claudeLog {
+		t.Fatalf("live session transcript path = %q, want %q", gotLive, claudeLog)
+	}
+}
+
+func TestMigrateGlobalHomeRollbackAcrossAgents(t *testing.T) {
+	realHome := t.TempDir()
+	makoHome := t.TempDir()
+	t.Setenv("HOME", realHome)
+	t.Setenv("MAKO_HOME", makoHome)
+
+	agyDefault := filepath.Join(realHome, ".gemini", "antigravity-cli")
+	agyLog := filepath.Join(agyDefault, "brain", "conv-x1", ".system_generated", "logs", "transcript_full.jsonl")
+	claudeLog := filepath.Join(realHome, ".claude", "projects", "-w-x", "c-x2.jsonl")
+	claudeSub := filepath.Join(realHome, ".claude", "projects", "-w-x", "c-x2", "agent-a1.jsonl")
+	for _, p := range []string{agyLog, claudeLog, claudeSub} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("{}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Make the destination parent directory for claude a regular file so moving claude's
+	// transcript fails after agy already moved!
+	conflictParent := filepath.Join(makoHome, "home", "claude", "projects", "-w-x")
+	if err := os.MkdirAll(filepath.Dir(conflictParent), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(conflictParent, []byte("conflict"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	origHist := `{"display":"keep","conversationId":"conv-ext"}` + "\n" +
+		`{"display":"move","conversationId":"conv-x1"}` + "\n"
+	srcHistPath := filepath.Join(agyDefault, "history.jsonl")
+	if err := os.WriteFile(srcHistPath, []byte(origHist), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	d := meshDaemon(t, "rb-cross")
+	d.sessionPath = filepath.Join(t.TempDir(), "sessions.json")
+	d.sessionMu.Lock()
+	d.saved["s-agy"] = savedSession{
+		Info:           &protocol.SessionInfo{Id: "s-agy", Agent: "agy", ConversationId: "conv-x1", State: protocol.StateStopped},
+		Request:        &protocol.OpenSession{Agent: "agy"},
+		TranscriptPath: agyLog,
+	}
+	d.saved["s-claude"] = savedSession{
+		Info:           &protocol.SessionInfo{Id: "s-claude", Agent: "claude", ConversationId: "c-x2", State: protocol.StateStopped},
+		Request:        &protocol.OpenSession{Agent: "claude"},
+		TranscriptPath: claudeLog,
+	}
+	_ = d.saveSessionsLocked()
+	d.sessionMu.Unlock()
+
+	if _, err := d.migrateGlobalHome(true, false, true); err == nil {
+		t.Fatal("expected migrateGlobalHome to fail on claude subagents conflict")
+	}
+
+	// Agent 1 (agy) and Agent 2's transcript must both be rolled back to src.
+	for _, p := range []string{agyLog, claudeLog, claudeSub} {
+		if _, err := os.Stat(p); err != nil {
+			t.Fatalf("expected rolled-back file at %s: %v", p, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(makoHome, "home", "agy", ".gemini", "antigravity-cli", "brain", "conv-x1")); !os.IsNotExist(err) {
+		t.Fatalf("agy brain should have been rolled back: %v", err)
+	}
+	gotHist, err := os.ReadFile(srcHistPath)
+	if err != nil || string(gotHist) != origHist {
+		t.Fatalf("agy history.jsonl after cross-agent rollback = %q (%v), want %q", gotHist, err, origHist)
+	}
+}
+
+func TestCopyFileOverwriteStreamingAndPermissions(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "large.bin")
+	dstDir := filepath.Join(dir, "out")
+	dst := filepath.Join(dstDir, "target.bin")
+
+	payload := bytes.Repeat([]byte("0123456789abcdef"), 128*1024) // 2 MiB
+	if err := os.WriteFile(src, payload, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := copyFileOverwrite(src, dst, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("copied %d bytes, want %d", len(got), len(payload))
+	}
+	fi, err := os.Stat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o755 {
+		t.Fatalf("mode = %o, want 0755", fi.Mode().Perm())
+	}
+	entries, err := os.ReadDir(dstDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "target.bin" {
+		t.Fatalf("unexpected temp files left in %s: %v", dstDir, entries)
+	}
+
+	// Missing src fails cleanly without leaving temp files.
+	if err := copyFileOverwrite(filepath.Join(dir, "missing.bin"), dst, 0o644); err == nil {
+		t.Fatal("expected error for missing source")
+	}
+	entries, _ = os.ReadDir(dstDir)
+	if len(entries) != 1 {
+		t.Fatalf("temp file leaked on failure: %v", entries)
+	}
+}
+
+func TestMigrateGlobalHomeRollbackPreservesPreExistingDstAndCleansCopiedConfig(t *testing.T) {
+	realHome := t.TempDir()
+	makoHome := t.TempDir()
+	t.Setenv("HOME", realHome)
+	t.Setenv("MAKO_HOME", makoHome)
+
+	if err := os.WriteFile(filepath.Join(realHome, ".gitconfig"), []byte("[user]\nname = Mako\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	agyDefault := filepath.Join(realHome, ".gemini", "antigravity-cli")
+	agyCfgDir := filepath.Join(realHome, ".gemini", "config")
+	if err := os.MkdirAll(agyCfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	agyLog := filepath.Join(agyDefault, "brain", "conv-1", ".system_generated", "logs", "transcript_full.jsonl")
+	claudeLog := filepath.Join(realHome, ".claude", "projects", "-w-x", "c-2.jsonl")
+	claudeSub := filepath.Join(realHome, ".claude", "projects", "-w-x", "c-2", "agent-a1.jsonl")
+	for _, p := range []string{agyLog, claudeLog, claudeSub} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("{\"src\":true}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(agyDefault, "settings.json"), []byte(`{"theme":"dark"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agyCfgDir, "hooks.json"), []byte(`{"user":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	origHist := `{"display":"keep","conversationId":"conv-ext"}` + "\n" +
+		`{"display":"move","conversationId":"conv-1"}` + "\n"
+	srcHistPath := filepath.Join(agyDefault, "history.jsonl")
+	if err := os.WriteFile(srcHistPath, []byte(origHist), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pre-existing file inside destination brain/conv-1 that MUST survive rollback untouched.
+	isoAgyRoot := filepath.Join(makoHome, "home", "agy")
+	isoAgyData := filepath.Join(isoAgyRoot, ".gemini", "antigravity-cli")
+	dstBrain := filepath.Join(isoAgyData, "brain", "conv-1")
+	if err := os.MkdirAll(dstBrain, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	preexistingPath := filepath.Join(dstBrain, "preexisting.txt")
+	if err := os.WriteFile(preexistingPath, []byte("PRESERVE_ME"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Force agent #2 (claude) to fail after agy has copied config and moved brain/history.
+	conflictParent := filepath.Join(makoHome, "home", "claude", "projects", "-w-x")
+	if err := os.MkdirAll(filepath.Dir(conflictParent), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(conflictParent, []byte("conflict"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	d := meshDaemon(t, "rb-probe1")
+	d.sessionPath = filepath.Join(t.TempDir(), "sessions.json")
+	d.sessionMu.Lock()
+	d.saved["s-agy"] = savedSession{
+		Info:           &protocol.SessionInfo{Id: "s-agy", Agent: "agy", ConversationId: "conv-1", State: protocol.StateStopped},
+		Request:        &protocol.OpenSession{Agent: "agy"},
+		TranscriptPath: agyLog,
+	}
+	d.saved["s-claude"] = savedSession{
+		Info:           &protocol.SessionInfo{Id: "s-claude", Agent: "claude", ConversationId: "c-2", State: protocol.StateStopped},
+		Request:        &protocol.OpenSession{Agent: "claude"},
+		TranscriptPath: claudeLog,
+	}
+	_ = d.saveSessionsLocked()
+	d.sessionMu.Unlock()
+
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if _, err := c.MigrateAgentHome(ctx, &protocol.MigrateAgentHome{
+		Isolate: true, CopyConfig: true, MoveSessions: true,
+	}); err == nil {
+		t.Fatal("expected MigrateAgentHome to fail on claude destination conflict")
+	}
+
+	// Pre-existing destination file must remain intact in dst and must NOT be stolen into src.
+	gotPre, err := os.ReadFile(preexistingPath)
+	if err != nil || string(gotPre) != "PRESERVE_ME" {
+		t.Fatalf("preexisting.txt in dst = %q (%v), want PRESERVE_ME", gotPre, err)
+	}
+	if _, err := os.Stat(filepath.Join(agyDefault, "brain", "conv-1", "preexisting.txt")); !os.IsNotExist(err) {
+		t.Fatalf("preexisting.txt was stolen into src: %v", err)
+	}
+
+	// All src files and history.jsonl must be restored.
+	for _, p := range []string{agyLog, claudeLog, claudeSub} {
+		got, err := os.ReadFile(p)
+		if err != nil || string(got) != "{\"src\":true}\n" {
+			t.Fatalf("restored src file %s = %q (%v)", p, got, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dstBrain, ".system_generated")); !os.IsNotExist(err) {
+		t.Fatalf("moved agy subdir left behind in dst: %v", err)
+	}
+	gotHist, err := os.ReadFile(srcHistPath)
+	if err != nil || string(gotHist) != origHist {
+		t.Fatalf("history.jsonl = %q (%v), want %q", gotHist, err, origHist)
+	}
+
+	// Copied config & isolated-home symlinks/dirs created during failed migration must be removed.
+	for _, leftover := range []string{
+		filepath.Join(isoAgyData, "settings.json"),
+		filepath.Join(isoAgyRoot, ".gemini", "config", "hooks.json"),
+		filepath.Join(isoAgyRoot, ".gemini", "config", "skills"),
+		filepath.Join(isoAgyRoot, ".gemini", "config"),
+		filepath.Join(isoAgyRoot, ".gitconfig"),
+		filepath.Join(isoAgyData, "history.jsonl"),
+	} {
+		if _, err := os.Lstat(leftover); !os.IsNotExist(err) {
+			t.Fatalf("unexpected leftover artifact %s after rollback: %v", leftover, err)
+		}
+	}
+}
+
+func TestMovePathJournaledRestoresOverwrittenFileAndSymlink(t *testing.T) {
+	dir := t.TempDir()
+	srcDir := filepath.Join(dir, "src")
+	dstDir := filepath.Join(dir, "dst")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dstDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	srcFile := filepath.Join(srcDir, "log.jsonl")
+	dstFile := filepath.Join(dstDir, "log.jsonl")
+	if err := os.WriteFile(srcFile, []byte("SRC_FILE"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dstFile, []byte("OLD_DST_FILE"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	srcLink := filepath.Join(srcDir, "link")
+	dstLink := filepath.Join(dstDir, "link")
+	if err := os.Symlink("/src/target", srcLink); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/dst/old-target", dstLink); err != nil {
+		t.Fatal(err)
+	}
+
+	preExisting := filepath.Join(dstDir, "keep.txt")
+	if err := os.WriteFile(preExisting, []byte("KEEP"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	j := &migrationJournal{}
+	if err := j.move(srcDir, dstDir); err != nil {
+		t.Fatalf("j.move: %v", err)
+	}
+	if got, err := os.ReadFile(dstFile); err != nil || string(got) != "SRC_FILE" {
+		t.Fatalf("dstFile after move = %q (%v)", got, err)
+	}
+	if target, err := os.Readlink(dstLink); err != nil || target != "/src/target" {
+		t.Fatalf("dstLink after move = %q (%v)", target, err)
+	}
+
+	if err := j.rollback(); err != nil {
+		t.Fatalf("j.rollback: %v", err)
+	}
+
+	if got, err := os.ReadFile(srcFile); err != nil || string(got) != "SRC_FILE" {
+		t.Fatalf("srcFile after rollback = %q (%v)", got, err)
+	}
+	if got, err := os.ReadFile(dstFile); err != nil || string(got) != "OLD_DST_FILE" {
+		t.Fatalf("dstFile after rollback = %q (%v)", got, err)
+	}
+	if fi, err := os.Stat(dstFile); err != nil || fi.Mode().Perm() != 0o640 {
+		t.Fatalf("dstFile mode after rollback = %v (%v), want 0640", fi, err)
+	}
+	if target, err := os.Readlink(srcLink); err != nil || target != "/src/target" {
+		t.Fatalf("srcLink after rollback = %q (%v)", target, err)
+	}
+	if target, err := os.Readlink(dstLink); err != nil || target != "/dst/old-target" {
+		t.Fatalf("dstLink after rollback = %q (%v)", target, err)
+	}
+	if got, err := os.ReadFile(preExisting); err != nil || string(got) != "KEEP" {
+		t.Fatalf("keep.txt after rollback = %q (%v)", got, err)
 	}
 }

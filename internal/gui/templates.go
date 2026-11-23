@@ -7,6 +7,8 @@ import (
 	"image/color"
 	"io/fs"
 	"maps"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -37,10 +39,62 @@ import (
 // shows what is wrong with those given; Enter sends the prompt the
 // template makes of them.
 
+type templateFileStamp struct {
+	name        string
+	size        int64
+	modUnixNano int64
+	mode        fs.FileMode
+}
+
+type templateDirStamp struct {
+	has    bool
+	dir    string
+	exists bool
+	files  []templateFileStamp
+}
+
+func (s templateDirStamp) equal(other templateDirStamp) bool {
+	return s.has && other.has && s.dir == other.dir && s.exists == other.exists && slices.Equal(s.files, other.files)
+}
+
+func readTemplateDirStamp(dir string) templateDirStamp {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return templateDirStamp{has: true, dir: dir, exists: false}
+		}
+		return templateDirStamp{}
+	}
+	var files []templateFileStamp
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".md") {
+			continue
+		}
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil || info.IsDir() {
+			continue
+		}
+		files = append(files, templateFileStamp{
+			name:        name,
+			size:        info.Size(),
+			modUnixNano: info.ModTime().UnixNano(),
+			mode:        info.Mode(),
+		})
+	}
+	slices.SortFunc(files, func(a, b templateFileStamp) int { return strings.Compare(a.name, b.name) })
+	return templateDirStamp{has: true, dir: dir, exists: true, files: files}
+}
+
 // templateMenu is the templates a composer's menu lists.
 type templateMenu struct {
-	templates *ggui.StateValue[[]*prompttmpl.Template]
-	read      time.Time
+	templates    *ggui.StateValue[[]*prompttmpl.Template]
+	read         time.Time
+	stamp        templateDirStamp
+	loading      bool
+	pendingForce bool
+	gen          uint64
+	loads        uint64
 	// failed is what was wrong with the last call Enter tried to send, and
 	// the draft it was for; it goes once the draft changes.
 	failed *ggui.StateValue[templateFailure]
@@ -67,31 +121,88 @@ func (m *model) invalidateSessionTemplates() {
 	for _, state := range m.chats {
 		if state != nil && state.templates != nil {
 			state.templates.read = time.Time{}
+			state.templates.stamp.has = false
+			state.templates.gen++
 		}
 	}
 }
 
-// readTemplates reads the templates again, unless they were read lately
-// and force is false. A file that does not read is left out.
+// readTemplates reads template metadata again off the UI goroutine when post is
+// available (synchronously when m.post == nil), unless they were read lately
+// or the templates directory stamp is unchanged and force is false.
 func (m *model) readTemplates(state *chatState, force bool) {
 	menu := state.templates
+	if menu.loading {
+		if force {
+			menu.gen++
+			menu.stamp.has = false
+			menu.pendingForce = true
+		}
+		return
+	}
 	if !force && time.Since(menu.read) < templatesStale {
 		return
 	}
-	menu.read = time.Now()
 	dir, err := config.TemplatesDir()
 	if err != nil {
 		return
 	}
-	got, _ := prompttmpl.LoadAll(dir)
-	menu.templates.Set(got)
+	if m.post == nil {
+		nextStamp := readTemplateDirStamp(dir)
+		if !force && menu.stamp.has && nextStamp.has && menu.stamp.equal(nextStamp) {
+			menu.read = time.Now()
+			return
+		}
+		got, _ := prompttmpl.LoadAllMetadata(dir)
+		menu.loads++
+		menu.read = time.Now()
+		if nextStamp.has {
+			menu.stamp = nextStamp
+		}
+		menu.templates.Set(got)
+		return
+	}
+	if force {
+		menu.gen++
+		menu.stamp.has = false
+	}
+	menu.loading = true
+	menu.read = time.Now()
+	prevStamp := menu.stamp
+	reqGen := menu.gen
+	post := m.post
+	go func() {
+		nextStamp := readTemplateDirStamp(dir)
+		unchanged := !force && prevStamp.has && nextStamp.has && prevStamp.equal(nextStamp)
+		var got []*prompttmpl.Template
+		if !unchanged {
+			got, _ = prompttmpl.LoadAllMetadata(dir)
+		}
+		post(func() {
+			menu.loading = false
+			rerun := menu.pendingForce || menu.gen != reqGen
+			menu.pendingForce = false
+			if rerun {
+				m.readTemplates(state, true)
+				return
+			}
+			menu.read = time.Now()
+			if nextStamp.has {
+				menu.stamp = nextStamp
+			}
+			if !unchanged {
+				menu.loads++
+				menu.templates.Set(got)
+			}
+		})
+	}()
 }
 
 // templateItems are the templates for session id's agent whose names the
 // draft begins or holds, or argument value completions once the template
 // name is followed by whitespace. Reactive.
 func (m *model) templateItems(id string, state *chatState, draft string) []menuItem {
-	call, _ := prompttmpl.ParseCall(draft)
+	call, _ := prompttmpl.ParseDraft(draft)
 	s, _ := sessionIn(m.Sessions.Get(), id)
 	var ours []*prompttmpl.Template
 	for _, t := range state.templates.templates.Get() {
@@ -605,7 +716,6 @@ func (h *guiTemplateHost) Agents(ctx context.Context, agentName string, refresh 
 					if res, err := c.ListAgentModels(ctx, &protocol.ListAgentModels{NodeId: h.remoteNode, Agent: name, Refresh: refresh}); err == nil {
 						models = res.GetModels()
 					}
-					c.Close()
 				}
 			}
 			if len(models) == 0 {
@@ -679,7 +789,6 @@ func (h *guiTemplateHost) Spawn(ctx context.Context, req prompttmpl.SpawnRequest
 	if err != nil {
 		return prompttmpl.SpawnResult{}, err
 	}
-	defer c.Close()
 
 	info, err := c.Open(ctx, &protocol.OpenSession{
 		NodeId:          h.remoteNode,
@@ -745,7 +854,6 @@ func (h *guiTemplateHost) Ask(ctx context.Context, req prompttmpl.AskRequest) (p
 	if err != nil {
 		return prompttmpl.AskResult{}, err
 	}
-	defer c.Close()
 
 	res, err := c.RunAgentPrompt(ctx, &protocol.RunAgentPrompt{
 		NodeId:          h.remoteNode,
@@ -774,7 +882,6 @@ func (h *guiTemplateHost) Decide(ctx context.Context, rawJSON []byte) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
-	defer c.Close()
 
 	res, err := c.RunDecision(ctx, &protocol.RunDecision{RequestJson: string(rawJSON)})
 	if err != nil {
@@ -838,17 +945,21 @@ func typeWant(t prompttmpl.Type, options []string) string {
 // templateHint is, for a draft that calls a template with arguments after
 // its name, an interactive pill bar of bound, active, and remaining arguments,
 // active argument hints, validation errors, or running status. Reactive.
-func templateHint(state *chatState) ggui.Widget {
+func (m *model) templateHint(id string, state *chatState) ggui.Widget {
 	draft := state.draft.Get()
 	call, ok := prompttmpl.ParseCall(draft)
 	if !ok || !strings.ContainsAny(draft, " \t\n") {
 		return nil
 	}
-	i := slices.IndexFunc(state.templates.templates.Get(), func(t *prompttmpl.Template) bool { return t.Name == call.Name })
+	s, _ := sessionIn(m.Sessions.Get(), id)
+	templates := state.templates.templates.Get()
+	i := slices.IndexFunc(templates, func(t *prompttmpl.Template) bool {
+		return t.Name == call.Name && t.For(s.GetAgent(), s.GetProfile())
+	})
 	if i < 0 {
 		return nil
 	}
-	t := ggui.Peek(state.templates.templates)[i]
+	t := templates[i]
 	an := analyzeTemplateCall(t, draft, call)
 
 	headerParts := []ggui.Widget{

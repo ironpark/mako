@@ -186,7 +186,7 @@ func TestSaveTemplateWorksWithLayoutWatchOnly(t *testing.T) {
 func TestSaveTemplateSurvivesStatusLineHeartbeats(t *testing.T) {
 	d := meshDaemon(t, "agy-template-statusline")
 	s, err := session.Start(session.Spec{
-		ID: "agy-save", NodeID: d.cfg.NodeID, Agent: "agy", Project: t.TempDir(),
+		ID: "agy-save", NodeID: d.config().NodeID, Agent: "agy", Project: t.TempDir(),
 		Command: []string{"/bin/sh", "-c", "sleep 30"},
 		Cols:    80, Rows: 24,
 	})

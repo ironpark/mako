@@ -1,11 +1,16 @@
 package daemon
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"io"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
+	"time"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
@@ -15,6 +20,107 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/pkg/fsutil"
 )
+
+func cloneBoolPtr(p *bool) *bool {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func cloneStringSlicePtr(p *[]string) *[]string {
+	if p == nil {
+		return nil
+	}
+	cp := slices.Clone(*p)
+	if cp == nil {
+		cp = []string{}
+	}
+	return &cp
+}
+
+func cloneAgent(a agentspec.Agent) agentspec.Agent {
+	a.Command = slices.Clone(a.Command)
+	a.Args = slices.Clone(a.Args)
+	a.Env = maps.Clone(a.Env)
+	a.Enabled = cloneBoolPtr(a.Enabled)
+	a.AllowAgent = cloneBoolPtr(a.AllowAgent)
+	a.AllowTemplate = cloneBoolPtr(a.AllowTemplate)
+	if a.Profiles != nil {
+		profiles := make([]agentspec.Profile, len(a.Profiles))
+		for i, p := range a.Profiles {
+			p.Args = slices.Clone(p.Args)
+			p.Env = maps.Clone(p.Env)
+			p.Yolo = cloneBoolPtr(p.Yolo)
+			p.ContextServers = cloneStringSlicePtr(p.ContextServers)
+			p.AllowAgent = cloneBoolPtr(p.AllowAgent)
+			p.AllowTemplate = cloneBoolPtr(p.AllowTemplate)
+			profiles[i] = p
+		}
+		a.Profiles = profiles
+	}
+	return a
+}
+
+func cloneAgentsMap(m map[string]agentspec.Agent) map[string]agentspec.Agent {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]agentspec.Agent, len(m))
+	for k, v := range m {
+		out[k] = cloneAgent(v)
+	}
+	return out
+}
+
+func cloneShell(s agentspec.Shell) agentspec.Shell {
+	s.Command = slices.Clone(s.Command)
+	s.Args = slices.Clone(s.Args)
+	s.Env = maps.Clone(s.Env)
+	return s
+}
+
+func cloneContextServers(m map[string]mcp.Server) map[string]mcp.Server {
+	if m == nil {
+		return nil
+	}
+	out := make(map[string]mcp.Server, len(m))
+	for k, s := range m {
+		s.Enabled = cloneBoolPtr(s.Enabled)
+		s.Settings = bytes.Clone(s.Settings)
+		if s.Command != nil {
+			cmd := *s.Command
+			cmd.Args = slices.Clone(cmd.Args)
+			cmd.Env = maps.Clone(cmd.Env)
+			s.Command = &cmd
+		}
+		out[k] = s
+	}
+	return out
+}
+
+func cloneDecision(d config.Decision) config.Decision {
+	d.Models = maps.Clone(d.Models)
+	return d
+}
+
+func cloneConfig(c *config.Config) *config.Config {
+	if c == nil {
+		c = config.Default()
+	}
+	out := *c
+	out.Peers = slices.Clone(c.Peers)
+	out.Discovery.TailnetHosts = slices.Clone(c.Discovery.TailnetHosts)
+	out.P2P.Relays = slices.Clone(c.P2P.Relays)
+	out.Agents = cloneAgentsMap(c.Agents)
+	out.Shell = cloneShell(c.Shell)
+	out.ContextServers = cloneContextServers(c.ContextServers)
+	out.Devices.Share = slices.Clone(c.Devices.Share)
+	out.Workspace.Sync = cloneBoolPtr(c.Workspace.Sync)
+	out.Decision = cloneDecision(c.Decision)
+	return &out
+}
 
 // agentFile follows the agents and MCP servers of the config file the
 // daemon was started from, so an agent, a flag, a profile or a server
@@ -27,6 +133,10 @@ type agentFile struct {
 	hasSum      bool
 	badSum      [32]byte
 	hasBadSum   bool
+	statMod     time.Time
+	statSize    int64
+	hasStat     bool
+	reads       int
 	read        bool
 	agents      map[string]agentspec.Agent
 	isolateHome bool
@@ -37,6 +147,27 @@ type agentFile struct {
 	decision  config.Decision
 }
 
+func (f *agentFile) setFromConfigLocked(c *config.Config) {
+	f.agents = cloneAgentsMap(c.Agents)
+	f.isolateHome = c.IsolateHome
+	f.shell = cloneShell(c.Shell)
+	f.servers = cloneContextServers(c.ContextServers)
+	f.workspace = config.Workspace{Sync: cloneBoolPtr(c.Workspace.Sync)}
+	f.decision = cloneDecision(c.Decision)
+	f.read = true
+}
+
+func (d *Daemon) syncConfigFromAgentFileLocked(f *agentFile) {
+	d.updateConfig(func(c *config.Config) {
+		c.Agents = cloneAgentsMap(f.agents)
+		c.IsolateHome = f.isolateHome
+		c.Shell = cloneShell(f.shell)
+		c.ContextServers = cloneContextServers(f.servers)
+		c.Workspace = config.Workspace{Sync: cloneBoolPtr(f.workspace.Sync)}
+		c.Decision = cloneDecision(f.decision)
+	})
+}
+
 // FollowAgents makes the daemon read its agents from the config file at
 // path whenever it changes, starting from the configuration it was given.
 func (d *Daemon) FollowAgents(path string) {
@@ -44,13 +175,21 @@ func (d *Daemon) FollowAgents(path string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.path = path
-	f.hasSum, f.hasBadSum = false, false
-	if body, err := os.ReadFile(path); err == nil {
-		var file config.Config
-		if json.Unmarshal(body, &file) == nil {
-			file.TakeShell()
-			f.agents, f.isolateHome, f.shell, f.servers, f.workspace, f.decision = file.Agents, file.IsolateHome, file.Shell, file.ContextServers, file.Workspace, file.Decision
-			f.sum, f.hasSum, f.read = sha256.Sum256(body), true, true
+	f.hasSum, f.hasBadSum, f.hasStat = false, false, false
+	if fh, err := os.Open(path); err == nil {
+		fi, statErr := fh.Stat()
+		body, readErr := io.ReadAll(fh)
+		_ = fh.Close()
+		if statErr == nil && readErr == nil {
+			f.reads++
+			var file config.Config
+			if json.Unmarshal(body, &file) == nil {
+				file.TakeShell()
+				f.setFromConfigLocked(&file)
+				f.sum, f.hasSum, f.hasBadSum = sha256.Sum256(body), true, false
+				f.statMod, f.statSize, f.hasStat = fi.ModTime(), fi.Size(), true
+				d.syncConfigFromAgentFileLocked(f)
+			}
 		}
 	}
 }
@@ -73,28 +212,38 @@ func (d *Daemon) contextServers() map[string]mcp.Server {
 
 // decisionConfig returns the active decision provider/model defaults.
 func (d *Daemon) decisionConfig() config.Decision {
-	return d.followed().decision
+	return cloneDecision(d.followed().decision)
 }
 
 // setDecisionConfig updates the daemon's decision defaults and persists them
 // when FollowAgents is watching a configuration file.
 func (d *Daemon) setDecisionConfig(next config.Decision) error {
+	next = cloneDecision(next)
 	f := &d.agentFile
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if !f.read {
-		f.agents, f.isolateHome, f.shell, f.servers, f.workspace, f.decision, f.read = d.cfg.Agents, d.cfg.IsolateHome, d.cfg.Shell, d.cfg.ContextServers, d.cfg.Workspace, d.cfg.Decision, true
-	}
-	f.decision = next
-	d.cfg.Decision = next
 	if f.path == "" {
+		if !f.read {
+			f.setFromConfigLocked(d.config())
+		}
+		f.decision = cloneDecision(next)
+		d.updateConfig(func(c *config.Config) {
+			c.Decision = cloneDecision(next)
+		})
 		return nil
 	}
-	cfg := config.Default()
-	if d.cfg != nil {
-		*cfg = *d.cfg
-	}
+	cfg := cloneConfig(d.config())
 	if body, err := os.ReadFile(f.path); err == nil {
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return err
+		}
+		if _, ok := raw["agents"]; ok {
+			cfg.Agents = nil
+		}
+		if _, ok := raw["context_servers"]; ok {
+			cfg.ContextServers = nil
+		}
 		if err := json.Unmarshal(body, cfg); err != nil {
 			return err
 		}
@@ -102,7 +251,7 @@ func (d *Daemon) setDecisionConfig(next config.Decision) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	cfg.Decision = next
+	cfg.Decision = cloneDecision(next)
 	if err := os.MkdirAll(filepath.Dir(f.path), 0o700); err != nil {
 		return err
 	}
@@ -114,9 +263,21 @@ func (d *Daemon) setDecisionConfig(next config.Decision) error {
 	if err := fsutil.Write(f.path, payload); err != nil {
 		return err
 	}
+	var written config.Config
+	if err := json.Unmarshal(payload, &written); err != nil {
+		return err
+	}
+	written.TakeShell()
+	f.setFromConfigLocked(&written)
 	f.sum = sha256.Sum256(payload)
 	f.hasSum = true
 	f.hasBadSum = false
+	if fi, err := os.Stat(f.path); err == nil {
+		f.statMod, f.statSize, f.hasStat = fi.ModTime(), fi.Size(), true
+	} else {
+		f.hasStat = false
+	}
+	d.syncConfigFromAgentFileLocked(f)
 	return nil
 }
 
@@ -134,28 +295,45 @@ func (d *Daemon) followed() followedConfig {
 	f := &d.agentFile
 	f.mu.Lock()
 	if !f.read {
-		f.agents, f.isolateHome, f.shell, f.servers, f.workspace, f.decision, f.read = d.cfg.Agents, d.cfg.IsolateHome, d.cfg.Shell, d.cfg.ContextServers, d.cfg.Workspace, d.cfg.Decision, true
+		f.setFromConfigLocked(d.config())
 	}
 	now := followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision}
 	reloaded := false
 	if f.path != "" {
-		if body, err := os.ReadFile(f.path); err == nil {
-			sum := sha256.Sum256(body)
-			if !f.hasSum || sum != f.sum {
-				var file config.Config
-				if err := json.Unmarshal(body, &file); err != nil {
-					if !f.hasBadSum || sum != f.badSum {
-						f.badSum, f.hasBadSum = sum, true
-						d.log.Warn("config changed but cannot be read; keeping the agents", "path", f.path, "err", err)
+		fi, err := os.Stat(f.path)
+		if err != nil {
+			f.hasStat = false
+		} else if !f.hasStat || !fi.ModTime().Equal(f.statMod) || fi.Size() != f.statSize {
+			if fh, err := os.Open(f.path); err == nil {
+				readInfo, statErr := fh.Stat()
+				body, readErr := io.ReadAll(fh)
+				_ = fh.Close()
+				if statErr == nil && readErr == nil {
+					f.reads++
+					f.statMod, f.statSize, f.hasStat = readInfo.ModTime(), readInfo.Size(), true
+					sum := sha256.Sum256(body)
+					if !f.hasSum || sum != f.sum {
+						var file config.Config
+						if err := json.Unmarshal(body, &file); err != nil {
+							if !f.hasBadSum || sum != f.badSum {
+								f.badSum, f.hasBadSum = sum, true
+								d.log.Warn("config changed but cannot be read; keeping the agents", "path", f.path, "err", err)
+							}
+						} else {
+							file.TakeShell()
+							f.setFromConfigLocked(&file)
+							f.sum, f.hasSum, f.hasBadSum = sum, true, false
+							d.syncConfigFromAgentFileLocked(f)
+							now = followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision}
+							reloaded = true
+							d.log.Info("configuration reloaded", "path", f.path)
+						}
 					}
 				} else {
-					file.TakeShell()
-					f.agents, f.isolateHome, f.shell, f.servers, f.workspace, f.decision = file.Agents, file.IsolateHome, file.Shell, file.ContextServers, file.Workspace, file.Decision
-					f.sum, f.hasSum, f.hasBadSum = sum, true, false
-					now = followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision}
-					reloaded = true
-					d.log.Info("configuration reloaded", "path", f.path)
+					f.hasStat = false
 				}
+			} else {
+				f.hasStat = false
 			}
 		}
 	}

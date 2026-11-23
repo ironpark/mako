@@ -164,6 +164,101 @@ func TestPluginGraphRenderAndNodeClickHitTest(t *testing.T) {
 	}
 }
 
+// Regression test [QA-5]: plain mouse-wheel scrolling over a ui.graph must not
+// hijack scrolling from an enclosing ui.scroll container; only Ctrl/Meta/Shift +
+// wheel (or the explicit +/- buttons) zooms the graph canvas.
+func TestPluginGraphWheelPassesThroughToParentScroll(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	i18n.Set("en")
+
+	tree := &protocol.UiNode{
+		Id:   "/sc",
+		Kind: "scroll",
+		Children: []*protocol.UiNode{
+			{
+				Id:        "/sc/graph",
+				Kind:      "graph",
+				Text:      "Knowledge Graph",
+				MaxHeight: 280,
+				GraphNodes: []*protocol.UiGraphNode{
+					{Id: "a", Label: "Alpha Node", Tone: "accent"},
+					{Id: "b", Label: "Beta Node", Tone: "success"},
+				},
+				GraphEdges: []*protocol.UiGraphEdge{
+					{From: "a", To: "b"},
+				},
+			},
+			{Id: "/sc/spacer", Kind: "card", Children: []*protocol.UiNode{
+				{Id: "/sc/spacer/1", Kind: "text", Text: "Section One"},
+				{Id: "/sc/spacer/2", Kind: "text", Text: "Section Two"},
+				{Id: "/sc/spacer/3", Kind: "text", Text: "Section Three"},
+				{Id: "/sc/spacer/4", Kind: "text", Text: "Section Four"},
+				{Id: "/sc/spacer/5", Kind: "text", Text: "Insights Footer"},
+			}},
+		},
+	}
+
+	form := newBlockForm()
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		form.redraw()
+		v := &treeView{block: "plugin:okf/vault", form: form}
+		return v.node(tree, false)
+	}, ggui.Sz(420, 320))
+	defer p.Close()
+	for range 3 {
+		p.Frame()
+	}
+
+	st := form.graphState("/sc/graph")
+	footerBefore, ok := p.Semantics().Find(ggui.RoleText, "Insights Footer")
+	if !ok {
+		t.Fatalf("missing Insights Footer:\n%s", p.Semantics().String())
+	}
+
+	// Plain wheel scroll over the graph canvas must pass through to the parent scroll
+	// and must not zoom the graph.
+	p.Scroll(ggui.Pt(210, 140), ggui.Pt(0, -120))
+	for range 3 {
+		p.Frame()
+	}
+	if st.zoom != 1.0 {
+		t.Fatalf("plain wheel unexpectedly zoomed graph to %v", st.zoom)
+	}
+	footerAfter, ok := p.Semantics().Find(ggui.RoleText, "Insights Footer")
+	if !ok {
+		t.Fatalf("missing Insights Footer after scroll")
+	}
+	if footerAfter.Rect.Origin.Y >= footerBefore.Rect.Origin.Y {
+		t.Fatalf("parent scroll did not move on plain wheel over graph: beforeY=%.1f afterY=%.1f",
+			footerBefore.Rect.Origin.Y, footerAfter.Rect.Origin.Y)
+	}
+
+	// Verify canvas HandlePointer directly: plain wheel returns false; Ctrl/Meta/Shift + wheel zooms.
+	canvas := &pluginGraphCanvas{state: newGraphViewState()}
+	if canvas.HandlePointer(ggui.PointerEvent{Kind: ggui.PointerScroll, Scroll: ggui.Pt(0, -2)}) {
+		t.Fatal("plain PointerScroll should return false")
+	}
+	if canvas.state.zoom != 1.0 {
+		t.Fatalf("plain PointerScroll changed zoom to %v", canvas.state.zoom)
+	}
+	for _, tc := range []struct {
+		name string
+		mods ggui.Mods
+	}{
+		{"ctrl", ggui.Mods{Ctrl: true}},
+		{"meta", ggui.Mods{Meta: true}},
+		{"shift", ggui.Mods{Shift: true}},
+	} {
+		canvas.state.reset()
+		if !canvas.HandlePointer(ggui.PointerEvent{Kind: ggui.PointerScroll, Scroll: ggui.Pt(0, -2), Mods: tc.mods}) {
+			t.Fatalf("%s+wheel should be consumed by graph canvas", tc.name)
+		}
+		if canvas.state.zoom <= 1.0 {
+			t.Fatalf("%s+wheel did not zoom in: zoom=%v", tc.name, canvas.state.zoom)
+		}
+	}
+}
+
 func TestPluginRichUIv2Components(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	i18n.Set("en")

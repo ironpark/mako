@@ -3,22 +3,30 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/binary"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/p2p"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transport"
@@ -64,7 +72,7 @@ func meshDaemonWith(t *testing.T, name string, configure func(*config.Config), p
 // letIn has a let b in, by b's own key.
 func letIn(t *testing.T, a, b *Daemon) {
 	t.Helper()
-	if err := a.p2p.Keys().Add(b.p2p.Key(), b.cfg.Name); err != nil {
+	if err := a.p2p.Keys().Add(b.p2p.Key(), b.config().Name); err != nil {
 		t.Fatal(err)
 	}
 	a.p2p.Reconsider()
@@ -83,7 +91,7 @@ func addSession(t *testing.T, d *Daemon, id string) {
 func addSessionOf(t *testing.T, d *Daemon, id, agent string) {
 	t.Helper()
 	s, err := session.Start(session.Spec{
-		ID: id, NodeID: d.cfg.NodeID, Agent: agent, Project: t.TempDir(),
+		ID: id, NodeID: d.config().NodeID, Agent: agent, Project: t.TempDir(),
 		Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
 	})
 	if err != nil {
@@ -140,14 +148,14 @@ func TestDaemonsThatLetEachOtherInShareTheirState(t *testing.T) {
 	defer cancel()
 
 	waitFor(t, "b's session on a", func() bool {
-		_, sent := a.remote.fresh()[b.cfg.NodeID]
+		_, sent := a.remote.fresh()[b.config().NodeID]
 		return sent && lists(ctx, c, "on-b")
 	})
-	node := nodeOf(ctx, t, c, b.cfg.NodeID)
+	node := nodeOf(ctx, t, c, b.config().NodeID)
 	if node.GetPeerId() != b.p2p.ID().String() || node.GetName() != "b" || !node.GetTrusted() || !node.GetTrustsUs() || node.GetKey() == "" {
 		t.Fatalf("a's record of b: %v", node)
 	}
-	if _, err := c.ListDir(ctx, &protocol.ListDir{NodeId: b.cfg.NodeID, Path: t.TempDir()}); err != nil {
+	if _, err := c.ListDir(ctx, &protocol.ListDir{NodeId: b.config().NodeID, Path: t.TempDir()}); err != nil {
 		t.Fatalf("a request forwarded to b: %v", err)
 	}
 
@@ -186,17 +194,17 @@ func TestTrustRunsOneWayAcrossTheMesh(t *testing.T) {
 	defer cancel()
 
 	waitFor(t, "the server's session on the laptop", func() bool { return lists(ctx, fromLaptop, "on-server") })
-	if _, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: server.cfg.NodeID, Path: t.TempDir()}); err != nil {
+	if _, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: server.config().NodeID, Path: t.TempDir()}); err != nil {
 		t.Fatalf("the laptop asking the server: %v", err)
 	}
 	if lists(ctx, fromServer, "on-laptop") {
 		t.Fatal("the server lists the laptop's session")
 	}
-	_, err := fromServer.ListDir(ctx, &protocol.ListDir{NodeId: laptop.cfg.NodeID, Path: t.TempDir()})
+	_, err := fromServer.ListDir(ctx, &protocol.ListDir{NodeId: laptop.config().NodeID, Path: t.TempDir()})
 	if err == nil || !strings.Contains(err.Error(), "has not let this node in") {
 		t.Fatalf("the server asking the laptop: %v", err)
 	}
-	if n := nodeOf(ctx, t, fromServer, laptop.cfg.NodeID); n == nil || !n.GetTrusted() || n.GetTrustsUs() {
+	if n := nodeOf(ctx, t, fromServer, laptop.config().NodeID); n == nil || !n.GetTrusted() || n.GetTrustsUs() {
 		t.Fatalf("the server's record of the laptop: %v", n)
 	}
 }
@@ -220,11 +228,11 @@ func TestTrustCarriesAlongAChain(t *testing.T) {
 	defer cancel()
 
 	waitFor(t, "the runner's session on the laptop", func() bool { return lists(ctx, fromLaptop, "on-runner") })
-	n := nodeOf(ctx, t, fromLaptop, runner.cfg.NodeID)
-	if n.GetHops() != 3 || n.GetVia() != server.cfg.NodeID || n.Standing() != protocol.StandingVia {
+	n := nodeOf(ctx, t, fromLaptop, runner.config().NodeID)
+	if n.GetHops() != 3 || n.GetVia() != server.config().NodeID || n.Standing() != protocol.StandingVia {
 		t.Fatalf("the laptop's record of the runner: hops %d via %q, %s", n.GetHops(), n.GetVia(), n.Standing())
 	}
-	if _, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: runner.cfg.NodeID, Path: t.TempDir()}); err != nil {
+	if _, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: runner.config().NodeID, Path: t.TempDir()}); err != nil {
 		t.Fatalf("the laptop asking the runner: %v", err)
 	}
 	// A file large enough to go compressed comes whole down the chain.
@@ -233,10 +241,10 @@ func TestTrustCarriesAlongAChain(t *testing.T) {
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if f, err := fromLaptop.ReadFile(ctx, &protocol.ReadFile{NodeId: runner.cfg.NodeID, Path: path}); err != nil || string(f.GetData()) != text {
+	if f, err := fromLaptop.ReadFile(ctx, &protocol.ReadFile{NodeId: runner.config().NodeID, Path: path}); err != nil || string(f.GetData()) != text {
 		t.Fatalf("the laptop reading the runner's file: %d bytes, %v", len(f.GetData()), err)
 	}
-	info, err := fromLaptop.Rename(ctx, &protocol.RenameSession{NodeId: runner.cfg.NodeID, SessionId: "on-runner", Name: "renamed"})
+	info, err := fromLaptop.Rename(ctx, &protocol.RenameSession{NodeId: runner.config().NodeID, SessionId: "on-runner", Name: "renamed"})
 	if err != nil || info.GetName() != "renamed" {
 		t.Fatalf("the laptop renaming the runner's session: %v %v", info, err)
 	}
@@ -244,11 +252,11 @@ func TestTrustCarriesAlongAChain(t *testing.T) {
 	if lists(ctx, fromRunner, "on-laptop") {
 		t.Fatal("the runner lists the laptop's session")
 	}
-	if _, err := fromRunner.ListDir(ctx, &protocol.ListDir{NodeId: laptop.cfg.NodeID, Path: t.TempDir()}); err == nil {
+	if _, err := fromRunner.ListDir(ctx, &protocol.ListDir{NodeId: laptop.config().NodeID, Path: t.TempDir()}); err == nil {
 		t.Fatal("the runner reached the laptop")
 	}
 	// What a node runs on is told to every node it links to, let in or not.
-	if n := nodeOf(ctx, t, fromRunner, laptop.cfg.NodeID); n.GetOs() != runtime.GOOS || n.GetArch() != runtime.GOARCH {
+	if n := nodeOf(ctx, t, fromRunner, laptop.config().NodeID); n.GetOs() != runtime.GOOS || n.GetArch() != runtime.GOARCH {
 		t.Fatalf("the runner's record of the laptop: %s/%s", n.GetOs(), n.GetArch())
 	}
 
@@ -258,7 +266,7 @@ func TestTrustCarriesAlongAChain(t *testing.T) {
 	}
 	box.p2p.Reconsider()
 	waitFor(t, "the laptop to be cut off from the runner", func() bool {
-		_, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: runner.cfg.NodeID, Path: t.TempDir()})
+		_, err := fromLaptop.ListDir(ctx, &protocol.ListDir{NodeId: runner.config().NodeID, Path: t.TempDir()})
 		return err != nil
 	})
 }
@@ -280,19 +288,19 @@ func TestAStaleRouteEnds(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	waitFor(t, "a to reach c", func() bool {
-		n := nodeOf(ctx, t, fromA, c.cfg.NodeID)
-		return n.GetHops() == 2 && n.GetVia() == b.cfg.NodeID
+		n := nodeOf(ctx, t, fromA, c.config().NodeID)
+		return n.GetHops() == 2 && n.GetVia() == b.config().NodeID
 	})
 
 	if _, err := c.p2p.Keys().Remove(ssh.FingerprintSHA256(b.p2p.Key())); err != nil {
 		t.Fatal(err)
 	}
 	c.p2p.Reconsider()
-	waitFor(t, "b to lose c", func() bool { return b.routing()[c.cfg.NodeID].hops == 0 })
-	if _, err := fromA.ListDir(ctx, &protocol.ListDir{NodeId: c.cfg.NodeID, Path: t.TempDir()}); err == nil {
+	waitFor(t, "b to lose c", func() bool { return b.routing()[c.config().NodeID].hops == 0 })
+	if _, err := fromA.ListDir(ctx, &protocol.ListDir{NodeId: c.config().NodeID, Path: t.TempDir()}); err == nil {
 		t.Fatal("a reached c through the ring")
 	}
-	waitForWithin(t, stateFresh+maxHops*2*time.Second, "a to lose c", func() bool { return a.routing()[c.cfg.NodeID].hops == 0 })
+	waitForWithin(t, stateFresh+maxHops*2*time.Second, "a to lose c", func() bool { return a.routing()[c.config().NodeID].hops == 0 })
 }
 
 // A node that is not let in asks to be; the other's front-end sees the
@@ -305,24 +313,24 @@ func TestANodeAsksToBeLetIn(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	waitFor(t, "the laptop to know the server", func() bool { return nodeOf(ctx, t, fromLaptop, server.cfg.NodeID) != nil })
+	waitFor(t, "the laptop to know the server", func() bool { return nodeOf(ctx, t, fromLaptop, server.config().NodeID) != nil })
 	if lists(ctx, fromLaptop, "on-server") {
 		t.Fatal("the laptop lists a session of a server that has not let it in")
 	}
-	if _, err := fromLaptop.Access(ctx, &protocol.Access{Op: "request", NodeId: server.cfg.NodeID, Note: "my laptop"}); err != nil {
+	if _, err := fromLaptop.Access(ctx, &protocol.Access{Op: "request", NodeId: server.config().NodeID, Note: "my laptop"}); err != nil {
 		t.Fatal(err)
 	}
 	info, err := fromServer.Access(ctx, &protocol.Access{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(info.GetRequests()) != 1 || info.GetRequests()[0].GetNode().GetId() != laptop.cfg.NodeID || info.GetRequests()[0].GetNote() != "my laptop" {
+	if len(info.GetRequests()) != 1 || info.GetRequests()[0].GetNode().GetId() != laptop.config().NodeID || info.GetRequests()[0].GetNote() != "my laptop" {
 		t.Fatalf("requests on the server: %v", info.GetRequests())
 	}
 	if got, want := info.GetRequests()[0].GetKey().GetFingerprint(), laptop.keyPrint; got != want {
 		t.Fatalf("the request's key %s, want the laptop's %s", got, want)
 	}
-	info, err = fromServer.Access(ctx, &protocol.Access{Op: "allow", NodeId: laptop.cfg.NodeID})
+	info, err = fromServer.Access(ctx, &protocol.Access{Op: "allow", NodeId: laptop.config().NodeID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,7 +443,7 @@ func TestAnAttachAcrossTheMeshComesPlain(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer stream.Close()
-	if err := stream.Send(protocol.TypeAttach, "", &protocol.Attach{SessionId: "loud", NodeId: server.cfg.NodeID, Replay: true}); err != nil {
+	if err := stream.Send(protocol.TypeAttach, "", &protocol.Attach{SessionId: "loud", NodeId: server.config().NodeID, Replay: true}); err != nil {
 		t.Fatal(err)
 	}
 	_ = stream.SetReadDeadline(time.Now().Add(20 * time.Second))
@@ -476,7 +484,7 @@ func TestAnAttachPacksAsOneStreamWhenAsked(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer stream.Close()
-	if err := stream.Send(protocol.TypeAttach, "", &protocol.Attach{SessionId: "loud", NodeId: server.cfg.NodeID, Replay: true, PackStream: true}); err != nil {
+	if err := stream.Send(protocol.TypeAttach, "", &protocol.Attach{SessionId: "loud", NodeId: server.config().NodeID, Replay: true, PackStream: true}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := stream.Welcomed(); err != nil {
@@ -530,7 +538,7 @@ func TestAnAttachPacksAsOneStreamWhenAsked(t *testing.T) {
 func loudSession(t *testing.T, d *Daemon) {
 	t.Helper()
 	s, err := session.Start(session.Spec{
-		ID: "loud", NodeID: d.cfg.NodeID, Agent: "shell", Project: t.TempDir(),
+		ID: "loud", NodeID: d.config().NodeID, Agent: "shell", Project: t.TempDir(),
 		Command: []string{"sh", "-c", "while :; do i=0; while [ $i -lt 3000 ]; do echo a line the session printed; i=$((i+1)); done; sleep 1; done"}, Cols: 80, Rows: 24,
 	})
 	if err != nil {
@@ -564,5 +572,156 @@ func TestSessionsAreTheSameAsAnAgentsSpinnerTurns(t *testing.T) {
 	stopped[0].State = protocol.StateExited
 	if sameSessions(at("◑ Claude Code", now), stopped) {
 		t.Error("a session that exited read as no change")
+	}
+}
+
+func TestStateSendersCoalesceDropAndShutdown(t *testing.T) {
+	pidA := peer.ID("12D3KooWTestPeerA")
+	pidB := peer.ID("12D3KooWTestPeerB")
+	pA := p2p.Peer{ID: pidA, Node: "node-a", Name: "A", Trusts: true, TrustedBy: true}
+	pB := p2p.Peer{ID: pidB, Node: "node-b", Name: "B", Trusts: true, TrustedBy: true}
+
+	firstStarted := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	var mu sync.Mutex
+	var gotA []string
+	var inFlight atomic.Int32
+	var maxInFlight atomic.Int32
+	peerBCanceled := make(chan struct{})
+
+	var s stateSenders
+	s.sendFn = func(ctx context.Context, p p2p.Peer, data []byte) {
+		cur := inFlight.Add(1)
+		defer inFlight.Add(-1)
+		for {
+			prev := maxInFlight.Load()
+			if cur <= prev || maxInFlight.CompareAndSwap(prev, cur) {
+				break
+			}
+		}
+		if p.ID == pidA {
+			val := string(data)
+			mu.Lock()
+			gotA = append(gotA, val)
+			isFirst := len(gotA) == 1
+			mu.Unlock()
+			if isFirst {
+				close(firstStarted)
+				<-releaseFirst
+			}
+			return
+		}
+		<-ctx.Done()
+		select {
+		case <-peerBCanceled:
+		default:
+			close(peerBCanceled)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	// 1. Coalescing & ordered delivery: v1 runs, v2/v3 are overwritten by v4.
+	s.enqueue(ctx, pA, []byte("v1"), nil)
+	<-firstStarted
+	s.enqueue(ctx, pA, []byte("v2"), nil)
+	s.enqueue(ctx, pA, []byte("v3"), nil)
+	s.enqueue(ctx, pA, []byte("v4"), nil)
+	close(releaseFirst)
+
+	waitForWithin(t, 2*time.Second, "coalesced v4 not delivered", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(gotA) == 2 && gotA[1] == "v4"
+	})
+	mu.Lock()
+	if !slices.Equal(gotA, []string{"v1", "v4"}) {
+		t.Fatalf("coalesced delivery = %v, want [v1 v4]", gotA)
+	}
+	mu.Unlock()
+	if maxInFlight.Load() != 1 {
+		t.Fatalf("max concurrent sends for single peer = %d, want 1", maxInFlight.Load())
+	}
+
+	// 2. Peer drop cancels stalled in-flight send immediately.
+	s.enqueue(ctx, pB, []byte("b1"), nil)
+	time.Sleep(30 * time.Millisecond)
+	s.drop(pidB.String())
+	select {
+	case <-peerBCanceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("drop did not cancel in-flight peer send")
+	}
+
+	// 3. closeAndWait drains all workers cleanly and makes subsequent enqueues no-ops.
+	s.closeAndWait()
+	s.enqueue(ctx, pA, []byte("after-close"), nil)
+	mu.Lock()
+	if len(gotA) != 2 {
+		t.Fatalf("enqueue after closeAndWait delivered %v", gotA)
+	}
+	mu.Unlock()
+}
+
+func TestStartP2PClosesOwnerCloserOnNewFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix SSH_AUTH_SOCK test")
+	}
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.NewSignerFromKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kr := agent.NewKeyring()
+	if err := kr.Add(agent.AddedKey{PrivateKey: priv}); err != nil {
+		t.Fatal(err)
+	}
+
+	dir := t.TempDir()
+	pubPath := filepath.Join(dir, "id_ed25519.pub")
+	if err := os.WriteFile(pubPath, ssh.MarshalAuthorizedKey(signer.PublicKey()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	runDir, err := config.RunDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(runDir) })
+	sock := filepath.Join(runDir, "a.sock")
+	ln, err := net.Listen("unix", sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	connClosed := make(chan struct{})
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_ = agent.ServeAgent(kr, conn)
+		close(connClosed)
+	}()
+
+	t.Setenv("SSH_AUTH_SOCK", sock)
+	cfg := config.Default()
+	cfg.SSHKey = pubPath
+	cfg.P2P.Relays = []string{"not-a-valid-multiaddr"} // forces p2p.New to fail after LoadSigner succeeds
+	d := New(cfg, slog.New(slog.DiscardHandler))
+
+	if err := d.startP2P(t.Context(), dir); err == nil {
+		t.Fatal("expected startP2P to fail with invalid relay")
+	}
+	select {
+	case <-connClosed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("SSH agent connection leaked when p2p.New failed")
 	}
 }

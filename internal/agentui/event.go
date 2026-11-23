@@ -34,23 +34,25 @@ func (s *Store) Event(ev *protocol.BlockEvent) (session, text string, err error)
 	}
 	s.mu.Lock()
 	b, ok := s.blocks[ev.GetBlock()]
-	if ok && !b.events.take(s.now()) {
+	if !ok {
+		s.mu.Unlock()
+		return "", "", fmt.Errorf("no block %s on this node", ev.GetBlock())
+	}
+	if !b.events.take(s.now()) {
 		s.mu.Unlock()
 		return "", "", errors.New("events come faster than the agent takes them; this one was dropped")
 	}
+	tree, name, id, session := b.tree, b.name, b.id, b.session
 	s.mu.Unlock()
-	if !ok {
-		return "", "", fmt.Errorf("no block %s on this node", ev.GetBlock())
-	}
-	msg, err := b.tree.Message(ev)
+	msg, err := tree.Message(ev)
 	if err != nil {
 		return "", "", err
 	}
-	values, err := b.tree.Values(ev.GetValues())
+	values, err := tree.Values(ev.GetValues())
 	if err != nil {
 		return "", "", err
 	}
-	out := Event{Block: b.name, ID: b.id, Node: ev.GetNode(), Kind: ev.GetKind(), Message: msg.Given, Values: values}
+	out := Event{Block: name, ID: id, Node: ev.GetNode(), Kind: ev.GetKind(), Message: msg.Given, Values: values}
 	if ev.GetKind() != protocol.UiTap {
 		v := ev.GetValue()
 		out.Value = &v
@@ -59,5 +61,5 @@ func (s *Store) Event(ev *protocol.BlockEvent) (session, text string, err error)
 	if err != nil {
 		return "", "", err
 	}
-	return b.session, string(data), nil
+	return session, string(data), nil
 }

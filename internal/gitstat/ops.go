@@ -2,11 +2,14 @@ package gitstat
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -120,30 +123,125 @@ func discardFiles(ctx context.Context, root string, paths []string) error {
 	if len(paths) == 0 {
 		return errors.New("no files named")
 	}
-	var tracked, untracked []string
-	for _, p := range paths {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	cleanPaths := make([]string, len(paths))
+	for i, p := range paths {
 		if err := inWorkTree(p); err != nil || p == "" {
 			return orErr(err, errors.New("an empty path"))
 		}
-		if out, _ := gitOut(ctx, root, nil, "ls-tree", "--name-only", "HEAD", "--", p); len(bytes.TrimSpace(out)) > 0 {
-			tracked = append(tracked, p)
-		} else {
-			untracked = append(untracked, p)
+		clean := path.Clean(p)
+		rel := filepath.FromSlash(clean)
+		if clean == "." || filepath.Clean(p) == "." ||
+			filepath.IsAbs(rel) || strings.HasPrefix(filepath.Clean(rel), "..") ||
+			hasDotGitSegment(clean) ||
+			hasDotGitSegment(filepath.ToSlash(filepath.Clean(rel))) {
+			return fmt.Errorf("%q is not a file in the work tree", p)
+		}
+		cleanPaths[i] = clean
+	}
+	rootDir, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer rootDir.Close()
+	for i, clean := range cleanPaths {
+		if err := checkNoIntermediateSymlink(rootDir, clean, paths[i]); err != nil {
+			return err
+		}
+	}
+	hasHead, err := repoHasHead(ctx, root)
+	if err != nil {
+		return err
+	}
+	var tracked, untracked []string
+	if !hasHead {
+		untracked = append(untracked, cleanPaths...)
+	} else {
+		for _, p := range cleanPaths {
+			out, err := gitOut(ctx, root, nil, "--literal-pathspecs", "ls-tree", "--name-only", "HEAD", "--", p)
+			if err != nil {
+				return cmp.Or(ctx.Err(), err)
+			}
+			if len(bytes.TrimSpace(out)) > 0 {
+				tracked = append(tracked, p)
+			} else {
+				untracked = append(untracked, p)
+			}
 		}
 	}
 	if len(tracked) > 0 {
-		if _, err := gitOut(ctx, root, nil, append([]string{"restore", "--source=HEAD", "--staged", "--worktree", "--"}, tracked...)...); err != nil {
-			return err
+		if _, err := gitOut(ctx, root, nil, append([]string{"--literal-pathspecs", "restore", "--source=HEAD", "--staged", "--worktree", "--"}, tracked...)...); err != nil {
+			return cmp.Or(ctx.Err(), err)
 		}
 	}
 	for _, p := range untracked {
 		// New to the index, or never added: out of both.
-		_, _ = gitOut(ctx, root, nil, "rm", "--cached", "--quiet", "--ignore-unmatch", "--", p)
-		if err := os.RemoveAll(filepath.Join(root, filepath.FromSlash(p))); err != nil {
+		if _, err := gitOut(ctx, root, nil, "--literal-pathspecs", "rm", "--cached", "--quiet", "--ignore-unmatch", "--", p); err != nil {
+			return cmp.Or(ctx.Err(), err)
+		}
+		if err := rootDir.RemoveAll(filepath.FromSlash(p)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func hasDotGitSegment(p string) bool {
+	return slices.ContainsFunc(strings.Split(p, "/"), func(seg string) bool {
+		return strings.EqualFold(seg, ".git")
+	})
+}
+
+func checkNoIntermediateSymlink(rootDir *os.Root, clean, orig string) error {
+	dir := path.Dir(clean)
+	if dir == "." {
+		return nil
+	}
+	prefix := ""
+	for seg := range strings.SplitSeq(dir, "/") {
+		if prefix == "" {
+			prefix = seg
+		} else {
+			prefix += "/" + seg
+		}
+		info, err := rootDir.Lstat(filepath.FromSlash(prefix))
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%q traverses a symbolic link", orig)
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("%q traverses non-directory %q", orig, prefix)
+		}
+	}
+	return nil
+}
+
+func repoHasHead(ctx context.Context, root string) (bool, error) {
+	if _, err := gitOut(ctx, root, nil, "rev-parse", "--verify", "--quiet", "HEAD"); err == nil {
+		return true, nil
+	} else if ctxErr := ctx.Err(); ctxErr != nil {
+		return false, ctxErr
+	}
+	// HEAD did not resolve: only treat as unborn HEAD inside a valid work
+	// tree whose HEAD is an unborn symbolic ref.
+	out, err := gitOut(ctx, root, nil, "rev-parse", "--is-inside-work-tree")
+	if err != nil {
+		return false, cmp.Or(ctx.Err(), err)
+	}
+	if strings.TrimSpace(string(out)) != "true" {
+		return false, errors.New("not inside a git work tree")
+	}
+	if _, err := gitOut(ctx, root, nil, "symbolic-ref", "--quiet", "HEAD"); err != nil {
+		return false, cmp.Or(ctx.Err(), err)
+	}
+	return false, nil
 }
 
 func orErr(err, fallback error) error {

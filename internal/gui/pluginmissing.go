@@ -19,8 +19,12 @@ import (
 
 // missingPluginBlock stands for a plugin's block this node lacks.
 func missingPluginBlock(m *model, name string) ggui.Widget {
-	id, ok := strings.CutPrefix(name, "plugin:")
-	if id, _, ok = strings.Cut(id, "/"); !ok || !m.storeOpen() {
+	rest, ok := strings.CutPrefix(name, "plugin:")
+	if !ok {
+		return missingBlock(name)
+	}
+	id, block, ok := strings.Cut(rest, "/")
+	if !ok || id == "" || block == "" || !m.storeOpen() {
 		return missingBlock(name)
 	}
 	m.lookUpPlugin(id)

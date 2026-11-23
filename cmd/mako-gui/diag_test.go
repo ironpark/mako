@@ -1,13 +1,16 @@
 package main
 
 import (
-	"github.com/ironpark/ggfx"
-	"github.com/ironpark/ggui/inspect"
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/ironpark/ggfx"
+	"github.com/ironpark/ggui/inspect"
 )
 
 func TestAnIncidentIsTheCollectorBusyOrTheCoresKept(t *testing.T) {
@@ -79,5 +82,83 @@ func TestTheTexturesLineTellsKindsApart(t *testing.T) {
 	want := "layers 78.0 MB, backbuffer 0.0 MB, path masks 0.0 MB, icons 0.5 MB, images 0.0 MB, stencils 0.0 MB; screen 78.0 MB"
 	if got != want {
 		t.Fatalf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestDiagnoseDirWritesStatsAndStopsOnCancel(t *testing.T) {
+	dir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		diagnoseDir(ctx, dir, 5*time.Millisecond, 5*time.Millisecond)
+	}()
+
+	logPath := filepath.Join(dir, "stats.log")
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		data, err := os.ReadFile(logPath)
+		if err == nil && strings.Contains(string(data), "# mako-gui ") && strings.Contains(string(data), "\n20") {
+			break
+		}
+		if time.Now().After(deadline) {
+			cancel()
+			<-done
+			t.Fatalf("stats.log was not populated in time (err=%v, data=%q)", err, string(data))
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("diagnoseDir did not stop on context cancellation")
+	}
+}
+
+func TestOpenStatsLogAppendAndTruncate(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "stats.log")
+
+	f := openStatsLog(path)
+	if f == nil {
+		t.Fatal("openStatsLog failed")
+	}
+	_, _ = f.WriteString("first\n")
+	f.Close()
+
+	f = openStatsLog(path)
+	if f == nil {
+		t.Fatal("second openStatsLog failed")
+	}
+	_, _ = f.WriteString("second\n")
+	f.Close()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "first\nsecond\n" {
+		t.Fatalf("append got %q, want %q", string(data), "first\nsecond\n")
+	}
+
+	big := make([]byte, statsLogMax+1)
+	if err := os.WriteFile(path, big, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f = openStatsLog(path)
+	if f == nil {
+		t.Fatal("truncate openStatsLog failed")
+	}
+	_, _ = f.WriteString("fresh\n")
+	f.Close()
+
+	data, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "fresh\n" {
+		t.Fatalf("truncate got %d bytes (%q), want %q", len(data), string(data), "fresh\n")
 	}
 }

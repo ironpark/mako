@@ -1,9 +1,11 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -246,5 +248,106 @@ func TestConcurrentAgentsInSameProjectBindTheirOwnLogs(t *testing.T) {
 	}
 	if len(patched.GetMessages()) >= len(whole.GetMessages()) {
 		t.Fatalf("a patch sent %d messages of %d", len(patched.GetMessages()), len(whole.GetMessages()))
+	}
+}
+
+func TestDaemonShutdownWaitsForConversationsAndPlugins(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("MAKO_HOME", home)
+
+	cfg := config.Default()
+	cfg.P2P.Disabled = true
+	d := New(cfg, slog.New(slog.DiscardHandler))
+	d.dir = home
+
+	ctx, cancel := context.WithCancel(t.Context())
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- d.Run(ctx)
+	}()
+
+	select {
+	case <-d.Ready():
+	case err := <-runErr:
+		t.Fatalf("Daemon.Run exited early: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("Daemon.Run did not become ready")
+	}
+
+	s, err := session.Start(session.Spec{
+		ID: "conv-wait", NodeID: cfg.NodeID, Agent: "claude", Project: t.TempDir(),
+		Command: []string{"/bin/sh", "-c", "sleep 30"}, Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.sessions.add(s)
+	d.trackConversation(s)
+
+	waitForWithin(t, 2*time.Second, "followConversations never started", func() bool {
+		d.conversations.mu.Lock()
+		defer d.conversations.mu.Unlock()
+		return d.conversations.running
+	})
+
+	cancel()
+	select {
+	case err := <-runErr:
+		if err != nil {
+			t.Fatalf("Daemon.Run returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Daemon.Run did not exit after cancel")
+	}
+
+	d.conversations.mu.Lock()
+	stillRunning := d.conversations.running
+	stopped := d.conversations.stopped
+	d.conversations.mu.Unlock()
+	if stillRunning || !stopped {
+		t.Fatalf("conversations state after Run exit: running=%v stopped=%v, want false/true", stillRunning, stopped)
+	}
+}
+
+func TestFollowConversationsRunIDPreventsStaleDeferReset(t *testing.T) {
+	d := New(&config.Config{NodeID: "n1"}, slog.New(slog.DiscardHandler))
+	s, err := session.Start(session.Spec{
+		ID: "conv-runid", NodeID: "n1", Agent: "claude", Project: t.TempDir(),
+		Command: []string{"/bin/sh", "-c", "sleep 30"}, Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+
+	// Simulate an older exited instance (runID 1) running its defer after a newer
+	// instance (runID 2) has already been spawned and set running=true.
+	d.conversations.mu.Lock()
+	d.conversations.running = true
+	d.conversations.runID = 2
+	d.conversations.sessions = map[*session.Session]*conversation{s: {}}
+	d.conversations.mu.Unlock()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // immediately exits followConversations and triggers defer
+	d.conversations.wg.Add(1)
+	d.followConversations(ctx, 1)
+
+	d.conversations.mu.Lock()
+	runningAfterStale := d.conversations.running
+	d.conversations.mu.Unlock()
+	if !runningAfterStale {
+		t.Fatal("stale followConversations(runID=1) defer cleared running=false for newer runID=2")
+	}
+
+	// Matching runID 2 defer must clear running=false.
+	d.conversations.wg.Add(1)
+	d.followConversations(ctx, 2)
+	d.conversations.mu.Lock()
+	runningAfterCurrent := d.conversations.running
+	d.conversations.mu.Unlock()
+	if runningAfterCurrent {
+		t.Fatal("current followConversations(runID=2) defer did not clear running=false")
 	}
 }

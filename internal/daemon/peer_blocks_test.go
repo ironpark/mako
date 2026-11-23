@@ -33,7 +33,7 @@ func newBlockPair(t *testing.T) blockPair {
 	phone := meshDaemon(t, "phone")
 	server := meshDaemon(t, "server", p2pAddr(phone))
 	letIn(t, server, phone)
-	waitFor(t, "the server among the phone's peers", func() bool { _, ok := phone.peers.get(server.cfg.NodeID); return ok })
+	waitFor(t, "the server among the phone's peers", func() bool { _, ok := phone.peers.get(server.config().NodeID); return ok })
 	return blockPair{phone: phone, server: server, c: dialDaemon(t, phone)}
 }
 
@@ -123,7 +123,7 @@ func TestANodeLetInFollowsAnAgentsBlock(t *testing.T) {
 		{"kind":"button","key":"go","text":"Go 0","onTap":["go"]}]}`)); err != nil {
 		t.Fatal(err)
 	}
-	server := p.server.cfg.NodeID
+	server := p.server.config().NodeID
 	list, err := p.c.AgentBlocksOn(ctx, server)
 	if err != nil || len(list.GetBlocks()) != 1 || list.GetBlocks()[0].GetName() != "agent:s1/board" {
 		t.Fatalf("the server's agents' blocks: %v %v", list, err)
@@ -180,7 +180,7 @@ func TestANodeLetInTapsAPluginsBlock(t *testing.T) {
 		list := p.server.plugins.List()
 		return len(list) == 1 && list[0].GetState() == protocol.PluginWaiting
 	})
-	server := p.server.cfg.NodeID
+	server := p.server.config().NodeID
 	got, ended := followBlock(ctx, p.c, server, "plugin:hello/hi")
 	// Waiting, the phone is told so, and cannot allow it: that is the
 	// computer's.
@@ -202,7 +202,7 @@ func TestANodeLetInTapsAPluginsBlock(t *testing.T) {
 func TestANodeNotLetInReachesNoBlocks(t *testing.T) {
 	phone := meshDaemon(t, "phone")
 	stranger := meshDaemon(t, "stranger", p2pAddr(phone))
-	waitFor(t, "the stranger among the phone's peers", func() bool { _, ok := phone.peers.get(stranger.cfg.NodeID); return ok })
+	waitFor(t, "the stranger among the phone's peers", func() bool { _, ok := phone.peers.get(stranger.config().NodeID); return ok })
 	addSessionOf(t, stranger, "s1", "claude")
 	if _, err := stranger.agentUI.Show("s1", "claude", "board", "Board", []byte(`{"kind":"button","text":"Go","onTap":["go"]}`)); err != nil {
 		t.Fatal(err)
@@ -210,7 +210,7 @@ func TestANodeNotLetInReachesNoBlocks(t *testing.T) {
 	c := dialDaemon(t, phone)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	node := stranger.cfg.NodeID
+	node := stranger.config().NodeID
 	if list, err := c.AgentBlocksOn(ctx, node); err == nil {
 		t.Errorf("listed a stranger's agents' blocks: %v", list)
 	}
@@ -243,7 +243,7 @@ func TestARelayedBlockComesPlain(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer stream.Close()
-	if err := stream.Send(protocol.TypeWatchBlock, "", &protocol.WatchBlock{Block: "agent:s1/notes", NodeId: p.server.cfg.NodeID}); err != nil {
+	if err := stream.Send(protocol.TypeWatchBlock, "", &protocol.WatchBlock{Block: "agent:s1/notes", NodeId: p.server.config().NodeID}); err != nil {
 		t.Fatal(err)
 	}
 	_ = stream.SetReadDeadline(time.Now().Add(20 * time.Second))
@@ -306,7 +306,7 @@ scope = "project"
 		return len(list) == 1 && list[0].GetState() == protocol.PluginReady
 	})
 
-	server := p.server.cfg.NodeID
+	server := p.server.config().NodeID
 	gotA, endedA := followBlockScoped(ctx, p.c, server, "plugin:rscope/counter", "project:p1")
 	gotB, endedB := followBlockScoped(ctx, p.c, server, "plugin:rscope/counter", "project:p2")
 

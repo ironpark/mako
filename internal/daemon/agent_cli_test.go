@@ -5,12 +5,15 @@ package daemon
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -268,6 +271,10 @@ func TestAgySidecarNativeDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	tokenBytes, err := os.ReadFile(filepath.Join(run, sidecarTokenFile))
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Connect a mock agy sidecar subscriber to agent-cli.sock.
 	received := make(chan sidecarPush, 1)
 	sidecarConn, err := net.DialTimeout("unix", d.projectAgents.cliSocket, 3*time.Second)
@@ -275,7 +282,7 @@ func TestAgySidecarNativeDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sidecarConn.Close()
-	if err := json.NewEncoder(sidecarConn).Encode(agentCLIRequest{Op: "sidecar_subscribe"}); err != nil {
+	if err := json.NewEncoder(sidecarConn).Encode(agentCLIRequest{Op: "sidecar_subscribe", Token: strings.TrimSpace(string(tokenBytes))}); err != nil {
 		t.Fatal(err)
 	}
 	go func() {
@@ -364,7 +371,7 @@ func TestAgentPluginCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.sessions.closeAll)
-	d.workspace.load(d.dir, d.cfg.NodeID)
+	d.workspace.load(d.dir, d.config().NodeID)
 	setTestWorkspaceSpaceAndProjects(t, d, project, t.TempDir())
 
 	// Start plugin manager with a simple tool plugin that accepts typed params and stdin text.
@@ -495,4 +502,268 @@ body = { type = "string", description = "Body text" }
 	if code != 0 || strings.Contains(out, "combine") {
 		t.Fatalf("list with AGENT_MAKO_PLUGINS=none should hide all tools: code=%d out=%q stderr=%q", code, out, stderr)
 	}
+}
+
+func TestAgySidecarRejectsUnauthorized(t *testing.T) {
+	dir := t.TempDir()
+	d := New(config.Default(), slog.New(slog.DiscardHandler))
+	d.dir, d.ctx = dir, t.Context()
+	run, err := config.RunDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(run) })
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	if err := d.listenAgentCLI(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+
+	tokenPath := filepath.Join(run, sidecarTokenFile)
+	fi, err := os.Stat(tokenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0o600 {
+		t.Fatalf("sidecar.token mode = %o, want 0600", fi.Mode().Perm())
+	}
+	tokenBytes, err := os.ReadFile(tokenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register a valid sidecar first.
+	validConn, err := net.DialTimeout("unix", d.projectAgents.cliSocket, 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer validConn.Close()
+	if err := json.NewEncoder(validConn).Encode(agentCLIRequest{Op: "sidecar_subscribe", Token: strings.TrimSpace(string(tokenBytes))}); err != nil {
+		t.Fatal(err)
+	}
+	var validClient *agySidecarClient
+	waitForWithin(t, 2*time.Second, "valid sidecar never registered", func() bool {
+		d.projectAgents.mu.Lock()
+		defer d.projectAgents.mu.Unlock()
+		validClient = d.projectAgents.agySidecar
+		return validClient != nil
+	})
+
+	// Unauthorized callers (empty token and wrong token) must be rejected without
+	// disturbing the active valid sidecar.
+	for _, badToken := range []string{"", "deadbeef"} {
+		badConn, err := net.DialTimeout("unix", d.projectAgents.cliSocket, 3*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.NewEncoder(badConn).Encode(agentCLIRequest{Op: "sidecar_subscribe", Token: badToken}); err != nil {
+			badConn.Close()
+			t.Fatal(err)
+		}
+		var resp agentCLIResponse
+		if err := json.NewDecoder(badConn).Decode(&resp); err != nil {
+			badConn.Close()
+			t.Fatalf("expected JSON rejection for token %q: %v", badToken, err)
+		}
+		badConn.Close()
+		if resp.OK || !strings.Contains(resp.Error, "unauthorized") {
+			t.Fatalf("unexpected response for token %q: %+v", badToken, resp)
+		}
+	}
+
+	d.projectAgents.mu.Lock()
+	stillValid := d.projectAgents.agySidecar == validClient
+	d.projectAgents.mu.Unlock()
+	if !stillValid {
+		t.Fatal("unauthorized sidecar attempt displaced active valid sidecar")
+	}
+
+	// Shutting down ctx cleans up sidecar.token.
+	cancel()
+	waitForWithin(t, 2*time.Second, "sidecar.token not cleaned up on shutdown", func() bool {
+		_, err := os.Stat(tokenPath)
+		return os.IsNotExist(err)
+	})
+}
+
+func TestAgySidecarEOFTeardown(t *testing.T) {
+	dir := t.TempDir()
+	d := New(config.Default(), slog.New(slog.DiscardHandler))
+	d.dir, d.ctx = dir, t.Context()
+	run, err := config.RunDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(run) })
+	if err := d.listenAgentCLI(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	tokenBytes, err := os.ReadFile(filepath.Join(run, sidecarTokenFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sidecarConn, err := net.DialTimeout("unix", d.projectAgents.cliSocket, 3*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.NewEncoder(sidecarConn).Encode(agentCLIRequest{Op: "sidecar_subscribe", Token: strings.TrimSpace(string(tokenBytes))}); err != nil {
+		t.Fatal(err)
+	}
+	waitForWithin(t, 2*time.Second, "sidecar never registered", func() bool {
+		d.projectAgents.mu.Lock()
+		defer d.projectAgents.mu.Unlock()
+		return d.projectAgents.agySidecar != nil
+	})
+
+	// Closing the sidecar connection must clear d.projectAgents.agySidecar promptly
+	// without waiting for ctx.Done().
+	_ = sidecarConn.Close()
+	waitForWithin(t, 2*time.Second, "sidecar not cleared on EOF", func() bool {
+		d.projectAgents.mu.Lock()
+		defer d.projectAgents.mu.Unlock()
+		return d.projectAgents.agySidecar == nil
+	})
+}
+
+type noopSidecarDeliverer struct{}
+
+func (noopSidecarDeliverer) DeliverMessage(context.Context, string, string, string, map[string]string) error {
+	return nil
+}
+
+func TestRunAgySidecarExitsWhenSocketGone(t *testing.T) {
+	dir := t.TempDir()
+	missingSock := filepath.Join(dir, "agent-cli.sock")
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runAgySidecarLoop(t.Context(), missingSock, noopSidecarDeliverer{}, io.Discard, sidecarRetryPolicy{
+			initial:    15 * time.Millisecond,
+			max:        30 * time.Millisecond,
+			maxMissing: 80 * time.Millisecond,
+		})
+	}()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatal("expected error when sidecar socket is missing")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("runAgySidecarLoop did not exit when socket stayed missing")
+	}
+
+	// Also verify unauthorized rejection exits immediately without waiting maxMissing.
+	d := New(config.Default(), slog.New(slog.DiscardHandler))
+	d.dir, d.ctx = dir, t.Context()
+	run, err := config.RunDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(run) })
+	if err := d.listenAgentCLI(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	// Overwrite sidecar.token with an invalid token.
+	if err := os.WriteFile(filepath.Join(run, sidecarTokenFile), []byte("wrong-token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	authErrCh := make(chan error, 1)
+	go func() {
+		authErrCh <- runAgySidecarLoop(t.Context(), d.projectAgents.cliSocket, noopSidecarDeliverer{}, io.Discard, sidecarRetryPolicy{
+			initial:    500 * time.Millisecond,
+			max:        500 * time.Millisecond,
+			maxMissing: 10 * time.Second,
+		})
+	}()
+	select {
+	case err := <-authErrCh:
+		if !errors.Is(err, errSidecarUnauthorized) {
+			t.Fatalf("expected errSidecarUnauthorized, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("runAgySidecarLoop did not exit promptly on auth rejection")
+	}
+}
+
+func TestServeAgentCLIDoesNotLeakGoroutines(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	project := t.TempDir()
+	binDir := t.TempDir()
+	fakeClaude := filepath.Join(binDir, "claude")
+	if err := os.WriteFile(fakeClaude, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		NodeID: "node",
+		Agents: map[string]agentspec.Agent{
+			"claude": {Command: []string{fakeClaude}},
+		},
+	}
+	d := New(cfg, slog.New(slog.DiscardHandler))
+	d.dir, d.ctx, d.mcp, d.hookBinary = t.TempDir(), t.Context(), nil, "/bin/makod"
+	if err := d.loadSessions(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.projectAgents.messages.load(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	run, err := config.RunDir(d.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := d.listenAgentMCP(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.sessions.closeAll)
+
+	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: project})
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := d.projectAgents.peer(s.ID())
+	if peer == nil {
+		t.Fatal("expected agent peer")
+	}
+
+	callList := func() {
+		t.Helper()
+		conn, err := net.DialTimeout("unix", d.projectAgents.cliSocket, 3*time.Second)
+		if err != nil {
+			t.Fatalf("dial agent-cli: %v", err)
+		}
+		defer conn.Close()
+		if err := json.NewEncoder(conn).Encode(agentCLIRequest{
+			Session: peer.id,
+			Token:   peer.token,
+			Op:      "list",
+		}); err != nil {
+			t.Fatalf("encode request: %v", err)
+		}
+		var resp agentCLIResponse
+		if err := json.NewDecoder(conn).Decode(&resp); err != nil {
+			t.Fatalf("decode response: %v", err)
+		}
+		if !resp.OK {
+			t.Fatalf("unexpected error response: %s", resp.Error)
+		}
+	}
+
+	// Warm up before measuring baseline goroutines.
+	callList()
+	callList()
+	runtime.GC()
+	time.Sleep(50 * time.Millisecond)
+	before := runtime.NumGoroutine()
+
+	const calls = 40
+	for range calls {
+		callList()
+	}
+
+	waitForWithin(t, 3*time.Second, "serveAgentCLI leaked goroutines across completed requests", func() bool {
+		runtime.GC()
+		return runtime.NumGoroutine() <= before+8
+	})
 }

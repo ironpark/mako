@@ -421,7 +421,7 @@ func TestOKFExamplePlugin(t *testing.T) {
 		},
 	})
 	files := map[string]string{}
-	for _, name := range []string{ManifestName, "main.js", "lib/okf.js", "lib/i18n.js"} {
+	for _, name := range []string{ManifestName, "main.js", "lib/okf.js", "lib/i18n.js", "lib/retrieval.js"} {
 		b, err := os.ReadFile(filepath.Join("../../examples/plugins/okf", name))
 		if err != nil {
 			t.Fatal(err)

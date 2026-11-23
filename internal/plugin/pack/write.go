@@ -13,6 +13,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 )
 
 // ReadFolder reads a plugin's folder for packing: every regular file but
@@ -147,7 +148,7 @@ func Build(files map[string][]byte, priv ed25519.PrivateKey) ([]byte, *Package, 
 // stored, mode 0644, dated 1980-01-01 with no other time, so that the
 // same files make the same bytes.
 func writeEntry(zw *zip.Writer, name string, data []byte) error {
-	h := &zip.FileHeader{Name: name, Method: zip.Store, ModifiedDate: 1<<5 | 1}
+	h := &zip.FileHeader{Name: name, Method: zip.Store, Modified: time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC)}
 	h.SetMode(0o644)
 	w, err := zw.CreateHeader(h)
 	if err != nil {

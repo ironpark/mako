@@ -3,8 +3,10 @@ package prompttmpl
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeHost struct {
@@ -15,6 +17,7 @@ type fakeHost struct {
 
 	spawnFn  func(SpawnRequest) (SpawnResult, error)
 	askFn    func(AskRequest) (AskResult, error)
+	askCtxFn func(context.Context, AskRequest) (AskResult, error)
 	decideFn func([]byte) ([]byte, error)
 }
 
@@ -40,8 +43,11 @@ func (f *fakeHost) Spawn(_ context.Context, req SpawnRequest) (SpawnResult, erro
 	return SpawnResult{SessionID: "sess-1", Agent: a, Profile: p, Name: req.Name, Project: req.Project}, nil
 }
 
-func (f *fakeHost) Ask(_ context.Context, req AskRequest) (AskResult, error) {
+func (f *fakeHost) Ask(ctx context.Context, req AskRequest) (AskResult, error) {
 	f.asks = append(f.asks, req)
+	if f.askCtxFn != nil {
+		return f.askCtxFn(ctx, req)
+	}
 	if f.askFn != nil {
 		return f.askFn(req)
 	}
@@ -215,5 +221,75 @@ yes:{#each await mako.ask({ prompt: "list", format: "json" }) as item}[{{item}}]
 	want := "yes:[a][b]\nHigh"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestHostCallRespectsHostWallTimeout(t *testing.T) {
+	tm, err := Parse("wall", []byte(`{{await mako.ask("hang")}}`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	_, comp, err := tm.prepare()
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+
+	var sawDeadline bool
+	host := &fakeHost{
+		askCtxFn: func(ctx context.Context, _ AskRequest) (AskResult, error) {
+			_, sawDeadline = ctx.Deadline()
+			<-ctx.Done()
+			return AskResult{}, ctx.Err()
+		},
+	}
+
+	b := newBudget(context.Background(), 50*time.Millisecond, 90*time.Millisecond)
+	defer b.release()
+	_, err = evalPromptJS(b, tm, comp.program, nil, nil, host)
+	if !sawDeadline {
+		t.Fatal("host.Ask ctx did not carry a deadline")
+	}
+	if !errors.Is(err, errScriptWall) {
+		t.Fatalf("expected errScriptWall, got %v", err)
+	}
+}
+
+func TestHostCallRespectsParentCancelAndPauseGuard(t *testing.T) {
+	tm, err := Parse("cancel", []byte(`{{await mako.ask("wait")}}`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	_, comp, err := tm.prepare()
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+
+	parent, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	host := &fakeHost{
+		askCtxFn: func(ctx context.Context, _ AskRequest) (AskResult, error) {
+			close(started)
+			<-ctx.Done()
+			return AskResult{}, ctx.Err()
+		},
+	}
+
+	b := newBudget(parent, time.Second, 5*time.Second)
+	defer b.release()
+	go func() {
+		<-started
+		cancel()
+	}()
+	if _, err := evalPromptJS(b, tm, comp.program, nil, nil, host); err == nil {
+		t.Fatal("expected error when parent ctx is canceled")
+	}
+
+	// endCPU must be a no-op while paused.
+	b2 := newBudget(context.Background(), time.Hour, time.Hour)
+	defer b2.release()
+	b2.pause()
+	b2.endCPU()
+	if b2.Err() != nil {
+		t.Fatalf("endCPU fired while paused: %v", b2.Err())
 	}
 }

@@ -1,9 +1,11 @@
 package plugin
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -361,5 +363,367 @@ export default {
 			}
 		}
 		return false
+	})
+}
+
+func TestFullQueuePluginDenyAndDisableTeardown(t *testing.T) {
+	cases := []struct {
+		name  string
+		perms []string
+		op    string
+		want  string
+	}{
+		{name: "deny with perms", perms: []string{"storage"}, op: protocol.PluginDeny, want: protocol.PluginDenied},
+		{name: "deny zero perms", perms: nil, op: protocol.PluginDeny, want: protocol.PluginReady},
+		{name: "disable", perms: []string{"storage"}, op: protocol.PluginDisable, want: protocol.PluginDisabled},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t, testLimits, nil)
+			r.write("sat", map[string]string{
+				ManifestName: manifest("sat", tc.perms, ""),
+				"main.js":    block(``, `ui.text("up")`),
+			})
+			if len(tc.perms) > 0 {
+				r.state("sat", protocol.PluginWaiting)
+				r.grant("sat")
+			} else {
+				r.state("sat", protocol.PluginReady)
+			}
+			w := r.watch("plugin:sat/ui")
+			w.until("running", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "up") })
+			r.state("sat", protocol.PluginRunning)
+
+			p, ok := r.m.plugin("sat")
+			if !ok {
+				t.Fatal("plugin sat missing")
+			}
+			started := make(chan struct{})
+			unblock := make(chan struct{})
+			if !p.post(func() {
+				close(started)
+				<-unblock
+			}) {
+				t.Fatal("failed to queue blocker job")
+			}
+			<-started
+			for p.post(func() {}) {
+			}
+			if p.post(func() {}) {
+				t.Fatal("expected p.jobs queue to be saturated")
+			}
+
+			if _, err := r.act(&protocol.PluginAction{PluginId: "sat", Op: tc.op}); err != nil {
+				t.Fatalf("Act(%s): %v", tc.op, err)
+			}
+			close(unblock)
+
+			deadline := time.Now().Add(5 * time.Second)
+			for time.Now().Before(deadline) {
+				if !r.runtimeUp("sat") {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if r.runtimeUp("sat") {
+				t.Fatalf("runtime stayed up after %s with saturated p.jobs", tc.op)
+			}
+			r.state("sat", tc.want)
+		})
+	}
+}
+
+func TestCorruptGrantsJSONIsNotOverwritten(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{name: "corrupt json", raw: `{corrupt`},
+		{name: "null json", raw: `null`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := t.TempDir()
+			dataDir := filepath.Join(base, "plugin-data")
+			if err := os.MkdirAll(dataDir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			grantsPath := filepath.Join(dataDir, "grants.json")
+			if err := os.WriteFile(grantsPath, []byte(tc.raw), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			r := startRigIn(t, base, Config{Limits: testLimits})
+			r.write("p1", map[string]string{
+				ManifestName: manifest("p1", []string{"storage"}, ""),
+				"main.js":    block(``, `ui.text("ok")`),
+			})
+			r.state("p1", protocol.PluginWaiting)
+			if _, err := r.act(&protocol.PluginAction{PluginId: "p1", Op: protocol.PluginGrant}); err == nil {
+				t.Fatal("expected Act(PluginGrant) to fail when grants.json was corrupt")
+			}
+			got, err := os.ReadFile(grantsPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tc.raw {
+				t.Fatalf("grants.json overwritten: got %q, want %q", string(got), tc.raw)
+			}
+			if !strings.Contains(r.logs.String(), "grants store") {
+				t.Fatalf("expected error log for corrupt grants.json, got:\n%s", r.logs.String())
+			}
+		})
+	}
+}
+
+func TestPluginDisableThenEnableSaturatedAndCommandStarted(t *testing.T) {
+	t.Run("watched saturated queue 31/32", func(t *testing.T) {
+		r := newRig(t, testLimits, nil)
+		r.write("tog", map[string]string{
+			ManifestName: manifest("tog", []string{"storage"}, ""),
+			"main.js":    block(``, `ui.text("up")`),
+		})
+		r.state("tog", protocol.PluginWaiting)
+		r.grant("tog")
+		w := r.watch("plugin:tog/ui")
+		w.until("running", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "up") })
+		r.state("tog", protocol.PluginRunning)
+
+		p, ok := r.m.plugin("tog")
+		if !ok {
+			t.Fatal("plugin tog missing")
+		}
+		started := make(chan struct{})
+		unblock := make(chan struct{})
+		if !p.post(func() {
+			close(started)
+			<-unblock
+		}) {
+			t.Fatal("failed to queue blocker job")
+		}
+		<-started
+		for range 31 {
+			if !p.post(func() {}) {
+				t.Fatal("failed to pre-fill 31/32 p.jobs slots")
+			}
+		}
+
+		if _, err := r.act(&protocol.PluginAction{PluginId: "tog", Op: protocol.PluginDisable}); err != nil {
+			t.Fatalf("Act(PluginDisable): %v", err)
+		}
+		if _, err := r.act(&protocol.PluginAction{PluginId: "tog", Op: protocol.PluginEnable}); err != nil {
+			t.Fatalf("Act(PluginEnable): %v", err)
+		}
+		close(unblock)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := p.do(ctx, func() error { return nil }); err != nil {
+			t.Fatalf("drain actor: %v", err)
+		}
+		if !r.runtimeUp("tog") {
+			t.Fatal("watched plugin runtime was stopped after PluginDisable -> PluginEnable")
+		}
+		r.state("tog", protocol.PluginRunning)
+	})
+
+	t.Run("command-started unwatched with in-flight job", func(t *testing.T) {
+		r := newRig(t, testLimits, nil)
+		r.write("cmdtog", map[string]string{
+			ManifestName: manifest("cmdtog", nil, `
+[[contributes.command]]
+id = "ping"
+title = "Ping"
+`),
+			"main.js": `export default {
+  activate(m) {
+    m.blocks.register("ui", { state: {}, render: (s, ui) => ui.text("ok") });
+    m.commands.register("ping", () => {});
+  },
+};`,
+		})
+		r.state("cmdtog", protocol.PluginReady)
+		if _, err := r.act(&protocol.PluginAction{PluginId: "cmdtog", Op: protocol.PluginRun, Command: "ping"}); err != nil {
+			t.Fatalf("PluginRun: %v", err)
+		}
+		r.state("cmdtog", protocol.PluginRunning)
+
+		p, ok := r.m.plugin("cmdtog")
+		if !ok {
+			t.Fatal("plugin cmdtog missing")
+		}
+		started := make(chan struct{})
+		unblock := make(chan struct{})
+		if !p.post(func() {
+			close(started)
+			<-unblock
+		}) {
+			t.Fatal("failed to queue blocker job")
+		}
+		<-started
+
+		if _, err := r.act(&protocol.PluginAction{PluginId: "cmdtog", Op: protocol.PluginDisable}); err != nil {
+			t.Fatalf("Act(PluginDisable): %v", err)
+		}
+		if _, err := r.act(&protocol.PluginAction{PluginId: "cmdtog", Op: protocol.PluginEnable}); err != nil {
+			t.Fatalf("Act(PluginEnable): %v", err)
+		}
+		close(unblock)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := p.do(ctx, func() error { return nil }); err != nil {
+			t.Fatalf("drain actor: %v", err)
+		}
+		if !r.runtimeUp("cmdtog") {
+			t.Fatal("command-started plugin runtime was stopped after PluginDisable -> PluginEnable")
+		}
+		r.state("cmdtog", protocol.PluginRunning)
+
+		// Single PluginDisable on the unwatched command-started plugin still stops it.
+		if _, err := r.act(&protocol.PluginAction{PluginId: "cmdtog", Op: protocol.PluginDisable}); err != nil {
+			t.Fatalf("Act(PluginDisable): %v", err)
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) && r.runtimeUp("cmdtog") {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if r.runtimeUp("cmdtog") {
+			t.Fatal("command-started plugin runtime stayed up after PluginDisable")
+		}
+		r.state("cmdtog", protocol.PluginDisabled)
+	})
+}
+
+func TestPluginDenyVsGrantInterleaving(t *testing.T) {
+	t.Run("deny then grant with saturated queue", func(t *testing.T) {
+		r := newRig(t, testLimits, nil)
+		r.write("dg", map[string]string{
+			ManifestName: manifest("dg", []string{"storage"}, ""),
+			"main.js":    block(``, `ui.text("up")`),
+		})
+		r.state("dg", protocol.PluginWaiting)
+		r.grant("dg")
+		w := r.watch("plugin:dg/ui")
+		w.until("running", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "up") })
+		r.state("dg", protocol.PluginRunning)
+
+		p, ok := r.m.plugin("dg")
+		if !ok {
+			t.Fatal("plugin dg missing")
+		}
+		started := make(chan struct{})
+		unblock := make(chan struct{})
+		if !p.post(func() {
+			close(started)
+			<-unblock
+		}) {
+			t.Fatal("failed to queue blocker job")
+		}
+		<-started
+		for p.post(func() {}) {
+		}
+
+		if _, err := r.act(&protocol.PluginAction{PluginId: "dg", Op: protocol.PluginDeny}); err != nil {
+			t.Fatalf("Act(PluginDeny): %v", err)
+		}
+		if _, err := r.act(&protocol.PluginAction{PluginId: "dg", Op: protocol.PluginGrant}); err != nil {
+			t.Fatalf("Act(PluginGrant): %v", err)
+		}
+		close(unblock)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := p.do(ctx, func() error { return nil }); err != nil {
+			t.Fatalf("drain actor: %v", err)
+		}
+		if !r.runtimeUp("dg") {
+			t.Fatal("granted plugin runtime was torn down after PluginDeny -> PluginGrant")
+		}
+		r.state("dg", protocol.PluginRunning)
+	})
+
+	t.Run("enable does not clear denyClose on denied plugin", func(t *testing.T) {
+		r := newRig(t, testLimits, nil)
+		r.write("den", map[string]string{
+			ManifestName: manifest("den", []string{"storage"}, ""),
+			"main.js":    block(``, `ui.text("up")`),
+		})
+		r.state("den", protocol.PluginWaiting)
+		r.grant("den")
+		w := r.watch("plugin:den/ui")
+		w.until("running", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, "up") })
+		r.state("den", protocol.PluginRunning)
+
+		p, ok := r.m.plugin("den")
+		if !ok {
+			t.Fatal("plugin den missing")
+		}
+		started := make(chan struct{})
+		unblock := make(chan struct{})
+		if !p.post(func() {
+			close(started)
+			<-unblock
+		}) {
+			t.Fatal("failed to queue blocker job")
+		}
+		<-started
+
+		if _, err := r.act(&protocol.PluginAction{PluginId: "den", Op: protocol.PluginDeny}); err != nil {
+			t.Fatalf("Act(PluginDeny): %v", err)
+		}
+		if _, err := r.act(&protocol.PluginAction{PluginId: "den", Op: protocol.PluginEnable}); err != nil {
+			t.Fatalf("Act(PluginEnable): %v", err)
+		}
+		close(unblock)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := p.do(ctx, func() error { return nil }); err != nil {
+			t.Fatalf("drain actor: %v", err)
+		}
+		if r.runtimeUp("den") {
+			t.Fatal("denied plugin runtime stayed up after PluginDeny -> PluginEnable")
+		}
+		r.state("den", protocol.PluginDenied)
+	})
+
+	t.Run("concurrent deny and grant stress", func(t *testing.T) {
+		r := newRig(t, testLimits, nil)
+		r.write("racep", map[string]string{
+			ManifestName: manifest("racep", []string{"storage"}, ""),
+			"main.js":    block(``, `ui.text("up")`),
+		})
+		r.state("racep", protocol.PluginWaiting)
+		w := r.watch("plugin:racep/ui")
+		w.until("waiting", func(_ *protocol.UiNode, u *protocol.BlockUpdate) bool { return u.GetState() == protocol.PluginWaiting })
+
+		var wg sync.WaitGroup
+		for _, op := range []string{protocol.PluginDeny, protocol.PluginGrant} {
+			wg.Add(1)
+			go func(op string) {
+				defer wg.Done()
+				for range 40 {
+					_, _ = r.act(&protocol.PluginAction{PluginId: "racep", Op: op})
+				}
+			}(op)
+		}
+		wg.Wait()
+
+		r.grant("racep")
+		r.state("racep", protocol.PluginRunning)
+		if !r.runtimeUp("racep") {
+			t.Fatal("expected runtime up after final PluginGrant")
+		}
+		if _, err := r.act(&protocol.PluginAction{PluginId: "racep", Op: protocol.PluginDeny}); err != nil {
+			t.Fatalf("final PluginDeny: %v", err)
+		}
+		r.state("racep", protocol.PluginDenied)
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) && r.runtimeUp("racep") {
+			time.Sleep(10 * time.Millisecond)
+		}
+		if r.runtimeUp("racep") {
+			t.Fatal("expected runtime down after final PluginDeny")
+		}
 	})
 }

@@ -70,13 +70,170 @@ func checkAgentText(text string) error {
 // Messages are kept until explicitly acknowledged. Reconnecting a tool
 // client or restarting the daemon must not silently consume a message.
 type agentMessages struct {
-	mu      sync.Mutex
-	path    string
-	data    messageFile
-	changed chan struct{}
+	writeMu   sync.Mutex // serializes disk writes; lock order: writeMu -> mu
+	mu        sync.Mutex
+	path      string
+	data      messageFile
+	changed   chan struct{}
+	gen       uint64
+	dirty     bool
+	async     bool
+	flushWake chan struct{}
+	stopOnce  sync.Once
+	stopCh    chan struct{}
+	doneCh    chan struct{}
+	onErr     func(error)
 	// added, if set, is told of each message left, outside the lock: the
 	// plugins subscribed to agents' messages hear of it.
 	added func(agentMessage)
+}
+
+func (m *agentMessages) start(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	m.mu.Lock()
+	if m.async {
+		m.mu.Unlock()
+		return
+	}
+	m.async = true
+	m.flushWake = make(chan struct{}, 1)
+	m.stopCh = make(chan struct{})
+	m.doneCh = make(chan struct{})
+	m.stopOnce = sync.Once{}
+	m.mu.Unlock()
+	go m.flushLoop(ctx)
+}
+
+func (m *agentMessages) close() error {
+	m.mu.Lock()
+	async := m.async
+	m.async = false
+	stopCh := m.stopCh
+	doneCh := m.doneCh
+	m.mu.Unlock()
+	if !async {
+		return m.flush()
+	}
+	m.stopOnce.Do(func() { close(stopCh) })
+	<-doneCh
+	return m.flush()
+}
+
+func (m *agentMessages) flushLoop(ctx context.Context) {
+	defer close(m.doneCh)
+	for {
+		select {
+		case <-m.flushWake:
+		case <-m.stopCh:
+			return
+		case <-ctx.Done():
+			return
+		}
+		timer := time.NewTimer(15 * time.Millisecond)
+		select {
+		case <-timer.C:
+		case <-m.stopCh:
+			timer.Stop()
+			return
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		}
+		if err := m.flush(); err != nil && m.onErr != nil {
+			m.onErr(err)
+		}
+	}
+}
+
+func (m *agentMessages) flush() error {
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
+	m.mu.Lock()
+	if !m.dirty || m.path == "" {
+		m.mu.Unlock()
+		return nil
+	}
+	path := m.path
+	snap := m.copyLocked()
+	targetGen := m.gen
+	m.mu.Unlock()
+
+	data, err := json.Marshal(snap)
+	if err != nil {
+		return err
+	}
+	if err := fsutil.Write(path, data); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	if m.gen == targetGen {
+		m.dirty = false
+	}
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *agentMessages) notifyChangedLocked() {
+	if m.changed != nil {
+		close(m.changed)
+	}
+	m.changed = make(chan struct{})
+}
+
+func (m *agentMessages) signalFlush() {
+	select {
+	case m.flushWake <- struct{}{}:
+	default:
+	}
+}
+
+func (m *agentMessages) mutate(build func() (next messageFile, changed bool, err error)) error {
+	m.mu.Lock()
+	if m.async {
+		next, changed, err := build()
+		if err != nil || !changed {
+			m.mu.Unlock()
+			return err
+		}
+		m.data = next
+		m.gen++
+		m.dirty = true
+		m.notifyChangedLocked()
+		m.mu.Unlock()
+		m.signalFlush()
+		return nil
+	}
+	m.mu.Unlock()
+
+	m.writeMu.Lock()
+	defer m.writeMu.Unlock()
+	m.mu.Lock()
+	next, changed, err := build()
+	if err != nil || !changed {
+		m.mu.Unlock()
+		return err
+	}
+	path := m.path
+	m.mu.Unlock()
+
+	if path != "" {
+		data, err := json.Marshal(next)
+		if err != nil {
+			return err
+		}
+		if err := fsutil.Write(path, data); err != nil {
+			return err
+		}
+	}
+	m.mu.Lock()
+	m.data = next
+	m.gen++
+	m.dirty = false
+	m.notifyChangedLocked()
+	m.mu.Unlock()
+	return nil
 }
 
 func (m *agentMessages) load(dir string) error {
@@ -134,24 +291,6 @@ func trimAgentHistory(history []agentMessageRecord) []agentMessageRecord {
 	return kept
 }
 
-func (m *agentMessages) saveLocked(next messageFile) error {
-	if m.path != "" {
-		data, err := json.Marshal(next)
-		if err != nil {
-			return err
-		}
-		if err := fsutil.Write(m.path, data); err != nil {
-			return err
-		}
-	}
-	m.data = next
-	if m.changed != nil {
-		close(m.changed)
-	}
-	m.changed = make(chan struct{})
-	return nil
-}
-
 func (m *agentMessages) send(from, to, text, project string) (agentMessage, error) {
 	return m.add(agentMessage{From: from, To: to, Text: text}, project)
 }
@@ -190,68 +329,74 @@ func (m *agentMessages) add(msg agentMessage, project string) (agentMessage, err
 }
 
 func (m *agentMessages) addLocked(msg agentMessage, project string) (agentMessage, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	to := msg.To
-	if len(m.data.Inboxes[to]) >= maxAgentInbox {
-		return agentMessage{}, errors.New("recipient inbox is full; read_messages with ack_through to acknowledge received messages")
-	}
-	next := m.copyLocked()
-	next.Next++
-	msg.ID, msg.Created = next.Next, time.Now().UTC()
-	next.Inboxes[to] = append(append([]agentMessage(nil), next.Inboxes[to]...), msg)
-	next.History = trimAgentHistory(append(next.History, agentMessageRecord{Message: msg, Project: project, State: "pending"}))
-	if err := m.saveLocked(next); err != nil {
+	var created agentMessage
+	err := m.mutate(func() (messageFile, bool, error) {
+		to := msg.To
+		if len(m.data.Inboxes[to]) >= maxAgentInbox {
+			return messageFile{}, false, errors.New("recipient inbox is full; read_messages with ack_through to acknowledge received messages")
+		}
+		next := m.copyLocked()
+		next.Next++
+		created = msg
+		created.ID, created.Created = next.Next, time.Now().UTC()
+		next.Inboxes[to] = append(append([]agentMessage(nil), next.Inboxes[to]...), created)
+		next.History = trimAgentHistory(append(next.History, agentMessageRecord{Message: created, Project: project, State: "pending"}))
+		return next, true, nil
+	})
+	if err != nil {
 		return agentMessage{}, err
 	}
-	return msg, nil
+	return created, nil
 }
 
 func (m *agentMessages) remove(id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, exists := m.data.Inboxes[id]; !exists {
-		return nil
-	}
-	next := m.copyLocked()
-	delete(next.Inboxes, id)
-	for i := range next.History {
-		if next.History[i].Message.To == id && next.History[i].State == "pending" {
-			next.History[i].State = "removed"
+	return m.mutate(func() (messageFile, bool, error) {
+		if _, exists := m.data.Inboxes[id]; !exists {
+			return messageFile{}, false, nil
 		}
-	}
-	return m.saveLocked(next)
+		next := m.copyLocked()
+		delete(next.Inboxes, id)
+		for i := range next.History {
+			if next.History[i].Message.To == id && next.History[i].State == "pending" {
+				next.History[i].State = "removed"
+			}
+		}
+		return next, true, nil
+	})
+}
+
+func (m *agentMessages) ackMessages(id string, ack uint64) error {
+	return m.mutate(func() (messageFile, bool, error) {
+		if ack > m.data.Next {
+			return messageFile{}, false, errors.New("ack_through is beyond the latest message")
+		}
+		next := m.copyLocked()
+		var kept []agentMessage
+		for _, msg := range next.Inboxes[id] {
+			if msg.ID > ack {
+				kept = append(kept, msg)
+			}
+		}
+		next.Inboxes[id] = kept
+		for i := range next.History {
+			if next.History[i].Message.To == id && next.History[i].Message.ID <= ack && next.History[i].State == "pending" {
+				next.History[i].State = "acknowledged"
+			}
+		}
+		return next, true, nil
+	})
 }
 
 func (m *agentMessages) read(ctx context.Context, id string, after, ack uint64, limit int, wait time.Duration) ([]agentMessage, error) {
+	if ack > 0 {
+		if err := m.ackMessages(id, ack); err != nil {
+			return nil, err
+		}
+	}
 	deadline := time.NewTimer(wait)
 	defer deadline.Stop()
 	for {
 		m.mu.Lock()
-		if ack > m.data.Next {
-			m.mu.Unlock()
-			return nil, errors.New("ack_through is beyond the latest message")
-		}
-		if ack > 0 {
-			next := m.copyLocked()
-			var kept []agentMessage
-			for _, msg := range next.Inboxes[id] {
-				if msg.ID > ack {
-					kept = append(kept, msg)
-				}
-			}
-			next.Inboxes[id] = kept
-			for i := range next.History {
-				if next.History[i].Message.To == id && next.History[i].Message.ID <= ack && next.History[i].State == "pending" {
-					next.History[i].State = "acknowledged"
-				}
-			}
-			if err := m.saveLocked(next); err != nil {
-				m.mu.Unlock()
-				return nil, err
-			}
-			ack = 0
-		}
 		messages := make([]agentMessage, 0)
 		for _, msg := range m.data.Inboxes[id] {
 			if msg.ID > after {
@@ -314,23 +459,23 @@ func (m *agentMessages) pending(id string) ([]agentMessage, <-chan struct{}) {
 // delivered takes the messages through, typed into id's terminal, out of
 // its inbox: the agent has them as a prompt and need not read them.
 func (m *agentMessages) delivered(id string, through uint64) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	next := m.copyLocked()
-	var kept []agentMessage
-	for _, msg := range next.Inboxes[id] {
-		if msg.ID > through {
-			kept = append(kept, msg)
+	return m.mutate(func() (messageFile, bool, error) {
+		next := m.copyLocked()
+		var kept []agentMessage
+		for _, msg := range next.Inboxes[id] {
+			if msg.ID > through {
+				kept = append(kept, msg)
+			}
 		}
-	}
-	if len(kept) == len(next.Inboxes[id]) {
-		return nil
-	}
-	next.Inboxes[id] = kept
-	for i := range next.History {
-		if next.History[i].Message.To == id && next.History[i].Message.ID <= through && next.History[i].State == "pending" {
-			next.History[i].State = "delivered"
+		if len(kept) == len(next.Inboxes[id]) {
+			return messageFile{}, false, nil
 		}
-	}
-	return m.saveLocked(next)
+		next.Inboxes[id] = kept
+		for i := range next.History {
+			if next.History[i].Message.To == id && next.History[i].Message.ID <= through && next.History[i].State == "pending" {
+				next.History[i].State = "delivered"
+			}
+		}
+		return next, true, nil
+	})
 }

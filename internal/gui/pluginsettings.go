@@ -714,15 +714,27 @@ func pluginAgentBar(m *model) ggui.Widget {
 		if ask.GetName() != "" {
 			where = ask.GetName() + " — " + where
 		}
-		body := widget.Column(
-			widget.Text(Tf("The plugin %s asks to start an agent", id)).Size(13.5).Weight(ggui.WeightMedium),
+		isAsk := ask.GetKind() == "ask"
+		heading := Tf("The plugin %s asks to start an agent", id)
+		note := T("An agent runs programs on this computer and may cost money.")
+		alwaysLabel := T("Always allow this plugin")
+		if isAsk {
+			heading = Tf("The plugin %s asks an agent a question", id)
+			note = T("It runs once, without YOLO, in this project, and its answer goes to the plugin.")
+			alwaysLabel = T("Always allow this agent")
+		}
+		lines := []ggui.Widget{
+			widget.Text(heading).Size(13.5).Weight(ggui.WeightMedium),
 			muted(widget.Text(where).Size(12.5).NoWrap().Ellipsis()),
-			muted(widget.Text(strings.Join(strings.Fields(ask.GetPrompt()), " ")).Size(12.5).NoWrap().Ellipsis()),
-			muted(widget.Text(T("An agent runs programs on this computer and may cost money.")).Size(12.5)),
-		).Gap(3).Stretch()
+		}
+		if prompt := strings.Join(strings.Fields(ask.GetPrompt()), " "); prompt != "" && (!isAsk || prompt != ask.GetName()) {
+			lines = append(lines, muted(widget.Text(prompt).Size(12.5).NoWrap().Ellipsis()))
+		}
+		lines = append(lines, muted(widget.Text(note).Size(12.5)))
+		body := widget.Column(lines...).Gap(3).Stretch()
 		buttons := []ggui.Widget{
 			ui.Button(T("Deny"), answer(protocol.PluginDenyAgent, "")).Outline(),
-			ui.Button(T("Always allow this plugin"), answer(protocol.PluginAllowAgent, protocol.AgentAlways)).Outline(),
+			ui.Button(alwaysLabel, answer(protocol.PluginAllowAgent, protocol.AgentAlways)).Outline(),
 			ui.Button(T("Allow once"), answer(protocol.PluginAllowAgent, protocol.AgentOnce)),
 		}
 		return askBarFrame("bot", body, buttons)

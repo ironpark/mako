@@ -55,7 +55,15 @@ func (d *Daemon) handleRunAgentPrompt(ctx context.Context, stream *transport.Str
 	})
 }
 
+type oneShotOptions struct {
+	stripYolo bool
+}
+
 func (d *Daemon) runAgentPrompt(ctx context.Context, req *protocol.RunAgentPrompt) (*protocol.AgentPromptResult, error) {
+	return d.runAgentPromptWith(ctx, req, oneShotOptions{})
+}
+
+func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentPrompt, opts oneShotOptions) (*protocol.AgentPromptResult, error) {
 	if strings.TrimSpace(req.GetPrompt()) == "" {
 		return nil, errors.New("prompt is required")
 	}
@@ -92,6 +100,10 @@ func (d *Daemon) runAgentPrompt(ctx context.Context, req *protocol.RunAgentPromp
 	if err != nil {
 		return nil, err
 	}
+	if opts.stripYolo && len(launch.Command) > 1 {
+		rest, _ := agentspec.LiftYoloArgs(agentName, launch.Command[1:])
+		launch.Command = append(launch.Command[:1:1], rest...)
+	}
 	if d.isolateHome() {
 		if err := agentspec.ApplyIsolatedHome(agentName, &launch); err != nil {
 			return nil, err
@@ -114,8 +126,8 @@ func (d *Daemon) runAgentPrompt(ctx context.Context, req *protocol.RunAgentPromp
 	}
 	launch.SetEnv("AGENT_MAKO_PROJECT", workDir)
 	launch.SetEnv("AGENT_MAKO_MODE", "subagent")
-	if d.cfg != nil && d.cfg.NodeID != "" {
-		launch.SetEnv("AGENT_MAKO_NODE", d.cfg.NodeID)
+	if nodeID := d.config().NodeID; nodeID != "" {
+		launch.SetEnv("AGENT_MAKO_NODE", nodeID)
 	}
 	if profName := strings.TrimSpace(req.GetProfile()); profName != "" {
 		launch.SetEnv("AGENT_MAKO_PROFILE", profName)

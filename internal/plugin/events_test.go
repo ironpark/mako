@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/mako/internal/plugin/hostapi"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -303,5 +304,46 @@ func TestEventsAreBoundedAndGated(t *testing.T) {
 	healthy(t, r)
 	if r.seen("flood") != before || r.runtimeUp("flood") {
 		t.Fatal("a refused plugin was told an event")
+	}
+}
+
+func TestHasGrantZeroAllocAndEquivalence(t *testing.T) {
+	r := newRig(t, testLimits, nil)
+	r.write("permchk", map[string]string{
+		ManifestName: manifest("permchk", []string{"storage", "net:api.example.com"}, ""),
+		"main.js":    block(``, `ui.text("ok")`),
+	})
+	r.state("permchk", protocol.PluginWaiting)
+	r.grant("permchk")
+
+	p, ok := r.m.plugin("permchk")
+	if !ok {
+		t.Fatal("plugin permchk missing")
+	}
+	v := p.current()
+	g := grantsOf(v.man, p.m.grant.get(p.id).Granted)
+
+	permsToCheck := []string{
+		hostapi.PermNone,
+		hostapi.PermStorage,
+		hostapi.PermNet,
+		hostapi.PermNet + ":api.example.com",
+		hostapi.PermNet + ":evil.example.com",
+		hostapi.PermSessionsRead,
+		hostapi.PermDbSync,
+	}
+	for _, perm := range permsToCheck {
+		if got, want := p.hasGrant(perm), g.Has(perm); got != want {
+			t.Fatalf("hasGrant(%q) = %v, grantsOf.Has = %v", perm, got, want)
+		}
+	}
+
+	allocs := testing.AllocsPerRun(100, func() {
+		if !p.hasGrant(hostapi.PermSessionsRead) {
+			_ = p.hasGrant(hostapi.PermNet)
+		}
+	})
+	if allocs != 0 {
+		t.Fatalf("expected 0 allocs for hasGrant, got %v", allocs)
 	}
 }

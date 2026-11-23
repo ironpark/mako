@@ -91,9 +91,19 @@ type conversations struct {
 	mu       sync.Mutex
 	sessions map[*session.Session]*conversation
 	running  bool
+	runID    uint64
+	stopped  bool
+	wg       sync.WaitGroup
 	// binding serializes binding what hooks report and what listings find,
 	// so the newest report is also the last bound.
 	binding sync.Mutex
+}
+
+func (c *conversations) stopAndWait() {
+	c.mu.Lock()
+	c.stopped = true
+	c.mu.Unlock()
+	c.wg.Wait()
 }
 
 // conversation is what the daemon keeps of one session's conversation.
@@ -115,16 +125,26 @@ func (d *Daemon) trackConversation(s *session.Session) {
 	if !transcript.Supported(s.Agent()) {
 		return
 	}
+	ctx := d.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	c := &d.conversations
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.stopped || ctx.Err() != nil {
+		return
+	}
 	if c.sessions == nil {
 		c.sessions = map[*session.Session]*conversation{}
 	}
 	c.sessions[s] = &conversation{}
 	if !c.running {
 		c.running = true
-		go d.followConversations()
+		c.runID++
+		runID := c.runID
+		c.wg.Add(1)
+		go d.followConversations(ctx, runID)
 	}
 }
 
@@ -222,25 +242,46 @@ func (c *conversations) seen(s *session.Session) {
 	}
 }
 
-func (d *Daemon) followConversations() {
+func (d *Daemon) followConversations(ctx context.Context, runID uint64) {
+	defer d.conversations.wg.Done()
+	defer func() {
+		d.conversations.mu.Lock()
+		if d.conversations.runID == runID {
+			d.conversations.running = false
+		}
+		d.conversations.mu.Unlock()
+	}()
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		due, unseen, live, ok := d.conversations.due()
 		if !ok {
 			return
 		}
 		if len(due) > 0 {
-			d.checkConversations(due)
+			d.checkConversations(ctx, due)
 		}
 		for _, s := range unseen {
+			if ctx.Err() != nil {
+				return
+			}
 			d.checkReported(s)
 		}
 		for _, s := range live {
+			if ctx.Err() != nil {
+				return
+			}
 			d.refreshActivity(s)
 		}
 		d.conversations.forgetUnread(time.Now())
-		<-ticker.C
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
 	}
 }
 
@@ -288,8 +329,8 @@ func (d *Daemon) refreshActivity(s *session.Session) {
 
 // checkConversations binds each session to the log its process has open for
 // writing, all of them from one process listing.
-func (d *Daemon) checkConversations(sessions []*session.Session) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+func (d *Daemon) checkConversations(ctx context.Context, sessions []*session.Session) {
+	ctx, cancel := context.WithTimeout(ctx, 1500*time.Millisecond)
 	defer cancel()
 	pids := make([]int, len(sessions))
 	for i, s := range sessions {

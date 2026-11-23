@@ -77,9 +77,10 @@ func (d *Daemon) remoteAgents(scope string) []*protocol.SessionInfo {
 		return nil
 	}
 	var out []*protocol.SessionInfo
+	nodeID := d.config().NodeID
 	for _, info := range d.meshSessions(d.routing()) {
 		// A node of an older daemon shares its shells too.
-		if info.GetAgentScope() == scope && info.GetNodeId() != d.cfg.NodeID && isAgent(info) {
+		if info.GetAgentScope() == scope && info.GetNodeId() != nodeID && isAgent(info) {
 			out = append(out, info)
 		}
 	}

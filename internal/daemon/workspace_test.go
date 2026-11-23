@@ -277,19 +277,19 @@ func TestWorkspacesMergeAcrossNodesThatTrustEachOther(t *testing.T) {
 	go func() { _ = cb.Watch(ctx, func(ch *protocol.Changed) { changes <- ch }) }()
 	<-changes
 
-	aKey, bKey := workspace.LocationKey(a.cfg.NodeID, "/src/pa"), workspace.LocationKey(b.cfg.NodeID, "/src/pa-b")
+	aKey, bKey := workspace.LocationKey(a.config().NodeID, "/src/pa"), workspace.LocationKey(b.config().NodeID, "/src/pa-b")
 	for _, d := range []*protocol.WorkspaceState{newSpace("sa", "A's"), newProject("pa", aKey, bKey)} {
 		if got, err := ca.SetWorkspace(ctx, &protocol.Workspace{State: d}); err != nil || got.GetState() == nil {
 			t.Fatalf("a's edit: %v %v", got, err)
 		}
 	}
-	for _, d := range []*protocol.WorkspaceState{newSpace("sb", "B's"), newProject("pb", workspace.LocationKey(b.cfg.NodeID, "/src/pb"))} {
+	for _, d := range []*protocol.WorkspaceState{newSpace("sb", "B's"), newProject("pb", workspace.LocationKey(b.config().NodeID, "/src/pb"))} {
 		if _, err := cb.SetWorkspace(ctx, &protocol.Workspace{State: d}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for _, d := range []*Daemon{a, b} {
-		waitForWithin(t, 15*time.Second, d.cfg.Name+" holds both's spaces", func() bool {
+		waitForWithin(t, 15*time.Second, d.config().Name+" holds both's spaces", func() bool {
 			return len(workspace.Spaces(d.workspace.get(true).GetState())) == 2
 		})
 	}
@@ -321,7 +321,7 @@ func TestWorkspacesMergeAcrossNodesThatTrustEachOther(t *testing.T) {
 		return len(p) == 2 && slices.Equal(p["pa"], []string{"/src/pa-b"}) && slices.Equal(p["pb"], []string{"/src/pb"})
 	})
 
-	waitFor(t, "a's state on the server", func() bool { _, ok := server.peers.get(a.cfg.NodeID); return ok })
+	waitFor(t, "a's state on the server", func() bool { _, ok := server.peers.get(a.config().NodeID); return ok })
 	time.Sleep(2 * time.Second)
 	if !workspace.Empty(server.workspace.get(true).GetState()) {
 		t.Fatal("the server took up a's workspace")
@@ -349,8 +349,8 @@ func TestAWorkspaceNotSharedStaysHome(t *testing.T) {
 	if b.state().GetWorkspace() != nil {
 		t.Fatal("b's state carries its workspace")
 	}
-	waitFor(t, "b's state on a", func() bool { _, ok := a.peers.get(b.cfg.NodeID); return ok })
-	waitFor(t, "a's state on b", func() bool { _, ok := b.peers.get(a.cfg.NodeID); return ok })
+	waitFor(t, "b's state on a", func() bool { _, ok := a.peers.get(b.config().NodeID); return ok })
+	waitFor(t, "a's state on b", func() bool { _, ok := b.peers.get(a.config().NodeID); return ok })
 	time.Sleep(2 * time.Second)
 	if got := spaceNames(a.workspace.get(true).GetState()); !slices.Equal(got, []string{"A's"}) {
 		t.Errorf("a holds %v", got)
@@ -372,7 +372,7 @@ func TestTheWorkspacesProjectsOutrankSetProjects(t *testing.T) {
 	if err != nil || len(got.GetProjects()) != 1 || got.GetProjects()[0].GetId() != "given" {
 		t.Fatalf("before the workspace held projects: %v %v", got, err)
 	}
-	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newProject("p", workspace.LocationKey(d.cfg.NodeID, "/src/p"))}); err != nil {
+	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newProject("p", workspace.LocationKey(d.config().NodeID, "/src/p"))}); err != nil {
 		t.Fatal(err)
 	}
 	if list := d.projects.get(); len(list) != 1 || list[0].GetId() != "p" {
@@ -397,12 +397,12 @@ func TestAWorkspaceIsReadFromANodeThatLetsThisOneIn(t *testing.T) {
 	ca := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	waitFor(t, "the server among a's peers", func() bool { _, ok := a.peers.get(server.cfg.NodeID); return ok })
-	got, err := ca.WorkspaceOf(ctx, server.cfg.NodeID)
+	waitFor(t, "the server among a's peers", func() bool { _, ok := a.peers.get(server.config().NodeID); return ok })
+	got, err := ca.WorkspaceOf(ctx, server.config().NodeID)
 	if err != nil || !slices.Equal(spaceNames(got.GetState()), []string{"Server's"}) {
 		t.Fatalf("the server's workspace: %v %v", got, err)
 	}
-	if got, err := ca.WorkspaceOf(ctx, other.cfg.NodeID); err == nil && !workspace.Empty(got.GetState()) {
+	if got, err := ca.WorkspaceOf(ctx, other.config().NodeID); err == nil && !workspace.Empty(got.GetState()) {
 		t.Fatalf("read the workspace of a node that does not let a in: %v", got.GetState())
 	}
 }
@@ -416,12 +416,12 @@ func TestAWorkspaceThatDiffersIsAskedFor(t *testing.T) {
 	// it never sends b its workspace of its own accord.
 	letIn(t, server, b)
 	server.workspace.edit(newSpace("s", "Server's"))
-	waitFor(t, "the server among b's peers", func() bool { _, ok := b.peers.get(server.cfg.NodeID); return ok })
+	waitFor(t, "the server among b's peers", func() bool { _, ok := b.peers.get(server.config().NodeID); return ok })
 	time.Sleep(time.Second)
 	if !workspace.Empty(b.workspace.get(true).GetState()) {
 		t.Fatal("b took the server's workspace unasked")
 	}
-	b.takeWorkspace(server.cfg.NodeID, &protocol.Workspace{Digest: server.workspace.currentDigest()})
+	b.takeWorkspace(server.config().NodeID, &protocol.Workspace{Digest: server.workspace.currentDigest()})
 	waitFor(t, "the server's workspace on b", func() bool {
 		return slices.Equal(spaceNames(b.workspace.get(true).GetState()), []string{"Server's"})
 	})
@@ -439,12 +439,12 @@ func TestAWorkspaceNotSharedIsStillShown(t *testing.T) {
 	ca := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	waitFor(t, "b among a's peers", func() bool { _, ok := a.peers.get(b.cfg.NodeID); return ok })
-	got, err := ca.WorkspaceOf(ctx, b.cfg.NodeID)
+	waitFor(t, "b among a's peers", func() bool { _, ok := a.peers.get(b.config().NodeID); return ok })
+	got, err := ca.WorkspaceOf(ctx, b.config().NodeID)
 	if err != nil || !slices.Equal(spaceNames(got.GetState()), []string{"B's"}) || len(got.GetDigest()) > 0 {
 		t.Fatalf("b's workspace %v %v", got, err)
 	}
-	a.takeWorkspace(b.cfg.NodeID, &protocol.Workspace{Digest: []byte("another")})
+	a.takeWorkspace(b.config().NodeID, &protocol.Workspace{Digest: []byte("another")})
 	time.Sleep(time.Second)
 	if !workspace.Empty(a.workspace.get(true).GetState()) {
 		t.Fatal("a merged the workspace of a node not sharing it")
@@ -463,21 +463,21 @@ func TestANodeLetInEditsTheWorkspace(t *testing.T) {
 	c := dialDaemon(t, phone)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	waitFor(t, "the server among the phone's peers", func() bool { _, ok := phone.peers.get(server.cfg.NodeID); return ok })
+	waitFor(t, "the server among the phone's peers", func() bool { _, ok := phone.peers.get(server.config().NodeID); return ok })
 	delta := newSpace("p", "Phone's")
 	delta.Spaces["p"].Name.Clock = &protocol.HLC{WallTime: 1 << 60, NodeId: "phone's window"}
-	got, err := c.SetWorkspace(ctx, &protocol.Workspace{State: delta, ToNode: server.cfg.NodeID})
+	got, err := c.SetWorkspace(ctx, &protocol.Workspace{State: delta, ToNode: server.config().NodeID})
 	if err != nil || !slices.Equal(spaceNames(got.GetState()), []string{"Phone's", "Server's"}) {
 		t.Fatalf("the answer: %v %v", got.GetState(), err)
 	}
 	if !proto.Equal(got.GetState(), server.workspace.get(false).GetState()) {
 		t.Fatal("the answer is not the state the server holds")
 	}
-	if clock := got.GetState().GetSpaces()["p"].GetName().GetClock(); clock.GetNodeId() != server.cfg.NodeID || clock.GetWallTime() == 1<<60 {
+	if clock := got.GetState().GetSpaces()["p"].GetName().GetClock(); clock.GetNodeId() != server.config().NodeID || clock.GetWallTime() == 1<<60 {
 		t.Errorf("stamped %v: not by the server's clock", clock)
 	}
 	var kept workspaces
-	kept.load(server.workspace.dir, server.cfg.NodeID)
+	kept.load(server.workspace.dir, server.config().NodeID)
 	if !slices.Equal(spaceNames(kept.get(false).GetState()), []string{"Phone's", "Server's"}) {
 		t.Errorf("kept on disk: %v", spaceNames(kept.get(false).GetState()))
 	}
@@ -486,7 +486,7 @@ func TestANodeLetInEditsTheWorkspace(t *testing.T) {
 	}
 	// The phone learns of the server's changes from its record.
 	waitFor(t, "the server's digest in the phone's record of it", func() bool {
-		n, _ := phone.peers.get(server.cfg.NodeID)
+		n, _ := phone.peers.get(server.config().NodeID)
 		return len(n.GetWorkspaceDigest()) > 0 && bytes.Equal(n.GetWorkspaceDigest(), server.workspace.currentDigest())
 	})
 }
@@ -503,20 +503,20 @@ func TestOnlyANodeLetInGivesADelta(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	waitFor(t, "both among the phone's peers", func() bool {
-		_, a := phone.peers.get(server.cfg.NodeID)
-		_, b := phone.peers.get(stranger.cfg.NodeID)
+		_, a := phone.peers.get(server.config().NodeID)
+		_, b := phone.peers.get(stranger.config().NodeID)
 		return a && b
 	})
-	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), ToNode: stranger.cfg.NodeID}); err == nil {
+	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), ToNode: stranger.config().NodeID}); err == nil {
 		t.Error("a node that does not let the phone in took its edit")
 	}
 	if !workspace.Empty(stranger.workspace.get(false).GetState()) {
 		t.Errorf("the stranger holds %v", stranger.workspace.get(false).GetState())
 	}
-	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{Doc: legacyDoc(5, "phone", "Old"), ToNode: server.cfg.NodeID}); err == nil {
+	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{Doc: legacyDoc(5, "phone", "Old"), ToNode: server.config().NodeID}); err == nil {
 		t.Error("the server took a peer's old document")
 	}
-	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), Doc: legacyDoc(5, "phone", "Old"), ToNode: server.cfg.NodeID}); err == nil {
+	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), Doc: legacyDoc(5, "phone", "Old"), ToNode: server.config().NodeID}); err == nil {
 		t.Error("the server took a peer's old document with a delta")
 	}
 	if !workspace.Empty(server.workspace.get(false).GetState()) {
@@ -536,10 +536,10 @@ func TestAnEditIsRoutedAlongAChain(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	waitFor(t, "a route to the box", func() bool {
-		n, ok := phone.peers.get(box.cfg.NodeID)
-		return ok && phone.routing()[n.GetId()].via == server.cfg.NodeID
+		n, ok := phone.peers.get(box.config().NodeID)
+		return ok && phone.routing()[n.GetId()].via == server.config().NodeID
 	})
-	got, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), ToNode: box.cfg.NodeID})
+	got, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), ToNode: box.config().NodeID})
 	if err != nil || !slices.Equal(spaceNames(box.workspace.get(false).GetState()), []string{"Phone's"}) || !proto.Equal(got.GetState(), box.workspace.get(false).GetState()) {
 		t.Fatalf("the box after: %v, answered %v %v", box.workspace.get(false).GetState(), got.GetState(), err)
 	}

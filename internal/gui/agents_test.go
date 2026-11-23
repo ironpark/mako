@@ -114,7 +114,9 @@ func TestTheAgentsListUnfoldsOneAgent(t *testing.T) {
 	cfg := config.Default()
 	cfg.Agents = map[string]agentspec.Agent{"claude": {Profiles: []agentspec.Profile{{Name: "opus"}}}}
 	m := newModel(cfg, "")
-	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(agentSettings(m)) }, ggui.Sz(760, 2000))
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return ggui.Provide(ggui.ReducedMotionKey, true, widget.Scroll(agentSettings(m)))
+	}, ggui.Sz(760, 2000))
 	defer p.Close()
 	p.Frame()
 	if _, ok := p.Semantics().Find(ggui.RoleButton, Tf("%s settings", "shell")); ok {

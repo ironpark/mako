@@ -18,16 +18,17 @@ func (d *Daemon) discover(ctx context.Context) {
 		<-ctx.Done()
 		return
 	}
-	for _, addr := range d.cfg.Peers {
+	cfg := d.config()
+	for _, addr := range cfg.Peers {
 		go d.keepStatic(ctx, addr)
 	}
 
 	var backends []discovery.Backend
-	if d.cfg.Discovery.MDNS {
+	if cfg.Discovery.MDNS {
 		mdns := &discovery.MDNS{
-			NodeID: d.cfg.NodeID,
-			Name:   d.cfg.Name,
-			Domain: d.cfg.Domain,
+			NodeID: cfg.NodeID,
+			Name:   cfg.Name,
+			Domain: cfg.Domain,
 			PeerID: d.peerID(),
 			Port:   d.p2p.Port(),
 		}
@@ -39,11 +40,11 @@ func (d *Daemon) discover(ctx context.Context) {
 		}
 		backends = append(backends, mdns)
 	}
-	if d.cfg.Discovery.Tailscale {
+	if cfg.Discovery.Tailscale {
 		backends = append(backends, &discovery.Tailscale{
 			Self:     d.peerID(),
 			Linked:   d.p2p.Connected,
-			Hosts:    d.cfg.Discovery.TailnetHosts,
+			Hosts:    cfg.Discovery.TailnetHosts,
 			Port:     d.p2p.Port(),
 			Interval: time.Minute,
 		})
@@ -58,7 +59,7 @@ func (d *Daemon) discover(ctx context.Context) {
 	})
 	for f := range found {
 		switch {
-		case f.NodeID == d.cfg.NodeID || f.PeerID == d.peerID():
+		case f.NodeID == cfg.NodeID || f.PeerID == d.peerID():
 		case f.NodeID == "":
 			d.link(f.Node()) // its record comes as the two introduce themselves
 		case d.notePeer(f.Node()):

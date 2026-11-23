@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/pkg/fsutil"
@@ -140,16 +141,27 @@ func loadSettingsObject(raw string, env map[string]string) (map[string]any, bool
 	return doc, true
 }
 
+var hooksMu sync.Mutex
+
 // writeHooks writes mako's entry for hook into the hooks.json at path,
 // keeping the rest, unless it is there already.
 func writeHooks(path, hook string) error {
+	hooksMu.Lock()
+	defer hooksMu.Unlock()
+
 	doc := map[string]json.RawMessage{}
 	body, err := os.ReadFile(path)
 	switch {
 	case err == nil:
 		// agy reads a file saved with a byte-order mark too.
-		if err := json.Unmarshal(bytes.TrimPrefix(body, []byte("\xef\xbb\xbf")), &doc); err != nil {
-			return err // the user's, which mako will not overwrite
+		trimmed := bytes.TrimSpace(bytes.TrimPrefix(body, []byte("\xef\xbb\xbf")))
+		if len(trimmed) > 0 {
+			if err := json.Unmarshal(trimmed, &doc); err != nil {
+				return err // the user's, which mako will not overwrite
+			}
+			if doc == nil {
+				doc = map[string]json.RawMessage{}
+			}
 		}
 	case !os.IsNotExist(err):
 		return err
@@ -160,9 +172,16 @@ func writeHooks(path, hook string) error {
 	}
 	sum := sha256.Sum256([]byte(hook))
 	name := "mako-" + hex.EncodeToString(sum[:4])
+	pruned := false
+	for k := range doc {
+		if k != name && strings.HasPrefix(k, "mako-") {
+			delete(doc, k)
+			pruned = true
+		}
+	}
 	// As written, the entry is indented.
 	var was bytes.Buffer
-	if json.Compact(&was, doc[name]) == nil && bytes.Equal(was.Bytes(), entry) {
+	if !pruned && len(body) > 0 && json.Compact(&was, doc[name]) == nil && bytes.Equal(was.Bytes(), entry) {
 		return nil
 	}
 	doc[name] = entry

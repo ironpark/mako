@@ -292,3 +292,63 @@ export default {
 		t.Fatal("quarantined future HLC row was accepted")
 	}
 }
+
+func TestDeliverDBSyncCoalescedWhenQueueFull(t *testing.T) {
+	r := newRig(t, testLimits, nil)
+	r.write("dbsync", map[string]string{
+		ManifestName: manifest("dbsync", []string{"db", "db:sync"}, ""),
+		"main.js": `let mako;
+export default {
+  activate(m) {
+    mako = m;
+    mako.blocks.register("ui", {
+      state: { events: [], reloadCount: 0 },
+      load(s) { s.reloadCount++; },
+      render: (s, ui) => ui.text(JSON.stringify(s)),
+    });
+  },
+  on: {
+    dbSync(ev) {
+      const s = globalThis.__syncEvents || (globalThis.__syncEvents = []);
+      s.push(ev);
+      const b = mako.blocks.state("ui");
+      b.events = s;
+    },
+  },
+};`,
+	})
+	// Wait for manifest and grant db:sync, then load/render with mako.on.dbSync capturing events.
+	r.state("dbsync", protocol.PluginWaiting)
+	r.grant("dbsync")
+	w := r.watch("plugin:dbsync/ui")
+	w.until("loaded", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool { return hasText(n, `"reloadCount":1`) })
+
+	p, ok := r.m.plugin("dbsync")
+	if !ok {
+		t.Fatal("plugin dbsync missing")
+	}
+	started := make(chan struct{})
+	unblock := make(chan struct{})
+	if !p.post(func() {
+		close(started)
+		<-unblock
+	}) {
+		t.Fatal("failed to queue blocker job")
+	}
+	<-started
+	for p.post(func() {}) {
+	}
+
+	// Queue is now full; deliverDBSync must coalesce and never drop!
+	p.deliverDBSync("", []string{"t1"}, 2)
+	p.deliverDBSync("", []string{"t2", "t1"}, 3)
+	close(unblock)
+
+	w.until("coalesced sync delivered", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, `"rows":5`) && hasText(n, `"reloadCount":2`)
+	})
+	tree := w.until("tables unioned", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, `"t1"`) && hasText(n, `"t2"`)
+	})
+	_ = tree
+}

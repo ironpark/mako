@@ -60,9 +60,8 @@ type Resolver struct {
 	Extensions, Work string
 	Log              *slog.Logger
 
-	once  sync.Once
-	turn  chan struct{} // held by the Resolve running
-	mu    sync.Mutex    // guards cache
+	mu    sync.Mutex // guards turns and cache
+	turns map[string]chan struct{}
 	cache map[string]cached
 }
 
@@ -88,8 +87,9 @@ func (r *Resolver) log() *slog.Logger {
 // server that cannot be resolved, as one lacking its settings, is logged
 // and left out.
 //
-// One Resolve runs at a time. One that waits for another past ctx gives
-// the servers resolved before instead, without asking their extensions.
+// Each extension server resolves one at a time across callers. A server
+// waiting past ctx returns any cached command instead, without asking its
+// extension.
 func (r *Resolver) Resolve(ctx context.Context, servers map[string]Server) []Launch {
 	return r.resolveAll(ctx, servers, func(_ string, s Server) bool { return s.On() })
 }
@@ -100,15 +100,27 @@ func (r *Resolver) ResolveOnly(ctx context.Context, servers map[string]Server, i
 	return r.resolveAll(ctx, servers, func(id string, _ Server) bool { return slices.Contains(ids, id) })
 }
 
-func (r *Resolver) resolveAll(ctx context.Context, servers map[string]Server, on func(string, Server) bool) []Launch {
-	r.once.Do(func() { r.turn = make(chan struct{}, 1) })
-	cachedOnly := false
-	select {
-	case r.turn <- struct{}{}:
-		defer func() { <-r.turn }()
-	case <-ctx.Done():
-		cachedOnly = true
+func (r *Resolver) serverTurn(id string) chan struct{} {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.turns == nil {
+		r.turns = map[string]chan struct{}{}
 	}
+	ch, ok := r.turns[id]
+	if !ok {
+		ch = make(chan struct{}, 1)
+		r.turns[id] = ch
+	}
+	return ch
+}
+
+func cloneLaunch(l Launch) Launch {
+	l.Args = slices.Clone(l.Args)
+	l.Env = maps.Clone(l.Env)
+	return l
+}
+
+func (r *Resolver) resolveAll(ctx context.Context, servers map[string]Server, on func(string, Server) bool) []Launch {
 	byServer := map[string]zed.Extension{}
 	if r.Extensions != "" {
 		exts, err := (&zed.Store{Dir: r.Extensions}).Installed()
@@ -142,27 +154,55 @@ func (r *Resolver) resolveAll(ctx context.Context, servers map[string]Server, on
 			continue
 		}
 		if s.Command != nil && s.Command.Path != "" {
-			out = append(out, Launch{ID: id, Command: ExpandHome(s.Command.Path), Args: s.Command.Args, Env: s.Command.Env})
+			out = append(out, Launch{
+				ID:      id,
+				Command: ExpandHome(s.Command.Path),
+				Args:    slices.Clone(s.Command.Args),
+				Env:     maps.Clone(s.Command.Env),
+			})
 			continue
 		}
 		ext, ok := byServer[id]
 		if !ok {
 			continue // configured for an extension since removed
 		}
-		if cachedOnly {
-			if l, ok := r.cached(id, s, ext); ok {
-				out = append(out, l)
-			}
-			continue
+		if l, ok := r.resolveServer(ctx, id, servers, ext, loaded); ok {
+			out = append(out, l)
 		}
-		l, err := r.resolve(ctx, id, servers, ext, loaded)
-		if err != nil {
-			r.log().Warn("mcp: server left out", "server", id, "extension", ext.ID, "err", err)
-			continue
-		}
-		out = append(out, l)
 	}
 	return out
+}
+
+func (r *Resolver) resolveServer(ctx context.Context, id string, servers map[string]Server, ext zed.Extension, loaded map[string]*zedhost.Extension) (Launch, bool) {
+	s := servers[id]
+	if l, ok := r.cached(id, s, ext); ok {
+		return l, true
+	}
+	if ctx.Err() != nil {
+		return Launch{}, false
+	}
+	turn := r.serverTurn(id)
+	select {
+	case turn <- struct{}{}:
+		defer func() { <-turn }()
+	case <-ctx.Done():
+		if l, ok := r.cached(id, s, ext); ok {
+			return l, true
+		}
+		return Launch{}, false
+	}
+	if ctx.Err() != nil {
+		if l, ok := r.cached(id, s, ext); ok {
+			return l, true
+		}
+		return Launch{}, false
+	}
+	l, err := r.resolve(ctx, id, servers, ext, loaded)
+	if err != nil {
+		r.log().Warn("mcp: server left out", "server", id, "extension", ext.ID, "err", err)
+		return Launch{}, false
+	}
+	return l, true
 }
 
 func (r *Resolver) resolve(ctx context.Context, id string, servers map[string]Server, ext zed.Extension, loaded map[string]*zedhost.Extension) (Launch, error) {
@@ -199,7 +239,7 @@ func (r *Resolver) resolve(ctx context.Context, id string, servers map[string]Se
 	r.cache[id] = cached{key: cacheKey(s, ext), launch: l, at: time.Now()}
 	r.mu.Unlock()
 	r.log().Info("mcp: server resolved", "server", id, "command", l.Command, "took", time.Since(start).Round(time.Millisecond))
-	return l, nil
+	return cloneLaunch(l), nil
 }
 
 func cacheKey(s Server, ext zed.Extension) string {
@@ -215,7 +255,7 @@ func (r *Resolver) cached(id string, s Server, ext zed.Extension) (Launch, bool)
 	if !ok || c.key != cacheKey(s, ext) || time.Since(c.at) >= cacheFor || !runnable(c.launch.Command) {
 		return Launch{}, false
 	}
-	return c.launch, true
+	return cloneLaunch(c.launch), true
 }
 
 // settingsFor answers an extension's get-settings for a server, the key
