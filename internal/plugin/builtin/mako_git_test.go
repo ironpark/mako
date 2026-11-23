@@ -355,7 +355,7 @@ func TestMakoGitCompactStandaloneTreePickAndDiffIntent(t *testing.T) {
 		t.Fatalf("missing child files under app/src/gen: a=%v b=%v", fileA, fileB)
 	}
 	r.sendEvent(scope, fileA.GetId(), "check", "off", nil)
-	tree = wCompact.until("mixed dir check", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+	_ = wCompact.until("mixed dir check", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		d := findByKindAndText(n, "tree_item", "app/src/gen")
 		return d != nil && d.GetCheck() == "mixed"
 	})

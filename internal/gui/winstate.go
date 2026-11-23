@@ -128,19 +128,13 @@ func changedStack(p, n *layoutdoc.Node) bool {
 // blockShown says whether the window shows the block: placed by the
 // document, every collapsible node it is in open, and every stack showing
 // it. Read in an effect, it follows them all.
-func (m *model) blockShown(name string) bool { return m.blockIn(name, true) }
-
-// blockChosen says whether the block is placed and every stack it is in
-// shows it, open or not.
-func (m *model) blockChosen(name string) bool { return m.blockIn(name, false) }
-
-func (m *model) blockIn(name string, open bool) bool {
+func (m *model) blockShown(name string) bool {
 	path := m.WinDoc.Get().BlockPath(name)
 	if path == nil {
 		return false
 	}
 	for i, n := range path {
-		if open && n.Collapsible && !m.nodeState(n).open.Get() {
+		if n.Collapsible && !m.nodeState(n).open.Get() {
 			return false
 		}
 		if n.Kind == layoutdoc.KindStack && n.Children[layoutdoc.StackIndex(n, m.nodeState(n).active.Get())] != path[i+1] {

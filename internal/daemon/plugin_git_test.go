@@ -40,6 +40,8 @@ func initTestGitRepo(t *testing.T) (repo string, runGit func(dir string, args ..
 		return strings.TrimSpace(string(out))
 	}
 	runGit(repo, "init", "-q", "-b", "main")
+	runGit(repo, "config", "user.name", "Tester")
+	runGit(repo, "config", "user.email", "tester@example.com")
 	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("hello\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -355,9 +357,7 @@ func TestDaemonGitHostRemoteForwardingAndWatch(t *testing.T) {
 	}
 }
 
-type failingTreeFileWatcher struct {
-	base FileWatcher
-}
+type failingTreeFileWatcher struct{}
 
 func (f failingTreeFileWatcher) NewPathWatcher(logf func(string, ...any)) PathWatcher {
 	return noopPathWatcher{}
@@ -539,6 +539,10 @@ func TestBundledMakoGitWatchOverDaemon(t *testing.T) {
 	d := meshDaemon(t, "a")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	waitFor(t, "mako-git bundled plugin ready", func() bool {
+		return d.plugins != nil && findPlugin(d.plugins.List(), "mako-git") != nil
+	})
 
 	repo, _ := initTestGitRepo(t)
 	if err := os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("hello\n"), 0o644); err != nil {

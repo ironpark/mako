@@ -195,4 +195,3 @@ func findUiNodeSuffix(n *protocol.UiNode, suffix string) *protocol.UiNode {
 	}
 	return nil
 }
-

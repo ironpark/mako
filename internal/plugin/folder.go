@@ -255,7 +255,9 @@ func readBoundedFS(fsys fs.FS, name string, max int) ([]byte, error) {
 		fi  fs.FileInfo
 		err error
 	)
-	if lfs, ok := fsys.(interface{ Lstat(string) (fs.FileInfo, error) }); ok {
+	if lfs, ok := fsys.(interface {
+		Lstat(string) (fs.FileInfo, error)
+	}); ok {
 		fi, err = lfs.Lstat(name)
 	} else {
 		fi, err = fs.Stat(fsys, name)

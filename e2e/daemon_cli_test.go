@@ -25,7 +25,13 @@ func TestDaemonCLIOfflineChecks(t *testing.T) {
 	})
 
 	t.Run("mako_agents_offline", func(t *testing.T) {
-		env := newTestEnv(t)
+		env := newTestEnv(t, func(o *testConfigOpts) {
+			o.Agents = map[string]any{
+				"agy":    map[string]any{"command": []string{"agy"}, "enabled": true},
+				"claude": map[string]any{"command": []string{"claude"}, "enabled": true},
+				"codex":  map[string]any{"command": []string{"codex"}, "enabled": true},
+			}
+		})
 		out, errOut, code := env.runCLI("agents")
 		if code != 0 {
 			t.Fatalf("mako agents exited %d: stderr=%q", code, errOut)

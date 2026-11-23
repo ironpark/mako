@@ -313,14 +313,3 @@ func (m *model) rereadDiffChanges(node string) {
 		}
 	}
 }
-
-// refreshDiffChangesForRoot reloads open working-tree diff groups matching
-// node and repo/root path after a direct git operation.
-func (m *model) refreshDiffChangesForRoot(node, path string) {
-	groups, _ := openDiffGroups(ggui.Peek(m.Diffs))
-	for g := range groups {
-		if g.Root.Node == node && (g.Repo == path || g.Root.Path == path) {
-			m.loadDiffChanges(g, true)
-		}
-	}
-}

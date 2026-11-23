@@ -1,8 +1,6 @@
 package gui
 
 import (
-	"cmp"
-	"context"
 	"image/color"
 	"time"
 
@@ -10,9 +8,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 
-	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
-	"github.com/ironpark/mako/internal/protocol"
 )
 
 // gitOpTimeout bounds a git operation as the window waits on it: the
@@ -23,38 +19,6 @@ const gitOpTimeout = 150 * time.Second
 type gitNote struct {
 	Text string
 	Err  bool
-}
-
-// gitRun runs a git operation on the target repository (or the currently
-// selected repoFolder when req.Root is empty).
-func (m *model) gitRun(req *protocol.GitRun, label string, done func()) {
-	node := req.GetNodeId()
-	if req.GetRoot() == "" {
-		root := ggui.Untrack(m.repoFolder)
-		if root.Path == "" {
-			return
-		}
-		node = root.Node
-		req.NodeId = m.remoteID(root.Node)
-		req.Root = cmp.Or(req.GetWorktree().GetPath(), root.Path)
-	}
-	if node == "" {
-		node = ggui.Peek(m.Conn).Self.GetId()
-	}
-	fetch(m, gitOpTimeout, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
-		return c.GitRun(ctx, req)
-	}, func(_ *protocol.GitResult, err error) {
-		if err != nil {
-			if m.toaster != nil {
-				m.toaster.Push(ui.Toast(cmp.Or(label, T("Git")), nodeErr(err)).Destructive())
-			}
-			return
-		}
-		if done != nil {
-			done()
-		}
-		m.refreshDiffChangesForRoot(node, req.GetRoot())
-	})
 }
 
 // statusLine is the operation under way, busy, or what the last one said,
