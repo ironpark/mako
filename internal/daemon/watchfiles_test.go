@@ -19,7 +19,7 @@ func TestWatchingFiles(t *testing.T) {
 	b := meshDaemon(t, "watch-b", p2pAddr(a))
 	letIn(t, b, a)
 	letIn(t, a, b)
-	waitFor(t, "the nodes linked", func() bool { _, err := a.node(b.config().NodeID); return err == nil })
+	waitFor(t, "the nodes linked", func() bool { return trustedBy(a, b) })
 	for _, node := range []string{"", b.config().NodeID} {
 		dir, tree := t.TempDir(), gitTree(t)
 		if err := os.MkdirAll(filepath.Join(tree, "src"), 0o755); err != nil {

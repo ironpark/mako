@@ -33,7 +33,7 @@ func newBlockPair(t *testing.T) blockPair {
 	phone := meshDaemon(t, "phone")
 	server := meshDaemon(t, "server", p2pAddr(phone))
 	letIn(t, server, phone)
-	waitFor(t, "the server among the phone's peers", func() bool { _, ok := phone.peers.get(server.config().NodeID); return ok })
+	waitFor(t, "the server to let the phone in", func() bool { return trustedBy(phone, server) })
 	return blockPair{phone: phone, server: server, c: dialDaemon(t, phone)}
 }
 

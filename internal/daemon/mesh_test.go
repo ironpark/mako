@@ -78,6 +78,15 @@ func letIn(t *testing.T, a, b *Daemon) {
 	a.p2p.Reconsider()
 }
 
+// trustedBy reports whether d knows peer is linked and lets d in.
+func trustedBy(d, peer *Daemon) bool {
+	if _, ok := d.peers.get(peer.config().NodeID); !ok {
+		return false
+	}
+	p, ok := d.p2p.Peer(peer.peerID())
+	return ok && p.TrustedBy
+}
+
 // p2pAddr is where d is on libp2p, to give a peer.
 func p2pAddr(d *Daemon) string { return d.p2p.Addrs()[0] + "/p2p/" + d.p2p.ID().String() }
 
@@ -477,6 +486,7 @@ func TestAnAttachPacksAsOneStreamWhenAsked(t *testing.T) {
 	server := meshDaemon(t, "server", p2pAddr(laptop))
 	letIn(t, server, laptop)
 	loudSession(t, server)
+	waitFor(t, "the server to let the laptop in", func() bool { return trustedBy(laptop, server) })
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	stream, err := laptop.peerStream(ctx, &protocol.Node{Name: "server", PeerId: server.peerID(), Multiaddrs: server.multiaddrs()})

@@ -321,7 +321,11 @@ func TestWorkspacesMergeAcrossNodesThatTrustEachOther(t *testing.T) {
 		return len(p) == 2 && slices.Equal(p["pa"], []string{"/src/pa-b"}) && slices.Equal(p["pb"], []string{"/src/pb"})
 	})
 
-	waitFor(t, "a's state on the server", func() bool { _, ok := server.peers.get(a.config().NodeID); return ok })
+	waitFor(t, "a's state on the server", func() bool {
+		_, ok := server.peers.get(a.config().NodeID)
+		p, pok := server.p2p.Peer(a.peerID())
+		return ok && pok && p.Trusts
+	})
 	time.Sleep(2 * time.Second)
 	if !workspace.Empty(server.workspace.get(true).GetState()) {
 		t.Fatal("the server took up a's workspace")
@@ -349,8 +353,8 @@ func TestAWorkspaceNotSharedStaysHome(t *testing.T) {
 	if b.state().GetWorkspace() != nil {
 		t.Fatal("b's state carries its workspace")
 	}
-	waitFor(t, "b's state on a", func() bool { _, ok := a.peers.get(b.config().NodeID); return ok })
-	waitFor(t, "a's state on b", func() bool { _, ok := b.peers.get(a.config().NodeID); return ok })
+	waitFor(t, "b's state on a", func() bool { return trustedBy(a, b) })
+	waitFor(t, "a's state on b", func() bool { return trustedBy(b, a) })
 	time.Sleep(2 * time.Second)
 	if got := spaceNames(a.workspace.get(true).GetState()); !slices.Equal(got, []string{"A's"}) {
 		t.Errorf("a holds %v", got)
@@ -397,7 +401,8 @@ func TestAWorkspaceIsReadFromANodeThatLetsThisOneIn(t *testing.T) {
 	ca := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	waitFor(t, "the server among a's peers", func() bool { _, ok := a.peers.get(server.config().NodeID); return ok })
+	waitFor(t, "the server to let a in", func() bool { return trustedBy(a, server) })
+	waitFor(t, "other among a's peers", func() bool { _, ok := a.peers.get(other.config().NodeID); return ok })
 	got, err := ca.WorkspaceOf(ctx, server.config().NodeID)
 	if err != nil || !slices.Equal(spaceNames(got.GetState()), []string{"Server's"}) {
 		t.Fatalf("the server's workspace: %v %v", got, err)
@@ -416,7 +421,7 @@ func TestAWorkspaceThatDiffersIsAskedFor(t *testing.T) {
 	// it never sends b its workspace of its own accord.
 	letIn(t, server, b)
 	server.workspace.edit(newSpace("s", "Server's"))
-	waitFor(t, "the server among b's peers", func() bool { _, ok := b.peers.get(server.config().NodeID); return ok })
+	waitFor(t, "the server to let b in", func() bool { return trustedBy(b, server) })
 	time.Sleep(time.Second)
 	if !workspace.Empty(b.workspace.get(true).GetState()) {
 		t.Fatal("b took the server's workspace unasked")
@@ -439,7 +444,7 @@ func TestAWorkspaceNotSharedIsStillShown(t *testing.T) {
 	ca := dialDaemon(t, a)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	waitFor(t, "b among a's peers", func() bool { _, ok := a.peers.get(b.config().NodeID); return ok })
+	waitFor(t, "b to let a in", func() bool { return trustedBy(a, b) })
 	got, err := ca.WorkspaceOf(ctx, b.config().NodeID)
 	if err != nil || !slices.Equal(spaceNames(got.GetState()), []string{"B's"}) || len(got.GetDigest()) > 0 {
 		t.Fatalf("b's workspace %v %v", got, err)
@@ -463,7 +468,7 @@ func TestANodeLetInEditsTheWorkspace(t *testing.T) {
 	c := dialDaemon(t, phone)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	waitFor(t, "the server among the phone's peers", func() bool { _, ok := phone.peers.get(server.config().NodeID); return ok })
+	waitFor(t, "the server to let the phone in", func() bool { return trustedBy(phone, server) })
 	delta := newSpace("p", "Phone's")
 	delta.Spaces["p"].Name.Clock = &protocol.HLC{WallTime: 1 << 60, NodeId: "phone's window"}
 	got, err := c.SetWorkspace(ctx, &protocol.Workspace{State: delta, ToNode: server.config().NodeID})
@@ -503,9 +508,8 @@ func TestOnlyANodeLetInGivesADelta(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	waitFor(t, "both among the phone's peers", func() bool {
-		_, a := phone.peers.get(server.config().NodeID)
 		_, b := phone.peers.get(stranger.config().NodeID)
-		return a && b
+		return trustedBy(phone, server) && b
 	})
 	if _, err := c.SetWorkspace(ctx, &protocol.Workspace{State: newSpace("p", "Phone's"), ToNode: stranger.config().NodeID}); err == nil {
 		t.Error("a node that does not let the phone in took its edit")

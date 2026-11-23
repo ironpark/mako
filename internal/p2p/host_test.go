@@ -495,6 +495,35 @@ func TestReconsiderDuringInFlightIntroduction(t *testing.T) {
 	}
 }
 
+func TestStaleVerdictDoesNotOverwriteNewerGeneration(t *testing.T) {
+	tr := newHost(t).trust
+	p := newHost(t).ID()
+
+	tr.mu.Lock()
+	st := tr.state(p)
+	tr.mu.Unlock()
+
+	// Newer remote generation arrives before an older in-flight introduction.
+	tr.applyExchange(p, st, 0, 1, Peer{ID: p, Node: "srv", Name: "server", Trusts: false, TrustedBy: true})
+	tr.applyExchange(p, st, 0, 0, Peer{ID: p, Node: "srv", Name: "server", Trusts: false, TrustedBy: false})
+	tr.settle(p, st, 0, nil)
+	got, ok := tr.get(p)
+	if !ok || !got.TrustedBy {
+		t.Fatalf("stale remote verdict overwrote newer generation: %+v %v", got, ok)
+	}
+
+	// Local reconsider advances localGen independently of remoteGen: a newer
+	// remote verdict with an older localGen still updates TrustedBy without
+	// reverting Trusts, and an older local update cannot overwrite a newer one.
+	tr.updateLocal(p, st, 2, true)
+	tr.updateLocal(p, st, 1, false)
+	tr.applyExchange(p, st, 1, 2, Peer{ID: p, Node: "srv", Name: "server", Trusts: false, TrustedBy: false})
+	got, ok = tr.get(p)
+	if !ok || !got.Trusts || got.TrustedBy {
+		t.Fatalf("independent local/remote generations not preserved: %+v %v", got, ok)
+	}
+}
+
 type closeableSigner struct {
 	ssh.Signer
 	closes atomic.Int32

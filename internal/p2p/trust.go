@@ -48,9 +48,12 @@ type intro struct {
 	Cert *Cert  `json:"cert,omitempty"`
 }
 
-// verdict is whether a host lets the other in.
+// verdict is whether a host lets the other in, stamped with the sender's
+// reconsider generation so an older introduction finishing late cannot
+// overwrite a newer verdict.
 type verdict struct {
-	Trusts bool `json:"trusts"`
+	Trusts bool   `json:"trusts"`
+	Gen    uint64 `json:"gen,omitempty"`
 }
 
 // Peer is how a host stands with a peer.
@@ -91,12 +94,13 @@ type trust struct {
 // introduction holds on to the state it began with, and what it brings
 // for a state no longer the peer's is dropped.
 type trustState struct {
-	started  bool
-	done     chan struct{}
-	err      error
-	peer     Peer
-	peerGen  uint64 // t.gen at which peer was last evaluated
-	introGen uint64 // highest t.gen for which an introduction has been scheduled
+	started   bool
+	done      chan struct{}
+	err       error
+	peer      Peer
+	localGen  uint64 // highest local t.gen applied to peer.Trusts
+	remoteGen uint64 // highest remote verdict.Gen applied to peer.TrustedBy and peer info
+	introGen  uint64 // highest t.gen for which an introduction has been scheduled
 }
 
 func newTrust(keys, sshKeys *Keys, self intro, owner ssh.Signer, log *slog.Logger) *trust {
@@ -300,11 +304,10 @@ func (t *trust) reconsider() {
 	changed := t.changed
 	t.mu.Unlock()
 	for _, s := range all {
-		if trusts := t.lets(s.info.Key, s.info.Owner); trusts != s.info.Trusts {
-			info, still := t.update(s.p, s.st, gen, func(pe *Peer) { pe.Trusts = trusts })
-			if still && changed != nil {
-				changed(info)
-			}
+		trusts := t.lets(s.info.Key, s.info.Owner)
+		info, still, flipped := t.updateLocal(s.p, s.st, gen, trusts)
+		if still && flipped && changed != nil {
+			changed(info)
 		}
 		go t.introduce(s.p, s.st)
 	}
@@ -362,36 +365,62 @@ func (t *trust) exchange(st *trustState, s network.Stream) (uint64, error) {
 	gen := t.gen
 	t.mu.Unlock()
 	trusts := t.lets(key, owner)
-	if err := writeJSON(s, verdict{Trusts: trusts}); err != nil {
+	if err := writeJSON(s, verdict{Trusts: trusts, Gen: gen}); err != nil {
 		return gen, err
 	}
 	var v verdict
 	if err := readJSON(s, &v); err != nil {
 		return gen, err
 	}
-	t.update(p, st, gen, func(pe *Peer) {
-		*pe = Peer{ID: p, Node: theirs.Node, Name: theirs.Name, OS: theirs.OS, Arch: theirs.Arch, Key: key, Owner: owner, Addr: s.Conn().RemoteMultiaddr(), Trusts: trusts, TrustedBy: v.Trusts}
+	t.applyExchange(p, st, gen, v.Gen, Peer{
+		ID: p, Node: theirs.Node, Name: theirs.Name, OS: theirs.OS, Arch: theirs.Arch,
+		Key: key, Owner: owner, Addr: s.Conn().RemoteMultiaddr(),
+		Trusts: trusts, TrustedBy: v.Trusts,
 	})
 	return gen, nil
 }
 
-// update sets how this host stands with p in st, through set, and cuts the
-// streams p opened if it let p in and no longer does. It reports the peer
-// as set, and whether st is still p's link. Older evaluations (gen < peerGen)
-// do not overwrite newer ones.
-func (t *trust) update(p peer.ID, st *trustState, gen uint64, set func(*Peer)) (Peer, bool) {
+// applyExchange records the result of an exchange in st and cuts inbound
+// streams if this host let p in and no longer does. Older evaluations of
+// either side's generation do not overwrite newer ones.
+func (t *trust) applyExchange(p peer.ID, st *trustState, localGen, remoteGen uint64, got Peer) {
 	t.mu.Lock()
 	was, ok := settled(st)
-	if gen >= st.peerGen {
-		set(&st.peer)
-		st.peerGen = gen
+	if remoteGen >= st.remoteGen {
+		trusts := st.peer.Trusts
+		st.peer = got
+		st.peer.Trusts = trusts
+		st.remoteGen = remoteGen
+	}
+	if localGen >= st.localGen {
+		st.peer.Trusts = got.Trusts
+		st.localGen = localGen
 	}
 	info, still := st.peer, t.peers[p] == st
 	t.mu.Unlock()
 	if still && ok && was.Trusts && !info.Trusts {
 		t.shut(p)
 	}
-	return info, still
+}
+
+// updateLocal updates whether this host lets p in at generation gen and
+// cuts inbound streams if it let p in and no longer does. It reports the
+// peer as set, whether st is still p's link, and whether Trusts changed.
+func (t *trust) updateLocal(p peer.ID, st *trustState, gen uint64, trusts bool) (Peer, bool, bool) {
+	t.mu.Lock()
+	was, ok := settled(st)
+	flipped := false
+	if gen >= st.localGen {
+		flipped = st.peer.Trusts != trusts
+		st.peer.Trusts = trusts
+		st.localGen = gen
+	}
+	info, still := st.peer, t.peers[p] == st
+	t.mu.Unlock()
+	if still && ok && was.Trusts && !info.Trusts {
+		t.shut(p)
+	}
+	return info, still, flipped
 }
 
 // settle records in st that p has introduced itself, or failed to. The
@@ -415,9 +444,14 @@ func (t *trust) settle(p peer.ID, st *trustState, gen uint64, err error) {
 	st.err = err
 	info, changed := st.peer, t.changed
 	reintro := false
-	if err == nil && t.gen > gen && t.gen > st.introGen {
-		st.introGen = t.gen
-		reintro = true
+	if err == nil {
+		if gen > st.introGen {
+			st.introGen = gen
+		}
+		if t.gen > st.introGen {
+			st.introGen = t.gen
+			reintro = true
+		}
 	}
 	t.mu.Unlock()
 	if err != nil {
