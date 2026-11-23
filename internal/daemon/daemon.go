@@ -86,6 +86,7 @@ type Daemon struct {
 	workspace            workspaces                // the spaces, projects and layouts; see workspace.go
 	pluginConfigSync     pluginConfigSync          // plugin registries, installs, disabled & non-secret settings; see plugin_config_sync.go
 	agentSync            agentConfigSync           // agent definitions, MCP servers, skills & templates; see agent_sync.go
+	configSyncWG         sync.WaitGroup            // background config-sync goroutines awaited on shutdown
 	fetching             map[string]bool           // the peers whose workspace is being asked for
 	syncingPluginDB      map[string]bool           // the peers whose plugin DB sync is in flight
 	syncingPluginConfig  map[string]*peerSyncState // the peers whose plugin config sync is in flight
@@ -266,6 +267,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	defer func() {
 		cancel()
 		<-pluginsDone
+		d.configSyncWG.Wait()
 		d.conversations.stopAndWait()
 	}()
 	if !cfg.P2P.Disabled {

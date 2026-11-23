@@ -72,7 +72,7 @@ func (p *pluginConfigSync) load(dir, nodeID string) {
 	p.state = st
 	p.digest = syncstate.DigestPluginConfig(st)
 	if healed {
-		go p.save(proto.CloneOf(st))
+		p.save(proto.CloneOf(st))
 	}
 }
 
@@ -401,7 +401,13 @@ func (d *Daemon) applyPluginConfigSync(ctx context.Context) {
 	}
 
 	// 3. Reconcile disabled states (never touches grants/permissions).
+	if ctx.Err() != nil {
+		return
+	}
 	for _, id := range slices.Sorted(maps.Keys(st.GetDisabled())) {
+		if ctx.Err() != nil {
+			return
+		}
 		off := st.Disabled[id].GetValue()
 		changed, err := d.plugins.ApplySyncedDisabled(id, off)
 		if err != nil {
@@ -412,6 +418,9 @@ func (d *Daemon) applyPluginConfigSync(ctx context.Context) {
 	}
 
 	// 4. Reconcile non-secret settings for loaded plugins.
+	if ctx.Err() != nil {
+		return
+	}
 	if d.applySyncedPluginSettings(st) {
 		anyChanged = true
 	}
@@ -455,13 +464,16 @@ func (d *Daemon) applySyncedPluginSettings(st *protocol.PluginConfigSyncState) b
 // applyPendingPluginSettings applies any synced non-secret settings to plugins
 // that just finished loading their manifest after a store install.
 func (d *Daemon) applyPendingPluginSettings() {
-	if d.plugins == nil || d.store == nil || !d.syncsPlugins() {
+	if d.ctx == nil || d.ctx.Err() != nil || d.plugins == nil || d.store == nil || !d.syncsPlugins() {
 		return
 	}
 	if !d.pluginConfigSync.applyMu.TryLock() {
 		return
 	}
 	defer d.pluginConfigSync.applyMu.Unlock()
+	if d.ctx.Err() != nil {
+		return
+	}
 	st, _ := d.pluginConfigSync.snapshot()
 	if syncstate.EmptyPluginConfig(st) {
 		return
@@ -578,8 +590,15 @@ func (d *Daemon) syncPluginConfigWithPeer(nodeID string, remoteDigest []byte) {
 	st.busy = true
 	d.mu.Unlock()
 
-	go func() {
+	d.configSyncWG.Go(func() {
 		for {
+			if d.ctx.Err() != nil {
+				d.mu.Lock()
+				st.busy = false
+				delete(d.syncingPluginConfig, nodeID)
+				d.mu.Unlock()
+				return
+			}
 			d.mu.Lock()
 			attempted := bytes.Clone(st.digest)
 			d.mu.Unlock()
@@ -587,7 +606,7 @@ func (d *Daemon) syncPluginConfigWithPeer(nodeID string, remoteDigest []byte) {
 			ok := d.syncPluginConfigOnce(nodeID)
 
 			d.mu.Lock()
-			if ok && !bytes.Equal(st.digest, attempted) && !bytes.Equal(st.digest, d.pluginConfigSync.currentDigest()) {
+			if ok && d.ctx.Err() == nil && !bytes.Equal(st.digest, attempted) && !bytes.Equal(st.digest, d.pluginConfigSync.currentDigest()) {
 				d.mu.Unlock()
 				continue
 			}
@@ -596,7 +615,7 @@ func (d *Daemon) syncPluginConfigWithPeer(nodeID string, remoteDigest []byte) {
 			d.mu.Unlock()
 			return
 		}
-	}()
+	})
 }
 
 func (d *Daemon) syncPluginConfigOnce(nodeID string) bool {
@@ -639,12 +658,12 @@ func (d *Daemon) handleSyncPluginConfig(_ context.Context, stream *transport.Str
 	}
 	d.captureLocalPluginConfig()
 	merged, changed := d.pluginConfigSync.merge(req.GetState())
-	if changed {
-		go func() {
+	if changed && d.ctx.Err() == nil {
+		d.configSyncWG.Go(func() {
 			ctx, cancel := context.WithTimeout(d.ctx, 2*time.Minute)
 			defer cancel()
 			d.applyPluginConfigSync(ctx)
-		}()
+		})
 	}
 	return stream.Send(protocol.TypePluginConfigSyncState, env.GetId(), merged)
 }

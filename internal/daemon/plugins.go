@@ -118,7 +118,7 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		SyncChanged:       func() { d.pokeStatus() },
 		ConfigSyncChanged: func() { d.onPluginConfigLocalChange() },
 		Changed: func() {
-			go d.applyPendingPluginSettings()
+			d.configSyncWG.Go(func() { d.applyPendingPluginSettings() })
 			d.changes.firePlugins()
 			d.syncProjectAgents()
 		},

@@ -75,7 +75,7 @@ func (a *agentConfigSync) load(dir, nodeID string) {
 	a.state = st
 	a.digest = syncstate.DigestAgentConfig(st)
 	if healed {
-		go a.save(proto.CloneOf(st))
+		a.save(proto.CloneOf(st))
 	}
 }
 
@@ -383,8 +383,8 @@ func (d *Daemon) applyAgentConfigSync() {
 	d.refreshAgentLocalBaselineLocked(st)
 	a.applyMu.Unlock()
 
-	if skillsChanged {
-		go d.syncBuiltinSkills(d.ctx)
+	if skillsChanged && d.ctx.Err() == nil {
+		d.configSyncWG.Go(func() { d.syncBuiltinSkills(d.ctx) })
 	}
 	if configChanged || skillsChanged || templatesChanged {
 		d.syncProjectAgents()
@@ -678,8 +678,15 @@ func (d *Daemon) syncAgentConfigWithPeer(nodeID string, remoteDigest []byte) {
 	st.busy = true
 	d.mu.Unlock()
 
-	go func() {
+	d.configSyncWG.Go(func() {
 		for {
+			if d.ctx.Err() != nil {
+				d.mu.Lock()
+				st.busy = false
+				delete(d.syncingAgentConfig, nodeID)
+				d.mu.Unlock()
+				return
+			}
 			d.mu.Lock()
 			attempted := bytes.Clone(st.digest)
 			d.mu.Unlock()
@@ -687,7 +694,7 @@ func (d *Daemon) syncAgentConfigWithPeer(nodeID string, remoteDigest []byte) {
 			ok := d.syncAgentConfigOnce(nodeID)
 
 			d.mu.Lock()
-			if ok && !bytes.Equal(st.digest, attempted) && !bytes.Equal(st.digest, d.agentSync.currentDigest()) {
+			if ok && d.ctx.Err() == nil && !bytes.Equal(st.digest, attempted) && !bytes.Equal(st.digest, d.agentSync.currentDigest()) {
 				d.mu.Unlock()
 				continue
 			}
@@ -696,7 +703,7 @@ func (d *Daemon) syncAgentConfigWithPeer(nodeID string, remoteDigest []byte) {
 			d.mu.Unlock()
 			return
 		}
-	}()
+	})
 }
 
 func (d *Daemon) syncAgentConfigOnce(nodeID string) bool {
