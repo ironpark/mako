@@ -352,7 +352,7 @@ func (h *Host) link(ctx context.Context, info peer.AddrInfo) (Peer, error) {
 func (h *Host) HandleState(fn func(from Peer, data []byte)) {
 	h.h.SetStreamHandler(stateProtocol, func(s network.Stream) {
 		defer s.Close()
-		p, ok := h.trust.get(s.Conn().RemotePeer())
+		p, ok := h.trust.arrived(s.Conn().RemotePeer())
 		if !ok || !(p.Trusts || p.TrustedBy) {
 			_ = s.Reset()
 			return

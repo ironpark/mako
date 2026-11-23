@@ -302,8 +302,13 @@ func TestStatesTravelWhereTrustRuns(t *testing.T) {
 	if err := b.SendState(ctx, a.ID(), []byte("b's")); err != nil {
 		t.Fatal(err)
 	}
-	if s := <-got; s != "b's" {
-		t.Fatalf("got %q", s)
+	select {
+	case s := <-got:
+		if s != "b's" {
+			t.Fatalf("got %q", s)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for b's state")
 	}
 	if err := stranger.Ensure(ctx, a.ID().String(), a.Addrs()); err != nil {
 		t.Fatal(err)
