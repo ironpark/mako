@@ -70,10 +70,12 @@ type model struct {
 	Page       *ggui.StateValue[string] // "workspace" or "settings"
 	Section    *ggui.StateValue[string] // the settings page shown
 	Host       *ggui.StateValue[hostDraft]
-	// WorkspaceSync is whether this node shares its workspace with its
-	// peers: its daemon's setting (config.Workspace), which Settings
-	// changes.
+	// WorkspaceSync, PluginSync, and AgentSync control whether this node
+	// shares workspace, plugin config, and agent config with mutually trusted
+	// peers (config.Workspace), editable in Settings.
 	WorkspaceSync       *ggui.StateValue[bool]
+	PluginSync          *ggui.StateValue[bool]
+	AgentSync           *ggui.StateValue[bool]
 	IsolateHome         *ggui.StateValue[bool]
 	AgentDraft          *ggui.StateValue[[]agentDraft]
 	AgentCatalogs       *ggui.StateValue[map[string][]*protocol.AgentModel]
@@ -296,6 +298,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		Section:             ggui.State("general"),
 		Host:                ggui.State(draftFrom(cfg)),
 		WorkspaceSync:       ggui.State(workspaceSyncs(cfg)),
+		PluginSync:          ggui.State(cfg.Workspace.PluginsEnabled()),
+		AgentSync:           ggui.State(cfg.Workspace.AgentsEnabled()),
 		IsolateHome:         ggui.State(cfg.IsolateHome),
 		AgentDraft:          ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
 		AgentCatalogs:       ggui.State(map[string][]*protocol.AgentModel{}).WithEqual(equalCatalogMaps),

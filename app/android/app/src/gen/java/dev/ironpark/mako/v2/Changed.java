@@ -262,6 +262,44 @@ public  final class Changed extends
     agentBlocks_ = false;
   }
 
+  public static final int CONFIG_FIELD_NUMBER = 8;
+  private boolean config_;
+  /**
+   * <pre>
+   * synced agent config, MCP servers, skills, or templates changed (revision 47)
+   * </pre>
+   *
+   * <code>bool config = 8 [json_name = "config"];</code>
+   * @return The config.
+   */
+  @java.lang.Override
+  public boolean getConfig() {
+    return config_;
+  }
+  /**
+   * <pre>
+   * synced agent config, MCP servers, skills, or templates changed (revision 47)
+   * </pre>
+   *
+   * <code>bool config = 8 [json_name = "config"];</code>
+   * @param value The config to set.
+   */
+  private void setConfig(boolean value) {
+    
+    config_ = value;
+  }
+  /**
+   * <pre>
+   * synced agent config, MCP servers, skills, or templates changed (revision 47)
+   * </pre>
+   *
+   * <code>bool config = 8 [json_name = "config"];</code>
+   */
+  private void clearConfig() {
+
+    config_ = false;
+  }
+
   public static dev.ironpark.mako.v2.Changed parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -619,6 +657,46 @@ public  final class Changed extends
       return this;
     }
 
+    /**
+     * <pre>
+     * synced agent config, MCP servers, skills, or templates changed (revision 47)
+     * </pre>
+     *
+     * <code>bool config = 8 [json_name = "config"];</code>
+     * @return The config.
+     */
+    @java.lang.Override
+    public boolean getConfig() {
+      return instance.getConfig();
+    }
+    /**
+     * <pre>
+     * synced agent config, MCP servers, skills, or templates changed (revision 47)
+     * </pre>
+     *
+     * <code>bool config = 8 [json_name = "config"];</code>
+     * @param value The config to set.
+     * @return This builder for chaining.
+     */
+    public Builder setConfig(boolean value) {
+      copyOnWrite();
+      instance.setConfig(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * synced agent config, MCP servers, skills, or templates changed (revision 47)
+     * </pre>
+     *
+     * <code>bool config = 8 [json_name = "config"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearConfig() {
+      copyOnWrite();
+      instance.clearConfig();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Changed)
   }
   @java.lang.Override
@@ -642,10 +720,11 @@ public  final class Changed extends
             "devices_",
             "plugins_",
             "agentBlocks_",
+            "config_",
           };
           java.lang.String info =
-              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0007\u0002\u0007" +
-              "\u0003\u0007\u0004\u0007\u0005\u0007\u0006\u0007\u0007\u0007";
+              "\u0000\b\u0000\u0000\u0001\b\b\u0000\u0000\u0000\u0001\u0007\u0002\u0007\u0003\u0007" +
+              "\u0004\u0007\u0005\u0007\u0006\u0007\u0007\u0007\b\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

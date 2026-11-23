@@ -87,4 +87,28 @@ public interface NodeStateOrBuilder extends
    * @return The pluginSyncDigest.
    */
   com.google.protobuf.ByteString getPluginSyncDigest();
+
+  /**
+   * <pre>
+   * plugin_config_sync_digest is a 32-byte SHA-256 digest of this node's synced
+   * plugin registries, store installs, non-secret settings, and disabled states
+   * (revision 47); mutually trusted peers exchange SyncPluginConfig when digests differ.
+   * </pre>
+   *
+   * <code>bytes plugin_config_sync_digest = 7 [json_name = "pluginConfigSyncDigest"];</code>
+   * @return The pluginConfigSyncDigest.
+   */
+  com.google.protobuf.ByteString getPluginConfigSyncDigest();
+
+  /**
+   * <pre>
+   * agent_sync_digest is a 32-byte SHA-256 digest of this node's synced agent
+   * definitions, profiles, MCP context servers, skill overrides, and prompt
+   * templates (revision 47); mutually trusted peers exchange SyncAgentConfig when digests differ.
+   * </pre>
+   *
+   * <code>bytes agent_sync_digest = 8 [json_name = "agentSyncDigest"];</code>
+   * @return The agentSyncDigest.
+   */
+  com.google.protobuf.ByteString getAgentSyncDigest();
 }

@@ -25,6 +25,8 @@ public  final class NodeState extends
     sessions_ = emptyProtobufList();
     peers_ = emptyProtobufList();
     pluginSyncDigest_ = com.google.protobuf.ByteString.EMPTY;
+    pluginConfigSyncDigest_ = com.google.protobuf.ByteString.EMPTY;
+    agentSyncDigest_ = com.google.protobuf.ByteString.EMPTY;
   }
   private int bitField0_;
   public static final int NODE_FIELD_NUMBER = 1;
@@ -403,6 +405,96 @@ public  final class NodeState extends
   private void clearPluginSyncDigest() {
 
     pluginSyncDigest_ = getDefaultInstance().getPluginSyncDigest();
+  }
+
+  public static final int PLUGIN_CONFIG_SYNC_DIGEST_FIELD_NUMBER = 7;
+  private com.google.protobuf.ByteString pluginConfigSyncDigest_;
+  /**
+   * <pre>
+   * plugin_config_sync_digest is a 32-byte SHA-256 digest of this node's synced
+   * plugin registries, store installs, non-secret settings, and disabled states
+   * (revision 47); mutually trusted peers exchange SyncPluginConfig when digests differ.
+   * </pre>
+   *
+   * <code>bytes plugin_config_sync_digest = 7 [json_name = "pluginConfigSyncDigest"];</code>
+   * @return The pluginConfigSyncDigest.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString getPluginConfigSyncDigest() {
+    return pluginConfigSyncDigest_;
+  }
+  /**
+   * <pre>
+   * plugin_config_sync_digest is a 32-byte SHA-256 digest of this node's synced
+   * plugin registries, store installs, non-secret settings, and disabled states
+   * (revision 47); mutually trusted peers exchange SyncPluginConfig when digests differ.
+   * </pre>
+   *
+   * <code>bytes plugin_config_sync_digest = 7 [json_name = "pluginConfigSyncDigest"];</code>
+   * @param value The pluginConfigSyncDigest to set.
+   */
+  private void setPluginConfigSyncDigest(com.google.protobuf.ByteString value) {
+    java.util.Objects.requireNonNull(value);
+  
+    pluginConfigSyncDigest_ = value;
+  }
+  /**
+   * <pre>
+   * plugin_config_sync_digest is a 32-byte SHA-256 digest of this node's synced
+   * plugin registries, store installs, non-secret settings, and disabled states
+   * (revision 47); mutually trusted peers exchange SyncPluginConfig when digests differ.
+   * </pre>
+   *
+   * <code>bytes plugin_config_sync_digest = 7 [json_name = "pluginConfigSyncDigest"];</code>
+   */
+  private void clearPluginConfigSyncDigest() {
+
+    pluginConfigSyncDigest_ = getDefaultInstance().getPluginConfigSyncDigest();
+  }
+
+  public static final int AGENT_SYNC_DIGEST_FIELD_NUMBER = 8;
+  private com.google.protobuf.ByteString agentSyncDigest_;
+  /**
+   * <pre>
+   * agent_sync_digest is a 32-byte SHA-256 digest of this node's synced agent
+   * definitions, profiles, MCP context servers, skill overrides, and prompt
+   * templates (revision 47); mutually trusted peers exchange SyncAgentConfig when digests differ.
+   * </pre>
+   *
+   * <code>bytes agent_sync_digest = 8 [json_name = "agentSyncDigest"];</code>
+   * @return The agentSyncDigest.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString getAgentSyncDigest() {
+    return agentSyncDigest_;
+  }
+  /**
+   * <pre>
+   * agent_sync_digest is a 32-byte SHA-256 digest of this node's synced agent
+   * definitions, profiles, MCP context servers, skill overrides, and prompt
+   * templates (revision 47); mutually trusted peers exchange SyncAgentConfig when digests differ.
+   * </pre>
+   *
+   * <code>bytes agent_sync_digest = 8 [json_name = "agentSyncDigest"];</code>
+   * @param value The agentSyncDigest to set.
+   */
+  private void setAgentSyncDigest(com.google.protobuf.ByteString value) {
+    java.util.Objects.requireNonNull(value);
+  
+    agentSyncDigest_ = value;
+  }
+  /**
+   * <pre>
+   * agent_sync_digest is a 32-byte SHA-256 digest of this node's synced agent
+   * definitions, profiles, MCP context servers, skill overrides, and prompt
+   * templates (revision 47); mutually trusted peers exchange SyncAgentConfig when digests differ.
+   * </pre>
+   *
+   * <code>bytes agent_sync_digest = 8 [json_name = "agentSyncDigest"];</code>
+   */
+  private void clearAgentSyncDigest() {
+
+    agentSyncDigest_ = getDefaultInstance().getAgentSyncDigest();
   }
 
   public static dev.ironpark.mako.v2.NodeState parseFrom(
@@ -911,6 +1003,98 @@ public  final class NodeState extends
       return this;
     }
 
+    /**
+     * <pre>
+     * plugin_config_sync_digest is a 32-byte SHA-256 digest of this node's synced
+     * plugin registries, store installs, non-secret settings, and disabled states
+     * (revision 47); mutually trusted peers exchange SyncPluginConfig when digests differ.
+     * </pre>
+     *
+     * <code>bytes plugin_config_sync_digest = 7 [json_name = "pluginConfigSyncDigest"];</code>
+     * @return The pluginConfigSyncDigest.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getPluginConfigSyncDigest() {
+      return instance.getPluginConfigSyncDigest();
+    }
+    /**
+     * <pre>
+     * plugin_config_sync_digest is a 32-byte SHA-256 digest of this node's synced
+     * plugin registries, store installs, non-secret settings, and disabled states
+     * (revision 47); mutually trusted peers exchange SyncPluginConfig when digests differ.
+     * </pre>
+     *
+     * <code>bytes plugin_config_sync_digest = 7 [json_name = "pluginConfigSyncDigest"];</code>
+     * @param value The pluginConfigSyncDigest to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPluginConfigSyncDigest(com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setPluginConfigSyncDigest(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * plugin_config_sync_digest is a 32-byte SHA-256 digest of this node's synced
+     * plugin registries, store installs, non-secret settings, and disabled states
+     * (revision 47); mutually trusted peers exchange SyncPluginConfig when digests differ.
+     * </pre>
+     *
+     * <code>bytes plugin_config_sync_digest = 7 [json_name = "pluginConfigSyncDigest"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPluginConfigSyncDigest() {
+      copyOnWrite();
+      instance.clearPluginConfigSyncDigest();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * agent_sync_digest is a 32-byte SHA-256 digest of this node's synced agent
+     * definitions, profiles, MCP context servers, skill overrides, and prompt
+     * templates (revision 47); mutually trusted peers exchange SyncAgentConfig when digests differ.
+     * </pre>
+     *
+     * <code>bytes agent_sync_digest = 8 [json_name = "agentSyncDigest"];</code>
+     * @return The agentSyncDigest.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString getAgentSyncDigest() {
+      return instance.getAgentSyncDigest();
+    }
+    /**
+     * <pre>
+     * agent_sync_digest is a 32-byte SHA-256 digest of this node's synced agent
+     * definitions, profiles, MCP context servers, skill overrides, and prompt
+     * templates (revision 47); mutually trusted peers exchange SyncAgentConfig when digests differ.
+     * </pre>
+     *
+     * <code>bytes agent_sync_digest = 8 [json_name = "agentSyncDigest"];</code>
+     * @param value The agentSyncDigest to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAgentSyncDigest(com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setAgentSyncDigest(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * agent_sync_digest is a 32-byte SHA-256 digest of this node's synced agent
+     * definitions, profiles, MCP context servers, skill overrides, and prompt
+     * templates (revision 47); mutually trusted peers exchange SyncAgentConfig when digests differ.
+     * </pre>
+     *
+     * <code>bytes agent_sync_digest = 8 [json_name = "agentSyncDigest"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAgentSyncDigest() {
+      copyOnWrite();
+      instance.clearAgentSyncDigest();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.NodeState)
   }
   @java.lang.Override
@@ -936,10 +1120,12 @@ public  final class NodeState extends
             dev.ironpark.mako.v2.Node.class,
             "workspace_",
             "pluginSyncDigest_",
+            "pluginConfigSyncDigest_",
+            "agentSyncDigest_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0002\u0000\u0001\u1009\u0000\u0002" +
-              "\u001b\u0003\u0007\u0004\u001b\u0005\u1009\u0001\u0006\n";
+              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0002\u0000\u0001\u1009\u0000\u0002\u001b\u0003" +
+              "\u0007\u0004\u001b\u0005\u1009\u0001\u0006\n\u0007\n\b\n";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

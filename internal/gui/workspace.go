@@ -19,6 +19,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
@@ -587,4 +588,65 @@ func (m *model) setWorkspaceSync(on bool) {
 	}
 	m.cfg.Workspace = cfg.Workspace
 	m.WorkspaceSync.Set(on)
+}
+
+// setPluginSync toggles peer-to-peer plugin config sync in config.json.
+func (m *model) setPluginSync(on bool) {
+	cfg, err := config.Load()
+	if err == nil {
+		cfg.Workspace.SyncPlugins = &on
+		err = config.Save(cfg)
+	}
+	if err != nil {
+		if m.toaster != nil {
+			m.toaster.Push(ui.Toast(Tf("Could not save: %v", err), "").Destructive())
+		}
+		return
+	}
+	m.cfg.Workspace = cfg.Workspace
+	m.PluginSync.Set(on)
+}
+
+// setAgentSync toggles peer-to-peer agent config sync in config.json.
+func (m *model) setAgentSync(on bool) {
+	cfg, err := config.Load()
+	if err == nil {
+		cfg.Workspace.SyncAgents = &on
+		err = config.Save(cfg)
+	}
+	if err != nil {
+		if m.toaster != nil {
+			m.toaster.Push(ui.Toast(Tf("Could not save: %v", err), "").Destructive())
+		}
+		return
+	}
+	m.cfg.Workspace = cfg.Workspace
+	m.AgentSync.Set(on)
+}
+
+// reloadSyncedConfig reloads config.json after the daemon applies peer-synced
+// agents, MCP servers, skills, or prompt templates, preserving any unsaved
+// local edits in Settings.
+func (m *model) reloadSyncedConfig() {
+	cfg, err := config.Load()
+	if err != nil {
+		return
+	}
+	hostDirty := ggui.Peek(m.Host) != draftFrom(m.cfg)
+	agentsDirty := !sameAgents(ggui.Peek(m.AgentDraft), draftAgents(m.cfg.Agents))
+	*m.cfg = *cfg
+	m.Agents.Set(agentspec.Targets(cfg.Agents))
+	m.WorkspaceSync.Set(workspaceSyncs(cfg))
+	m.PluginSync.Set(cfg.Workspace.PluginsEnabled())
+	m.AgentSync.Set(cfg.Workspace.AgentsEnabled())
+	if !hostDirty {
+		m.Host.Set(draftFrom(cfg))
+	}
+	if !agentsDirty {
+		m.AgentDraft.Set(draftAgents(cfg.Agents))
+	}
+	if m.ext != nil {
+		m.ext.MCPServers.Set(maps.Clone(cfg.ContextServers))
+	}
+	m.invalidateSessionTemplates()
 }

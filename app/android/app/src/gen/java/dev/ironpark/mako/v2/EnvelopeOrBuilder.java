@@ -1467,5 +1467,57 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.PluginSyncBundle getPluginSyncBundle();
 
+  /**
+   * <pre>
+   * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+   * @return Whether the syncPluginConfig field is set.
+   */
+  boolean hasSyncPluginConfig();
+  /**
+   * <pre>
+   * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+   * @return The syncPluginConfig.
+   */
+  dev.ironpark.mako.v2.SyncPluginConfig getSyncPluginConfig();
+
+  /**
+   * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+   * @return Whether the pluginConfigSyncState field is set.
+   */
+  boolean hasPluginConfigSyncState();
+  /**
+   * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+   * @return The pluginConfigSyncState.
+   */
+  dev.ironpark.mako.v2.PluginConfigSyncState getPluginConfigSyncState();
+
+  /**
+   * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+   * @return Whether the syncAgentConfig field is set.
+   */
+  boolean hasSyncAgentConfig();
+  /**
+   * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+   * @return The syncAgentConfig.
+   */
+  dev.ironpark.mako.v2.SyncAgentConfig getSyncAgentConfig();
+
+  /**
+   * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+   * @return Whether the agentSyncState field is set.
+   */
+  boolean hasAgentSyncState();
+  /**
+   * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+   * @return The agentSyncState.
+   */
+  dev.ironpark.mako.v2.AgentSyncState getAgentSyncState();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

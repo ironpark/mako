@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package mako.v2;
+
+import "mako/v2/workspace.proto";
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// BytesReg is a Last-Write-Wins Register holding arbitrary bytes (e.g. canonical
+// JSON or Markdown). deleted == true is a tombstone so removals converge across
+// mutually trusted peers.
+message BytesReg {
+  bytes value = 1;
+  bool deleted = 2;
+  HLC clock = 3;
+}
+
+// PluginInstallSyncEntry is the CRDT record of one registry-installed plugin.
+// Permissions/grants and secrets are never included; each node approves grants
+// and holds secrets locally.
+message PluginInstallSyncEntry {
+  bool installed = 1; // false is a tombstone (removed from the store)
+  string registry = 2;
+  string key = 3; // pinned publisher public key
+  string version = 4;
+  HLC clock = 5;
+}
+
+// PluginConfigSyncState is the CRDT state replicated between mutually trusted
+// peers for plugin registries, store installs, disabled states, and non-secret
+// settings (revision 47).
+message PluginConfigSyncState {
+  // Custom registries added by the user (canonical URL -> set membership).
+  map<string, ElementMeta> registries = 1;
+  // Whether the built-in default registry was explicitly removed.
+  BoolReg no_default_registry = 2;
+  // Store-installed plugins (plugin_id -> desired install state or tombstone).
+  map<string, PluginInstallSyncEntry> installs = 3;
+  // Plugin disabled states (plugin_id -> disabled flag).
+  map<string, BoolReg> disabled = 4;
+  // Non-secret plugin settings.
+  // Key format: "<plugin_id>\x00<scope_key>\x00<setting_key>" (scope_key == "" for global).
+  // Value holds canonical JSON for string/bool/number; deleted == true means unset.
+  map<string, BytesReg> settings = 5;
+}
+
+// SyncPluginConfig exchanges a peer's PluginConfigSyncState and receives the
+// receiver's merged PluginConfigSyncState in reply.
+message SyncPluginConfig {
+  PluginConfigSyncState state = 1;
+}
+
+// AgentSyncState is the CRDT state replicated between mutually trusted peers
+// for agent definitions and profiles (without env), MCP context servers
+// (without command env), built-in skill overrides, and custom prompt templates
+// (revision 47).
+message AgentSyncState {
+  // Agent definitions by name (canonical JSON of sanitized agentspec.Agent without env).
+  map<string, BytesReg> agents = 1;
+  // MCP context servers by server ID (canonical JSON of sanitized mcp.Server without command.env).
+  map<string, BytesReg> context_servers = 2;
+  // Built-in skill overrides by skill name (Markdown contents of skills/<name>/SKILL.md).
+  map<string, BytesReg> skills = 3;
+  // Custom prompt templates by filename (e.g. "review.md" -> Markdown contents).
+  map<string, BytesReg> templates = 4;
+}
+
+// SyncAgentConfig exchanges a peer's AgentSyncState and receives the receiver's
+// merged AgentSyncState in reply.
+message SyncAgentConfig {
+  AgentSyncState state = 1;
+}

@@ -159,6 +159,10 @@ type Envelope struct {
 	//	*Envelope_DecisionResult
 	//	*Envelope_SyncPluginDb
 	//	*Envelope_PluginSyncBundle
+	//	*Envelope_SyncPluginConfig
+	//	*Envelope_PluginConfigSyncState
+	//	*Envelope_SyncAgentConfig
+	//	*Envelope_AgentSyncState
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1268,6 +1272,42 @@ func (x *Envelope) GetPluginSyncBundle() *PluginSyncBundle {
 	return nil
 }
 
+func (x *Envelope) GetSyncPluginConfig() *SyncPluginConfig {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SyncPluginConfig); ok {
+			return x.SyncPluginConfig
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetPluginConfigSyncState() *PluginConfigSyncState {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_PluginConfigSyncState); ok {
+			return x.PluginConfigSyncState
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetSyncAgentConfig() *SyncAgentConfig {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SyncAgentConfig); ok {
+			return x.SyncAgentConfig
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetAgentSyncState() *AgentSyncState {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AgentSyncState); ok {
+			return x.AgentSyncState
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1757,6 +1797,23 @@ type Envelope_PluginSyncBundle struct {
 	PluginSyncBundle *PluginSyncBundle `protobuf:"bytes,156,opt,name=plugin_sync_bundle,json=pluginSyncBundle,proto3,oneof"`
 }
 
+type Envelope_SyncPluginConfig struct {
+	// Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+	SyncPluginConfig *SyncPluginConfig `protobuf:"bytes,157,opt,name=sync_plugin_config,json=syncPluginConfig,proto3,oneof"`
+}
+
+type Envelope_PluginConfigSyncState struct {
+	PluginConfigSyncState *PluginConfigSyncState `protobuf:"bytes,158,opt,name=plugin_config_sync_state,json=pluginConfigSyncState,proto3,oneof"`
+}
+
+type Envelope_SyncAgentConfig struct {
+	SyncAgentConfig *SyncAgentConfig `protobuf:"bytes,159,opt,name=sync_agent_config,json=syncAgentConfig,proto3,oneof"`
+}
+
+type Envelope_AgentSyncState struct {
+	AgentSyncState *AgentSyncState `protobuf:"bytes,160,opt,name=agent_sync_state,json=agentSyncState,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -1991,6 +2048,14 @@ func (*Envelope_SyncPluginDb) isEnvelope_Body() {}
 
 func (*Envelope_PluginSyncBundle) isEnvelope_Body() {}
 
+func (*Envelope_SyncPluginConfig) isEnvelope_Body() {}
+
+func (*Envelope_PluginConfigSyncState) isEnvelope_Body() {}
+
+func (*Envelope_SyncAgentConfig) isEnvelope_Body() {}
+
+func (*Envelope_AgentSyncState) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -2060,7 +2125,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x1cmako/v2/project_agents.proto\"\xb43\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\xeb5\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -2203,7 +2268,11 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\frun_decision\x18\x99\x01 \x01(\v2\x14.mako.v2.RunDecisionH\x00R\vrunDecision\x12C\n" +
 	"\x0fdecision_result\x18\x9a\x01 \x01(\v2\x17.mako.v2.DecisionResultH\x00R\x0edecisionResult\x12>\n" +
 	"\x0esync_plugin_db\x18\x9b\x01 \x01(\v2\x15.mako.v2.SyncPluginDBH\x00R\fsyncPluginDb\x12J\n" +
-	"\x12plugin_sync_bundle\x18\x9c\x01 \x01(\v2\x19.mako.v2.PluginSyncBundleH\x00R\x10pluginSyncBundleB\x06\n" +
+	"\x12plugin_sync_bundle\x18\x9c\x01 \x01(\v2\x19.mako.v2.PluginSyncBundleH\x00R\x10pluginSyncBundle\x12J\n" +
+	"\x12sync_plugin_config\x18\x9d\x01 \x01(\v2\x19.mako.v2.SyncPluginConfigH\x00R\x10syncPluginConfig\x12Z\n" +
+	"\x18plugin_config_sync_state\x18\x9e\x01 \x01(\v2\x1e.mako.v2.PluginConfigSyncStateH\x00R\x15pluginConfigSyncState\x12G\n" +
+	"\x11sync_agent_config\x18\x9f\x01 \x01(\v2\x18.mako.v2.SyncAgentConfigH\x00R\x0fsyncAgentConfig\x12D\n" +
+	"\x10agent_sync_state\x18\xa0\x01 \x01(\v2\x17.mako.v2.AgentSyncStateH\x00R\x0eagentSyncStateB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2224,124 +2293,128 @@ func file_mako_v2_envelope_proto_rawDescGZIP() []byte {
 
 var file_mako_v2_envelope_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_mako_v2_envelope_proto_goTypes = []any{
-	(*Envelope)(nil),          // 0: mako.v2.Envelope
-	(*Error)(nil),             // 1: mako.v2.Error
-	(*Hello)(nil),             // 2: mako.v2.Hello
-	(*Welcome)(nil),           // 3: mako.v2.Welcome
-	(*ListNodes)(nil),         // 4: mako.v2.ListNodes
-	(*Nodes)(nil),             // 5: mako.v2.Nodes
-	(*Watch)(nil),             // 6: mako.v2.Watch
-	(*Changed)(nil),           // 7: mako.v2.Changed
-	(*Access)(nil),            // 8: mako.v2.Access
-	(*AccessInfo)(nil),        // 9: mako.v2.AccessInfo
-	(*GetWorkspace)(nil),      // 10: mako.v2.GetWorkspace
-	(*Workspace)(nil),         // 11: mako.v2.Workspace
-	(*LayoutDecision)(nil),    // 12: mako.v2.LayoutDecision
-	(*ListSessions)(nil),      // 13: mako.v2.ListSessions
-	(*Sessions)(nil),          // 14: mako.v2.Sessions
-	(*OpenSession)(nil),       // 15: mako.v2.OpenSession
-	(*SessionInfo)(nil),       // 16: mako.v2.SessionInfo
-	(*CloseSession)(nil),      // 17: mako.v2.CloseSession
-	(*RenameSession)(nil),     // 18: mako.v2.RenameSession
-	(*AnswerApproval)(nil),    // 19: mako.v2.AnswerApproval
-	(*Send)(nil),              // 20: mako.v2.Send
-	(*ListCommands)(nil),      // 21: mako.v2.ListCommands
-	(*Commands)(nil),          // 22: mako.v2.Commands
-	(*AnswerQuestion)(nil),    // 23: mako.v2.AnswerQuestion
-	(*AnswerDialog)(nil),      // 24: mako.v2.AnswerDialog
-	(*ConfigureAgent)(nil),    // 25: mako.v2.ConfigureAgent
-	(*SleepSession)(nil),      // 26: mako.v2.SleepSession
-	(*Attach)(nil),            // 27: mako.v2.Attach
-	(*Input)(nil),             // 28: mako.v2.Input
-	(*Output)(nil),            // 29: mako.v2.Output
-	(*Resize)(nil),            // 30: mako.v2.Resize
-	(*Snapshot)(nil),          // 31: mako.v2.Snapshot
-	(*Exited)(nil),            // 32: mako.v2.Exited
-	(*ListDir)(nil),           // 33: mako.v2.ListDir
-	(*Dir)(nil),               // 34: mako.v2.Dir
-	(*ReadFile)(nil),          // 35: mako.v2.ReadFile
-	(*File)(nil),              // 36: mako.v2.File
-	(*WriteFile)(nil),         // 37: mako.v2.WriteFile
-	(*FileOp)(nil),            // 38: mako.v2.FileOp
-	(*Search)(nil),            // 39: mako.v2.Search
-	(*SearchResult)(nil),      // 40: mako.v2.SearchResult
-	(*StageFile)(nil),         // 41: mako.v2.StageFile
-	(*Staged)(nil),            // 42: mako.v2.Staged
-	(*Tunnel)(nil),            // 43: mako.v2.Tunnel
-	(*Tunneled)(nil),          // 44: mako.v2.Tunneled
-	(*GitStatus)(nil),         // 45: mako.v2.GitStatus
-	(*GitChanges)(nil),        // 46: mako.v2.GitChanges
-	(*GitDiff)(nil),           // 47: mako.v2.GitDiff
-	(*Diff)(nil),              // 48: mako.v2.Diff
-	(*GitLog)(nil),            // 49: mako.v2.GitLog
-	(*GitHistory)(nil),        // 50: mako.v2.GitHistory
-	(*GitShow)(nil),           // 51: mako.v2.GitShow
-	(*GitCommitInfo)(nil),     // 52: mako.v2.GitCommitInfo
-	(*GitRun)(nil),            // 53: mako.v2.GitRun
-	(*GitResult)(nil),         // 54: mako.v2.GitResult
-	(*ReadChat)(nil),          // 55: mako.v2.ReadChat
-	(*Chat)(nil),              // 56: mako.v2.Chat
-	(*ReadProjectAgents)(nil), // 57: mako.v2.ReadProjectAgents
-	(*ProjectAgents)(nil),     // 58: mako.v2.ProjectAgents
-	(*SetProjects)(nil),       // 59: mako.v2.SetProjects
-	(*Projects)(nil),          // 60: mako.v2.Projects
-	(*RelayAgentMessage)(nil), // 61: mako.v2.RelayAgentMessage
-	(*AgentMessage)(nil),      // 62: mako.v2.AgentMessage
-	(*WatchChat)(nil),         // 63: mako.v2.WatchChat
-	(*ChatLive)(nil),          // 64: mako.v2.ChatLive
-	(*ForgeList)(nil),         // 65: mako.v2.ForgeList
-	(*ForgeItems)(nil),        // 66: mako.v2.ForgeItems
-	(*ForgeView)(nil),         // 67: mako.v2.ForgeView
-	(*ForgeDetail)(nil),       // 68: mako.v2.ForgeDetail
-	(*ForgeRun)(nil),          // 69: mako.v2.ForgeRun
-	(*ListDevices)(nil),       // 70: mako.v2.ListDevices
-	(*Devices)(nil),           // 71: mako.v2.Devices
-	(*Borrow)(nil),            // 72: mako.v2.Borrow
-	(*Lease)(nil),             // 73: mako.v2.Lease
-	(*GiveBack)(nil),          // 74: mako.v2.GiveBack
-	(*ListLeases)(nil),        // 75: mako.v2.ListLeases
-	(*Leases)(nil),            // 76: mako.v2.Leases
-	(*Claim)(nil),             // 77: mako.v2.Claim
-	(*Claimed)(nil),           // 78: mako.v2.Claimed
-	(*DeviceConn)(nil),        // 79: mako.v2.DeviceConn
-	(*DeviceListen)(nil),      // 80: mako.v2.DeviceListen
-	(*DeviceAccept)(nil),      // 81: mako.v2.DeviceAccept
-	(*ListPlugins)(nil),       // 82: mako.v2.ListPlugins
-	(*Plugins)(nil),           // 83: mako.v2.Plugins
-	(*PluginAction)(nil),      // 84: mako.v2.PluginAction
-	(*PluginDone)(nil),        // 85: mako.v2.PluginDone
-	(*WatchBlock)(nil),        // 86: mako.v2.WatchBlock
-	(*BlockUpdate)(nil),       // 87: mako.v2.BlockUpdate
-	(*BlockEvent)(nil),        // 88: mako.v2.BlockEvent
-	(*ListAgentBlocks)(nil),   // 89: mako.v2.ListAgentBlocks
-	(*AgentBlocks)(nil),       // 90: mako.v2.AgentBlocks
-	(*ListRegistries)(nil),    // 91: mako.v2.ListRegistries
-	(*Registries)(nil),        // 92: mako.v2.Registries
-	(*RegistryAction)(nil),    // 93: mako.v2.RegistryAction
-	(*SearchPlugins)(nil),     // 94: mako.v2.SearchPlugins
-	(*PluginListings)(nil),    // 95: mako.v2.PluginListings
-	(*InstallPlugin)(nil),     // 96: mako.v2.InstallPlugin
-	(*PluginInstalled)(nil),   // 97: mako.v2.PluginInstalled
-	(*ListPanels)(nil),        // 98: mako.v2.ListPanels
-	(*Panels)(nil),            // 99: mako.v2.Panels
-	(*SeeSession)(nil),        // 100: mako.v2.SeeSession
-	(*WatchFiles)(nil),        // 101: mako.v2.WatchFiles
-	(*FilesChanged)(nil),      // 102: mako.v2.FilesChanged
-	(*ListAgentModels)(nil),   // 103: mako.v2.ListAgentModels
-	(*AgentModels)(nil),       // 104: mako.v2.AgentModels
-	(*InspectAgentHome)(nil),  // 105: mako.v2.InspectAgentHome
-	(*AgentHomeInfo)(nil),     // 106: mako.v2.AgentHomeInfo
-	(*MigrateAgentHome)(nil),  // 107: mako.v2.MigrateAgentHome
-	(*AgentHomeMigrated)(nil), // 108: mako.v2.AgentHomeMigrated
-	(*RunAgentPrompt)(nil),    // 109: mako.v2.RunAgentPrompt
-	(*AgentPromptResult)(nil), // 110: mako.v2.AgentPromptResult
-	(*ListProviders)(nil),     // 111: mako.v2.ListProviders
-	(*Providers)(nil),         // 112: mako.v2.Providers
-	(*ProviderAction)(nil),    // 113: mako.v2.ProviderAction
-	(*RunDecision)(nil),       // 114: mako.v2.RunDecision
-	(*DecisionResult)(nil),    // 115: mako.v2.DecisionResult
-	(*SyncPluginDB)(nil),      // 116: mako.v2.SyncPluginDB
-	(*PluginSyncBundle)(nil),  // 117: mako.v2.PluginSyncBundle
+	(*Envelope)(nil),              // 0: mako.v2.Envelope
+	(*Error)(nil),                 // 1: mako.v2.Error
+	(*Hello)(nil),                 // 2: mako.v2.Hello
+	(*Welcome)(nil),               // 3: mako.v2.Welcome
+	(*ListNodes)(nil),             // 4: mako.v2.ListNodes
+	(*Nodes)(nil),                 // 5: mako.v2.Nodes
+	(*Watch)(nil),                 // 6: mako.v2.Watch
+	(*Changed)(nil),               // 7: mako.v2.Changed
+	(*Access)(nil),                // 8: mako.v2.Access
+	(*AccessInfo)(nil),            // 9: mako.v2.AccessInfo
+	(*GetWorkspace)(nil),          // 10: mako.v2.GetWorkspace
+	(*Workspace)(nil),             // 11: mako.v2.Workspace
+	(*LayoutDecision)(nil),        // 12: mako.v2.LayoutDecision
+	(*ListSessions)(nil),          // 13: mako.v2.ListSessions
+	(*Sessions)(nil),              // 14: mako.v2.Sessions
+	(*OpenSession)(nil),           // 15: mako.v2.OpenSession
+	(*SessionInfo)(nil),           // 16: mako.v2.SessionInfo
+	(*CloseSession)(nil),          // 17: mako.v2.CloseSession
+	(*RenameSession)(nil),         // 18: mako.v2.RenameSession
+	(*AnswerApproval)(nil),        // 19: mako.v2.AnswerApproval
+	(*Send)(nil),                  // 20: mako.v2.Send
+	(*ListCommands)(nil),          // 21: mako.v2.ListCommands
+	(*Commands)(nil),              // 22: mako.v2.Commands
+	(*AnswerQuestion)(nil),        // 23: mako.v2.AnswerQuestion
+	(*AnswerDialog)(nil),          // 24: mako.v2.AnswerDialog
+	(*ConfigureAgent)(nil),        // 25: mako.v2.ConfigureAgent
+	(*SleepSession)(nil),          // 26: mako.v2.SleepSession
+	(*Attach)(nil),                // 27: mako.v2.Attach
+	(*Input)(nil),                 // 28: mako.v2.Input
+	(*Output)(nil),                // 29: mako.v2.Output
+	(*Resize)(nil),                // 30: mako.v2.Resize
+	(*Snapshot)(nil),              // 31: mako.v2.Snapshot
+	(*Exited)(nil),                // 32: mako.v2.Exited
+	(*ListDir)(nil),               // 33: mako.v2.ListDir
+	(*Dir)(nil),                   // 34: mako.v2.Dir
+	(*ReadFile)(nil),              // 35: mako.v2.ReadFile
+	(*File)(nil),                  // 36: mako.v2.File
+	(*WriteFile)(nil),             // 37: mako.v2.WriteFile
+	(*FileOp)(nil),                // 38: mako.v2.FileOp
+	(*Search)(nil),                // 39: mako.v2.Search
+	(*SearchResult)(nil),          // 40: mako.v2.SearchResult
+	(*StageFile)(nil),             // 41: mako.v2.StageFile
+	(*Staged)(nil),                // 42: mako.v2.Staged
+	(*Tunnel)(nil),                // 43: mako.v2.Tunnel
+	(*Tunneled)(nil),              // 44: mako.v2.Tunneled
+	(*GitStatus)(nil),             // 45: mako.v2.GitStatus
+	(*GitChanges)(nil),            // 46: mako.v2.GitChanges
+	(*GitDiff)(nil),               // 47: mako.v2.GitDiff
+	(*Diff)(nil),                  // 48: mako.v2.Diff
+	(*GitLog)(nil),                // 49: mako.v2.GitLog
+	(*GitHistory)(nil),            // 50: mako.v2.GitHistory
+	(*GitShow)(nil),               // 51: mako.v2.GitShow
+	(*GitCommitInfo)(nil),         // 52: mako.v2.GitCommitInfo
+	(*GitRun)(nil),                // 53: mako.v2.GitRun
+	(*GitResult)(nil),             // 54: mako.v2.GitResult
+	(*ReadChat)(nil),              // 55: mako.v2.ReadChat
+	(*Chat)(nil),                  // 56: mako.v2.Chat
+	(*ReadProjectAgents)(nil),     // 57: mako.v2.ReadProjectAgents
+	(*ProjectAgents)(nil),         // 58: mako.v2.ProjectAgents
+	(*SetProjects)(nil),           // 59: mako.v2.SetProjects
+	(*Projects)(nil),              // 60: mako.v2.Projects
+	(*RelayAgentMessage)(nil),     // 61: mako.v2.RelayAgentMessage
+	(*AgentMessage)(nil),          // 62: mako.v2.AgentMessage
+	(*WatchChat)(nil),             // 63: mako.v2.WatchChat
+	(*ChatLive)(nil),              // 64: mako.v2.ChatLive
+	(*ForgeList)(nil),             // 65: mako.v2.ForgeList
+	(*ForgeItems)(nil),            // 66: mako.v2.ForgeItems
+	(*ForgeView)(nil),             // 67: mako.v2.ForgeView
+	(*ForgeDetail)(nil),           // 68: mako.v2.ForgeDetail
+	(*ForgeRun)(nil),              // 69: mako.v2.ForgeRun
+	(*ListDevices)(nil),           // 70: mako.v2.ListDevices
+	(*Devices)(nil),               // 71: mako.v2.Devices
+	(*Borrow)(nil),                // 72: mako.v2.Borrow
+	(*Lease)(nil),                 // 73: mako.v2.Lease
+	(*GiveBack)(nil),              // 74: mako.v2.GiveBack
+	(*ListLeases)(nil),            // 75: mako.v2.ListLeases
+	(*Leases)(nil),                // 76: mako.v2.Leases
+	(*Claim)(nil),                 // 77: mako.v2.Claim
+	(*Claimed)(nil),               // 78: mako.v2.Claimed
+	(*DeviceConn)(nil),            // 79: mako.v2.DeviceConn
+	(*DeviceListen)(nil),          // 80: mako.v2.DeviceListen
+	(*DeviceAccept)(nil),          // 81: mako.v2.DeviceAccept
+	(*ListPlugins)(nil),           // 82: mako.v2.ListPlugins
+	(*Plugins)(nil),               // 83: mako.v2.Plugins
+	(*PluginAction)(nil),          // 84: mako.v2.PluginAction
+	(*PluginDone)(nil),            // 85: mako.v2.PluginDone
+	(*WatchBlock)(nil),            // 86: mako.v2.WatchBlock
+	(*BlockUpdate)(nil),           // 87: mako.v2.BlockUpdate
+	(*BlockEvent)(nil),            // 88: mako.v2.BlockEvent
+	(*ListAgentBlocks)(nil),       // 89: mako.v2.ListAgentBlocks
+	(*AgentBlocks)(nil),           // 90: mako.v2.AgentBlocks
+	(*ListRegistries)(nil),        // 91: mako.v2.ListRegistries
+	(*Registries)(nil),            // 92: mako.v2.Registries
+	(*RegistryAction)(nil),        // 93: mako.v2.RegistryAction
+	(*SearchPlugins)(nil),         // 94: mako.v2.SearchPlugins
+	(*PluginListings)(nil),        // 95: mako.v2.PluginListings
+	(*InstallPlugin)(nil),         // 96: mako.v2.InstallPlugin
+	(*PluginInstalled)(nil),       // 97: mako.v2.PluginInstalled
+	(*ListPanels)(nil),            // 98: mako.v2.ListPanels
+	(*Panels)(nil),                // 99: mako.v2.Panels
+	(*SeeSession)(nil),            // 100: mako.v2.SeeSession
+	(*WatchFiles)(nil),            // 101: mako.v2.WatchFiles
+	(*FilesChanged)(nil),          // 102: mako.v2.FilesChanged
+	(*ListAgentModels)(nil),       // 103: mako.v2.ListAgentModels
+	(*AgentModels)(nil),           // 104: mako.v2.AgentModels
+	(*InspectAgentHome)(nil),      // 105: mako.v2.InspectAgentHome
+	(*AgentHomeInfo)(nil),         // 106: mako.v2.AgentHomeInfo
+	(*MigrateAgentHome)(nil),      // 107: mako.v2.MigrateAgentHome
+	(*AgentHomeMigrated)(nil),     // 108: mako.v2.AgentHomeMigrated
+	(*RunAgentPrompt)(nil),        // 109: mako.v2.RunAgentPrompt
+	(*AgentPromptResult)(nil),     // 110: mako.v2.AgentPromptResult
+	(*ListProviders)(nil),         // 111: mako.v2.ListProviders
+	(*Providers)(nil),             // 112: mako.v2.Providers
+	(*ProviderAction)(nil),        // 113: mako.v2.ProviderAction
+	(*RunDecision)(nil),           // 114: mako.v2.RunDecision
+	(*DecisionResult)(nil),        // 115: mako.v2.DecisionResult
+	(*SyncPluginDB)(nil),          // 116: mako.v2.SyncPluginDB
+	(*PluginSyncBundle)(nil),      // 117: mako.v2.PluginSyncBundle
+	(*SyncPluginConfig)(nil),      // 118: mako.v2.SyncPluginConfig
+	(*PluginConfigSyncState)(nil), // 119: mako.v2.PluginConfigSyncState
+	(*SyncAgentConfig)(nil),       // 120: mako.v2.SyncAgentConfig
+	(*AgentSyncState)(nil),        // 121: mako.v2.AgentSyncState
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2461,11 +2534,15 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	115, // 114: mako.v2.Envelope.decision_result:type_name -> mako.v2.DecisionResult
 	116, // 115: mako.v2.Envelope.sync_plugin_db:type_name -> mako.v2.SyncPluginDB
 	117, // 116: mako.v2.Envelope.plugin_sync_bundle:type_name -> mako.v2.PluginSyncBundle
-	117, // [117:117] is the sub-list for method output_type
-	117, // [117:117] is the sub-list for method input_type
-	117, // [117:117] is the sub-list for extension type_name
-	117, // [117:117] is the sub-list for extension extendee
-	0,   // [0:117] is the sub-list for field type_name
+	118, // 117: mako.v2.Envelope.sync_plugin_config:type_name -> mako.v2.SyncPluginConfig
+	119, // 118: mako.v2.Envelope.plugin_config_sync_state:type_name -> mako.v2.PluginConfigSyncState
+	120, // 119: mako.v2.Envelope.sync_agent_config:type_name -> mako.v2.SyncAgentConfig
+	121, // 120: mako.v2.Envelope.agent_sync_state:type_name -> mako.v2.AgentSyncState
+	121, // [121:121] is the sub-list for method output_type
+	121, // [121:121] is the sub-list for method input_type
+	121, // [121:121] is the sub-list for extension type_name
+	121, // [121:121] is the sub-list for extension extendee
+	0,   // [0:121] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2483,6 +2560,7 @@ func file_mako_v2_envelope_proto_init() {
 	file_mako_v2_plugins_proto_init()
 	file_mako_v2_pluginstore_proto_init()
 	file_mako_v2_session_proto_init()
+	file_mako_v2_sync_proto_init()
 	file_mako_v2_project_agents_proto_init()
 	file_mako_v2_envelope_proto_msgTypes[0].OneofWrappers = []any{
 		(*Envelope_Hello)(nil),
@@ -2602,6 +2680,10 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_DecisionResult)(nil),
 		(*Envelope_SyncPluginDb)(nil),
 		(*Envelope_PluginSyncBundle)(nil),
+		(*Envelope_SyncPluginConfig)(nil),
+		(*Envelope_PluginConfigSyncState)(nil),
+		(*Envelope_SyncAgentConfig)(nil),
+		(*Envelope_AgentSyncState)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

@@ -145,6 +145,9 @@ type Config struct {
 	NodeID string
 	// SyncChanged is called whenever a plugin's P2P-synced SQLite tables change.
 	SyncChanged func()
+	// ConfigSyncChanged is called whenever a plugin's synced configuration
+	// (disabled flag or non-secret setting) changes locally.
+	ConfigSyncChanged func()
 	// Poll is how often the folder is read for changes; 0 for a second.
 	Poll   time.Duration
 	Limits Limits

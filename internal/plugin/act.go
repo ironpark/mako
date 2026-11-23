@@ -92,6 +92,9 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 			p.cancelPending("the plugin was disabled")
 		}
 		p.signalRecheck()
+		if m.cfg.ConfigSyncChanged != nil {
+			m.cfg.ConfigSyncChanged()
+		}
 	case protocol.PluginReload:
 		p.post(p.reload)
 	case protocol.PluginRun:
@@ -138,6 +141,9 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		}
 		if err := p.settings.setScoped(*d, scopeKey, a.GetValue()); err != nil {
 			return nil, err
+		}
+		if d.Type != SettingSecret && m.cfg.ConfigSyncChanged != nil {
+			m.cfg.ConfigSyncChanged()
 		}
 		p.status(func() {})
 		// A block drawn from the settings is loaded again with them.

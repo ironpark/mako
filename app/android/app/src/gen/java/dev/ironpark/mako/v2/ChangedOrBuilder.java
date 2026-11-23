@@ -71,4 +71,14 @@ public interface ChangedOrBuilder extends
    * @return The agentBlocks.
    */
   boolean getAgentBlocks();
+
+  /**
+   * <pre>
+   * synced agent config, MCP servers, skills, or templates changed (revision 47)
+   * </pre>
+   *
+   * <code>bool config = 8 [json_name = "config"];</code>
+   * @return The config.
+   */
+  boolean getConfig();
 }

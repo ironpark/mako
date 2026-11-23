@@ -445,9 +445,19 @@ func agentSettings(m *model) ggui.Widget {
 	return listPage(T("Agents"), T("The programs a session can start on this node, the flags and environment each starts with, and profiles: named variations of an agent, such as claude on another model or account. A session picks one as agent:profile. Changes apply to the next session started."),
 		isolateHomeCard(m),
 		builtinMCPCard(m),
+		agentSyncCard(m),
 		agents,
 		saveBar(m),
 	)
+}
+
+func agentSyncCard(m *model) ggui.Widget {
+	return card(row(
+		T("Sync agents across nodes"),
+		T("Share agent profiles, MCP servers, customized skills and prompt templates with mutually trusted nodes. Environment variables stay on each node."),
+		ui.Switch(ggui.Bind(m.AgentSync.Get, m.setAgentSync), "").Name(T("Sync agents across nodes")).
+			BindDisabled(ggui.Not(m.WorkspaceSync)),
+	))
 }
 
 func builtinMCPCard(m *model) ggui.Widget {

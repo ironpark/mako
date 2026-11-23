@@ -29,7 +29,13 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 46
+const Revision = 47
+
+// RevisionConfigSync adds P2P CRDT replication of plugin registries, store
+// installs, non-secret settings, and disabled states (SyncPluginConfig), as well
+// as agent definitions/profiles, MCP servers, skill overrides, and prompt
+// templates (SyncAgentConfig), plus Changed.config notifications.
+const RevisionConfigSync = 47
 
 // RevisionPluginGitAndChrome adds standalone panel chrome (WatchBlock.standalone,
 // BlockUpdate.chrome), bundled first-party plugins (PluginInfo.bundled), the

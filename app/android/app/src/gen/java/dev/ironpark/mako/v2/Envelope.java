@@ -143,6 +143,10 @@ public  final class Envelope extends
     DECISION_RESULT(154),
     SYNC_PLUGIN_DB(155),
     PLUGIN_SYNC_BUNDLE(156),
+    SYNC_PLUGIN_CONFIG(157),
+    PLUGIN_CONFIG_SYNC_STATE(158),
+    SYNC_AGENT_CONFIG(159),
+    AGENT_SYNC_STATE(160),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -275,6 +279,10 @@ public  final class Envelope extends
         case 154: return DECISION_RESULT;
         case 155: return SYNC_PLUGIN_DB;
         case 156: return PLUGIN_SYNC_BUNDLE;
+        case 157: return SYNC_PLUGIN_CONFIG;
+        case 158: return PLUGIN_CONFIG_SYNC_STATE;
+        case 159: return SYNC_AGENT_CONFIG;
+        case 160: return AGENT_SYNC_STATE;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -6603,6 +6611,226 @@ public  final class Envelope extends
     }
   }
 
+  public static final int SYNC_PLUGIN_CONFIG_FIELD_NUMBER = 157;
+  /**
+   * <pre>
+   * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSyncPluginConfig() {
+    return bodyCase_ == 157;
+  }
+  /**
+   * <pre>
+   * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SyncPluginConfig getSyncPluginConfig() {
+    if (bodyCase_ == 157) {
+       return (dev.ironpark.mako.v2.SyncPluginConfig) body_;
+    }
+    return dev.ironpark.mako.v2.SyncPluginConfig.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+   */
+  private void setSyncPluginConfig(dev.ironpark.mako.v2.SyncPluginConfig value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 157;
+  }
+  /**
+   * <pre>
+   * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+   */
+  private void mergeSyncPluginConfig(dev.ironpark.mako.v2.SyncPluginConfig value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 157 &&
+        body_ != dev.ironpark.mako.v2.SyncPluginConfig.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SyncPluginConfig.newBuilder((dev.ironpark.mako.v2.SyncPluginConfig) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 157;
+  }
+  /**
+   * <pre>
+   * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+   * </pre>
+   *
+   * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+   */
+  private void clearSyncPluginConfig() {
+    if (bodyCase_ == 157) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int PLUGIN_CONFIG_SYNC_STATE_FIELD_NUMBER = 158;
+  /**
+   * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPluginConfigSyncState() {
+    return bodyCase_ == 158;
+  }
+  /**
+   * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginConfigSyncState getPluginConfigSyncState() {
+    if (bodyCase_ == 158) {
+       return (dev.ironpark.mako.v2.PluginConfigSyncState) body_;
+    }
+    return dev.ironpark.mako.v2.PluginConfigSyncState.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+   */
+  private void setPluginConfigSyncState(dev.ironpark.mako.v2.PluginConfigSyncState value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 158;
+  }
+  /**
+   * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+   */
+  private void mergePluginConfigSyncState(dev.ironpark.mako.v2.PluginConfigSyncState value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 158 &&
+        body_ != dev.ironpark.mako.v2.PluginConfigSyncState.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.PluginConfigSyncState.newBuilder((dev.ironpark.mako.v2.PluginConfigSyncState) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 158;
+  }
+  /**
+   * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+   */
+  private void clearPluginConfigSyncState() {
+    if (bodyCase_ == 158) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SYNC_AGENT_CONFIG_FIELD_NUMBER = 159;
+  /**
+   * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSyncAgentConfig() {
+    return bodyCase_ == 159;
+  }
+  /**
+   * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SyncAgentConfig getSyncAgentConfig() {
+    if (bodyCase_ == 159) {
+       return (dev.ironpark.mako.v2.SyncAgentConfig) body_;
+    }
+    return dev.ironpark.mako.v2.SyncAgentConfig.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+   */
+  private void setSyncAgentConfig(dev.ironpark.mako.v2.SyncAgentConfig value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 159;
+  }
+  /**
+   * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+   */
+  private void mergeSyncAgentConfig(dev.ironpark.mako.v2.SyncAgentConfig value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 159 &&
+        body_ != dev.ironpark.mako.v2.SyncAgentConfig.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SyncAgentConfig.newBuilder((dev.ironpark.mako.v2.SyncAgentConfig) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 159;
+  }
+  /**
+   * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+   */
+  private void clearSyncAgentConfig() {
+    if (bodyCase_ == 159) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int AGENT_SYNC_STATE_FIELD_NUMBER = 160;
+  /**
+   * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAgentSyncState() {
+    return bodyCase_ == 160;
+  }
+  /**
+   * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AgentSyncState getAgentSyncState() {
+    if (bodyCase_ == 160) {
+       return (dev.ironpark.mako.v2.AgentSyncState) body_;
+    }
+    return dev.ironpark.mako.v2.AgentSyncState.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+   */
+  private void setAgentSyncState(dev.ironpark.mako.v2.AgentSyncState value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 160;
+  }
+  /**
+   * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+   */
+  private void mergeAgentSyncState(dev.ironpark.mako.v2.AgentSyncState value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 160 &&
+        body_ != dev.ironpark.mako.v2.AgentSyncState.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AgentSyncState.newBuilder((dev.ironpark.mako.v2.AgentSyncState) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 160;
+  }
+  /**
+   * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+   */
+  private void clearAgentSyncState() {
+    if (bodyCase_ == 160) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -12862,6 +13090,222 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSyncPluginConfig() {
+      return instance.hasSyncPluginConfig();
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SyncPluginConfig getSyncPluginConfig() {
+      return instance.getSyncPluginConfig();
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+     */
+    public Builder setSyncPluginConfig(dev.ironpark.mako.v2.SyncPluginConfig value) {
+      copyOnWrite();
+      instance.setSyncPluginConfig(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+     */
+    public Builder setSyncPluginConfig(
+        dev.ironpark.mako.v2.SyncPluginConfig.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSyncPluginConfig(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+     */
+    public Builder mergeSyncPluginConfig(dev.ironpark.mako.v2.SyncPluginConfig value) {
+      copyOnWrite();
+      instance.mergeSyncPluginConfig(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+     * </pre>
+     *
+     * <code>.mako.v2.SyncPluginConfig sync_plugin_config = 157 [json_name = "syncPluginConfig"];</code>
+     */
+    public Builder clearSyncPluginConfig() {
+      copyOnWrite();
+      instance.clearSyncPluginConfig();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPluginConfigSyncState() {
+      return instance.hasPluginConfigSyncState();
+    }
+    /**
+     * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginConfigSyncState getPluginConfigSyncState() {
+      return instance.getPluginConfigSyncState();
+    }
+    /**
+     * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+     */
+    public Builder setPluginConfigSyncState(dev.ironpark.mako.v2.PluginConfigSyncState value) {
+      copyOnWrite();
+      instance.setPluginConfigSyncState(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+     */
+    public Builder setPluginConfigSyncState(
+        dev.ironpark.mako.v2.PluginConfigSyncState.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPluginConfigSyncState(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+     */
+    public Builder mergePluginConfigSyncState(dev.ironpark.mako.v2.PluginConfigSyncState value) {
+      copyOnWrite();
+      instance.mergePluginConfigSyncState(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.PluginConfigSyncState plugin_config_sync_state = 158 [json_name = "pluginConfigSyncState"];</code>
+     */
+    public Builder clearPluginConfigSyncState() {
+      copyOnWrite();
+      instance.clearPluginConfigSyncState();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSyncAgentConfig() {
+      return instance.hasSyncAgentConfig();
+    }
+    /**
+     * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SyncAgentConfig getSyncAgentConfig() {
+      return instance.getSyncAgentConfig();
+    }
+    /**
+     * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+     */
+    public Builder setSyncAgentConfig(dev.ironpark.mako.v2.SyncAgentConfig value) {
+      copyOnWrite();
+      instance.setSyncAgentConfig(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+     */
+    public Builder setSyncAgentConfig(
+        dev.ironpark.mako.v2.SyncAgentConfig.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSyncAgentConfig(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+     */
+    public Builder mergeSyncAgentConfig(dev.ironpark.mako.v2.SyncAgentConfig value) {
+      copyOnWrite();
+      instance.mergeSyncAgentConfig(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SyncAgentConfig sync_agent_config = 159 [json_name = "syncAgentConfig"];</code>
+     */
+    public Builder clearSyncAgentConfig() {
+      copyOnWrite();
+      instance.clearSyncAgentConfig();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAgentSyncState() {
+      return instance.hasAgentSyncState();
+    }
+    /**
+     * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AgentSyncState getAgentSyncState() {
+      return instance.getAgentSyncState();
+    }
+    /**
+     * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+     */
+    public Builder setAgentSyncState(dev.ironpark.mako.v2.AgentSyncState value) {
+      copyOnWrite();
+      instance.setAgentSyncState(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+     */
+    public Builder setAgentSyncState(
+        dev.ironpark.mako.v2.AgentSyncState.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAgentSyncState(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+     */
+    public Builder mergeAgentSyncState(dev.ironpark.mako.v2.AgentSyncState value) {
+      copyOnWrite();
+      instance.mergeAgentSyncState(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AgentSyncState agent_sync_state = 160 [json_name = "agentSyncState"];</code>
+     */
+    public Builder clearAgentSyncState() {
+      copyOnWrite();
+      instance.clearAgentSyncState();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -12999,9 +13443,13 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.DecisionResult.class,
             dev.ironpark.mako.v2.SyncPluginDB.class,
             dev.ironpark.mako.v2.PluginSyncBundle.class,
+            dev.ironpark.mako.v2.SyncPluginConfig.class,
+            dev.ironpark.mako.v2.PluginConfigSyncState.class,
+            dev.ironpark.mako.v2.SyncAgentConfig.class,
+            dev.ironpark.mako.v2.AgentSyncState.class,
           };
           java.lang.String info =
-              "\u0000w\u0001\u0000\u0001\u009cw\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
+              "\u0000{\u0001\u0000\u0001\u00a0{\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
               "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
               "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
               "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
@@ -13015,7 +13463,8 @@ public  final class Envelope extends
               "<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000\u0089<\u0000\u008a<\u0000" +
               "\u008b<\u0000\u008c<\u0000\u008d<\u0000\u008e<\u0000\u008f<\u0000\u0090<\u0000\u0091" +
               "<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000\u0097<\u0000" +
-              "\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000";
+              "\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000\u009d<\u0000\u009e" +
+              "<\u0000\u009f<\u0000\u00a0<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

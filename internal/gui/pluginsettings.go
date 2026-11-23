@@ -71,16 +71,25 @@ func pluginSettings(m *model) ggui.Widget {
 		}
 		return widget.Column(cards...).Gap(sectionGap).Stretch()
 	})
-	installed = widget.Column(secretsNote(m), installed).Gap(sectionGap).Stretch()
+	installed = widget.Column(pluginSyncCard(m), secretsNote(m), installed).Gap(sectionGap).Stretch()
 	about := T("The plugins this node's daemon runs, each in a sandbox of its own, from the plugins folder beside its configuration. A plugin runs once you allow what it asks for.")
 	if !m.storeOpen() {
 		return page(T("Plugins"), about, installed)
 	}
-	return page(T("Plugins"), about+" "+T("Installing is this node's own: another of your computers installs for itself."),
+	return page(T("Plugins"), about+" "+T("When sync is on, registries, store installs, non-secret settings and enabled states replicate across mutually trusted nodes while permissions and secrets stay on each node."),
 		section(T("Installed"), installed),
 		section(T("Find plugins"), storeSection(m)),
 		section(T("Registries"), registriesSection(m)),
 	)
+}
+
+func pluginSyncCard(m *model) ggui.Widget {
+	return card(row(
+		T("Sync plugins across nodes"),
+		T("Share plugin registries, store-installed plugins, non-secret settings and enabled states with mutually trusted nodes. Permissions and secrets stay on each node."),
+		ui.Switch(ggui.Bind(m.PluginSync.Get, m.setPluginSync), "").Name(T("Sync plugins across nodes")).
+			BindDisabled(ggui.Not(m.WorkspaceSync)),
+	))
 }
 
 // secretsNote says, over the plugins, that this node keeps their secrets

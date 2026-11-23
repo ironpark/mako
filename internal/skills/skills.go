@@ -143,17 +143,26 @@ func OverridePath(name string) (string, error) {
 // Effective returns every built-in skill with any user override from
 // <configDir>/skills/<name>/SKILL.md applied on top.
 func Effective() []Skill {
+	dir, _ := OverridesDir()
+	return EffectiveFrom(dir)
+}
+
+// EffectiveFrom returns every built-in skill with overrides read from
+// <overridesDir>/<name>/SKILL.md applied on top.
+func EffectiveFrom(overridesDir string) []Skill {
 	list := Builtin()
+	if overridesDir == "" {
+		return list
+	}
 	for i := range list {
-		if path, err := OverridePath(list[i].Name); err == nil {
-			if data, err := os.ReadFile(path); err == nil {
-				_, desc := Frontmatter(data)
-				list[i].Content = data
-				if desc != "" {
-					list[i].Description = desc
-				}
-				list[i].Customized = true
+		path := filepath.Join(overridesDir, list[i].Name, "SKILL.md")
+		if data, err := os.ReadFile(path); err == nil {
+			_, desc := Frontmatter(data)
+			list[i].Content = data
+			if desc != "" {
+				list[i].Description = desc
 			}
+			list[i].Customized = true
 		}
 	}
 	return list
@@ -308,10 +317,16 @@ func EnsureAgentSkills(agentName string, env map[string]string) error {
 // (<skillsRoot>/<name>/SKILL.md). Existing files without ManagedMarker are
 // preserved untouched so manually placed user overrides are never clobbered.
 func SyncToDir(skillsRoot string) error {
+	dir, _ := OverridesDir()
+	return SyncFromOverridesDir(dir, skillsRoot)
+}
+
+// SyncFromOverridesDir is SyncToDir reading overrides from overridesDir.
+func SyncFromOverridesDir(overridesDir, skillsRoot string) error {
 	if skillsRoot == "" {
 		return nil
 	}
-	for _, sk := range Effective() {
+	for _, sk := range EffectiveFrom(overridesDir) {
 		dir := filepath.Join(skillsRoot, sk.Name)
 		dst := filepath.Join(dir, "SKILL.md")
 		desired := ensureManagedContent(sk.Content)

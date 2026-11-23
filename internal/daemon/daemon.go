@@ -84,8 +84,12 @@ type Daemon struct {
 	changes              notifier            // tells watching front-ends what changed
 	statusPoke           chan struct{}       // a session's status changed; see watchState
 	workspace            workspaces          // the spaces, projects and layouts; see workspace.go
+	pluginConfigSync     pluginConfigSync    // plugin registries, installs, disabled & non-secret settings; see plugin_config_sync.go
+	agentSync            agentConfigSync     // agent definitions, MCP servers, skills & templates; see agent_sync.go
 	fetching             map[string]bool     // the peers whose workspace is being asked for
 	syncingPluginDB      map[string]bool     // the peers whose plugin DB sync is in flight
+	syncingPluginConfig  map[string]bool     // the peers whose plugin config sync is in flight
+	syncingAgentConfig   map[string]bool     // the peers whose agent config sync is in flight
 	projects             projectStore        // the projects of several folders; see projects.go
 	linking              map[string]*linkTry // peer ID -> how its link is being made, until one holds
 	stateSenders         stateSenders        // coalesced per-peer state senders; see mesh.go
@@ -225,6 +229,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 	}
 	cfg := d.config()
 	d.workspace.load(dir, cfg.NodeID)
+	d.pluginConfigSync.load(dir, cfg.NodeID)
+	d.agentSync.load(dir, cfg.NodeID)
 	d.layouts.load(dir)
 	d.projects.load(dir)
 	d.syncWorkspaceProjects()
@@ -255,6 +261,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 	pluginsDone := d.startPlugins(ctx, dir)
+	d.captureLocalPluginConfig()
+	d.captureLocalAgentConfig()
 	defer func() {
 		cancel()
 		<-pluginsDone
@@ -512,6 +520,10 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handlePluginStore(ctx, stream, env, fromPeer)
 	case protocol.TypeSyncPluginDB:
 		return d.handleSyncPluginDB(ctx, stream, env, fromPeer)
+	case protocol.TypeSyncPluginConfig:
+		return d.handleSyncPluginConfig(ctx, stream, env, fromPeer)
+	case protocol.TypeSyncAgentConfig:
+		return d.handleSyncAgentConfig(ctx, stream, env, fromPeer)
 
 	case protocol.TypeResize:
 		payload, err := protocol.Body[*protocol.Resize](env)
@@ -575,7 +587,7 @@ func (d *Daemon) syncBuiltinSkills(ctx context.Context) {
 			if _, err := os.Stat(parent); err != nil {
 				continue // skip agents not initialized on this machine
 			}
-			if err := skills.SyncToDir(dir); err != nil {
+			if err := skills.SyncFromOverridesDir(d.skillsDir(), dir); err != nil {
 				d.log.Warn("failed to sync mako built-in skills", "agent", name, "dir", dir, "err", err)
 			}
 		}

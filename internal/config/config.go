@@ -77,7 +77,7 @@ type Decision struct {
 	Models   map[string]string `json:"models,omitempty"`
 }
 
-// Workspace configures how a node shares the workspace.
+// Workspace configures how a node shares the workspace, plugins and agents.
 type Workspace struct {
 	// Sync shares the workspace with the peers the node and they let each
 	// other in. Off, the daemon sends its own to none of them and takes
@@ -85,6 +85,15 @@ type Workspace struct {
 	// come of it. Left out, it is as the window's "Follow other nodes" was
 	// set, which it took the place of: on, unless gui.json turned that off.
 	Sync *bool `json:"sync,omitempty"`
+	// SyncPlugins shares plugin registries, store installs, non-secret
+	// settings, and disabled states across mutually trusted peers while
+	// Sync is on. Nil defaults to true.
+	SyncPlugins *bool `json:"sync_plugins,omitempty"`
+	// SyncAgents shares agent definitions/profiles (without env), MCP
+	// context servers (without command env), skill overrides, and prompt
+	// templates across mutually trusted peers while Sync is on. Nil defaults
+	// to true.
+	SyncAgents *bool `json:"sync_agents,omitempty"`
 }
 
 // Syncs reports whether the node shares its workspace; dir is the
@@ -105,6 +114,22 @@ func (w Workspace) Syncs(dir string) bool {
 	}
 	return *gui.SyncWorkspace
 }
+
+// PluginsEnabled reports whether the per-feature plugin sync toggle is on
+// (independent of the master Sync toggle).
+func (w Workspace) PluginsEnabled() bool { return w.SyncPlugins == nil || *w.SyncPlugins }
+
+// AgentsEnabled reports whether the per-feature agent sync toggle is on
+// (independent of the master Sync toggle).
+func (w Workspace) AgentsEnabled() bool { return w.SyncAgents == nil || *w.SyncAgents }
+
+// SyncsPlugins reports whether this node replicates plugin registries, store
+// installs, non-secret settings, and disabled states with mutually trusted peers.
+func (w Workspace) SyncsPlugins(dir string) bool { return w.Syncs(dir) && w.PluginsEnabled() }
+
+// SyncsAgents reports whether this node replicates agent definitions, MCP
+// servers, skill overrides, and prompt templates with mutually trusted peers.
+func (w Workspace) SyncsAgents(dir string) bool { return w.Syncs(dir) && w.AgentsEnabled() }
 
 // Devices configures the devices a node lends.
 type Devices struct {

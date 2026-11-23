@@ -688,8 +688,16 @@ type NodeState struct {
 	// SQLite buckets on this node (revision 43); peers trusted both ways fetch
 	// and merge buckets via SyncPluginDB only when digests differ.
 	PluginSyncDigest []byte `protobuf:"bytes,6,opt,name=plugin_sync_digest,json=pluginSyncDigest,proto3" json:"plugin_sync_digest,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// plugin_config_sync_digest is a 32-byte SHA-256 digest of this node's synced
+	// plugin registries, store installs, non-secret settings, and disabled states
+	// (revision 47); mutually trusted peers exchange SyncPluginConfig when digests differ.
+	PluginConfigSyncDigest []byte `protobuf:"bytes,7,opt,name=plugin_config_sync_digest,json=pluginConfigSyncDigest,proto3" json:"plugin_config_sync_digest,omitempty"`
+	// agent_sync_digest is a 32-byte SHA-256 digest of this node's synced agent
+	// definitions, profiles, MCP context servers, skill overrides, and prompt
+	// templates (revision 47); mutually trusted peers exchange SyncAgentConfig when digests differ.
+	AgentSyncDigest []byte `protobuf:"bytes,8,opt,name=agent_sync_digest,json=agentSyncDigest,proto3" json:"agent_sync_digest,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *NodeState) Reset() {
@@ -760,6 +768,20 @@ func (x *NodeState) GetWorkspace() *Workspace {
 func (x *NodeState) GetPluginSyncDigest() []byte {
 	if x != nil {
 		return x.PluginSyncDigest
+	}
+	return nil
+}
+
+func (x *NodeState) GetPluginConfigSyncDigest() []byte {
+	if x != nil {
+		return x.PluginConfigSyncDigest
+	}
+	return nil
+}
+
+func (x *NodeState) GetAgentSyncDigest() []byte {
+	if x != nil {
+		return x.AgentSyncDigest
 	}
 	return nil
 }
@@ -1195,6 +1217,7 @@ type Changed struct {
 	Devices       bool                   `protobuf:"varint,5,opt,name=devices,proto3" json:"devices,omitempty"`                            // a device lent or borrowed here changed
 	Plugins       bool                   `protobuf:"varint,6,opt,name=plugins,proto3" json:"plugins,omitempty"`                            // a plugin came, went, or changed how it stands (revision 26)
 	AgentBlocks   bool                   `protobuf:"varint,7,opt,name=agent_blocks,json=agentBlocks,proto3" json:"agent_blocks,omitempty"` // an agent's block came, went or moved (revision 27)
+	Config        bool                   `protobuf:"varint,8,opt,name=config,proto3" json:"config,omitempty"`                              // synced agent config, MCP servers, skills, or templates changed (revision 47)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1274,6 +1297,13 @@ func (x *Changed) GetPlugins() bool {
 func (x *Changed) GetAgentBlocks() bool {
 	if x != nil {
 		return x.AgentBlocks
+	}
+	return false
+}
+
+func (x *Changed) GetConfig() bool {
+	if x != nil {
+		return x.Config
 	}
 	return false
 }
@@ -1729,14 +1759,16 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x0f_allow_template\"\v\n" +
 	"\tListNodes\",\n" +
 	"\x05Nodes\x12#\n" +
-	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\x94\x02\n" +
+	"\x05nodes\x18\x01 \x03(\v2\r.mako.v2.NodeR\x05nodes\"\xfb\x02\n" +
 	"\tNodeState\x12!\n" +
 	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\x120\n" +
 	"\bsessions\x18\x02 \x03(\v2\x14.mako.v2.SessionInfoR\bsessions\x12-\n" +
 	"\x12watching_approvals\x18\x03 \x01(\bR\x11watchingApprovals\x12#\n" +
 	"\x05peers\x18\x04 \x03(\v2\r.mako.v2.NodeR\x05peers\x120\n" +
 	"\tworkspace\x18\x05 \x01(\v2\x12.mako.v2.WorkspaceR\tworkspace\x12,\n" +
-	"\x12plugin_sync_digest\x18\x06 \x01(\fR\x10pluginSyncDigest\"\xdc\x01\n" +
+	"\x12plugin_sync_digest\x18\x06 \x01(\fR\x10pluginSyncDigest\x129\n" +
+	"\x19plugin_config_sync_digest\x18\a \x01(\fR\x16pluginConfigSyncDigest\x12*\n" +
+	"\x11agent_sync_digest\x18\b \x01(\fR\x0fagentSyncDigest\"\xdc\x01\n" +
 	"\tWorkspace\x12\x10\n" +
 	"\x03doc\x18\x01 \x01(\fR\x03doc\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x17\n" +
@@ -1767,7 +1799,7 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"?\n" +
 	"\x05Watch\x12\x1c\n" +
 	"\tapprovals\x18\x01 \x01(\bR\tapprovals\x12\x18\n" +
-	"\alayouts\x18\x02 \x01(\bR\alayouts\"\xc8\x01\n" +
+	"\alayouts\x18\x02 \x01(\bR\alayouts\"\xe0\x01\n" +
 	"\aChanged\x12\x14\n" +
 	"\x05nodes\x18\x01 \x01(\bR\x05nodes\x12\x1a\n" +
 	"\bsessions\x18\x02 \x01(\bR\bsessions\x12\x16\n" +
@@ -1775,7 +1807,8 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\tworkspace\x18\x04 \x01(\bR\tworkspace\x12\x18\n" +
 	"\adevices\x18\x05 \x01(\bR\adevices\x12\x18\n" +
 	"\aplugins\x18\x06 \x01(\bR\aplugins\x12!\n" +
-	"\fagent_blocks\x18\a \x01(\bR\vagentBlocks\"m\n" +
+	"\fagent_blocks\x18\a \x01(\bR\vagentBlocks\x12\x16\n" +
+	"\x06config\x18\b \x01(\bR\x06config\"m\n" +
 	"\x06Access\x12\x0e\n" +
 	"\x02op\x18\x01 \x01(\tR\x02op\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x10\n" +

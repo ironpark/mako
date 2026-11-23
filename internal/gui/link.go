@@ -59,10 +59,11 @@ type daemonLink struct {
 	accessStale  atomic.Bool
 	wsStale      atomic.Bool
 	devicesStale atomic.Bool
-	// pluginsStale and agentBlocksStale say the next poll lists the
-	// plugins, and the agents' blocks, again.
+	// pluginsStale, agentBlocksStale, and configStale say the next poll reloads
+	// plugins, agent blocks, or synced config.json/skills/templates.
 	pluginsStale     atomic.Bool
 	agentBlocksStale atomic.Bool
+	configStale      atomic.Bool
 }
 
 func newDaemonLink(addr, daemon string) *daemonLink {
@@ -326,6 +327,9 @@ func (m *model) watch(ctx context.Context) {
 					if ch.GetAgentBlocks() {
 						m.link.agentBlocksStale.Store(true)
 					}
+					if ch.GetConfig() {
+						m.link.configStale.Store(true)
+					}
 					m.link.watching.Store(true)
 					m.link.pollNow()
 				})
@@ -473,6 +477,7 @@ func (m *model) poll(ctx context.Context) {
 			askAgain(&m.link.agentBlocksStale, stale, err)
 		}
 	}
+	configStale := m.link.configStale.Swap(false)
 	self := c.Node()
 	now := time.Now()
 	live := liveNodes(self, nodes, now)
@@ -543,9 +548,15 @@ func (m *model) poll(ctx context.Context) {
 		}
 		if plugins != nil && m.link.generation() == gen {
 			m.setPluginList(plugins)
+			if ggui.Peek(m.Page) == "settings" && canonicalSettingsSection(ggui.Peek(m.Section)) == pluginsSection.id {
+				m.loadRegistries()
+			}
 		}
 		if agentBlocks != nil && m.link.generation() == gen {
 			m.setAgentBlocks(agentBlocks.GetBlocks())
+		}
+		if configStale && m.link.generation() == gen {
+			m.reloadSyncedConfig()
 		}
 	})
 }

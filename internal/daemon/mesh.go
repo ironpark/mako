@@ -325,6 +325,12 @@ func (d *Daemon) state() *protocol.NodeState {
 		st.Workspace = d.workspace.shared()
 		st.PluginSyncDigest = d.pluginSyncDigest()
 	}
+	if d.syncsPlugins() {
+		st.PluginConfigSyncDigest = d.pluginConfigSyncDigest()
+	}
+	if d.syncsAgents() {
+		st.AgentSyncDigest = d.agentSyncDigest()
+	}
 	return st
 }
 
@@ -347,6 +353,12 @@ func (d *Daemon) watchState(ctx context.Context) {
 	var sentDigest []byte
 	for {
 		_ = d.followed()
+		if d.syncsAgents() {
+			d.captureLocalAgentConfig()
+		}
+		if d.syncsPlugins() {
+			d.captureLocalPluginConfig()
+		}
 		if d.p2p != nil || d.changes.watched() {
 			st := d.state()
 			// A route that changed goes on at once, as do the sessions of the
@@ -362,7 +374,9 @@ func (d *Daemon) watchState(ctx context.Context) {
 			}
 			changed := last == nil || nodesChanged || sessionsChanged || routesChanged || st.GetWatchingApprovals() != last.GetWatchingApprovals() ||
 				!bytes.Equal(st.GetWorkspace().GetDigest(), last.GetWorkspace().GetDigest()) ||
-				!bytes.Equal(st.GetPluginSyncDigest(), last.GetPluginSyncDigest())
+				!bytes.Equal(st.GetPluginSyncDigest(), last.GetPluginSyncDigest()) ||
+				!bytes.Equal(st.GetPluginConfigSyncDigest(), last.GetPluginConfigSyncDigest()) ||
+				!bytes.Equal(st.GetAgentSyncDigest(), last.GetAgentSyncDigest())
 			if d.p2p != nil && (changed || time.Since(sent) >= stateEvery) {
 				digest := st.GetWorkspace().GetDigest()
 				whole := !bytes.Equal(digest, sentDigest)
@@ -433,6 +447,8 @@ func (d *Daemon) encodeState(st *protocol.NodeState, routes map[string]route, re
 		out.Workspace = &protocol.Workspace{Digest: ws.GetDigest()}
 	}
 	out.PluginSyncDigest = st.GetPluginSyncDigest()
+	out.PluginConfigSyncDigest = st.GetPluginConfigSyncDigest()
+	out.AgentSyncDigest = st.GetAgentSyncDigest()
 	shared = marshalState(out)
 	node = d.publicSelf()
 	node.LastSeen = out.Node.LastSeen
@@ -641,9 +657,17 @@ func (d *Daemon) takeState(from p2p.Peer, data []byte) {
 	// A workspace is merged from a peer trusted both ways: one person's
 	// nodes, whose windows show each other's sessions; and only while this
 	// node shares its own.
-	if from.TrustedBy && from.Trusts && d.syncsWorkspace() {
-		d.takeWorkspace(node.GetId(), st.GetWorkspace())
-		d.takePluginSyncDigest(node.GetId(), st.GetPluginSyncDigest())
+	if from.TrustedBy && from.Trusts {
+		if d.syncsWorkspace() {
+			d.takeWorkspace(node.GetId(), st.GetWorkspace())
+			d.takePluginSyncDigest(node.GetId(), st.GetPluginSyncDigest())
+		}
+		if d.syncsPlugins() {
+			d.takePluginConfigSyncDigest(node.GetId(), st.GetPluginConfigSyncDigest())
+		}
+		if d.syncsAgents() {
+			d.takeAgentSyncDigest(node.GetId(), st.GetAgentSyncDigest())
+		}
 	}
 	if from.TrustedBy {
 		for _, other := range st.GetPeers() {
@@ -696,6 +720,10 @@ func (n *notifier) fireAgentBlocks() { n.send(&protocol.Changed{AgentBlocks: tru
 // changed.
 func (n *notifier) fireDevices() { n.send(&protocol.Changed{Devices: true}) }
 
+// fireConfig tells every watcher that synced agent config, MCP servers,
+// skills, or templates changed on this node.
+func (n *notifier) fireConfig() { n.send(&protocol.Changed{Nodes: true, Config: true}) }
+
 // send gives every watcher c, merged into what it has not taken yet.
 func (n *notifier) send(c *protocol.Changed) {
 	n.mu.Lock()
@@ -711,6 +739,7 @@ func (n *notifier) send(c *protocol.Changed) {
 			next.Devices = next.Devices || pending.GetDevices()
 			next.Plugins = next.Plugins || pending.GetPlugins()
 			next.AgentBlocks = next.AgentBlocks || pending.GetAgentBlocks()
+			next.Config = next.Config || pending.GetConfig()
 		default:
 		}
 		ch <- next

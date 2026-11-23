@@ -66,6 +66,9 @@ func (d *Daemon) handlePluginStore(ctx context.Context, stream *transport.Stream
 		if err != nil {
 			return err
 		}
+		if req.GetOp() == protocol.RegistryAdd || req.GetOp() == protocol.RegistryRemove {
+			d.onPluginConfigLocalChange()
+		}
 		return stream.Send(protocol.TypeRegistries, env.GetId(), &protocol.Registries{Registries: d.store.Registries()})
 	case protocol.TypeSearchPlugins:
 		req, err := protocol.Body[*protocol.SearchPlugins](env)
@@ -96,6 +99,7 @@ func (d *Daemon) handlePluginStore(ctx context.Context, stream *transport.Stream
 		if err != nil {
 			return err
 		}
+		d.onPluginConfigLocalChange()
 		return stream.Send(protocol.TypePluginInstalled, env.GetId(), done)
 	}
 	return fmt.Errorf("unexpected %s", env.Type())

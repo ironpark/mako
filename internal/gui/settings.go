@@ -330,6 +330,12 @@ func generalSettings(m *model) ggui.Widget {
 				widget.Row(widget.Expanded(ui.TextField(project).Name(T("Default working directory"))), browse).Gap(8)),
 			row(T("Follow other nodes"), T("Share the spaces, projects, pins, tabs and panes with the nodes this one trusts both ways. Off, this node keeps its own."),
 				ui.Switch(ggui.Bind(m.WorkspaceSync.Get, m.setWorkspaceSync), "").Name(T("Follow other nodes"))),
+			row(T("Sync plugins"), T("Share plugin registries, store-installed plugins, non-secret settings and enabled states with mutually trusted nodes. Permissions and secrets stay on each node."),
+				ui.Switch(ggui.Bind(m.PluginSync.Get, m.setPluginSync), "").Name(T("Sync plugins")).
+					BindDisabled(ggui.Not(m.WorkspaceSync))),
+			row(T("Sync agents"), T("Share agent profiles, MCP servers, customized skills and prompt templates with mutually trusted nodes. Environment variables stay on each node."),
+				ui.Switch(ggui.Bind(m.AgentSync.Get, m.setAgentSync), "").Name(T("Sync agents")).
+					BindDisabled(ggui.Not(m.WorkspaceSync))),
 			row(T("Confirm before killing"), T("Ask before a session is stopped from the window."),
 				ui.Switch(prefField(m, func(p *prefs) *bool { return &p.ConfirmKill }), "").Name(T("Confirm before killing"))),
 			row(T("Approve in the window"), T("While the window is open, agents that ask through mako ask for approvals here, in Chat and over the terminal. Otherwise they ask in their terminals."),

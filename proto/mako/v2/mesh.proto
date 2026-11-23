@@ -130,6 +130,14 @@ message NodeState {
   // SQLite buckets on this node (revision 43); peers trusted both ways fetch
   // and merge buckets via SyncPluginDB only when digests differ.
   bytes plugin_sync_digest = 6;
+  // plugin_config_sync_digest is a 32-byte SHA-256 digest of this node's synced
+  // plugin registries, store installs, non-secret settings, and disabled states
+  // (revision 47); mutually trusted peers exchange SyncPluginConfig when digests differ.
+  bytes plugin_config_sync_digest = 7;
+  // agent_sync_digest is a 32-byte SHA-256 digest of this node's synced agent
+  // definitions, profiles, MCP context servers, skill overrides, and prompt
+  // templates (revision 47); mutually trusted peers exchange SyncAgentConfig when digests differ.
+  bytes agent_sync_digest = 8;
 }
 
 // Workspace is what a window shows: its tabs and panes, in each of its
@@ -229,6 +237,7 @@ message Changed {
   bool devices = 5; // a device lent or borrowed here changed
   bool plugins = 6; // a plugin came, went, or changed how it stands (revision 26)
   bool agent_blocks = 7; // an agent's block came, went or moved (revision 27)
+  bool config = 8; // synced agent config, MCP servers, skills, or templates changed (revision 47)
 }
 
 // Access asks the daemon about who it lets in, or changes it. Only a

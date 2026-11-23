@@ -105,6 +105,14 @@ func cloneDecision(d config.Decision) config.Decision {
 	return d
 }
 
+func cloneWorkspace(w config.Workspace) config.Workspace {
+	return config.Workspace{
+		Sync:        cloneBoolPtr(w.Sync),
+		SyncPlugins: cloneBoolPtr(w.SyncPlugins),
+		SyncAgents:  cloneBoolPtr(w.SyncAgents),
+	}
+}
+
 func cloneConfig(c *config.Config) *config.Config {
 	if c == nil {
 		c = config.Default()
@@ -117,7 +125,7 @@ func cloneConfig(c *config.Config) *config.Config {
 	out.Shell = cloneShell(c.Shell)
 	out.ContextServers = cloneContextServers(c.ContextServers)
 	out.Devices.Share = slices.Clone(c.Devices.Share)
-	out.Workspace.Sync = cloneBoolPtr(c.Workspace.Sync)
+	out.Workspace = cloneWorkspace(c.Workspace)
 	out.Decision = cloneDecision(c.Decision)
 	return &out
 }
@@ -152,7 +160,7 @@ func (f *agentFile) setFromConfigLocked(c *config.Config) {
 	f.isolateHome = c.IsolateHome
 	f.shell = cloneShell(c.Shell)
 	f.servers = cloneContextServers(c.ContextServers)
-	f.workspace = config.Workspace{Sync: cloneBoolPtr(c.Workspace.Sync)}
+	f.workspace = cloneWorkspace(c.Workspace)
 	f.decision = cloneDecision(c.Decision)
 	f.read = true
 }
@@ -163,7 +171,7 @@ func (d *Daemon) syncConfigFromAgentFileLocked(f *agentFile) {
 		c.IsolateHome = f.isolateHome
 		c.Shell = cloneShell(f.shell)
 		c.ContextServers = cloneContextServers(f.servers)
-		c.Workspace = config.Workspace{Sync: cloneBoolPtr(f.workspace.Sync)}
+		c.Workspace = cloneWorkspace(f.workspace)
 		c.Decision = cloneDecision(f.decision)
 	})
 }
@@ -171,9 +179,10 @@ func (d *Daemon) syncConfigFromAgentFileLocked(f *agentFile) {
 // FollowAgents makes the daemon read its agents from the config file at
 // path whenever it changes, starting from the configuration it was given.
 func (d *Daemon) FollowAgents(path string) {
+	d.agentSync.applyMu.Lock()
+	defer d.agentSync.applyMu.Unlock()
 	f := &d.agentFile
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	f.path = path
 	f.hasSum, f.hasBadSum, f.hasStat = false, false, false
 	if fh, err := os.Open(path); err == nil {
@@ -191,6 +200,10 @@ func (d *Daemon) FollowAgents(path string) {
 				d.syncConfigFromAgentFileLocked(f)
 			}
 		}
+	}
+	f.mu.Unlock()
+	if d.syncsAgentsSnapshot() {
+		d.captureLocalAgentConfigLocked()
 	}
 }
 
@@ -345,6 +358,12 @@ func (d *Daemon) followed() followedConfig {
 }
 
 func (d *Daemon) onConfigReloaded() {
+	if d.syncsAgents() {
+		d.captureLocalAgentConfig()
+	}
+	if d.syncsPlugins() {
+		d.captureLocalPluginConfig()
+	}
 	d.syncProjectAgents()
 	d.changes.fire(true, true)
 	d.pokeStatus()

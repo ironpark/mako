@@ -18,6 +18,7 @@ import "mako/v2/mesh.proto";
 import "mako/v2/plugins.proto";
 import "mako/v2/pluginstore.proto";
 import "mako/v2/session.proto";
+import "mako/v2/sync.proto";
 import "mako/v2/project_agents.proto";
 
 option go_package = "github.com/ironpark/mako/internal/protocol";
@@ -187,6 +188,12 @@ message Envelope {
     // Peer-to-peer plugin SQLite CRDT sync (revision 43).
     SyncPluginDB sync_plugin_db = 155;
     PluginSyncBundle plugin_sync_bundle = 156;
+
+    // Peer-to-peer plugin config and agent config CRDT sync (revision 47).
+    SyncPluginConfig sync_plugin_config = 157;
+    PluginConfigSyncState plugin_config_sync_state = 158;
+    SyncAgentConfig sync_agent_config = 159;
+    AgentSyncState agent_sync_state = 160;
   }
 }
 

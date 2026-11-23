@@ -97,28 +97,33 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 	}
 	d.initDecisionStore(dir, kc, note)
 	d.plugins = plugin.New(plugin.Config{
-		Keychain:     kc,
-		KeychainNote: note,
-		Dir:          d.pluginsDir,
-		DataDir:      filepath.Join(dir, "plugin-data"),
-		Log:          d.log,
-		Sessions:     d.listSessions,
-		Transcript:   d.pluginTranscript,
-		Projects:     d.pluginProjects,
-		ResolveScope: d.resolvePluginScope,
-		Agents:       pluginAgents{d},
-		Decisions:    pluginDecisions{d},
-		Asks:         pluginAsks{d},
-		Layout:       pluginLayout{d},
-		Git:          d.pluginGitHost(),
-		Forge:        d.pluginForgeHost(),
-		Bundled:      builtin.FS,
-		BundledDev:   os.Getenv("MAKO_DEV_BUNDLED_PLUGINS"),
-		NodeID:       d.config().NodeID,
-		SyncChanged:  func() { d.pokeStatus() },
-		Changed:      func() { d.changes.firePlugins(); d.syncProjectAgents() },
-		Installs:     d.store,
-		NetTest:      testhooks.NetTest(),
+		Keychain:          kc,
+		KeychainNote:      note,
+		Dir:               d.pluginsDir,
+		DataDir:           filepath.Join(dir, "plugin-data"),
+		Log:               d.log,
+		Sessions:          d.listSessions,
+		Transcript:        d.pluginTranscript,
+		Projects:          d.pluginProjects,
+		ResolveScope:      d.resolvePluginScope,
+		Agents:            pluginAgents{d},
+		Decisions:         pluginDecisions{d},
+		Asks:              pluginAsks{d},
+		Layout:            pluginLayout{d},
+		Git:               d.pluginGitHost(),
+		Forge:             d.pluginForgeHost(),
+		Bundled:           builtin.FS,
+		BundledDev:        os.Getenv("MAKO_DEV_BUNDLED_PLUGINS"),
+		NodeID:            d.config().NodeID,
+		SyncChanged:       func() { d.pokeStatus() },
+		ConfigSyncChanged: func() { d.onPluginConfigLocalChange() },
+		Changed: func() {
+			go d.applyPendingPluginSettings()
+			d.changes.firePlugins()
+			d.syncProjectAgents()
+		},
+		Installs: d.store,
+		NetTest:  testhooks.NetTest(),
 	})
 	d.store.Attach(d.plugins)
 	// What a daemon stopped midway through an install left is settled
