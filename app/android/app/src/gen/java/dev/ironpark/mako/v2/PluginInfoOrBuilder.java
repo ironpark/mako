@@ -435,4 +435,14 @@ public interface PluginInfoOrBuilder extends
    * @return The dbQuota.
    */
   long getDbQuota();
+
+  /**
+   * <pre>
+   * bundled says the plugin ships inside mako itself (revision 46).
+   * </pre>
+   *
+   * <code>bool bundled = 26 [json_name = "bundled"];</code>
+   * @return The bundled.
+   */
+  boolean getBundled();
 }

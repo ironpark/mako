@@ -79,6 +79,9 @@ on = { type = "boolean", default = true }
 		"default option":    {swap(`default = "a"`, `default = "c"`), "default"},
 		"block scope":       {swap(`title = "Test"`, "title = \"Test\"\nscope = \"workspace\""), "scope"},
 		"setting scope":     {swap(`type = "boolean", default = true`, `type = "boolean", default = true, scope = "org"`), "scope"},
+		"mako publisher":    {swap(`publisher = "test"`, `publisher = "mako"`), "mako's own"},
+		"hidden user block": {swap(`title = "Test"`, "title = \"Test\"\nhidden = true"), "hidden"},
+		"invalid chrome":    {swap(`title = "Test"`, "title = \"Test\"\nchrome = \"weird\""), "chrome"},
 	}
 	for name, c := range cases {
 		_, err := ParseManifest([]byte(c.manifest))
@@ -132,5 +135,35 @@ b = { type = "string", scope = "session" }
 	badTool := strings.Replace(raw, `scope = "space"`, `scope = "cluster"`, 1)
 	if _, err := ParseManifest([]byte(badTool)); err == nil || !strings.Contains(err.Error(), "scope") {
 		t.Fatalf("expected invalid tool scope error, got %v", err)
+	}
+	// Folder scope is rejected on tools.
+	folderTool := strings.Replace(raw, `scope = "space"`, `scope = "folder"`, 1)
+	if _, err := ParseManifest([]byte(folderTool)); err == nil || !strings.Contains(err.Error(), "folder") {
+		t.Fatalf("expected folder tool scope error, got %v", err)
+	}
+	// Folder scope + chrome + hidden work on bundled manifests.
+	bundledRaw := `id = "mako-git"
+version = "1.0.0"
+publisher = "mako"
+api = 1
+entry = "main.js"
+permissions = ["git:read", "git:write", "forge:read"]
+
+[[contributes.block]]
+id = "panel"
+title = "Git"
+scope = "folder"
+chrome = "toolbar"
+hidden = true
+`
+	if _, err := ParseManifest([]byte(bundledRaw)); err == nil {
+		t.Fatal("ParseManifest unexpectedly accepted bundled-only manifest")
+	}
+	bm, err := parseManifest([]byte(bundledRaw), true)
+	if err != nil {
+		t.Fatalf("parseManifest(bundled=true) failed: %v", err)
+	}
+	if bm.Blocks[0].Scope != "folder" || bm.Blocks[0].Chrome != BlockChromeToolbar || !bm.Blocks[0].Hidden {
+		t.Fatalf("bundled block = %+v", bm.Blocks[0])
 	}
 }

@@ -28,6 +28,7 @@ public  final class BlockUpdate extends
     sessionId_ = "";
     agent_ = "";
     scope_ = "";
+    chrome_ = "";
   }
   private int bitField0_;
   public static final int BLOCK_FIELD_NUMBER = 1;
@@ -818,6 +819,78 @@ public  final class BlockUpdate extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     scope_ = value.toStringUtf8();
+
+  }
+
+  public static final int CHROME_FIELD_NUMBER = 14;
+  private java.lang.String chrome_;
+  /**
+   * <pre>
+   * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string chrome = 14 [json_name = "chrome"];</code>
+   * @return The chrome.
+   */
+  @java.lang.Override
+  public java.lang.String getChrome() {
+    return chrome_;
+  }
+  /**
+   * <pre>
+   * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string chrome = 14 [json_name = "chrome"];</code>
+   * @return The bytes for chrome.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getChromeBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(chrome_);
+  }
+  /**
+   * <pre>
+   * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string chrome = 14 [json_name = "chrome"];</code>
+   * @param value The chrome to set.
+   */
+  private void setChrome(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    chrome_ = value;
+  }
+  /**
+   * <pre>
+   * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string chrome = 14 [json_name = "chrome"];</code>
+   */
+  private void clearChrome() {
+
+    chrome_ = getDefaultInstance().getChrome();
+  }
+  /**
+   * <pre>
+   * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string chrome = 14 [json_name = "chrome"];</code>
+   * @param value The bytes for chrome to set.
+   */
+  private void setChromeBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    chrome_ = value.toStringUtf8();
 
   }
 
@@ -1752,6 +1825,80 @@ public  final class BlockUpdate extends
       return this;
     }
 
+    /**
+     * <pre>
+     * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string chrome = 14 [json_name = "chrome"];</code>
+     * @return The chrome.
+     */
+    @java.lang.Override
+    public java.lang.String getChrome() {
+      return instance.getChrome();
+    }
+    /**
+     * <pre>
+     * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string chrome = 14 [json_name = "chrome"];</code>
+     * @return The bytes for chrome.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getChromeBytes() {
+      return instance.getChromeBytes();
+    }
+    /**
+     * <pre>
+     * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string chrome = 14 [json_name = "chrome"];</code>
+     * @param value The chrome to set.
+     * @return This builder for chaining.
+     */
+    public Builder setChrome(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setChrome(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string chrome = 14 [json_name = "chrome"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearChrome() {
+      copyOnWrite();
+      instance.clearChrome();
+      return this;
+    }
+    /**
+     * <pre>
+     * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string chrome = 14 [json_name = "chrome"];</code>
+     * @param value The bytes for chrome to set.
+     * @return This builder for chaining.
+     */
+    public Builder setChromeBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setChromeBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.BlockUpdate)
   }
   @java.lang.Override
@@ -1783,11 +1930,12 @@ public  final class BlockUpdate extends
             "agent_",
             "gone_",
             "scope_",
+            "chrome_",
           };
           java.lang.String info =
-              "\u0000\r\u0000\u0001\u0001\r\r\u0000\u0001\u0000\u0001\u0208\u0002\u0003\u0003\u1009" +
-              "\u0000\u0004\u001b\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u0208\u000b" +
-              "\u0208\f\u0007\r\u0208";
+              "\u0000\u000e\u0000\u0001\u0001\u000e\u000e\u0000\u0001\u0000\u0001\u0208\u0002\u0003" +
+              "\u0003\u1009\u0000\u0004\u001b\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007" +
+              "\n\u0208\u000b\u0208\f\u0007\r\u0208\u000e\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

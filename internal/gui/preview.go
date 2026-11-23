@@ -392,23 +392,48 @@ func Preview(cfg *config.Config, addr, dir string, width, height int) error {
 					s, ok := m.session(ggui.Peek(m.Selected))
 					return ok && s.GetNodeId() == ggui.Peek(m.Conn).Self.GetId()
 				}),
-				until("the history", func() bool { v := ggui.Peek(m.git.History); return v.Root.Path != "" && !v.Loading }),
+				until("the history", func() bool {
+					dag := findUiNodeSuffix(m.blockTreeFor(gitPluginBlock), "history-dag")
+					return dag != nil && len(dag.GetRows()) > 0
+				}),
 				frames(5), shot("03-history"),
 				// The changes folded, the stashes and branches open.
-				do(func() { m.git.ChangesOpen.Set(false); m.git.StashOpen.Set(true); m.git.BranchOpen.Set(true) }),
-				frames(5), shot("03-git-sections"),
-				do(func() { m.git.ChangesOpen.Set(true); m.git.StashOpen.Set(false); m.git.BranchOpen.Set(false) }),
 				do(func() {
-					if cs := ggui.Peek(m.git.History).History.GetCommits(); len(cs) > 0 {
-						m.openCommit(cs[0].GetHash())
+					scope := ggui.Untrack(func() string { return m.resolveActiveScope(protocol.ScopeFolder) })
+					tree := m.blockTreeFor(gitPluginBlock, scope)
+					for _, key := range []string{"sec-changes-toggle", "sec-stashes-toggle", "sec-branches-toggle"} {
+						if n := findUiNodeSuffix(tree, key); n != nil {
+							m.blockEvent(gitPluginBlock, scope, n.GetId(), protocol.UiTap, "", nil)
+						}
 					}
 				}),
-				until("the commit", func() bool { return !ggui.Peek(m.git.Commit).Loading }),
+				frames(5), shot("03-git-sections"),
+				do(func() {
+					scope := ggui.Untrack(func() string { return m.resolveActiveScope(protocol.ScopeFolder) })
+					tree := m.blockTreeFor(gitPluginBlock, scope)
+					for _, key := range []string{"sec-changes-toggle", "sec-stashes-toggle", "sec-branches-toggle"} {
+						if n := findUiNodeSuffix(tree, key); n != nil {
+							m.blockEvent(gitPluginBlock, scope, n.GetId(), protocol.UiTap, "", nil)
+						}
+					}
+				}),
+				do(func() {
+					scope := ggui.Untrack(func() string { return m.resolveActiveScope(protocol.ScopeFolder) })
+					if dag := findUiNodeSuffix(m.blockTreeFor(gitPluginBlock, scope), "history-dag"); dag != nil && len(dag.GetRows()) > 0 {
+						m.blockEvent(gitPluginBlock, scope, dag.GetId(), protocol.UiChange, dag.GetRows()[0].GetId(), nil)
+					}
+				}),
+				until("the commit", func() bool {
+					return findUiNodeSuffix(m.blockTreeFor(gitPluginBlock), "cd-files") != nil
+				}),
 				frames(5), shot("03-commit"),
 				// A file of it, its diff in a tab, beside a wider panel.
 				do(func() {
-					if fs := ggui.Peek(m.git.Commit).Info.GetFiles(); len(fs) > 0 {
-						m.openCommitFile(fs[0])
+					scope := ggui.Untrack(func() string { return m.resolveActiveScope(protocol.ScopeFolder) })
+					if files := findUiNodeSuffix(m.blockTreeFor(gitPluginBlock, scope), "cd-files"); files != nil && len(files.GetChildren()) > 0 {
+						if btn := files.GetChildren()[0]; btn.GetKind() == "button" {
+							m.blockEvent(gitPluginBlock, scope, btn.GetId(), protocol.UiTap, "", nil)
+						}
 					}
 					m.DetailsWidth.Set(440)
 				}),

@@ -136,6 +136,13 @@ func (m *model) openDiffFrom(from diffTab, f *protocol.GitFile, preview bool) {
 	}
 	m.showTab(id)
 	m.readDiff(id)
+	if from.Pull == 0 {
+		if from.Commit != "" {
+			m.loadDiffCommit(from.commitKey())
+		} else {
+			m.loadDiffChanges(from.group(), false)
+		}
+	}
 }
 
 // doubleTap is how soon a second tap on a tab makes a double tap.
@@ -188,17 +195,17 @@ func (m *model) updateDiff(id string, fn func(*diffTab)) {
 // followChanges reads again the open diffs of a work tree's changes, as
 // its changes are read again: a file may have changed with the rest, or
 // have none left.
-func (m *model) followChanges(v gitView) {
+func (m *model) followChanges(g diffGroup, ch *protocol.GitChanges) {
 	for id, d := range ggui.Peek(m.Diffs) {
-		if d.Commit != "" || d.Base != v.Base || d.Root != v.Root || d.Repo != v.Changes.GetRoot() {
+		if d.Pull > 0 || d.Commit != "" || d.group() != g {
 			continue
 		}
-		i := slices.IndexFunc(v.Changes.GetFiles(), func(f *protocol.GitFile) bool { return f.GetPath() == d.File.GetPath() })
+		i := slices.IndexFunc(ch.GetFiles(), func(f *protocol.GitFile) bool { return f.GetPath() == d.File.GetPath() })
 		if i < 0 {
 			m.updateDiff(id, func(d *diffTab) { d.Diff, d.Err = &protocol.Diff{}, "" })
 			continue
 		}
-		m.updateDiff(id, func(d *diffTab) { d.File = v.Changes.GetFiles()[i] })
+		m.updateDiff(id, func(d *diffTab) { d.File = ch.GetFiles()[i] })
 		m.readDiff(id)
 	}
 }
@@ -223,15 +230,9 @@ func (m *model) siblings(d diffTab) []*protocol.GitFile {
 		return nil
 	}
 	if d.Commit != "" {
-		if c := ggui.Peek(m.git.Commit); c.Hash == d.Commit {
-			return c.Info.GetFiles()
-		}
-		return nil
+		return ggui.Peek(m.diffChanges.Commits)[d.commitKey()]
 	}
-	if v := ggui.Peek(m.git.View); v.Root == d.Root && v.Base == d.Base && v.Changes.GetRoot() == d.Repo {
-		return v.Changes.GetFiles()
-	}
-	return nil
+	return ggui.Peek(m.diffChanges.Groups)[d.group()].GetFiles()
 }
 
 // stepDiff shows the next changed file's diff, or with -1 the one before,
@@ -267,7 +268,7 @@ func (m *model) askDiscardHunk(id string, hunk []*protocol.DiffLine) {
 				return
 			}
 			m.readDiff(id)
-			m.loadGit(ggui.Peek(m.git.View).Root)
+			m.loadDiffChanges(d.group(), true)
 		})
 	}
 	m.askConfirm(confirmation{
@@ -325,10 +326,24 @@ func diffTabView(m *model, id string) ggui.Widget {
 	})
 	mode := ggui.Map(m.Prefs, func(p prefs) diffMode { return diffMode{Split: p.DiffSplit, Wrap: p.DiffWrap} })
 	sel := ggui.State(noSel)
+	sibs := ggui.Derived(func() int {
+		cur := d.Get()
+		if cur.Pull > 0 {
+			if o := m.Forge.Open.Get(); o.Root == cur.Root && o.Number == cur.Pull {
+				return len(o.Detail.GetFiles())
+			}
+			return 0
+		}
+		if cur.Commit != "" {
+			return len(m.diffChanges.Commits.Get()[cur.commitKey()])
+		}
+		return len(m.diffChanges.Groups.Get()[cur.group()].GetFiles())
+	})
 	type shown struct {
 		D    diffTab
 		Mode diffMode
 		Sel  lineSel
+		Sibs int
 	}
 	state := ggui.Derived(func() shown {
 		cur := d.Get()
@@ -336,9 +351,9 @@ func diffTabView(m *model, id string) ggui.Widget {
 		if s.To >= len(cur.Diff.GetLines()) {
 			s = noSel // the diff was read again, shorter
 		}
-		return shown{cur, mode.Get(), s}
+		return shown{cur, mode.Get(), s, sibs.Get()}
 	}).WithEqual(func(a, b shown) bool {
-		return a.Mode == b.Mode && a.Sel == b.Sel && a.D.Err == b.D.Err && a.D.Loading == b.D.Loading &&
+		return a.Mode == b.Mode && a.Sel == b.Sel && a.Sibs == b.Sibs && a.D.Err == b.D.Err && a.D.Loading == b.D.Loading &&
 			protocol.Same(a.D.File, b.D.File) && protocol.Same(a.D.Diff, b.D.Diff)
 	})
 	return ggui.View(state, func(v shown) ggui.Widget {

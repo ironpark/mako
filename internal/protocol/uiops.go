@@ -22,6 +22,10 @@ const (
 	UiMove    = "move"
 )
 
+// UiCheck is the BlockEvent kind sent when a node's tri-state check is toggled
+// (revision 46).
+const UiCheck = "check"
+
 // DiffUi is the ops that make old into next, both trees of the same
 // root id; none when they are the same.
 func DiffUi(old, next *UiNode) []*UiOp {

@@ -418,6 +418,7 @@ func TestScopedBlockEmptyPlaceholder(t *testing.T) {
 		{protocol.ScopeProject, "Select a project to view this block", "No project", "Pin to a project"},
 		{protocol.ScopeSpace, "Select a space to view this block", "No space", "Pin to a space"},
 		{protocol.ScopeSession, "Select a session to view this block", "No session", "Pin to a session"},
+		{protocol.ScopeFolder, "Select a folder to view this block", "No folder", "Pin to a folder"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.scope, func(t *testing.T) {

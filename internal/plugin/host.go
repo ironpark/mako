@@ -2,11 +2,15 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
+	"path"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/ironpark/mako/internal/plugin/hostapi"
 	"github.com/ironpark/mako/internal/protocol"
@@ -146,8 +150,16 @@ func (h *host) HttpFetch(ctx context.Context, req *hostapi.FetchRequest) (*hosta
 
 // The window's commands a plugin may run.
 const (
-	cmdOpenURL = "mako.openUrl"
-	cmdToast   = "mako.toast"
+	cmdOpenURL           = "mako.openUrl"
+	cmdToast             = "mako.toast"
+	cmdCopyText          = "mako.copyText"
+	cmdOpenDiff          = "mako.openDiff"
+	cmdOpenFile          = "mako.openFile"
+	cmdOpenForge         = "mako.openForge"
+	cmdCreatePullRequest = "mako.createPullRequest"
+
+	maxCopyText      = 64 << 10
+	maxPluginIntents = 8
 )
 
 func (h *host) CommandsRunCommand(_ context.Context, req *hostapi.RunCommandRequest) (*hostapi.RunCommandResponse, error) {
@@ -169,8 +181,231 @@ func (h *host) CommandsRunCommand(_ context.Context, req *hostapi.RunCommandRequ
 		}
 		h.p.toast = msg
 		return &hostapi.RunCommandResponse{}, nil
+	case cmdCopyText:
+		if !h.p.gesture {
+			return nil, fmt.Errorf("%s copies text only in answer to the user's tap or command", cmdCopyText)
+		}
+		arg := req.GetArg()
+		if len(arg) > maxCopyText || !utf8.ValidString(arg) {
+			return nil, fmt.Errorf("%s takes UTF-8 text of at most %d KiB", cmdCopyText, maxCopyText>>10)
+		}
+		h.p.copyText = arg
+		return &hostapi.RunCommandResponse{}, nil
+	case cmdOpenDiff:
+		if !h.p.gesture {
+			return nil, fmt.Errorf("%s runs only in answer to the user's tap or command", cmdOpenDiff)
+		}
+		if len(h.p.intents) >= maxPluginIntents {
+			return nil, fmt.Errorf("at most %d window intents may be queued per gesture", maxPluginIntents)
+		}
+		var a struct {
+			Node    string `json:"node"`
+			Folder  string `json:"folder"`
+			Repo    string `json:"repo"`
+			Path    string `json:"path"`
+			From    string `json:"from"`
+			Status  string `json:"status"`
+			Added   int64  `json:"added"`
+			Removed int64  `json:"removed"`
+			Binary  bool   `json:"binary"`
+			Commit  string `json:"commit"`
+			Base    string `json:"base"`
+			Preview bool   `json:"preview"`
+		}
+		if err := json.Unmarshal([]byte(req.GetArg()), &a); err != nil {
+			return nil, fmt.Errorf("%s: invalid JSON argument: %w", cmdOpenDiff, err)
+		}
+		if a.Folder == "" {
+			if node, folder, ok := h.activeFolder(); ok {
+				if a.Node == "" {
+					a.Node = node
+				}
+				a.Folder = folder
+			}
+		}
+		if err := h.allowIntentPath(a.Node, a.Folder); err != nil {
+			return nil, fmt.Errorf("%s: %w", cmdOpenDiff, err)
+		}
+		if err := checkWorktreeRelPath(a.Path, false); err != nil {
+			return nil, fmt.Errorf("%s: path: %w", cmdOpenDiff, err)
+		}
+		if err := checkWorktreeRelPath(a.From, true); err != nil {
+			return nil, fmt.Errorf("%s: from: %w", cmdOpenDiff, err)
+		}
+		if a.Repo != "" {
+			if err := h.allowIntentPath(a.Node, a.Repo); err != nil {
+				return nil, fmt.Errorf("%s: repo %q is not allowed", cmdOpenDiff, a.Repo)
+			}
+		}
+		h.p.intents = append(h.p.intents, &protocol.PluginOpen{
+			Kind:    "diff",
+			Node:    intentNode(a.Node),
+			Folder:  a.Folder,
+			Repo:    a.Repo,
+			Path:    a.Path,
+			From:    a.From,
+			Status:  a.Status,
+			Added:   a.Added,
+			Removed: a.Removed,
+			Binary:  a.Binary,
+			Commit:  a.Commit,
+			Base:    a.Base,
+			Preview: a.Preview,
+		})
+		return &hostapi.RunCommandResponse{}, nil
+	case cmdOpenFile:
+		if !h.p.gesture {
+			return nil, fmt.Errorf("%s runs only in answer to the user's tap or command", cmdOpenFile)
+		}
+		if len(h.p.intents) >= maxPluginIntents {
+			return nil, fmt.Errorf("at most %d window intents may be queued per gesture", maxPluginIntents)
+		}
+		var a struct {
+			Node string `json:"node"`
+			Path string `json:"path"`
+			Line int32  `json:"line"`
+		}
+		if err := json.Unmarshal([]byte(req.GetArg()), &a); err != nil {
+			return nil, fmt.Errorf("%s: invalid JSON argument: %w", cmdOpenFile, err)
+		}
+		if a.Line < 0 {
+			return nil, fmt.Errorf("%s: line must be >= 0", cmdOpenFile)
+		}
+		if a.Node == "" {
+			if node, folder, ok := h.activeFolder(); ok && pathWithinOrEqual(a.Path, folder) {
+				a.Node = node
+			}
+		}
+		if err := h.allowIntentPath(a.Node, a.Path); err != nil {
+			return nil, fmt.Errorf("%s: %w", cmdOpenFile, err)
+		}
+		h.p.intents = append(h.p.intents, &protocol.PluginOpen{
+			Kind: "file",
+			Node: intentNode(a.Node),
+			Path: a.Path,
+			Line: a.Line,
+		})
+		return &hostapi.RunCommandResponse{}, nil
+	case cmdOpenForge:
+		if !h.p.gesture {
+			return nil, fmt.Errorf("%s runs only in answer to the user's tap or command", cmdOpenForge)
+		}
+		if len(h.p.intents) >= maxPluginIntents {
+			return nil, fmt.Errorf("at most %d window intents may be queued per gesture", maxPluginIntents)
+		}
+		var a struct {
+			Node   string `json:"node"`
+			Folder string `json:"folder"`
+			Kind   string `json:"kind"`
+			Number int64  `json:"number"`
+		}
+		if err := json.Unmarshal([]byte(req.GetArg()), &a); err != nil {
+			return nil, fmt.Errorf("%s: invalid JSON argument: %w", cmdOpenForge, err)
+		}
+		if a.Kind != "pr" && a.Kind != "runs" {
+			return nil, fmt.Errorf("%s: kind %q must be \"pr\" or \"runs\"", cmdOpenForge, a.Kind)
+		}
+		if a.Number < 0 {
+			return nil, fmt.Errorf("%s: number must be >= 0", cmdOpenForge)
+		}
+		if a.Folder == "" {
+			if node, folder, ok := h.activeFolder(); ok {
+				if a.Node == "" {
+					a.Node = node
+				}
+				a.Folder = folder
+			}
+		}
+		if err := h.allowIntentPath(a.Node, a.Folder); err != nil {
+			return nil, fmt.Errorf("%s: %w", cmdOpenForge, err)
+		}
+		h.p.intents = append(h.p.intents, &protocol.PluginOpen{
+			Kind:   a.Kind,
+			Node:   intentNode(a.Node),
+			Folder: a.Folder,
+			Number: a.Number,
+		})
+		return &hostapi.RunCommandResponse{}, nil
+	case cmdCreatePullRequest:
+		if !h.p.gesture {
+			return nil, fmt.Errorf("%s runs only in answer to the user's tap or command", cmdCreatePullRequest)
+		}
+		if len(h.p.intents) >= maxPluginIntents {
+			return nil, fmt.Errorf("at most %d window intents may be queued per gesture", maxPluginIntents)
+		}
+		var a struct {
+			Node   string `json:"node"`
+			Folder string `json:"folder"`
+		}
+		if err := json.Unmarshal([]byte(req.GetArg()), &a); err != nil {
+			return nil, fmt.Errorf("%s: invalid JSON argument: %w", cmdCreatePullRequest, err)
+		}
+		if a.Folder == "" {
+			if node, folder, ok := h.activeFolder(); ok {
+				if a.Node == "" {
+					a.Node = node
+				}
+				a.Folder = folder
+			}
+		}
+		if err := h.allowIntentPath(a.Node, a.Folder); err != nil {
+			return nil, fmt.Errorf("%s: %w", cmdCreatePullRequest, err)
+		}
+		h.p.intents = append(h.p.intents, &protocol.PluginOpen{
+			Kind:   "create_pr",
+			Node:   intentNode(a.Node),
+			Folder: a.Folder,
+		})
+		return &hostapi.RunCommandResponse{}, nil
 	}
 	return nil, fmt.Errorf("command %q is not one a plugin may run", req.GetId())
+}
+
+func (h *host) activeFolder() (node, folder string, ok bool) {
+	if h.p.activeInstance == "" {
+		return "", "", false
+	}
+	_, scopeKey := splitInstanceKey(h.p.activeInstance)
+	return protocol.ParseFolderScope(scopeKey)
+}
+
+func (h *host) allowIntentPath(node, p string) error {
+	if p == "" || strings.ContainsRune(p, 0) || !utf8.ValidString(p) {
+		return errors.New("path must be a non-empty valid UTF-8 path")
+	}
+	if hasDotDotSegment(p) {
+		return fmt.Errorf("path %q must not contain \"..\" segments", p)
+	}
+	if instNode, instFolder, ok := h.activeFolder(); ok && sameGitNode(node, instNode) && pathWithinOrEqual(p, instFolder) {
+		return nil
+	}
+	if h.p.hasWatchedFolderContaining(node, p) {
+		return nil
+	}
+	if gh := h.p.m.cfg.Git; gh != nil && gh.Allowed(GitTarget{Node: gitHostNode(node), Path: p}) {
+		return nil
+	}
+	return fmt.Errorf("path %q is not within an allowed or watched folder", p)
+}
+
+func checkWorktreeRelPath(p string, allowEmpty bool) error {
+	if p == "" {
+		if allowEmpty {
+			return nil
+		}
+		return errors.New("path is empty")
+	}
+	if len(p) > maxRelPath || !utf8.ValidString(p) || strings.ContainsAny(p, "\\\x00") || path.IsAbs(p) || hasDotDotSegment(p) {
+		return fmt.Errorf("%q is not a valid relative worktree path", p)
+	}
+	return nil
+}
+
+func intentNode(node string) string {
+	if node == protocol.LocalScopeNode {
+		return ""
+	}
+	return node
 }
 
 // secretKey is the vault's name of a secret the plugin names, checked.

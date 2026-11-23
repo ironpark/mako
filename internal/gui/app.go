@@ -74,6 +74,7 @@ func setup(m *model) {
 	})
 	followAttention(m)
 	followFiles(m)
+	followDiffChanges(m)
 	followWindowFocus(m)
 	setupWorkspace(m)
 	ggui.Effect(func() ggui.Cleanup {

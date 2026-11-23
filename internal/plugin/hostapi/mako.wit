@@ -4,6 +4,178 @@ package mako:plugin@1.0.0;
 
 /// The records and enums the Host API's functions take and give.
 interface types {
+  /// GitTarget names a work tree: scope, a canonical folder scope key (the
+  /// prelude fills ctx.scopeKey), or node and path explicitly.
+  record git-target {
+    scope: string,
+    node: string,
+    path: string,
+  }
+
+  /// GitServiceStatusRequest asks for the status of a git work tree.
+  record git-service-status-request {
+    target: option<git-target>,
+    /// base asks for changes since leaving this branch; "" compares against HEAD.
+    base: string,
+  }
+
+  /// GitServiceStatusResponse reports a work tree's changes, branches, stashes,
+  /// and in-progress operation.
+  record git-service-status-response {
+    root: string,
+    node: string,
+    branch: string,
+    not-repo: bool,
+    files: list<git-file-entry>,
+    upstream: string,
+    ahead: s32,
+    behind: s32,
+    branches: list<string>,
+    remote-branches: list<string>,
+    stashes: list<git-stash-entry>,
+    operation: string,
+    /// worktree is the session worktree at path, if any.
+    worktree: option<git-worktree-info>,
+    /// base is the base branch as asked in the request.
+    base: string,
+  }
+
+  /// GitFileEntry is one changed file in a work tree or commit.
+  record git-file-entry {
+    path: string,
+    %from: string,
+    status: string,
+    added: s32,
+    removed: s32,
+    binary: bool,
+  }
+
+  /// GitStashEntry is one stashed change.
+  record git-stash-entry {
+    index: s32,
+    message: string,
+    /// time is RFC 3339 formatted.
+    time: string,
+  }
+
+  /// GitWorktreeInfo describes a session's git worktree.
+  record git-worktree-info {
+    repo: string,
+    path: string,
+    branch: string,
+    base: string,
+    start: string,
+  }
+
+  /// GitServiceHistoryRequest asks for recent commits of a repository.
+  record git-service-history-request {
+    target: option<git-target>,
+    /// max caps the commits returned, at most 500.
+    max: s32,
+    /// known is the fingerprint the caller already holds.
+    known: string,
+  }
+
+  /// GitServiceHistoryResponse holds recent commits and a fingerprint.
+  record git-service-history-response {
+    commits: list<git-commit-entry>,
+    current: string,
+    more: bool,
+    fingerprint: string,
+    unchanged: bool,
+  }
+
+  /// GitCommitEntry is one commit in a repository's history.
+  record git-commit-entry {
+    hash: string,
+    parents: list<string>,
+    author: string,
+    /// time is RFC 3339 formatted.
+    time: string,
+    subject: string,
+    refs: list<string>,
+  }
+
+  /// GitServiceShowCommitRequest asks for one commit's details and files.
+  record git-service-show-commit-request {
+    target: option<git-target>,
+    hash: string,
+  }
+
+  /// GitServiceShowCommitResponse holds one commit's details and changed files.
+  record git-service-show-commit-response {
+    commit: option<git-commit-entry>,
+    email: string,
+    body: string,
+    files: list<git-file-entry>,
+  }
+
+  /// GitServiceWatchRequest starts watching a work tree for changes.
+  record git-service-watch-request {
+    target: option<git-target>,
+  }
+
+  /// GitServiceWatchResponse confirms the work tree being watched.
+  record git-service-watch-response {
+    /// root is the top of the work tree watched.
+    root: string,
+  }
+
+  /// GitServiceUnwatchRequest stops watching a work tree.
+  record git-service-unwatch-request {
+    target: option<git-target>,
+  }
+
+  /// GitServiceRunRequest runs a mutating git operation asynchronously.
+  /// op is one of: commit, push, pull, fetch, checkout, branch, merge (worktree),
+  /// pull_request (worktree), remove_worktree, discard_files, ignore, stash,
+  /// stash_apply, stash_pop, stash_drop, track, delete_branch, merge_branch,
+  /// rebase, detach, cherry_pick, revert, tag, continue, abort.
+  record git-service-run-request {
+    target: option<git-target>,
+    op: string,
+    message: string,
+    paths: list<string>,
+    amend: bool,
+    branch: string,
+    commit: string,
+    stash: s32,
+    rebase: bool,
+    force: bool,
+    tag: string,
+    /// worktree acts on the session worktree at target (merge, pull_request,
+    /// remove_worktree); the daemon looks it up itself rather than trusting a
+    /// caller-supplied Worktree.
+    worktree: bool,
+  }
+
+  /// GitServiceRunResponse identifies the asynchronous git job; its outcome
+  /// arrives at on.gitDone({job, scopeKey, op, ok, output, error}).
+  record git-service-run-response {
+    job: string,
+  }
+
+  /// ForgeServiceBranchStatusRequest asks for the forge status of a branch.
+  record forge-service-branch-status-request {
+    target: option<git-target>,
+    branch: string,
+  }
+
+  /// ForgeServiceBranchStatusResponse holds the pull request and CI summary for a
+  /// branch on its forge.
+  record forge-service-branch-status-response {
+    forge: string,
+    has-pr: bool,
+    pr-number: s32,
+    pr-title: string,
+    pr-state: string,
+    pr-checks: string,
+    runs: s32,
+    runs-state: string,
+    run-number: s32,
+    run-head: string,
+  }
+
   /// WriteRequest is a line for the log.
   record write-request {
     /// level is "debug", "info", "warn" or "error"; "" is "info".
@@ -810,6 +982,57 @@ interface types {
   }
 }
 
+/// GitService reads and changes git work trees this node knows: a folder of a
+/// project location, a session's folder or worktree on any node of the mesh,
+/// or the folder of a folder-scoped block of this plugin's that a window shows.
+/// Reads: 120/min. Runs: 30/min, only in answer to the user (an event or
+/// command), carried out after the call returns; the outcome comes to the
+/// default export's on.gitDone. Watches: 16 at a time, bound to the calling
+/// block instance.
+interface git {
+  use types.{git-service-status-request, git-service-status-response, git-service-history-request, git-service-history-response, git-service-show-commit-request, git-service-show-commit-response, git-service-watch-request, git-service-watch-response, git-service-unwatch-request, git-service-run-request, git-service-run-response};
+
+  /// Status reads the working tree changes, branches, stashes, and operation
+  /// state of a repository.
+  /// Needs the permission git:read.
+  status: func(req: git-service-status-request) -> result<git-service-status-response, string>;
+
+  /// History lists recent commits of a repository, skipping the commit list
+  /// when the repository fingerprint matches known.
+  /// Needs the permission git:read.
+  history: func(req: git-service-history-request) -> result<git-service-history-response, string>;
+
+  /// ShowCommit reads one commit's metadata and changed files.
+  /// Needs the permission git:read.
+  show-commit: func(req: git-service-show-commit-request) -> result<git-service-show-commit-response, string>;
+
+  /// Watch subscribes the calling block instance to reloads whenever the
+  /// target repository changes.
+  /// Needs the permission git:read.
+  watch: func(req: git-service-watch-request) -> result<git-service-watch-response, string>;
+
+  /// Unwatch stops watching the target repository for the calling block
+  /// instance.
+  /// Needs the permission git:read.
+  unwatch: func(req: git-service-unwatch-request) -> result<_, string>;
+
+  /// Run executes a mutating git operation asynchronously in answer to a user
+  /// gesture; the outcome arrives at on.gitDone.
+  /// Needs the permission git:write.
+  run: func(req: git-service-run-request) -> result<git-service-run-response, string>;
+}
+
+/// ForgeService reads pull request and CI status for a repository's branch.
+/// Rate limit: 30/min.
+interface forge {
+  use types.{forge-service-branch-status-request, forge-service-branch-status-response};
+
+  /// BranchStatus returns the pull request and CI runs of a branch, as the
+  /// Git panel's forge line shows them.
+  /// Needs the permission forge:read.
+  branch-status: func(req: forge-service-branch-status-request) -> result<forge-service-branch-status-response, string>;
+}
+
 /// LogService writes to the daemon's log, under the plugin's name.
 interface log {
   use types.{write-request};
@@ -1158,6 +1381,8 @@ interface agents {
 /// What a plugin's component imports: the whole Host API. The host
 /// refuses at run time the calls the plugin has no permission for.
 world plugin {
+  import git;
+  import forge;
   import log;
   import settings;
   import storage;

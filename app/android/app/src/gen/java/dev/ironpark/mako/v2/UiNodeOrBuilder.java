@@ -577,4 +577,160 @@ public interface UiNodeOrBuilder extends
    * <code>repeated .mako.v2.UiGraphEdge graph_edges = 33 [json_name = "graphEdges"];</code>
    */
   int getGraphEdgesCount();
+
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.UiBadge> 
+      getBadgesList();
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  dev.ironpark.mako.v2.UiBadge getBadges(int index);
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  int getBadgesCount();
+
+  /**
+   * <pre>
+   * check is a checkbox's or tree_item's tri-state check value: "" (none),
+   * "on", "off", or "mixed" (revision 46).
+   * </pre>
+   *
+   * <code>string check = 35 [json_name = "check"];</code>
+   * @return The check.
+   */
+  java.lang.String getCheck();
+  /**
+   * <pre>
+   * check is a checkbox's or tree_item's tri-state check value: "" (none),
+   * "on", "off", or "mixed" (revision 46).
+   * </pre>
+   *
+   * <code>string check = 35 [json_name = "check"];</code>
+   * @return The bytes for check.
+   */
+  com.google.protobuf.ByteString
+      getCheckBytes();
+
+  /**
+   * <pre>
+   * checks says toggling check is answered by a BlockEvent of kind "check"
+   * with value "on" or "off" (revision 46).
+   * </pre>
+   *
+   * <code>bool checks = 36 [json_name = "checks"];</code>
+   * @return The checks.
+   */
+  boolean getChecks();
+
+  /**
+   * <pre>
+   * context_menu names the key of a menu node (variant "context") in the
+   * same tree opened as this node's context menu (revision 46).
+   * </pre>
+   *
+   * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+   * @return The contextMenu.
+   */
+  java.lang.String getContextMenu();
+  /**
+   * <pre>
+   * context_menu names the key of a menu node (variant "context") in the
+   * same tree opened as this node's context menu (revision 46).
+   * </pre>
+   *
+   * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+   * @return The bytes for contextMenu.
+   */
+  com.google.protobuf.ByteString
+      getContextMenuBytes();
+
+  /**
+   * <pre>
+   * context_arg (at most 256 chars) is carried as the value when an item of
+   * the node's context_menu is tapped (revision 46).
+   * </pre>
+   *
+   * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+   * @return The contextArg.
+   */
+  java.lang.String getContextArg();
+  /**
+   * <pre>
+   * context_arg (at most 256 chars) is carried as the value when an item of
+   * the node's context_menu is tapped (revision 46).
+   * </pre>
+   *
+   * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+   * @return The bytes for contextArg.
+   */
+  com.google.protobuf.ByteString
+      getContextArgBytes();
+
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.UiRow> 
+      getRowsList();
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  dev.ironpark.mako.v2.UiRow getRows(int index);
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  int getRowsCount();
+
+  /**
+   * <pre>
+   * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+   * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+   * @return The placeholder.
+   */
+  java.lang.String getPlaceholder();
+  /**
+   * <pre>
+   * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+   * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+   * @return The bytes for placeholder.
+   */
+  com.google.protobuf.ByteString
+      getPlaceholderBytes();
 }

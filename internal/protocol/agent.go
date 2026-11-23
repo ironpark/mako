@@ -29,7 +29,14 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 45
+const Revision = 46
+
+// RevisionPluginGitAndChrome adds standalone panel chrome (WatchBlock.standalone,
+// BlockUpdate.chrome), bundled first-party plugins (PluginInfo.bundled), the
+// folder scope kind, UIBlock vocabulary extensions (UiNode fields 34-39,
+// UiBadge, UiRow), gesture window intents (PluginDone.copy_text, PluginDone.open,
+// PluginOpen), GitChanges.worktree, and the Git and Forge plugin Host APIs.
+const RevisionPluginGitAndChrome = 46
 
 // RevisionPluginAssist adds the decision and agents:ask Host API groups,
 // PluginAgentAsk.kind, and the pill/chip/progress/scroll/tree_item/card

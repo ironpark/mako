@@ -54,6 +54,9 @@ func (noInstalls) Settle(string) bool                  { return false }
 // installStatus is how the plugin stands as installed, as its version
 // read says.
 func (p *plugin) installStatus() InstallStatus {
+	if p.bundled {
+		return InstallStatus{}
+	}
 	version := ""
 	if v := p.current(); v != nil {
 		version = v.man.Version
@@ -70,6 +73,9 @@ func (m *Manager) Dir() string { return m.cfg.Dir }
 // folder runs meanwhile, so the plugin is never seen gone, and a version
 // running is replaced as a folder changed in development is.
 func (m *Manager) Replace(id, stage string) error {
+	if m.isBundled(id) {
+		return fmt.Errorf("bundled plugin %q cannot be replaced", id)
+	}
 	if !ValidID(id) {
 		return fmt.Errorf("%q is not a plugin's ID", id)
 	}
@@ -105,6 +111,9 @@ func (m *Manager) Replace(id, stage string) error {
 // Remove takes the plugin's folder away, stops the plugin, and forgets
 // what it was allowed and what it kept on this node.
 func (m *Manager) Remove(id string) error {
+	if m.isBundled(id) {
+		return fmt.Errorf("bundled plugin %q cannot be removed", id)
+	}
 	if !ValidID(id) {
 		return fmt.Errorf("%q is not a plugin's ID", id)
 	}
@@ -136,6 +145,9 @@ func (m *Manager) Remove(id string) error {
 // node, before a first install of that ID: a plugin installed is not
 // given what another of its ID was. A plugin of the folder is refused.
 func (m *Manager) Forget(id string) error {
+	if m.isBundled(id) {
+		return fmt.Errorf("bundled plugin %q cannot be forgotten", id)
+	}
 	if !ValidID(id) {
 		return fmt.Errorf("%q is not a plugin's ID", id)
 	}
@@ -150,6 +162,9 @@ func (m *Manager) Forget(id string) error {
 // installed: a runtime up is closed first, without the save that would
 // keep its blocks' states for the folder now in its place.
 func (m *Manager) Disown(id string) error {
+	if m.isBundled(id) {
+		return fmt.Errorf("bundled plugin %q cannot be disowned", id)
+	}
 	if !ValidID(id) {
 		return fmt.Errorf("%q is not a plugin's ID", id)
 	}

@@ -140,8 +140,64 @@ var uiCases = []uiCase{
 			{"kind":"markdown","key":"md","text":"[[Intro]] updated","onLink":["link"]},
 			{"kind":"chart","key":"ch","chart":"pie","labels":["A","B"],"series":[{"values":[5,5]}]},
 			{"kind":"graph","key":"gr","value":"b","maxHeight":360,"onChange":["pick"],"graphNodes":[{"id":"a","label":"A","weight":1},{"id":"b","label":"B","tone":"accent","weight":3}],"graphEdges":[{"from":"a","to":"b","label":"rel","dashed":false}]}]}]}`},
+	// Rich UI v3 (revision 46): toolbar, menu, context menu, menu_item, checkbox, dialog, dag, badges, check/checks, split auto, placeholder.
+	{name: "rich-ui-v3", before: `{"kind":"column","fill":true,"children":[
+		{"kind":"row","key":"bar","variant":"toolbar","children":[
+			{"kind":"menu","key":"br","text":"main","icon":"git-branch","variant":"ghost","placeholder":"Branch","children":[
+				{"kind":"menu_item","key":"m1","text":"main","checked":true,"onTap":["checkout","main"]},
+				{"kind":"divider"},
+				{"kind":"menu","key":"more","text":"More","children":[
+					{"kind":"menu_item","key":"new","text":"Create branch","icon":"plus","onTap":["askBranch"]}]}]},
+			{"kind":"button","key":"pull","text":"Pull","placeholder":"Pull from origin/main","badges":[{"text":"2","tone":"accent","variant":"soft"}],"onTap":["pull"]}]},
+		{"kind":"split","key":"body","direction":"auto","ratio":0.45,"children":[
+			{"kind":"column","key":"left","children":[
+				{"kind":"tree","key":"files","children":[
+					{"kind":"tree_item","key":"f1","text":"main.go","icon":"file-diff","placeholder":"Commit main.go","check":"on","onCheck":["pick","main.go"],"badges":[{"text":"+12","tone":"success","variant":"mono"},{"text":"-3","tone":"danger","variant":"mono"}],"contextMenu":"file-menu","contextArg":"main.go","onTap":["open","main.go"]}]},
+				{"kind":"checkbox","key":"amend","text":"Amend","check":"off","onChange":["amend"]}]},
+			{"kind":"dag","key":"hist","value":"c1","contextMenu":"commit-menu","maxHeight":400,"onChange":["select"],"rows":[
+				{"id":"c1","parents":["c0"],"text":"Initial commit","detail":"Ada","meta":"2m","strong":true,"badges":[{"text":"main","tone":"accent","variant":"soft"}]},
+				{"id":"c0","text":"Root"}]}]},
+		{"kind":"menu","key":"file-menu","variant":"context","children":[
+			{"kind":"menu_item","key":"discard","text":"Discard","tone":"danger","onTap":["discard"]}]},
+		{"kind":"menu","key":"commit-menu","variant":"context","children":[
+			{"kind":"menu_item","key":"copy","text":"Copy hash","onTap":["copy"]}]}]}`,
+		next: `{"kind":"column","fill":true,"children":[
+		{"kind":"row","key":"bar","variant":"toolbar","children":[
+			{"kind":"menu","key":"br","text":"feature","icon":"git-branch","variant":"outline","placeholder":"Branch","children":[
+				{"kind":"menu_item","key":"m1","text":"main","checked":false,"onTap":["checkout","main"]},
+				{"kind":"menu_item","key":"m2","text":"feature","checked":true,"onTap":["checkout","feature"]},
+				{"kind":"divider"},
+				{"kind":"menu","key":"more","text":"More","children":[
+					{"kind":"menu_item","key":"new","text":"Create branch","icon":"plus","onTap":["askBranch"]}]}]},
+			{"kind":"button","key":"pull","text":"Pull","placeholder":"Pull","badges":[{"text":"0","tone":"muted","variant":"soft"}],"onTap":["pull"]}]},
+		{"kind":"split","key":"body","direction":"auto","ratio":0.5,"children":[
+			{"kind":"column","key":"left","children":[
+				{"kind":"tree","key":"files","children":[
+					{"kind":"tree_item","key":"f1","text":"main.go","icon":"file-diff","placeholder":"Commit src/main.go","check":"mixed","onCheck":["pick","main.go"],"badges":[{"text":"+15","tone":"success","variant":"mono"}],"contextMenu":"file-menu","contextArg":"src/main.go","onTap":["open","src/main.go"]}]},
+				{"kind":"checkbox","key":"amend","text":"Amend","check":"on","onChange":["amend"]}]},
+			{"kind":"dag","key":"hist","value":"c2","contextMenu":"commit-menu","maxHeight":480,"onChange":["select"],"rows":[
+				{"id":"c2","parents":["c1","c0"],"text":"Merge feature","detail":"Grace","meta":"now","strong":true,"icon":"git-merge","badges":[{"text":"HEAD","tone":"success","variant":"solid"}]},
+				{"id":"c1","parents":["c0"],"text":"Initial commit","detail":"Ada","meta":"3m"},
+				{"id":"c0","text":"Root"}]}]},
+		{"kind":"dialog","key":"confirm","text":"Discard changes?","variant":"danger","onChange":["closeDialog"],"children":[
+			{"kind":"text","text":"This cannot be undone."},
+			{"kind":"button","key":"ok","text":"Discard","variant":"danger","onTap":["confirmDiscard"]}]},
+		{"kind":"menu","key":"file-menu","variant":"context","children":[
+			{"kind":"menu_item","key":"discard","text":"Discard","tone":"danger","onTap":["discard"]}]},
+		{"kind":"menu","key":"commit-menu","variant":"context","children":[
+			{"kind":"menu_item","key":"copy","text":"Copy hash","onTap":["copy"]}]}]}`},
 
 	// Ops written by hand: what a front-end must do with them, or refuse.
+	{name: "update-dag-and-badges", before: `{"kind":"column","children":[
+		{"kind":"tree","key":"t","children":[
+			{"kind":"tree_item","key":"i","text":"a.go","check":"off","onCheck":["p"],"badges":[{"text":"+1","tone":"success","variant":"mono"}]}]},
+		{"kind":"dag","key":"d","rows":[{"id":"r1","text":"one"}]}]}`,
+		ops: []*protocol.UiOp{
+			{Op: protocol.UiUpdate, Id: "/t/i", Node: &protocol.UiNode{Id: "/t/i", Kind: "tree_item", Text: "a.go", Check: "on", Checks: true,
+				Badges: []*protocol.UiBadge{{Text: "+4", Tone: "success", Variant: "mono"}, {Text: "-2", Tone: "danger", Variant: "mono"}}}},
+			{Op: protocol.UiUpdate, Id: "/d", Node: &protocol.UiNode{Id: "/d", Kind: "dag", Value: "r2",
+				Rows: []*protocol.UiRow{{Id: "r2", Parents: []string{"r1"}, Text: "two", Strong: true, Badges: []*protocol.UiBadge{{Text: "main", Variant: "soft"}}}}}},
+		}},
 	{name: "update-keeps-children", before: `{"kind":"column","children":[{"kind":"row","key":"r","children":[{"kind":"text","text":"kept"}]}]}`,
 		ops: []*protocol.UiOp{{Op: protocol.UiUpdate, Id: "/r", Node: &protocol.UiNode{Id: "/r", Kind: "row", Gap: 3,
 			Children: []*protocol.UiNode{{Id: "/r/#9", Kind: "text", Text: "ignored"}}}}}},

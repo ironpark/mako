@@ -65,6 +65,9 @@ func (m *Manager) Tools() []ContributedTool {
 			continue
 		}
 		for _, tl := range v.man.Tools {
+			if tl.Scope == protocol.ScopeFolder {
+				continue
+			}
 			out = append(out, ContributedTool{
 				PluginID:    p.id,
 				ID:          tl.ID,

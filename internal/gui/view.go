@@ -71,7 +71,6 @@ func window(m *model) ggui.Widget {
 		fileDialogs(m),
 		tunnelDialog(m),
 		forgeDialogs(m),
-		gitAskDialog(m),
 		confirmDialog(m),
 		homeMigrateDialog(m),
 		imageViewer(m),

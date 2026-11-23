@@ -38,11 +38,12 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 	}
 	var a actions
 	var kind string
+	var node *protocol.UiNode
 	found := false
 	if t != nil {
 		a, found = t.actions[ev.GetNode()]
-		if n := nodeOf(t.Root, ev.GetNode()); n != nil {
-			kind = n.GetKind()
+		if node = nodeOf(t.Root, ev.GetNode()); node != nil {
+			kind = node.GetKind()
 		}
 	}
 	var raw json.RawMessage
@@ -61,6 +62,11 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 			return Message{}, fmt.Errorf("invalid drop payload for %q of %s", ev.GetNode(), ev.GetBlock())
 		}
 		raw = a.drop
+	case protocol.UiCheck:
+		if ev.GetValue() != "on" && ev.GetValue() != "off" {
+			return Message{}, fmt.Errorf("invalid check value %q for %q of %s", ev.GetValue(), ev.GetNode(), ev.GetBlock())
+		}
+		raw = a.check
 	default:
 		return Message{}, fmt.Errorf("%q is not a kind of event", ev.GetKind())
 	}
@@ -73,15 +79,53 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 	}
 	m := Message{Given: raw, Args: parts[1:], Kind: kind}
 	_ = json.Unmarshal(parts[0], &m.Name)
-	if ev.GetKind() != protocol.UiTap {
+	switch ev.GetKind() {
+	case protocol.UiTap:
+		if menuKey, ok := t.itemContextMenu[ev.GetNode()]; ok {
+			allowed := t.contextArgs[menuKey]
+			if !allowed[ev.GetValue()] {
+				return Message{}, fmt.Errorf("context menu %q of %s has no opener for arg %q", menuKey, ev.GetBlock(), ev.GetValue())
+			}
+			b, _ := json.Marshal(ev.GetValue())
+			m.Args = append(m.Args, b)
+		}
+	case protocol.UiChange:
 		var value any = ev.GetValue()
-		if ev.GetKind() == protocol.UiChange && (kind == KindToggle || kind == KindCollapsible || kind == KindTreeItem) {
+		switch kind {
+		case KindToggle, KindCollapsible, KindTreeItem:
 			value = ev.GetValue() == "true"
+		case KindCheckbox:
+			if ev.GetValue() != "on" && ev.GetValue() != "off" {
+				return Message{}, fmt.Errorf("invalid checkbox value %q for %q of %s", ev.GetValue(), ev.GetNode(), ev.GetBlock())
+			}
+		case KindDialog:
+			if ev.GetValue() != "dismiss" {
+				return Message{}, fmt.Errorf("invalid dialog change value %q for %q of %s", ev.GetValue(), ev.GetNode(), ev.GetBlock())
+			}
+		case KindDag:
+			if !dagHasRow(node, ev.GetValue()) {
+				return Message{}, fmt.Errorf("dag %q of %s has no row %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
+			}
 		}
 		b, _ := json.Marshal(value)
 		m.Args = append(m.Args, b)
+	default:
+		b, _ := json.Marshal(ev.GetValue())
+		m.Args = append(m.Args, b)
 	}
 	return m, nil
+}
+
+func dagHasRow(n *protocol.UiNode, id string) bool {
+	if n == nil || id == "" {
+		return false
+	}
+	for _, r := range n.GetRows() {
+		if r.GetId() == id {
+			return true
+		}
+	}
+	return false
 }
 
 // Values are the values of an event's block, as the front-end has them,
@@ -124,8 +168,8 @@ func (t *Tree) Values(in map[string]string) (map[string]string, error) {
 		switch kind, ok := kinds[id]; {
 		case !ok:
 			continue
-		case kind != KindInput && kind != KindTextarea && kind != KindToggle && kind != KindSelect && kind != KindTabs:
-			return nil, fmt.Errorf("node %q is no input, textarea, toggle, select or tabs of the block", id)
+		case kind != KindInput && kind != KindTextarea && kind != KindToggle && kind != KindCheckbox && kind != KindSelect && kind != KindTabs:
+			return nil, fmt.Errorf("node %q is no input, textarea, toggle, checkbox, select or tabs of the block", id)
 		}
 		out[id] = v
 	}

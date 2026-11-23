@@ -4,8 +4,10 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"io/fs"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,46 +31,55 @@ const minRefresh = 15 * time.Second
 var errGone = errors.New("the plugin was removed")
 
 type plugin struct {
-	m            *Manager
-	id           string
-	jobs         chan func()
-	recheck      chan struct{} // how the plugin stands as installed may have changed
-	denyClose    atomic.Bool   // PluginDeny requested immediate runtime teardown
-	enableReset  atomic.Bool   // PluginEnable requested clearing failErr on fallback
-	permSeq      atomic.Uint64 // monotonic counter ordering PluginGrant/PluginDeny inside grantStore.mu
-	dbSyncMu     sync.Mutex
-	dbSyncPend   map[string]*dbSyncPending
-	dbSyncCh     chan struct{} // coalesced DB sync delivery signal (cap 1)
-	done         chan struct{}
-	exited       chan struct{} // closed once the actor has stopped
-	quitOnce     sync.Once
-	settings     *settingsStore
-	vault        *vault
-	store        *kvStore
-	db           *dbStore
-	datafs       *datafsStore
-	logRate      *rateLimit
-	netRate      *rateLimit
-	evRate       *rateLimit
-	secRate      *rateLimit
-	dbRate       *rateLimit
-	datafsRate   *rateLimit
-	trRate       *rateLimit
-	fsRate       *rateLimit
-	fsWriteRate  *rateLimit
-	subRate      *rateLimit
-	dropLog      *rateLimit
-	subs         *subscriptions
-	asks         asks
-	msgRate      *rateLimit
-	startRate    *rateLimit
-	layoutRate   *rateLimit
-	layoutBusy   atomic.Bool // a change of the layout of the plugin's is under way
-	decisionRate *rateLimit
-	askRate      *rateLimit
-	pendingMu    sync.Mutex
-	decJobs      map[string]context.CancelFunc
-	askJobs      map[string]context.CancelFunc
+	m             *Manager
+	id            string
+	bundled       bool
+	bundledFS     fs.FS
+	devDir        string
+	jobs          chan func()
+	recheck       chan struct{} // how the plugin stands as installed may have changed
+	denyClose     atomic.Bool   // PluginDeny requested immediate runtime teardown
+	enableReset   atomic.Bool   // PluginEnable requested clearing failErr on fallback
+	permSeq       atomic.Uint64 // monotonic counter ordering PluginGrant/PluginDeny inside grantStore.mu
+	dbSyncMu      sync.Mutex
+	dbSyncPend    map[string]*dbSyncPending
+	dbSyncCh      chan struct{} // coalesced DB sync delivery signal (cap 1)
+	done          chan struct{}
+	exited        chan struct{} // closed once the actor has stopped
+	quitOnce      sync.Once
+	settings      *settingsStore
+	vault         *vault
+	store         *kvStore
+	db            *dbStore
+	datafs        *datafsStore
+	logRate       *rateLimit
+	netRate       *rateLimit
+	evRate        *rateLimit
+	secRate       *rateLimit
+	dbRate        *rateLimit
+	datafsRate    *rateLimit
+	trRate        *rateLimit
+	fsRate        *rateLimit
+	fsWriteRate   *rateLimit
+	gitReadRate   *rateLimit
+	gitRunRate    *rateLimit
+	forgeReadRate *rateLimit
+	subRate       *rateLimit
+	dropLog       *rateLimit
+	subs          *subscriptions
+	asks          asks
+	msgRate       *rateLimit
+	startRate     *rateLimit
+	layoutRate    *rateLimit
+	layoutBusy    atomic.Bool // a change of the layout of the plugin's is under way
+	decisionRate  *rateLimit
+	askRate       *rateLimit
+	pendingMu     sync.Mutex
+	decJobs       map[string]context.CancelFunc
+	askJobs       map[string]context.CancelFunc
+	gitJobs       map[string]context.CancelFunc
+	gitWatchMu    sync.Mutex
+	gitWatches    map[gitWatchKey]*gitWatch
 
 	mu      sync.Mutex
 	folder  string // the folder's fingerprint last seen
@@ -89,9 +100,12 @@ type plugin struct {
 	// renderFailures are the renders failed in a row.
 	renderFailures int
 	lastUsed       time.Time
-	gesture        bool   // the call under way answers the user
-	openURL        string // a link the call asked to open
-	toast          string // a short notice the call asked to show
+	gesture        bool                   // the call under way answers the user
+	activeInstance string                 // block instance key during load, render, or event
+	openURL        string                 // a link the call asked to open
+	toast          string                 // a short notice the call asked to show
+	copyText       string                 // text the call asked to copy to the clipboard
+	intents        []*protocol.PluginOpen // window intents asked during the gesture
 }
 
 const maxPluginLogs = 40
@@ -123,16 +137,25 @@ const maxScopeInstancesPerBlock = 16
 type instance struct {
 	key      string        // instanceKey(id, scopeKey)
 	id       string        // block ID from manifest
-	scopeKey string        // canonical scope key: "", "space:<id>", "project:<id>", "session:<id>"
+	scopeKey string        // canonical scope key: "", "space:<id>", "project:<id>", "session:<id>", "folder:<node>/<b64>"
 	locale   string        // active BCP-47 locale for this instance; guarded by plugin.mu
 	tree     *uiblock.Tree // the last render that read; guarded by plugin.mu
 	err      string        // the last call's error; guarded by plugin.mu
 	subs     int           // the streams watching it; guarded by plugin.mu
+	solo     int           // the streams watching it with View.Standalone; guarded by plugin.mu
+	loading  bool          // true while load() is running; guarded by plugin.mu
+	dirty    bool          // watch notified while loading or pending reload; guarded by plugin.mu
 	lastUsed time.Time     // LRU timestamp; guarded by plugin.mu
 
 	loaded   bool // the actor's: load ran since the runtime started
 	lastLoad time.Time
 	refresh  time.Duration
+}
+
+// standaloneLocked reports whether all current watchers present this block solo.
+// Caller must hold p.mu.
+func (in *instance) standaloneLocked() bool {
+	return in.subs > 0 && in.solo == in.subs
 }
 
 // getOrCreateInstanceLocked returns the instance for (blockID, scopeKey),
@@ -202,17 +225,22 @@ func newPlugin(m *Manager, id string) *plugin {
 		dbRate:       newRateLimit(dbOpsPerMinute, time.Minute),
 		datafsRate:   newRateLimit(datafsOpsPerMinute, time.Minute),
 		trRate:       newRateLimit(transcriptsPerMin, time.Minute),
-		fsRate:       newRateLimit(fsReadsPerMin, time.Minute),
-		fsWriteRate:  newRateLimit(fsWritesPerMin, time.Minute),
-		subRate:      newRateLimit(eventsPerSecond, time.Second),
-		dropLog:      newRateLimit(1, time.Minute),
-		msgRate:      newRateLimit(messagesPerMin, time.Minute),
-		startRate:    newRateLimit(agentStartsPerHr, time.Hour),
-		layoutRate:   newRateLimit(layoutPatchesPerMin, time.Minute),
-		decisionRate: newRateLimit(decisionsPerMin, time.Minute),
-		askRate:      newRateLimit(asksPerHour, time.Hour),
-		decJobs:      map[string]context.CancelFunc{},
-		askJobs:      map[string]context.CancelFunc{},
+		fsRate:        newRateLimit(fsReadsPerMin, time.Minute),
+		fsWriteRate:   newRateLimit(fsWritesPerMin, time.Minute),
+		gitReadRate:   newRateLimit(gitReadsPerMin, time.Minute),
+		gitRunRate:    newRateLimit(gitRunsPerMin, time.Minute),
+		forgeReadRate: newRateLimit(forgeReadsPerMin, time.Minute),
+		subRate:       newRateLimit(eventsPerSecond, time.Second),
+		dropLog:       newRateLimit(1, time.Minute),
+		msgRate:       newRateLimit(messagesPerMin, time.Minute),
+		startRate:     newRateLimit(agentStartsPerHr, time.Hour),
+		layoutRate:    newRateLimit(layoutPatchesPerMin, time.Minute),
+		decisionRate:  newRateLimit(decisionsPerMin, time.Minute),
+		askRate:       newRateLimit(asksPerHour, time.Hour),
+		decJobs:       map[string]context.CancelFunc{},
+		askJobs:       map[string]context.CancelFunc{},
+		gitJobs:       map[string]context.CancelFunc{},
+		gitWatches:    map[gitWatchKey]*gitWatch{},
 		subs:         &subscriptions{path: filepath.Join(data, "subscriptions.json")},
 		inst:         map[string]*instance{},
 		changed:      make(chan struct{}),
@@ -352,9 +380,22 @@ func (p *plugin) current() *version {
 	return p.v
 }
 
+// drainEffects returns and clears the gesture effects queued during a call.
+func (p *plugin) drainEffects() *protocol.PluginDone {
+	done := &protocol.PluginDone{
+		OpenUrl:  p.openURL,
+		Toast:    p.toast,
+		CopyText: p.copyText,
+		Open:     p.intents,
+	}
+	p.openURL, p.toast, p.copyText, p.intents = "", "", "", nil
+	return done
+}
+
 // stateLocked is how the plugin stands, and why: a plugin blocked stands
 // so before anything else it might, and whatever the user said.
 func (p *plugin) stateLocked(g grantEntry, st InstallStatus) (string, string) {
+	g = p.grantForLocked(g)
 	switch {
 	case p.v == nil:
 		return protocol.PluginFailed, cmp.Or(p.loadErr, "its folder has not been read")
@@ -392,9 +433,11 @@ func (p *plugin) info() *protocol.PluginInfo {
 	g, st := p.m.grant.get(p.id), p.installStatus()
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	g = p.grantForLocked(g)
 	state, err := p.stateLocked(g, st)
 	out := &protocol.PluginInfo{Id: p.id, State: state, Error: err, Stale: p.stale,
-		Installed: st.Installed, Source: st.Source, Key: st.Key, Update: st.Update, Blocked: st.Blocked}
+		Installed: st.Installed, Source: st.Source, Key: st.Key, Update: st.Update, Blocked: st.Blocked,
+		Bundled: p.bundled}
 	if p.stale && err == "" {
 		out.Error = p.loadErr
 	}
@@ -410,6 +453,9 @@ func (p *plugin) info() *protocol.PluginInfo {
 	out.AgentAsk, out.AgentsAllowed = p.asks.get().info(), g.AgentsAllowed || len(g.AsksAllowed) > 0
 	out.Asked = asked(man, g.Granted)
 	for _, b := range man.Blocks {
+		if b.Hidden {
+			continue
+		}
 		out.Blocks = append(out.Blocks, &protocol.PluginBlock{Name: blockName(p.id, b.ID), Title: b.Title, Slots: b.Slots, Scope: b.Scope})
 	}
 	for _, c := range man.Commands {
@@ -450,6 +496,17 @@ func (p *plugin) hasGrant(perm string) bool {
 	v := p.current()
 	if v == nil {
 		return false
+	}
+	if p.bundled {
+		if perm == hostapi.PermNet {
+			for _, mp := range v.man.Permissions {
+				if strings.HasPrefix(mp, hostapi.PermNet+":") {
+					return true
+				}
+			}
+			return false
+		}
+		return slices.Contains(v.man.Permissions, perm)
 	}
 	return p.m.grant.hasPermission(p.id, perm, v.man.Permissions)
 }

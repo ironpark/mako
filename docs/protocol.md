@@ -797,7 +797,7 @@ claim of its daemon changed.
 
 | Request | Payload | Reply | |
 |---|---|---|---|
-| `git_status` | `GitStatus` | `git_changes` | The work tree's changes against HEAD, or with `base` since it left that branch. Also branch, upstream, ahead and behind, the local and remote branches, the stashes, and a merge, rebase, cherry-pick or revert under way (`operation`), whose unmerged files have status `conflicted`. |
+| `git_status` | `GitStatus` | `git_changes` | The work tree's changes against HEAD, or with `base` since it left that branch. Also branch, upstream, ahead and behind, the local and remote branches, the stashes, a merge, rebase, cherry-pick or revert under way (`operation`, whose unmerged files have status `conflicted`), and the session `worktree` at `path` if any (field 12, revision 46). |
 | `git_diff` | `GitDiff` | `diff` | One file's hunks: against HEAD, against `base`, or as `commit` changed it. |
 | `git_log` | `GitLog` | `git_history` | Recent commits of every branch and tag, newest first. |
 | `git_show` | `GitShow` | `git_commit_info` | One commit's message and changed files. |
@@ -885,10 +885,10 @@ the front-end to list them again.
 
 | Request | Payload | Reply | |
 |---|---|---|---|
-| `list_plugins` | `ListPlugins` | `plugins` | The node's plugins, by ID: each one's manifest (version, publisher, blocks, commands, settings and their values, a secret's never), the permissions it asks for, those allowed, those still `asked`, and its `state` (`waiting`, `denied`, `ready`, `running`, `failed`, `disabled`, and from revision 29 `blocked`) with an `error`; `stale` when the version running is the last that worked and `error` says why the folder's newer one did not. From revision 29, `installed` when it came from a registry's package, with `source`, that registry, `key`, the publisher key pinned at its first install, `update`, a newer version that registry lists signed by that key, and `blocked`, why a registry's blocklist stops it. From revision 32, `secrets`, where the node keeps its plugins' secrets: the system keychain's name, or `file` when it reaches none, with `secrets_note` saying why; and each plugin's `agent_ask`, an agent it asks to start (`sessions:write`) waiting for the user to allow it, with the agent, profile, project's name, folder, the session's name and the first 2 KiB of the prompt, and `agents_allowed` when the user let it start agents without asking. |
-| `plugin_action` | `PluginAction` | `plugin_done` | Acts for the user: `grant` allows what the plugin asks for, `deny` refuses it and stops the plugin, `enable` / `disable`, `reload` reads its folder again, `run` runs its `command`, `set` sets its setting `key` to `value` ("" unsets); from revision 32, `allow_agent` lets the agent start that the plugin's `agent_ask` of id `key` asks for, `value` `once` or `always` (for this plugin from then on, on this node), `deny_agent` refuses it, and `forget_agents` has the plugin ask again before every start. `open_url` in the reply is a link the plugin asked, in answer, to open: the front-end that asked opens it. |
-| `watch_block` | `WatchBlock` | `block_update`, then more | Follows a plugin's block, `plugin:<id>/<block>`: the tree whole, then the changes. The block is shown, and its plugin started, while a front-end watches it; see [Plugin blocks](#plugin-blocks). A block of another node, `node_id`, is relayed as an `attach` is: the daemon passes the request on and copies what comes back, in plain frames to its socket. |
-| `block_event` | `BlockEvent` | `plugin_done` | The user acting on a node of a block's tree: `tap`, or `change` / `submit` with the value, and `values`, the block's inputs', toggles' and selects' values as the front-end has them, by node id (revision 27): 32 KiB of ids and values in all, and no more values than a tree holds nodes; a value of a node the daemon's tree no longer holds is left out, while the event's own node must be the tree's. The daemon looks up what the node's last render said to send; a front-end names only the node. |
+| `list_plugins` | `ListPlugins` | `plugins` | The node's plugins, by ID: each one's manifest (version, publisher, blocks, commands, settings and their values, a secret's never), the permissions it asks for, those allowed, those still `asked`, and its `state` (`waiting`, `denied`, `ready`, `running`, `failed`, `disabled`, and from revision 29 `blocked`) with an `error`; `stale` when the version running is the last that worked and `error` says why the folder's newer one did not. From revision 29, `installed` when it came from a registry's package, with `source`, that registry, `key`, the publisher key pinned at its first install, `update`, a newer version that registry lists signed by that key, and `blocked`, why a registry's blocklist stops it. From revision 32, `secrets`, where the node keeps its plugins' secrets: the system keychain's name, or `file` when it reaches none, with `secrets_note` saying why; and each plugin's `agent_ask`, an agent it asks to start (`sessions:write`) waiting for the user to allow it, with the agent, profile, project's name, folder, the session's name and the first 2 KiB of the prompt, and `agents_allowed` when the user let it start agents without asking. From revision 46, `bundled` (field 26) marks first-party plugins embedded in mako itself. |
+| `plugin_action` | `PluginAction` | `plugin_done` | Acts for the user: `grant` allows what the plugin asks for, `deny` refuses it and stops the plugin, `enable` / `disable`, `reload` reads its folder again, `run` runs its `command`, `set` sets its setting `key` to `value` ("" unsets); from revision 32, `allow_agent` lets the agent start that the plugin's `agent_ask` of id `key` asks for, `value` `once` or `always` (for this plugin from then on, on this node), `deny_agent` refuses it, and `forget_agents` has the plugin ask again before every start. `open_url` in `PluginDone` is a link the plugin asked, in answer, to open; `toast` (revision 41) is a short notice; `copy_text` and `open` (`repeated PluginOpen`, revision 46) carry clipboard text and gesture-gated window intents (`diff`, `file`, `pr`, `runs`, `create_pr`) for the front-end that asked. |
+| `watch_block` | `WatchBlock` | `block_update`, then more | Follows a plugin's block, `plugin:<id>/<block>`: the tree whole, then the changes. The block is shown, and its plugin started, while a front-end watches it; see [Plugin blocks](#plugin-blocks). `scope` selects a scoped instance (`space`, `project`, `session` from revision 42; `folder` from revision 46), `locale` passes the front-end's BCP-47 tag (revision 44), and `standalone` (field 5, revision 46) reports whether this viewer shows the block solo rather than tabbed. A block of another node, `node_id`, is relayed as an `attach` is: the daemon passes the request on and copies what comes back, in plain frames to its socket. |
+| `block_event` | `BlockEvent` | `plugin_done` | The user acting on a node of a block's tree: `tap`, `change` / `submit` with the value, `drop` with the drag payload (revision 40), or `check` (`protocol.UiCheck`, revision 46) with `"on"` / `"off"`, plus `values`, the block's inputs', textareas', toggles', checkboxes', selects' and tabs' values as the front-end has them, by node id (revision 27): 32 KiB of ids and values in all, and no more values than a tree holds nodes; a value of a node the daemon's tree no longer holds is left out, while the event's own node must be the tree's. The daemon looks up what the node's last render said to send; a front-end names only the node. |
 | `list_agent_blocks` | `ListAgentBlocks` | `agent_blocks` | The blocks the node's agents show (`show_ui`, [agent-mcp.md](agent-mcp.md#ui-of-your-own)), in the order shown, each its `name`, `agent:<session>/<id>`, `session_id`, `agent`, `title`, and where it goes: none, the right panel's last tab; or `document`, `parent`, `index` (-1 for the last) and `size`, which the user allowed (revision 27). `changed` has `agent_blocks` set as one comes, goes or moves. |
 | `list_panels` | `ListPanels` | `panels` | The blocks the node's window layout documents place (the default first, then by name, each depth first, its compact root after its root) and then its agents' blocks, each once: its `block` name, its `title` (a plugin's manifest's, an agent's block's, the window's English for its own; `""` for a plugin's block the node lacks) and `kind`, `builtin`, `plugin`, `agent` or `missing`, a hint for its icon. Nothing else of a plugin: not its permissions, settings, registry, nor a plugin no document places. Routed by `node_id`, and served to a node let in, as `watch_block` is: what a phone lists a computer's panels by before opening one (revision 35). |
 
@@ -1140,7 +1140,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 45) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 46) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
@@ -1360,11 +1360,11 @@ details panel act on the nodes of those IDs.
 
 A plugin draws a block, and an agent shows one, as a tree of `UiNode`s, of a fixed vocabulary:
 `column`, `row`, `stack`, `card`, `scroll`, `wrap`, `grid`, `split`,
-`collapsible`, `tree`, `tree_item`, `list`, `table` (which hold children),
+`collapsible`, `tree`, `tree_item`, `list`, `table`, `menu`, `dialog` (which hold children),
 `breadcrumb`, `text`, `icon`, `pill`, `chip`, `button`, `input`, `textarea`,
-`toggle`, `select`, `tabs`, `markdown`, `code`, `progress`, `divider`,
-`chart` (revision 33; `donut` and `pie` from revision 44), and `graph`
-(revision 44). A colour is a token (`tone`: `muted`, `faint`,
+`toggle`, `checkbox`, `select`, `tabs`, `markdown`, `code`, `progress`,
+`divider`, `menu_item`, `chart` (revision 33; `donut` and `pie` from revision 44),
+`graph` (revision 44), and `dag` (revision 46). A colour is a token (`tone`: `muted`, `faint`,
 `accent`, `success`, `warning`, `danger`), never a value; the front-end
 draws each kind with its own components in its own theme. The daemon reads
 what the plugin's render returned strictly, and refuses a tree with an
@@ -1405,6 +1405,41 @@ expands `UiNode.variant` tokens per node kind (`card`: `"soft"`; `pill` and
 `"spinner"` with optional `text`; `scroll`: `"follow"`; `tree_item`: `"badge"`),
 and adds the `decision` and `agents:ask` Host API services with `SessionEvent`
 fields 9–14 (`output`, `truncated`, `response_json`, `elapsed_ms`, `tag`, `code`).
+
+Revision 46 (`RevisionPluginGitAndChrome`) adds standalone panel chrome, bundled
+first-party plugins, the `folder` scope, gesture window intents, and the Git and
+Forge plugin Host APIs:
+- **Standalone panel & chrome**: `WatchBlock.standalone` (field 5, bool) signals
+  that the viewer displays the block solo rather than tabbed; the runtime
+  aggregates `standalone` with logical AND across active viewers of the same
+  `(block, scope)` instance and re-renders on transitions. `BlockUpdate.chrome`
+  (field 14: `"auto"` or `"toolbar"`) carries the block manifest's chrome hint.
+- **Bundled plugins & folder scope**: `PluginInfo.bundled` (field 26, bool) marks
+  plugins embedded in mako itself. `ScopeFolder` (`"folder"`) isolates blocks and
+  settings to one folder on one node using the canonical scope key
+  `folder:<node>/<base64url-nopad(path)>` (`<node>` is `"local"` or a peer node ID).
+- **Window intents**: `PluginDone` adds `copy_text` (field 3) and
+  `repeated PluginOpen open` (field 4), where `PluginOpen` carries `kind`
+  (`"diff"`, `"file"`, `"pr"`, `"runs"`, or `"create_pr"`), `node`, `folder`,
+  `repo`, `path`, `from`, `status`, `added`, `removed`, `binary`, `commit`,
+  `base`, `number`, `preview`, and `line`.
+- **UIBlock extensions**: `UiNode` adds fields 34–40: `repeated UiBadge badges`
+  (34; `UiBadge{text, tone, variant, icon}` with `variant` in `"soft"`, `"solid"`,
+  `"outline"`, `"mono"`), `string check` (35: `""`, `"on"`, `"off"`, `"mixed"`),
+  `bool checks` (36), `string context_menu` (37), `string context_arg` (38),
+  `repeated UiRow rows` (39; `UiRow{id, parents, text, detail, meta, badges, tone, strong, icon}`),
+  and `string placeholder` (40: input/textarea hint or tooltip/accessible label on
+  buttons, menus, `tree_item` checkboxes, checkboxes, icons, pills, and chips).
+  New kinds are `menu` (`variant`: `""`, `"ghost"`, `"outline"`, `"context"`),
+  `menu_item`, `checkbox`, `dialog` (`variant`: `"danger"`), and `dag`; `row`
+  gains `variant: "toolbar"`, and `split` gains `direction: "auto"`.
+  `BlockEvent.kind` adds `UiCheck` (`"check"`, value `"on"` or `"off"`) for
+  toggling a `tree_item`'s check state; context-menu `menu_item` taps carry the
+  opener's `context_arg` (or a `dag` row's `id`) in `BlockEvent.value`, verified
+  against the tree's active openers.
+- **Git & Forge**: `GitChanges.worktree` (field 12) attaches the session
+  `Worktree` at `path` when present. The plugin Host API adds `GitService`
+  (`git:read`, `git:write`) and `ForgeService` (`forge:read`).
 
 `watch_block` answers with a `block_update` holding the `tree`, then one
 whenever the block changes, holding `ops` that make the tree the last

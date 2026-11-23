@@ -13,7 +13,9 @@ import (
 
 	"github.com/ironpark/mako/internal/keychain"
 	"github.com/ironpark/mako/internal/layoutdoc"
+	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/plugin"
+	"github.com/ironpark/mako/internal/plugin/builtin"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/testhooks"
 	"github.com/ironpark/mako/internal/transport"
@@ -38,16 +40,16 @@ var errPluginPeer = errors.New("a node's plugins are its own front-ends' alone")
 // are trees of one vocabulary (internal/uiblock), sent whole and then as
 // patches; the window draws them alike, framed with where they come from.
 type blockSource interface {
-	Watch(ctx context.Context, name, scope, locale string, send func(*protocol.BlockUpdate) error) error
+	Watch(ctx context.Context, name, scope, locale string, view plugin.View, send func(*protocol.BlockUpdate) error) error
 	Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol.PluginDone, error)
 }
 
 // pluginBlocks adapts *plugin.Manager to blockSource, forwarding the watch
-// request's canonical scope key and locale to WatchScopedLocale.
+// request's canonical scope key, locale, and view to WatchScopedView.
 type pluginBlocks struct{ m *plugin.Manager }
 
-func (p pluginBlocks) Watch(ctx context.Context, name, scope, locale string, send func(*protocol.BlockUpdate) error) error {
-	return p.m.WatchScopedLocale(ctx, name, scope, locale, send)
+func (p pluginBlocks) Watch(ctx context.Context, name, scope, locale string, view plugin.View, send func(*protocol.BlockUpdate) error) error {
+	return p.m.WatchScopedView(ctx, name, scope, locale, view, send)
 }
 
 func (p pluginBlocks) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol.PluginDone, error) {
@@ -56,10 +58,10 @@ func (p pluginBlocks) Event(ctx context.Context, ev *protocol.BlockEvent) (*prot
 
 // agentBlocks makes the agents' blocks a blockSource: an event goes to
 // the agent as a message. Agent blocks are already session-addressed by name
-// so scope and locale are safely ignored.
+// so scope, locale, and view are safely ignored.
 type agentBlocks struct{ d *Daemon }
 
-func (a agentBlocks) Watch(ctx context.Context, name, _, _ string, send func(*protocol.BlockUpdate) error) error {
+func (a agentBlocks) Watch(ctx context.Context, name, _, _ string, _ plugin.View, send func(*protocol.BlockUpdate) error) error {
 	return a.d.agentUI.Watch(ctx, name, send)
 }
 
@@ -108,6 +110,10 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		Decisions:    pluginDecisions{d},
 		Asks:         pluginAsks{d},
 		Layout:       pluginLayout{d},
+		Git:          d.pluginGitHost(),
+		Forge:        d.pluginForgeHost(),
+		Bundled:      builtin.FS,
+		BundledDev:   os.Getenv("MAKO_DEV_BUNDLED_PLUGINS"),
 		NodeID:       d.config().NodeID,
 		SyncChanged:  func() { d.pokeStatus() },
 		Changed:      func() { d.changes.firePlugins(); d.syncProjectAgents() },
@@ -225,7 +231,7 @@ func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream,
 		cancel()
 		err = h.finish(parentCtx, env.GetId(), err)
 	}()
-	err = src.Watch(ctx, req.GetBlock(), req.GetScope(), req.GetLocale(), func(u *protocol.BlockUpdate) error {
+	err = src.Watch(ctx, req.GetBlock(), req.GetScope(), req.GetLocale(), plugin.View{Standalone: req.GetStandalone()}, func(u *protocol.BlockUpdate) error {
 		return stream.Send(protocol.TypeBlockUpdate, env.GetId(), u)
 	})
 	if ctx.Err() != nil {
@@ -290,8 +296,92 @@ func (d *Daemon) resolvePluginScope(scopeKey string) plugin.ScopeContext {
 			d.sessionMu.Unlock()
 		}
 		return d.sessionScopeContext(id, info)
+	case protocol.ScopeFolder:
+		node, folder, ok := protocol.ParseFolderScope(scopeKey)
+		if !ok {
+			return plugin.ScopeContext{Scope: protocol.ScopeGlobal, Roots: []string{}}
+		}
+		sc := plugin.ScopeContext{
+			Scope:    protocol.ScopeFolder,
+			ScopeKey: scopeKey,
+			Node:     node,
+			Folder:   folder,
+			Roots:    []string{folder},
+		}
+		d.enrichFolderScope(&sc, st, node, folder)
+		return sc
 	default:
 		return plugin.ScopeContext{Scope: protocol.ScopeGlobal, Roots: []string{}}
+	}
+}
+
+// enrichFolderScope fills ProjectID, ProjectName, SpaceID, SpaceName, and
+// SessionID on a folder-scoped ScopeContext when the folder belongs to a known
+// project location or hosts a live/saved session on node.
+func (d *Daemon) enrichFolderScope(sc *plugin.ScopeContext, st *protocol.WorkspaceState, node, folder string) {
+	local := d.isLocalGitNode(node)
+	nodeID := d.canonicalGitNode(node)
+
+	var sessionRepo string
+	if local {
+		for _, info := range d.localSessionSnapshots() {
+			if sameLocalPath(info.GetProject(), folder) ||
+				(info.GetWorktree() != nil && sameLocalPath(info.GetWorktree().GetPath(), folder)) {
+				sc.SessionID = info.GetId()
+				sessionRepo = cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())
+				break
+			}
+		}
+		proj, _ := d.projectFor(folder, sessionRepo)
+		if proj == nil && st != nil && nodeID != "" {
+			var tmp projectStore
+			tmp.resolveLocked(workspace.Scopes(st, nodeID))
+			r := sessionRepo
+			if r == "" {
+				r = d.heads.of(folder).repo
+			}
+			if r != "" {
+				r = cleanPath(r)
+			}
+			proj, _ = tmp.projectOf(cleanPath(folder), r)
+		}
+		if proj != nil {
+			sc.ProjectID = proj.GetId()
+			name, _ := d.projectMeta(st, proj.GetId())
+			sc.ProjectName = cmp.Or(proj.GetName(), name)
+			sc.SpaceID, sc.SpaceName = d.spaceForProject(st, proj.GetId())
+		}
+		return
+	}
+
+	for _, info := range d.meshSessions(d.routing()) {
+		if info.GetNodeId() != nodeID {
+			continue
+		}
+		if sameRemotePath(info.GetProject(), folder) ||
+			(info.GetWorktree() != nil && sameRemotePath(info.GetWorktree().GetPath(), folder)) {
+			sc.SessionID = info.GetId()
+			sessionRepo = cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())
+			break
+		}
+	}
+	if st == nil || nodeID == "" {
+		return
+	}
+	var best *protocol.ProjectScope
+	depth := -1
+	for _, p := range workspace.Scopes(st, nodeID) {
+		for _, loc := range p.GetPaths() {
+			if pathscope.Covers(loc, folder, sessionRepo) && len(loc) > depth {
+				best, depth = p, len(loc)
+			}
+		}
+	}
+	if best != nil {
+		sc.ProjectID = best.GetId()
+		name, _ := d.projectMeta(st, best.GetId())
+		sc.ProjectName = cmp.Or(best.GetName(), name)
+		sc.SpaceID, sc.SpaceName = d.spaceForProject(st, best.GetId())
 	}
 }
 

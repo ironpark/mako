@@ -27,6 +27,7 @@ message GitChanges {
   repeated GitStash stashes = 9;
   repeated string remote_branches = 10; // as "origin/name"
   string operation = 11; // one under way: merge, rebase, cherry-pick or revert
+  Worktree worktree = 12; // the session worktree at path, if any (revision 46)
 }
 
 // GitStash is one stashed change.

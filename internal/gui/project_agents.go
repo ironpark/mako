@@ -75,6 +75,40 @@ func (m *model) loadProjectAgents(root fileRoot) {
 }
 
 func projectAgentsPanel(m *model) ggui.Widget {
+	return projectAgentsPanelBody(m, true)
+}
+
+func projectAgentsPanelView(m *model, at blockPlace) blockView {
+	root := ggui.Derived(m.filesRoot)
+	hasRoot := ggui.Map(root, func(r fileRoot) bool { return r.Path != "" })
+	tools := ggui.Reactive(func() ggui.Widget {
+		r := root.Get()
+		if r.Path == "" {
+			return widget.Box()
+		}
+		v := m.ProjectAgents.Get()
+		meta := T("Loading agents…")
+		if !v.Updated.IsZero() {
+			meta = Tf("Updated %s", v.Updated.Local().Format("15:04:05"))
+		}
+		items := make([]ggui.Widget, 0, 3)
+		if !at.Solo {
+			items = append(items, icon("users").Size(14).Color(skin.Muted))
+		}
+		items = append(items,
+			widget.Expanded(widget.Text(projectName(r.Path)).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+			ui.Tooltip(iconButton("refresh-cw", T("Refresh agents"), func() { m.loadProjectAgents(r) }), meta),
+		)
+		return widget.Row(items...).Gap(7).Align(widget.AlignCenter)
+	})
+	return blockView{
+		Body:     projectAgentsPanelBody(m, false),
+		Tools:    tools,
+		hasTools: hasRoot,
+	}
+}
+
+func projectAgentsPanelBody(m *model, withHeader bool) ggui.Widget {
 	root := ggui.Derived(m.filesRoot)
 	pollWhileShown(m, root, agentsTab, 2*time.Second, m.loadProjectAgents, nil)
 	// The chosen session itself heads its project's agents.
@@ -82,7 +116,7 @@ func projectAgentsPanel(m *model) ggui.Widget {
 		if r.Path == "" {
 			return widget.Box(muted(widget.Text(T("Open a session to monitor its project agents.")).Size(13))).Pad(16)
 		}
-		return projectAgentsBody(m, r)
+		return projectAgentsBodyWithHeader(m, r, withHeader)
 	})
 	// The card is as tall as what it says while that fits, and scrolls in a
 	// panel shorter than it, rather than its lines drawn over each other.
@@ -144,6 +178,10 @@ func sessionCard(m *model) ggui.Widget {
 // each other below, the divider between them moved as the user likes: a
 // heading line each, a line an agent, two or so a message.
 func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
+	return projectAgentsBodyWithHeader(m, root, true)
+}
+
+func projectAgentsBodyWithHeader(m *model, root fileRoot, withHeader bool) ggui.Widget {
 	filter := ggui.State("")
 	expanded := ggui.State(uint64(0))
 	data := ggui.Map(m.ProjectAgents, func(v projectAgentsView) *protocol.ProjectAgents {
@@ -238,6 +276,9 @@ func projectAgentsBody(m *model, root fileRoot) ggui.Widget {
 	// Oldest first, as a conversation reads, kept at the newest.
 	bottom := widget.Column(messagesHead, widget.Expanded(widget.Scroll(messages).FollowEnd().Bar(skin.Surface3))).Stretch()
 	split := ui.Resizable(m.AgentsSplit, top, bottom).Vertical().MinSizes(60, 80).Hairline().Name(T("Messages divider"))
+	if !withHeader {
+		return widget.Column(status, widget.Expanded(split)).Stretch()
+	}
 	return widget.Column(header, hline(), status, widget.Expanded(split)).Stretch()
 }
 

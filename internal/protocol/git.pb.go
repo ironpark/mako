@@ -97,6 +97,7 @@ type GitChanges struct {
 	Stashes        []*GitStash            `protobuf:"bytes,9,rep,name=stashes,proto3" json:"stashes,omitempty"`
 	RemoteBranches []string               `protobuf:"bytes,10,rep,name=remote_branches,json=remoteBranches,proto3" json:"remote_branches,omitempty"` // as "origin/name"
 	Operation      string                 `protobuf:"bytes,11,opt,name=operation,proto3" json:"operation,omitempty"`                                 // one under way: merge, rebase, cherry-pick or revert
+	Worktree       *Worktree              `protobuf:"bytes,12,opt,name=worktree,proto3" json:"worktree,omitempty"`                                   // the session worktree at path, if any (revision 46)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -206,6 +207,13 @@ func (x *GitChanges) GetOperation() string {
 		return x.Operation
 	}
 	return ""
+}
+
+func (x *GitChanges) GetWorktree() *Worktree {
+	if x != nil {
+		return x.Worktree
+	}
+	return nil
 }
 
 // GitStash is one stashed change.
@@ -1149,7 +1157,7 @@ const file_mako_v2_git_proto_rawDesc = "" +
 	"\tGitStatus\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x12\n" +
-	"\x04base\x18\x03 \x01(\tR\x04base\"\xd5\x02\n" +
+	"\x04base\x18\x03 \x01(\tR\x04base\"\x84\x03\n" +
 	"\n" +
 	"GitChanges\x12\x12\n" +
 	"\x04root\x18\x01 \x01(\tR\x04root\x12\x16\n" +
@@ -1163,7 +1171,8 @@ const file_mako_v2_git_proto_rawDesc = "" +
 	"\astashes\x18\t \x03(\v2\x11.mako.v2.GitStashR\astashes\x12'\n" +
 	"\x0fremote_branches\x18\n" +
 	" \x03(\tR\x0eremoteBranches\x12\x1c\n" +
-	"\toperation\x18\v \x01(\tR\toperation\"j\n" +
+	"\toperation\x18\v \x01(\tR\toperation\x12-\n" +
+	"\bworktree\x18\f \x01(\v2\x11.mako.v2.WorktreeR\bworktree\"j\n" +
 	"\bGitStash\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x03R\x05index\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12.\n" +
@@ -1268,25 +1277,26 @@ var file_mako_v2_git_proto_goTypes = []any{
 	(*GitCommitInfo)(nil),         // 11: mako.v2.GitCommitInfo
 	(*GitRun)(nil),                // 12: mako.v2.GitRun
 	(*GitResult)(nil),             // 13: mako.v2.GitResult
-	(*timestamppb.Timestamp)(nil), // 14: google.protobuf.Timestamp
-	(*Worktree)(nil),              // 15: mako.v2.Worktree
+	(*Worktree)(nil),              // 14: mako.v2.Worktree
+	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
 }
 var file_mako_v2_git_proto_depIdxs = []int32{
 	3,  // 0: mako.v2.GitChanges.files:type_name -> mako.v2.GitFile
 	2,  // 1: mako.v2.GitChanges.stashes:type_name -> mako.v2.GitStash
-	14, // 2: mako.v2.GitStash.time:type_name -> google.protobuf.Timestamp
-	6,  // 3: mako.v2.Diff.lines:type_name -> mako.v2.DiffLine
-	9,  // 4: mako.v2.GitHistory.commits:type_name -> mako.v2.GitCommit
-	14, // 5: mako.v2.GitCommit.time:type_name -> google.protobuf.Timestamp
-	9,  // 6: mako.v2.GitCommitInfo.commit:type_name -> mako.v2.GitCommit
-	3,  // 7: mako.v2.GitCommitInfo.files:type_name -> mako.v2.GitFile
-	6,  // 8: mako.v2.GitRun.hunk:type_name -> mako.v2.DiffLine
-	15, // 9: mako.v2.GitRun.worktree:type_name -> mako.v2.Worktree
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	14, // 2: mako.v2.GitChanges.worktree:type_name -> mako.v2.Worktree
+	15, // 3: mako.v2.GitStash.time:type_name -> google.protobuf.Timestamp
+	6,  // 4: mako.v2.Diff.lines:type_name -> mako.v2.DiffLine
+	9,  // 5: mako.v2.GitHistory.commits:type_name -> mako.v2.GitCommit
+	15, // 6: mako.v2.GitCommit.time:type_name -> google.protobuf.Timestamp
+	9,  // 7: mako.v2.GitCommitInfo.commit:type_name -> mako.v2.GitCommit
+	3,  // 8: mako.v2.GitCommitInfo.files:type_name -> mako.v2.GitFile
+	6,  // 9: mako.v2.GitRun.hunk:type_name -> mako.v2.DiffLine
+	14, // 10: mako.v2.GitRun.worktree:type_name -> mako.v2.Worktree
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_git_proto_init() }

@@ -57,28 +57,75 @@ func (p *plugin) view(key, block string) uiblock.View {
 	return v
 }
 
-func (p *plugin) subscribe(block, scopeKey, locale string) (string, []string) {
+func (p *plugin) blockChrome(block string) string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.v != nil {
+		for _, b := range p.v.man.Blocks {
+			if b.ID == block {
+				if b.Chrome != "" {
+					return b.Chrome
+				}
+				return BlockChromeAuto
+			}
+		}
+	}
+	return ""
+}
+
+func (p *plugin) subscribe(block, scopeKey, locale string, view View) (string, []string) {
 	p.mu.Lock()
 	in, evicted := p.getOrCreateInstanceLocked(block, scopeKey)
 	in.subs++
+	if view.Standalone {
+		in.solo++
+	}
 	in.locale = normalizeLocale(locale)
 	key := in.key
 	p.mu.Unlock()
 	return key, evicted
 }
 
-func (p *plugin) unsubscribe(key string) {
+func (p *plugin) unsubscribe(key string, view View) {
 	p.mu.Lock()
 	var evicted []string
+	var flipped bool
+	var stillWatched bool
 	if in, ok := p.inst[key]; ok {
+		wasSolo := in.standaloneLocked()
 		in.subs--
+		if view.Standalone && in.solo > 0 {
+			in.solo--
+		}
+		flipped = wasSolo != in.standaloneLocked()
+		stillWatched = in.subs > 0
 		in.lastUsed = time.Now()
 		evicted = p.trimBlockInstancesLocked(in.id, "")
 	}
 	p.mu.Unlock()
+	stoppedWatches := false
+	if !stillWatched {
+		stoppedWatches = p.stopGitWatchesForInstance(key)
+	}
 	p.post(func() {
 		p.lastUsed = time.Now()
 		p.evictInstances(evicted)
+		if stoppedWatches {
+			p.mu.Lock()
+			in, ok := p.inst[key]
+			resubscribed := ok && in.subs > 0
+			p.mu.Unlock()
+			if ok {
+				in.loaded = false
+			}
+			if resubscribed {
+				p.show(key)
+				return
+			}
+		}
+		if flipped && stillWatched {
+			p.show(key)
+		}
 	})
 }
 
@@ -95,8 +142,9 @@ func (m *Manager) Watch(ctx context.Context, name string, send func(*protocol.Bl
 }
 
 // WatchScoped follows the block of the name in the canonical scope key ("" for
-// global, "space:<id>", "project:<id>", or "session:<id>"), calling send with
-// each update until ctx ends, send fails, or the plugin is removed.
+// global, "space:<id>", "project:<id>", "session:<id>", or
+// "folder:<node>/<b64>"), calling send with each update until ctx ends, send
+// fails, or the plugin is removed.
 func (m *Manager) WatchScoped(ctx context.Context, name, scope string, send func(*protocol.BlockUpdate) error) error {
 	return m.WatchScopedLocale(ctx, name, scope, "", send)
 }
@@ -106,6 +154,14 @@ func (m *Manager) WatchScoped(ctx context.Context, name, scope string, send func
 // calling send with each update until ctx ends, send fails, or the plugin is
 // removed.
 func (m *Manager) WatchScopedLocale(ctx context.Context, name, scope, locale string, send func(*protocol.BlockUpdate) error) error {
+	return m.WatchScopedView(ctx, name, scope, locale, View{}, send)
+}
+
+// WatchScopedView follows the block of the name in the canonical scope key
+// with the front-end's optional BCP-47 locale and presentation view
+// (Standalone), calling send with each update until ctx ends, send fails, or
+// the plugin is removed.
+func (m *Manager) WatchScopedView(ctx context.Context, name, scope, locale string, view View, send func(*protocol.BlockUpdate) error) error {
 	id, block, ok := splitBlock(name)
 	if !ok {
 		return fmt.Errorf("%q is not a plugin's block", name)
@@ -117,20 +173,22 @@ func (m *Manager) WatchScopedLocale(ctx context.Context, name, scope, locale str
 	if !ok {
 		return noPlugin(id)
 	}
-	key, evicted := p.subscribe(block, scope, locale)
-	defer p.unsubscribe(key)
+	key, evicted := p.subscribe(block, scope, locale, view)
+	defer p.unsubscribe(key, view)
 	if !p.post(func() {
 		p.evictInstances(evicted)
 		p.show(key)
 	}) {
 		return errors.New("the plugin is busy")
 	}
-	wrappedSend := send
-	if scope != "" {
-		wrappedSend = func(u *protocol.BlockUpdate) error {
+	wrappedSend := func(u *protocol.BlockUpdate) error {
+		if scope != "" {
 			u.Scope = scope
-			return send(u)
 		}
+		if ch := p.blockChrome(block); ch != "" {
+			u.Chrome = ch
+		}
+		return send(u)
 	}
 	return uiblock.Follow(ctx, name, m.lim.Updates, func() uiblock.View { return p.view(key, block) }, wrappedSend)
 }
@@ -159,6 +217,7 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	p.mu.Lock()
 	var tree *uiblock.Tree
 	var locale string
+	var standalone bool
 	if in, ok := p.inst[key]; ok {
 		in.lastUsed = time.Now()
 		tree = in.tree
@@ -166,6 +225,7 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 			in.locale = normalizeLocale(ev.GetLocale())
 		}
 		locale = in.locale
+		standalone = in.standaloneLocked()
 	}
 	p.mu.Unlock()
 	if ev.GetLocale() != "" {
@@ -206,15 +266,18 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	args := string(argsJSON)
 	sc := m.resolveScope(scopeKey)
 	sc.Locale = normalizeLocale(locale)
+	sc.View = View{Standalone: standalone}
 	ctxJSON := marshalScopeContext(sc)
-	var open, toast string
+	var done *protocol.PluginDone
 	err = p.do(ctx, func() error {
 		if err := p.ensure(); err != nil {
 			return err
 		}
+		prevInst := p.activeInstance
+		p.activeInstance = key
+		defer func() { p.activeInstance = prevInst }()
 		_, err := p.invoke("event", true, block, scopeKey, ctxJSON, name, args, string(valsJSON))
-		open, toast = p.openURL, p.toast
-		p.openURL, p.toast = "", ""
+		done = p.drainEffects()
 		p.setErr(key, err)
 		p.afterCall(scopeKey, key)
 		return err
@@ -222,5 +285,5 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	if err != nil {
 		return nil, err
 	}
-	return &protocol.PluginDone{OpenUrl: open, Toast: toast}, nil
+	return done, nil
 }

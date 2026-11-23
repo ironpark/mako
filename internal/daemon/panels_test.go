@@ -38,7 +38,10 @@ func TestANodeLetInListsTheComputersPanels(t *testing.T) {
 	}
 	writePlugin(t, server, "placed", plugin("placed", "Placed block"))
 	writePlugin(t, server, "hidden", plugin("hidden", "Secret project tracker"))
-	waitForWithin(t, 20*time.Second, "the plugins listed", func() bool { return len(server.plugins.List()) == 2 })
+	waitForWithin(t, 20*time.Second, "the plugins listed", func() bool {
+		list := server.plugins.List()
+		return findPlugin(list, "placed") != nil && findPlugin(list, "hidden") != nil
+	})
 	doc := layoutdoc.Default()
 	details := doc.Root.Children[len(doc.Root.Children)-1]
 	details.Children = append(details.Children,

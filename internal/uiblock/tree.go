@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -55,13 +56,18 @@ const (
 	KindDivider     = "divider"
 	KindChart       = "chart"
 	KindGraph       = "graph"
+	KindMenu        = "menu"
+	KindMenuItem    = "menu_item"
+	KindCheckbox    = "checkbox"
+	KindDialog      = "dialog"
+	KindDag         = "dag"
 )
 
 // Kinds are the vocabulary, in the order docs/plugins.md lists it.
 var Kinds = []string{KindColumn, KindRow, KindStack, KindCard, KindScroll, KindWrap, KindGrid, KindSplit,
 	KindCollapsible, KindBreadcrumb, KindTree, KindTreeItem, KindText, KindIcon, KindPill, KindChip, KindButton,
 	KindList, KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindTable, KindMarkdown, KindCode,
-	KindProgress, KindDivider, KindChart, KindGraph}
+	KindProgress, KindDivider, KindChart, KindGraph, KindMenu, KindMenuItem, KindCheckbox, KindDialog, KindDag}
 
 // Charts are the kinds of chart a chart node draws.
 var Charts = []string{"line", "bar", "sparkline", "donut", "pie"}
@@ -69,8 +75,15 @@ var Charts = []string{"line", "bar", "sparkline", "donut", "pie"}
 // Tones are the colour tokens a node may take.
 var Tones = []string{"", "muted", "faint", "accent", "success", "warning", "danger"}
 
+// Checks are the tri-state check tokens a checkbox or tree_item may take.
+var Checks = []string{"", "on", "off", "mixed"}
+
+// BadgeVariants are the style variant tokens a UiBadge may take.
+var BadgeVariants = []string{"", "soft", "solid", "outline", "mono"}
+
 // variantsOf says which variant tokens each node kind accepts (excluding "").
 var variantsOf = map[string][]string{
+	KindRow:      {"toolbar"},
 	KindButton:   {"primary", "secondary", "outline", "ghost", "danger"},
 	KindCard:     {"primary", "secondary", "outline", "ghost", "danger", "soft"},
 	KindPill:     {"soft", "solid", "outline"},
@@ -78,10 +91,12 @@ var variantsOf = map[string][]string{
 	KindProgress: {"spinner"},
 	KindScroll:   {"follow"},
 	KindTreeItem: {"badge"},
+	KindMenu:     {"ghost", "outline", "context"},
+	KindDialog:   {"danger"},
 }
 
 // Variants are every style variant token, for docs; VariantsOf says which a kind takes.
-var Variants = []string{"", "primary", "secondary", "outline", "ghost", "danger", "soft", "solid", "spinner", "follow", "badge"}
+var Variants = []string{"", "primary", "secondary", "outline", "ghost", "danger", "soft", "solid", "spinner", "follow", "badge", "toolbar", "context"}
 
 // VariantsOf returns the non-empty variant tokens accepted by kind.
 func VariantsOf(kind string) []string {
@@ -129,6 +144,19 @@ const (
 	maxGraphWeight   = 1e6
 	minGraphHeight   = 120
 	maxGraphHeight   = 1200
+	// Badges, menus, context menus, and dag bounds (revision 46).
+	maxBadges       = 8
+	maxBadgeText    = 32
+	maxContextArg   = 256
+	maxPlaceholder  = 256
+	maxMenuDepth    = 2
+	maxDagRows      = 1000
+	maxDagID        = 64
+	maxDagParents   = 8
+	maxDagText      = 320
+	maxDagDetail    = 320
+	maxDagMeta      = 128
+	maxDagRowBadges = 6
 )
 
 var (
@@ -176,6 +204,12 @@ type jsNode struct {
 	Labels      []string        `json:"labels"`
 	GraphNodes  []*jsGraphNode  `json:"graphNodes"`
 	GraphEdges  []*jsGraphEdge  `json:"graphEdges"`
+	Badges      []*jsBadge      `json:"badges"`
+	Check       string          `json:"check"`
+	OnCheck     json.RawMessage `json:"onCheck"`
+	ContextMenu string          `json:"contextMenu"`
+	ContextArg  string          `json:"contextArg"`
+	Rows        []*jsRow        `json:"rows"`
 }
 
 // jsSeries is a chart's series as the prelude writes it.
@@ -204,15 +238,38 @@ type jsGraphEdge struct {
 	Dashed bool   `json:"dashed"`
 }
 
+// jsBadge is a small trailing tag on a node or dag row.
+type jsBadge struct {
+	Text    string `json:"text"`
+	Tone    string `json:"tone"`
+	Variant string `json:"variant"`
+	Icon    string `json:"icon"`
+}
+
+// jsRow is one data-driven row of a dag node.
+type jsRow struct {
+	ID      string     `json:"id"`
+	Parents []string   `json:"parents"`
+	Text    string     `json:"text"`
+	Detail  string     `json:"detail"`
+	Meta    string     `json:"meta"`
+	Badges  []*jsBadge `json:"badges"`
+	Tone    string     `json:"tone"`
+	Strong  bool       `json:"strong"`
+	Icon    string     `json:"icon"`
+}
+
 // actions are what a node's events send: each a message, the JSON array
 // of its name and arguments.
-type actions struct{ tap, change, submit, drop json.RawMessage }
+type actions struct{ tap, change, submit, drop, check json.RawMessage }
 
 // Tree is a tree, read: the protocol's tree and its nodes' messages by
 // node id.
 type Tree struct {
-	Root    *protocol.UiNode
-	actions map[string]actions
+	Root            *protocol.UiNode
+	actions         map[string]actions
+	itemContextMenu map[string]string
+	contextArgs     map[string]map[string]bool
 }
 
 // Read reads a tree's JSON.
@@ -229,22 +286,42 @@ func Read(data []byte) (*Tree, error) {
 	if dec.More() {
 		return nil, fmt.Errorf("the tree does not read: more after it")
 	}
-	r := &treeReader{t: &Tree{actions: map[string]actions{}}}
-	n, err := r.node(&root, "", 1)
+	r := &treeReader{
+		t: &Tree{
+			actions:         map[string]actions{},
+			itemContextMenu: map[string]string{},
+			contextArgs:     map[string]map[string]bool{},
+		},
+		contextMenus: map[string]string{},
+	}
+	n, err := r.node(&root, "", 1, 0, "")
 	if err != nil {
 		return nil, err
+	}
+	for _, ref := range r.contextRefs {
+		if _, ok := r.contextMenus[ref.menu]; !ok {
+			return nil, fmt.Errorf("%s: unknown context menu %q", ref.where, ref.menu)
+		}
 	}
 	r.t.Root = n
 	return r.t, nil
 }
 
-type treeReader struct {
-	t     *Tree
-	nodes int
-	text  int
+type contextRef struct {
+	where string
+	menu  string
 }
 
-func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, error) {
+type treeReader struct {
+	t            *Tree
+	nodes        int
+	text         int
+	dialogs      int
+	contextMenus map[string]string
+	contextRefs  []contextRef
+}
+
+func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey string) (*protocol.UiNode, error) {
 	if j == nil {
 		return nil, fmt.Errorf("%s: a node is null", where(id))
 	}
@@ -287,6 +364,54 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 	}
 	if depth == 1 && j.Kind == KindTreeItem {
 		return nil, fmt.Errorf("%s: a tree_item must be inside a tree", where(id))
+	}
+	if j.Kind == KindMenu {
+		if j.Variant == "context" {
+			if menuDepth > 0 {
+				return nil, fmt.Errorf("%s: a context menu cannot be nested inside another menu", where(id))
+			}
+			if j.Key == "" || len(j.Key) > maxKey || strings.ContainsAny(j.Key, "/#") || strings.ContainsFunc(j.Key, Spoofing) {
+				return nil, fmt.Errorf("%s: a context menu requires a valid key", where(id))
+			}
+			if _, dup := r.contextMenus[j.Key]; dup {
+				return nil, fmt.Errorf("%s: duplicate context menu key %q", where(id), j.Key)
+			}
+			r.contextMenus[j.Key] = id
+			ctxMenuKey = j.Key
+		} else if j.Text == "" && j.Icon == "" {
+			return nil, fmt.Errorf("%s: a menu requires text or icon", where(id))
+		}
+		menuDepth++
+		if menuDepth > maxMenuDepth {
+			return nil, fmt.Errorf("%s: menu nesting exceeds depth %d", where(id), maxMenuDepth)
+		}
+	}
+	if j.Kind == KindMenuItem {
+		if menuDepth == 0 {
+			return nil, fmt.Errorf("%s: a menu_item must be inside a menu", where(id))
+		}
+		if j.Text == "" {
+			return nil, fmt.Errorf("%s: a menu_item requires text", where(id))
+		}
+		if ctxMenuKey != "" {
+			r.t.itemContextMenu[id] = ctxMenuKey
+		}
+	}
+	if j.Kind == KindDialog {
+		r.dialogs++
+		if r.dialogs > 1 {
+			return nil, fmt.Errorf("%s: a tree may contain at most one dialog", where(id))
+		}
+	}
+	if !slices.Contains(Checks, j.Check) {
+		return nil, fmt.Errorf("%s: check %q is not on, off or mixed", where(id), j.Check)
+	}
+	if j.Check != "" && j.Kind != KindCheckbox && j.Kind != KindTreeItem {
+		return nil, fmt.Errorf("%s: only a checkbox or tree_item takes check", where(id))
+	}
+	checkVal := j.Check
+	if j.Kind == KindCheckbox && checkVal == "" {
+		checkVal = "off"
 	}
 	if j.Kind != KindGrid && j.Columns != 0 {
 		return nil, fmt.Errorf("%s: only a grid node takes columns", where(id))
@@ -348,6 +473,9 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 	if strings.ContainsFunc(j.Placeholder, spoofingInline) {
 		return nil, fmt.Errorf("%s: placeholder holds control or reordering characters", where(id))
 	}
+	if utf8.RuneCountInString(j.Placeholder) > maxPlaceholder {
+		return nil, fmt.Errorf("%s: placeholder is over %d characters", where(id), maxPlaceholder)
+	}
 	if strings.ContainsFunc(j.Value, spoofingInline) {
 		return nil, fmt.Errorf("%s: value holds control or reordering characters", where(id))
 	}
@@ -375,15 +503,23 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		}
 		r.text += len(g)
 	}
-	if j.Direction != "" && j.Direction != "vertical" && j.Direction != "horizontal" {
-		return nil, fmt.Errorf("%s: direction %q is not vertical or horizontal", where(id), j.Direction)
-	}
-	if j.Direction != "" && j.Kind != KindScroll && j.Kind != KindSplit {
-		return nil, fmt.Errorf("%s: only a scroll or split node takes direction", where(id))
+	if j.Direction != "" {
+		switch j.Kind {
+		case KindScroll:
+			if j.Direction != "vertical" && j.Direction != "horizontal" {
+				return nil, fmt.Errorf("%s: direction %q is not vertical or horizontal", where(id), j.Direction)
+			}
+		case KindSplit:
+			if j.Direction != "vertical" && j.Direction != "horizontal" && j.Direction != "auto" {
+				return nil, fmt.Errorf("%s: direction %q is not vertical, horizontal or auto", where(id), j.Direction)
+			}
+		default:
+			return nil, fmt.Errorf("%s: only a scroll or split node takes direction", where(id))
+		}
 	}
 	if j.MaxHeight != 0 {
 		switch j.Kind {
-		case KindScroll:
+		case KindScroll, KindDag:
 			if !finite(j.MaxHeight, 0, maxScrollH) {
 				return nil, fmt.Errorf("%s: maxHeight is from 0 to %d", where(id), maxScrollH)
 			}
@@ -392,8 +528,24 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 				return nil, fmt.Errorf("%s: graph maxHeight is from %d to %d", where(id), minGraphHeight, maxGraphHeight)
 			}
 		default:
-			return nil, fmt.Errorf("%s: only a scroll or graph node takes maxHeight", where(id))
+			return nil, fmt.Errorf("%s: only a scroll, graph or dag node takes maxHeight", where(id))
 		}
+	}
+	if j.ContextMenu != "" {
+		if len(j.ContextMenu) > maxKey || strings.ContainsAny(j.ContextMenu, "/#") || strings.ContainsFunc(j.ContextMenu, Spoofing) {
+			return nil, fmt.Errorf("%s: invalid contextMenu %q", where(id), j.ContextMenu)
+		}
+		r.text += len(j.ContextMenu)
+		r.contextRefs = append(r.contextRefs, contextRef{where: where(id), menu: j.ContextMenu})
+	}
+	if j.ContextArg != "" {
+		if j.ContextMenu == "" {
+			return nil, fmt.Errorf("%s: contextArg requires contextMenu", where(id))
+		}
+		if utf8.RuneCountInString(j.ContextArg) > maxContextArg || strings.ContainsFunc(j.ContextArg, Spoofing) {
+			return nil, fmt.Errorf("%s: contextArg is over %d characters or holds control or reordering characters", where(id), maxContextArg)
+		}
+		r.text += len(j.ContextArg)
 	}
 	if r.text > maxTreeText {
 		return nil, fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
@@ -403,9 +555,16 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		Value: j.Value, Checked: j.Checked, Options: j.Options, Progress: j.Progress, Language: j.Language,
 		Disabled: j.Disabled, Grow: j.Grow, Gap: j.Gap, Columns: j.Columns, Ratio: ratio, Fill: j.Fill,
 		Drag: j.Drag, DragGroup: j.DragGroup, DropAccept: j.DropAccept, Direction: j.Direction, MaxHeight: j.MaxHeight,
+		Check: checkVal, ContextMenu: j.ContextMenu, ContextArg: j.ContextArg,
 	}
 	if (j.Kind == KindInput || j.Kind == KindTextarea) && n.Text == "" {
 		n.Text = j.Placeholder
+	}
+	if j.Placeholder != "" {
+		switch j.Kind {
+		case KindInput, KindTextarea, KindButton, KindMenu, KindTreeItem, KindCheckbox, KindIcon, KindPill, KindChip:
+			n.Placeholder = j.Placeholder
+		}
 	}
 	if j.Kind == KindTable {
 		if len(j.Labels) > maxTableCols {
@@ -422,11 +581,38 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		}
 		n.Labels = j.Labels
 	}
+	if len(j.Badges) > 0 {
+		badges, err := r.badges(j.Badges, maxBadges, where(id))
+		if err != nil {
+			return nil, err
+		}
+		n.Badges = badges
+	}
 	if err := r.chart(j, n, id); err != nil {
 		return nil, err
 	}
 	if err := r.graph(j, n, id); err != nil {
 		return nil, err
+	}
+	if err := r.dag(j, n, id); err != nil {
+		return nil, err
+	}
+	if j.ContextMenu != "" {
+		args := r.t.contextArgs[j.ContextMenu]
+		if args == nil {
+			args = map[string]bool{}
+			r.t.contextArgs[j.ContextMenu] = args
+		}
+		if j.Kind == KindDag {
+			for _, row := range n.Rows {
+				args[row.GetId()] = true
+			}
+			if j.ContextArg != "" {
+				args[j.ContextArg] = true
+			}
+		} else {
+			args[j.ContextArg] = true
+		}
 	}
 	var a actions
 	var linkMsg json.RawMessage
@@ -443,14 +629,25 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 	if a.drop, err = message(j.OnDrop); err != nil {
 		return nil, fmt.Errorf("%s: onDrop: %w", where(id), err)
 	}
+	if a.check, err = message(j.OnCheck); err != nil {
+		return nil, fmt.Errorf("%s: onCheck: %w", where(id), err)
+	}
 	if linkMsg, err = message(j.OnLink); err != nil {
 		return nil, fmt.Errorf("%s: onLink: %w", where(id), err)
 	}
 	if linkMsg != nil && j.Kind != KindMarkdown {
 		return nil, fmt.Errorf("%s: only a markdown node takes onLink", where(id))
 	}
+	if a.check != nil {
+		if j.Kind != KindTreeItem {
+			return nil, fmt.Errorf("%s: only a tree_item takes onCheck", where(id))
+		}
+		if j.Check == "" {
+			return nil, fmt.Errorf("%s: onCheck requires check", where(id))
+		}
+	}
 	switch j.Kind {
-	case KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindBreadcrumb, KindGraph:
+	case KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindBreadcrumb, KindGraph, KindCheckbox, KindDialog, KindDag:
 		if a.tap != nil {
 			return nil, fmt.Errorf("%s: a %s takes onChange, not onTap", where(id), j.Kind)
 		}
@@ -462,7 +659,14 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 			return nil, fmt.Errorf("%s: a collapsible takes onChange, not onTap", where(id))
 		}
 	case KindTreeItem:
-		// tree_item may take onTap (select), onChange (expand/collapse), drag, and onDrop.
+		// tree_item may take onTap (select), onChange (expand/collapse), onCheck (tri-state checkbox), drag, and onDrop.
+	case KindMenuItem:
+		if a.change != nil || a.submit != nil {
+			return nil, fmt.Errorf("%s: a menu_item takes onTap, not onChange", where(id))
+		}
+		if j.Drag != "" || a.drop != nil {
+			return nil, fmt.Errorf("%s: a menu_item does not take drag or onDrop", where(id))
+		}
 	case KindMarkdown:
 		if a.tap != nil || a.change != nil || a.submit != nil || a.drop != nil {
 			return nil, fmt.Errorf("%s: a markdown takes onLink, not onTap/onChange/onSubmit/onDrop", where(id))
@@ -471,7 +675,7 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 			return nil, fmt.Errorf("%s: a markdown does not take drag", where(id))
 		}
 		a.change = linkMsg
-	case KindDivider, KindProgress, KindCode, KindChart:
+	case KindDivider, KindProgress, KindCode, KindChart, KindMenu:
 		if a.tap != nil || a.change != nil || a.submit != nil || a.drop != nil {
 			return nil, fmt.Errorf("%s: a %s sends no messages", where(id), j.Kind)
 		}
@@ -500,13 +704,14 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 	if len(j.DropAccept) > 0 && a.drop == nil {
 		return nil, fmt.Errorf("%s: dropAccept requires onDrop", where(id))
 	}
-	n.Tap, n.Change, n.Drop = a.tap != nil, a.change != nil || a.submit != nil, a.drop != nil
-	if n.Tap || n.Change || n.Drop {
+	n.Tap, n.Change, n.Drop, n.Checks = a.tap != nil, a.change != nil || a.submit != nil, a.drop != nil, a.check != nil
+	if n.Tap || n.Change || n.Drop || n.Checks {
 		r.t.actions[id] = a
 	}
 	container := j.Kind == KindColumn || j.Kind == KindRow || j.Kind == KindStack || j.Kind == KindCard ||
 		j.Kind == KindScroll || j.Kind == KindWrap || j.Kind == KindGrid || j.Kind == KindSplit ||
-		j.Kind == KindCollapsible || j.Kind == KindTree || j.Kind == KindTreeItem || j.Kind == KindList || j.Kind == KindTable
+		j.Kind == KindCollapsible || j.Kind == KindTree || j.Kind == KindTreeItem || j.Kind == KindList ||
+		j.Kind == KindTable || j.Kind == KindMenu || j.Kind == KindDialog
 	if !container && len(j.Children) > 0 {
 		return nil, fmt.Errorf("%s: a %s holds no children", where(id), j.Kind)
 	}
@@ -527,6 +732,13 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 			}
 		}
 	}
+	if j.Kind == KindMenu {
+		for i, c := range j.Children {
+			if c != nil && c.Kind != KindMenuItem && c.Kind != KindDivider && c.Kind != KindMenu {
+				return nil, fmt.Errorf("%s: menu child %d must be a menu_item, divider or menu, got %q", where(id), i, c.Kind)
+			}
+		}
+	}
 	keys := map[string]bool{}
 	for i, c := range j.Children {
 		if c == nil {
@@ -534,6 +746,9 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 		}
 		if c.Kind == KindTreeItem && j.Kind != KindTree && j.Kind != KindTreeItem {
 			return nil, fmt.Errorf("%s: tree_item child %d must be inside a tree or tree_item", where(id), i)
+		}
+		if c.Kind == KindMenuItem && j.Kind != KindMenu {
+			return nil, fmt.Errorf("%s: menu_item child %d must be inside a menu", where(id), i)
 		}
 		k := c.Key
 		if k == "" {
@@ -545,7 +760,7 @@ func (r *treeReader) node(j *jsNode, id string, depth int) (*protocol.UiNode, er
 			return nil, fmt.Errorf("%s: two children have the key %q", where(id), k)
 		}
 		keys[k] = true
-		child, err := r.node(c, id+"/"+k, depth+1)
+		child, err := r.node(c, id+"/"+k, depth+1, menuDepth, ctxMenuKey)
 		if err != nil {
 			return nil, err
 		}
@@ -717,6 +932,109 @@ func (r *treeReader) graph(j *jsNode, n *protocol.UiNode, id string) error {
 	}
 	if r.text > maxTreeText {
 		return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+	}
+	return nil
+}
+
+// badges validates up to limit UiBadges, counting their text toward r.text.
+func (r *treeReader) badges(in []*jsBadge, limit int, loc string) ([]*protocol.UiBadge, error) {
+	if len(in) > limit {
+		return nil, fmt.Errorf("%s: at most %d badges", loc, limit)
+	}
+	out := make([]*protocol.UiBadge, 0, len(in))
+	for i, b := range in {
+		if b == nil {
+			return nil, fmt.Errorf("%s: badge %d is null", loc, i)
+		}
+		if b.Text == "" && b.Icon == "" {
+			return nil, fmt.Errorf("%s: badge %d requires text or icon", loc, i)
+		}
+		if utf8.RuneCountInString(b.Text) > maxBadgeText || strings.ContainsFunc(b.Text, Spoofing) {
+			return nil, fmt.Errorf("%s: badge %d text is over %d runes or holds control or reordering characters", loc, i, maxBadgeText)
+		}
+		if !slices.Contains(Tones, b.Tone) {
+			return nil, fmt.Errorf("%s: badge %d: tone %q is not a colour token", loc, i, b.Tone)
+		}
+		if !slices.Contains(BadgeVariants, b.Variant) {
+			return nil, fmt.Errorf("%s: badge %d: variant %q is not soft, solid, outline or mono", loc, i, b.Variant)
+		}
+		if b.Icon != "" && (len(b.Icon) > 48 || !iconName.MatchString(b.Icon)) {
+			return nil, fmt.Errorf("%s: badge %d: icon %q is not an icon's name", loc, i, b.Icon)
+		}
+		r.text += len(b.Text) + len(b.Icon)
+		if r.text > maxTreeText {
+			return nil, fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+		}
+		out = append(out, &protocol.UiBadge{
+			Text: b.Text, Tone: b.Tone, Variant: b.Variant, Icon: b.Icon,
+		})
+	}
+	return out, nil
+}
+
+// dag validates a dag node's rows into n, and refuses rows on any other node.
+func (r *treeReader) dag(j *jsNode, n *protocol.UiNode, id string) error {
+	if j.Kind != KindDag {
+		if len(j.Rows) > 0 {
+			return fmt.Errorf("%s: only a dag has rows", where(id))
+		}
+		return nil
+	}
+	if len(j.Rows) > maxDagRows {
+		return fmt.Errorf("%s: a dag has at most %d rows", where(id), maxDagRows)
+	}
+	rowIDs := make(map[string]bool, len(j.Rows))
+	for i, row := range j.Rows {
+		if row == nil {
+			return fmt.Errorf("%s: dag row %d is null", where(id), i)
+		}
+		if row.ID == "" || utf8.RuneCountInString(row.ID) > maxDagID || len(row.ID) > maxDagID*4 || strings.ContainsFunc(row.ID, Spoofing) {
+			return fmt.Errorf("%s: dag row %d has invalid id %q", where(id), i, row.ID)
+		}
+		if rowIDs[row.ID] {
+			return fmt.Errorf("%s: dag row id %q is duplicated", where(id), row.ID)
+		}
+		rowIDs[row.ID] = true
+		if len(row.Parents) > maxDagParents {
+			return fmt.Errorf("%s: dag row %q has more than %d parents", where(id), row.ID, maxDagParents)
+		}
+		for pi, p := range row.Parents {
+			if p == "" || utf8.RuneCountInString(p) > maxDagID || len(p) > maxDagID*4 || strings.ContainsFunc(p, Spoofing) {
+				return fmt.Errorf("%s: dag row %q parent %d has invalid id %q", where(id), row.ID, pi, p)
+			}
+			r.text += len(p)
+		}
+		if utf8.RuneCountInString(row.Text) > maxDagText || strings.ContainsFunc(row.Text, Spoofing) {
+			return fmt.Errorf("%s: dag row %q text is over %d characters or holds control or reordering characters", where(id), row.ID, maxDagText)
+		}
+		if utf8.RuneCountInString(row.Detail) > maxDagDetail || strings.ContainsFunc(row.Detail, Spoofing) {
+			return fmt.Errorf("%s: dag row %q detail is over %d characters or holds control or reordering characters", where(id), row.ID, maxDagDetail)
+		}
+		if utf8.RuneCountInString(row.Meta) > maxDagMeta || strings.ContainsFunc(row.Meta, Spoofing) {
+			return fmt.Errorf("%s: dag row %q meta is over %d characters or holds control or reordering characters", where(id), row.ID, maxDagMeta)
+		}
+		if !slices.Contains(Tones, row.Tone) {
+			return fmt.Errorf("%s: dag row %q: tone %q is not a colour token", where(id), row.ID, row.Tone)
+		}
+		if row.Icon != "" && (len(row.Icon) > 48 || !iconName.MatchString(row.Icon)) {
+			return fmt.Errorf("%s: dag row %q: icon %q is not an icon's name", where(id), row.ID, row.Icon)
+		}
+		var rowBadges []*protocol.UiBadge
+		if len(row.Badges) > 0 {
+			var err error
+			rowBadges, err = r.badges(row.Badges, maxDagRowBadges, fmt.Sprintf("%s dag row %q", where(id), row.ID))
+			if err != nil {
+				return err
+			}
+		}
+		r.text += len(row.ID) + len(row.Text) + len(row.Detail) + len(row.Meta) + len(row.Icon)
+		if r.text > maxTreeText {
+			return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+		}
+		n.Rows = append(n.Rows, &protocol.UiRow{
+			Id: row.ID, Parents: row.Parents, Text: row.Text, Detail: row.Detail, Meta: row.Meta,
+			Badges: rowBadges, Tone: row.Tone, Strong: row.Strong, Icon: row.Icon,
+		})
 	}
 	return nil
 }

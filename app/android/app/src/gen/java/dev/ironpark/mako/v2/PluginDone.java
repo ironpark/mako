@@ -21,6 +21,8 @@ public  final class PluginDone extends
   private PluginDone() {
     openUrl_ = "";
     toast_ = "";
+    copyText_ = "";
+    open_ = emptyProtobufList();
   }
   public static final int OPEN_URL_FIELD_NUMBER = 1;
   private java.lang.String openUrl_;
@@ -164,6 +166,227 @@ public  final class PluginDone extends
     checkByteStringIsUtf8(value);
     toast_ = value.toStringUtf8();
 
+  }
+
+  public static final int COPY_TEXT_FIELD_NUMBER = 3;
+  private java.lang.String copyText_;
+  /**
+   * <pre>
+   * copy_text is text the plugin asked the front-end to copy to the
+   * clipboard via mako.copyText (revision 46).
+   * </pre>
+   *
+   * <code>string copy_text = 3 [json_name = "copyText"];</code>
+   * @return The copyText.
+   */
+  @java.lang.Override
+  public java.lang.String getCopyText() {
+    return copyText_;
+  }
+  /**
+   * <pre>
+   * copy_text is text the plugin asked the front-end to copy to the
+   * clipboard via mako.copyText (revision 46).
+   * </pre>
+   *
+   * <code>string copy_text = 3 [json_name = "copyText"];</code>
+   * @return The bytes for copyText.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getCopyTextBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(copyText_);
+  }
+  /**
+   * <pre>
+   * copy_text is text the plugin asked the front-end to copy to the
+   * clipboard via mako.copyText (revision 46).
+   * </pre>
+   *
+   * <code>string copy_text = 3 [json_name = "copyText"];</code>
+   * @param value The copyText to set.
+   */
+  private void setCopyText(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    copyText_ = value;
+  }
+  /**
+   * <pre>
+   * copy_text is text the plugin asked the front-end to copy to the
+   * clipboard via mako.copyText (revision 46).
+   * </pre>
+   *
+   * <code>string copy_text = 3 [json_name = "copyText"];</code>
+   */
+  private void clearCopyText() {
+
+    copyText_ = getDefaultInstance().getCopyText();
+  }
+  /**
+   * <pre>
+   * copy_text is text the plugin asked the front-end to copy to the
+   * clipboard via mako.copyText (revision 46).
+   * </pre>
+   *
+   * <code>string copy_text = 3 [json_name = "copyText"];</code>
+   * @param value The bytes for copyText to set.
+   */
+  private void setCopyTextBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    copyText_ = value.toStringUtf8();
+
+  }
+
+  public static final int OPEN_FIELD_NUMBER = 4;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.PluginOpen> open_;
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.PluginOpen> getOpenList() {
+    return open_;
+  }
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.PluginOpenOrBuilder> 
+      getOpenOrBuilderList() {
+    return open_;
+  }
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  @java.lang.Override
+  public int getOpenCount() {
+    return open_.size();
+  }
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.PluginOpen getOpen(int index) {
+    return open_.get(index);
+  }
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  public dev.ironpark.mako.v2.PluginOpenOrBuilder getOpenOrBuilder(
+      int index) {
+    return open_.get(index);
+  }
+  private void ensureOpenIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.PluginOpen> tmp = open_;
+    if (!tmp.isModifiable()) {
+      open_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  private void setOpen(
+      int index, dev.ironpark.mako.v2.PluginOpen value) {
+    java.util.Objects.requireNonNull(value);
+    ensureOpenIsMutable();
+    open_.set(index, value);
+  }
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  private void addOpen(dev.ironpark.mako.v2.PluginOpen value) {
+    java.util.Objects.requireNonNull(value);
+    ensureOpenIsMutable();
+    open_.add(value);
+  }
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  private void addOpen(
+      int index, dev.ironpark.mako.v2.PluginOpen value) {
+    java.util.Objects.requireNonNull(value);
+    ensureOpenIsMutable();
+    open_.add(index, value);
+  }
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  private void addAllOpen(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.PluginOpen> values) {
+    ensureOpenIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, open_);
+  }
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  private void clearOpen() {
+    open_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * open holds gesture-gated window intents asked via mako.openDiff,
+   * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+   */
+  private void removeOpen(int index) {
+    ensureOpenIsMutable();
+    open_.remove(index);
   }
 
   public static dev.ironpark.mako.v2.PluginDone parseFrom(
@@ -415,6 +638,242 @@ public  final class PluginDone extends
       return this;
     }
 
+    /**
+     * <pre>
+     * copy_text is text the plugin asked the front-end to copy to the
+     * clipboard via mako.copyText (revision 46).
+     * </pre>
+     *
+     * <code>string copy_text = 3 [json_name = "copyText"];</code>
+     * @return The copyText.
+     */
+    @java.lang.Override
+    public java.lang.String getCopyText() {
+      return instance.getCopyText();
+    }
+    /**
+     * <pre>
+     * copy_text is text the plugin asked the front-end to copy to the
+     * clipboard via mako.copyText (revision 46).
+     * </pre>
+     *
+     * <code>string copy_text = 3 [json_name = "copyText"];</code>
+     * @return The bytes for copyText.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getCopyTextBytes() {
+      return instance.getCopyTextBytes();
+    }
+    /**
+     * <pre>
+     * copy_text is text the plugin asked the front-end to copy to the
+     * clipboard via mako.copyText (revision 46).
+     * </pre>
+     *
+     * <code>string copy_text = 3 [json_name = "copyText"];</code>
+     * @param value The copyText to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCopyText(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setCopyText(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * copy_text is text the plugin asked the front-end to copy to the
+     * clipboard via mako.copyText (revision 46).
+     * </pre>
+     *
+     * <code>string copy_text = 3 [json_name = "copyText"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCopyText() {
+      copyOnWrite();
+      instance.clearCopyText();
+      return this;
+    }
+    /**
+     * <pre>
+     * copy_text is text the plugin asked the front-end to copy to the
+     * clipboard via mako.copyText (revision 46).
+     * </pre>
+     *
+     * <code>string copy_text = 3 [json_name = "copyText"];</code>
+     * @param value The bytes for copyText to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCopyTextBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setCopyTextBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.PluginOpen> getOpenList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getOpenList());
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    @java.lang.Override
+    public int getOpenCount() {
+      return instance.getOpenCount();
+    }/**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.PluginOpen getOpen(int index) {
+      return instance.getOpen(index);
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    public Builder setOpen(
+        int index, dev.ironpark.mako.v2.PluginOpen value) {
+      copyOnWrite();
+      instance.setOpen(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    public Builder setOpen(
+        int index, dev.ironpark.mako.v2.PluginOpen.Builder builderForValue) {
+      copyOnWrite();
+      instance.setOpen(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    public Builder addOpen(dev.ironpark.mako.v2.PluginOpen value) {
+      copyOnWrite();
+      instance.addOpen(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    public Builder addOpen(
+        int index, dev.ironpark.mako.v2.PluginOpen value) {
+      copyOnWrite();
+      instance.addOpen(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    public Builder addOpen(
+        dev.ironpark.mako.v2.PluginOpen.Builder builderForValue) {
+      copyOnWrite();
+      instance.addOpen(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    public Builder addOpen(
+        int index, dev.ironpark.mako.v2.PluginOpen.Builder builderForValue) {
+      copyOnWrite();
+      instance.addOpen(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    public Builder addAllOpen(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.PluginOpen> values) {
+      copyOnWrite();
+      instance.addAllOpen(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    public Builder clearOpen() {
+      copyOnWrite();
+      instance.clearOpen();
+      return this;
+    }
+    /**
+     * <pre>
+     * open holds gesture-gated window intents asked via mako.openDiff,
+     * mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.PluginOpen open = 4 [json_name = "open"];</code>
+     */
+    public Builder removeOpen(int index) {
+      copyOnWrite();
+      instance.removeOpen(index);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginDone)
   }
   @java.lang.Override
@@ -433,10 +892,13 @@ public  final class PluginDone extends
           java.lang.Object[] objects = new java.lang.Object[] {
             "openUrl_",
             "toast_",
+            "copyText_",
+            "open_",
+            dev.ironpark.mako.v2.PluginOpen.class,
           };
           java.lang.String info =
-              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "";
+              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u001b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

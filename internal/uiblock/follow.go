@@ -20,6 +20,7 @@ type View struct {
 	// agent's block's session and its agent's name.
 	Plugin, Session, Agent string
 	Title, State, Err      string
+	Chrome                 string
 	Stale                  bool
 	Changed                <-chan struct{}
 	Gone                   bool
@@ -27,7 +28,7 @@ type View struct {
 
 func (v View) sameAs(o View) bool {
 	return v.Plugin == o.Plugin && v.Session == o.Session && v.Agent == o.Agent && v.Title == o.Title &&
-		v.State == o.State && v.Err == o.Err && v.Stale == o.Stale
+		v.State == o.State && v.Err == o.Err && v.Chrome == o.Chrome && v.Stale == o.Stale
 }
 
 // Follow sends a block of the name to send, as view tells it: its tree
@@ -41,7 +42,7 @@ func Follow(ctx context.Context, name string, every time.Duration, view func() V
 	for {
 		v := view()
 		upd := &protocol.BlockUpdate{Block: name, Plugin: v.Plugin, SessionId: v.Session, Agent: v.Agent,
-			Title: v.Title, State: v.State, Error: v.Err, Stale: v.Stale, Gone: v.Gone}
+			Title: v.Title, State: v.State, Error: v.Err, Chrome: v.Chrome, Stale: v.Stale, Gone: v.Gone}
 		switch {
 		case seq == 0 || last.Tree == nil && v.Tree != nil:
 			upd.Tree = v.Tree

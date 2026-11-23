@@ -67,6 +67,8 @@ func TestParseScopeKeyValidation(t *testing.T) {
 		{"project:free:my-workspace", protocol.ScopeProject, "free:my-workspace"},
 		{"session:s1", protocol.ScopeSession, "s1"},
 		{"project:" + strings.Repeat("a", 256), protocol.ScopeProject, strings.Repeat("a", 256)},
+		{protocol.FolderScope("", "/tmp/my-repo"), protocol.ScopeFolder, strings.TrimPrefix(protocol.FolderScope("", "/tmp/my-repo"), "folder:")},
+		{protocol.FolderScope("peer-1", "/Users/dev/project"), protocol.ScopeFolder, strings.TrimPrefix(protocol.FolderScope("peer-1", "/Users/dev/project"), "folder:")},
 	}
 	for _, tc := range good {
 		kind, id, err := parseScopeKey(tc.raw)
@@ -91,6 +93,11 @@ func TestParseScopeKeyValidation(t *testing.T) {
 		"project:-leading-dash",
 		"project:/leading-slash",
 		"project:" + strings.Repeat("a", 257),
+		"folder:",
+		"folder:local",
+		"folder:local/",
+		"folder:local/not!base64",
+		protocol.FolderScope("local", "/"+strings.Repeat("a", 800)),
 	}
 	for _, raw := range bad {
 		if _, _, err := parseScopeKey(raw); err == nil {

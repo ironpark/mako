@@ -359,6 +359,10 @@ export interface Ui {
 // fails unless the plugin's manifest asks for it and the user allowed it.
 
 export interface HostApi {
+  /** GitService reads and changes git work trees this node knows: a folder of a */
+  readonly git: GitApi;
+  /** ForgeService reads pull request and CI status for a repository's branch. */
+  readonly forge: ForgeApi;
   /** LogService writes to the daemon's log, under the plugin's name. */
   readonly log: LogApi;
   /** SettingsService reads the plugin's own settings, which its manifest */
@@ -389,6 +393,73 @@ export interface HostApi {
   readonly decision: DecisionApi;
   /** AgentsService lists the agents of this node a plugin may ask, and asks */
   readonly agents: AgentsApi;
+}
+
+/**
+ * GitService reads and changes git work trees this node knows: a folder of a
+ * project location, a session's folder or worktree on any node of the mesh,
+ * or the folder of a folder-scoped block of this plugin's that a window shows.
+ * Reads: 120/min. Runs: 30/min, only in answer to the user (an event or
+ * command), carried out after the call returns; the outcome comes to the
+ * default export's on.gitDone. Watches: 16 at a time, bound to the calling
+ * block instance.
+ */
+export interface GitApi {
+  /**
+   * Status reads the working tree changes, branches, stashes, and operation
+   * state of a repository.
+   *
+   * Needs git:read.
+   */
+  status(req?: GitServiceStatusRequest): Promise<GitServiceStatusResponse>;
+  /**
+   * History lists recent commits of a repository, skipping the commit list
+   * when the repository fingerprint matches known.
+   *
+   * Needs git:read.
+   */
+  history(req?: GitServiceHistoryRequest): Promise<GitServiceHistoryResponse>;
+  /**
+   * ShowCommit reads one commit's metadata and changed files.
+   *
+   * Needs git:read.
+   */
+  showCommit(req?: GitServiceShowCommitRequest): Promise<GitServiceShowCommitResponse>;
+  /**
+   * Watch subscribes the calling block instance to reloads whenever the
+   * target repository changes.
+   *
+   * Needs git:read.
+   */
+  watch(req?: GitServiceWatchRequest): Promise<GitServiceWatchResponse>;
+  /**
+   * Unwatch stops watching the target repository for the calling block
+   * instance.
+   *
+   * Needs git:read.
+   */
+  unwatch(req?: GitServiceUnwatchRequest): Promise<GitServiceUnwatchResponse>;
+  /**
+   * Run executes a mutating git operation asynchronously in answer to a user
+   * gesture; the outcome arrives at on.gitDone.
+   *
+   * Needs git:write.
+   */
+  run(req?: GitServiceRunRequest): Promise<GitServiceRunResponse>;
+}
+
+/**
+ * ForgeService reads pull request and CI status for a repository's branch.
+ * Rate limit: 30/min.
+ */
+export interface ForgeApi {
+  /**
+   * BranchStatus returns the pull request and CI runs of a branch, as the
+   * Git panel's forge line shows them.
+   *
+   * Needs forge:read.
+   */
+  branchStatus(req?: ForgeServiceBranchStatusRequest): Promise<ForgeServiceBranchStatusResponse>;
 }
 
 /** LogService writes to the daemon's log, under the plugin's name. */
@@ -843,6 +914,194 @@ export interface AgentsApi {
    * Needs agents:ask.
    */
   cancelAsk(req?: CancelAskRequest): Promise<CancelAskResponse>;
+}
+
+/**
+ * GitTarget names a work tree: scope, a canonical folder scope key (the
+ * prelude fills ctx.scopeKey), or node and path explicitly.
+ */
+export interface GitTarget {
+  scope?: string;
+  node?: string;
+  path?: string;
+}
+
+/** GitServiceStatusRequest asks for the status of a git work tree. */
+export interface GitServiceStatusRequest {
+  target?: GitTarget | null;
+  /** base asks for changes since leaving this branch; "" compares against HEAD. */
+  base?: string;
+}
+
+/**
+ * GitServiceStatusResponse reports a work tree's changes, branches, stashes,
+ * and in-progress operation.
+ */
+export interface GitServiceStatusResponse {
+  root?: string;
+  node?: string;
+  branch?: string;
+  notRepo?: boolean;
+  files?: GitFileEntry[];
+  upstream?: string;
+  ahead?: number;
+  behind?: number;
+  branches?: string[];
+  remoteBranches?: string[];
+  stashes?: GitStashEntry[];
+  operation?: string;
+  /** worktree is the session worktree at path, if any. */
+  worktree?: GitWorktreeInfo | null;
+  /** base is the base branch as asked in the request. */
+  base?: string;
+}
+
+/** GitFileEntry is one changed file in a work tree or commit. */
+export interface GitFileEntry {
+  path?: string;
+  from?: string;
+  status?: string;
+  added?: number;
+  removed?: number;
+  binary?: boolean;
+}
+
+/** GitStashEntry is one stashed change. */
+export interface GitStashEntry {
+  index?: number;
+  message?: string;
+  /** time is RFC 3339 formatted. */
+  time?: string;
+}
+
+/** GitWorktreeInfo describes a session's git worktree. */
+export interface GitWorktreeInfo {
+  repo?: string;
+  path?: string;
+  branch?: string;
+  base?: string;
+  start?: string;
+}
+
+/** GitServiceHistoryRequest asks for recent commits of a repository. */
+export interface GitServiceHistoryRequest {
+  target?: GitTarget | null;
+  /** max caps the commits returned, at most 500. */
+  max?: number;
+  /** known is the fingerprint the caller already holds. */
+  known?: string;
+}
+
+/** GitServiceHistoryResponse holds recent commits and a fingerprint. */
+export interface GitServiceHistoryResponse {
+  commits?: GitCommitEntry[];
+  current?: string;
+  more?: boolean;
+  fingerprint?: string;
+  unchanged?: boolean;
+}
+
+/** GitCommitEntry is one commit in a repository's history. */
+export interface GitCommitEntry {
+  hash?: string;
+  parents?: string[];
+  author?: string;
+  /** time is RFC 3339 formatted. */
+  time?: string;
+  subject?: string;
+  refs?: string[];
+}
+
+/** GitServiceShowCommitRequest asks for one commit's details and files. */
+export interface GitServiceShowCommitRequest {
+  target?: GitTarget | null;
+  hash?: string;
+}
+
+/** GitServiceShowCommitResponse holds one commit's details and changed files. */
+export interface GitServiceShowCommitResponse {
+  commit?: GitCommitEntry | null;
+  email?: string;
+  body?: string;
+  files?: GitFileEntry[];
+}
+
+/** GitServiceWatchRequest starts watching a work tree for changes. */
+export interface GitServiceWatchRequest {
+  target?: GitTarget | null;
+}
+
+/** GitServiceWatchResponse confirms the work tree being watched. */
+export interface GitServiceWatchResponse {
+  /** root is the top of the work tree watched. */
+  root?: string;
+}
+
+/** GitServiceUnwatchRequest stops watching a work tree. */
+export interface GitServiceUnwatchRequest {
+  target?: GitTarget | null;
+}
+
+/** GitServiceUnwatchResponse confirms the watch was removed. */
+export interface GitServiceUnwatchResponse {
+}
+
+/**
+ * GitServiceRunRequest runs a mutating git operation asynchronously.
+ * op is one of: commit, push, pull, fetch, checkout, branch, merge (worktree),
+ * pull_request (worktree), remove_worktree, discard_files, ignore, stash,
+ * stash_apply, stash_pop, stash_drop, track, delete_branch, merge_branch,
+ * rebase, detach, cherry_pick, revert, tag, continue, abort.
+ */
+export interface GitServiceRunRequest {
+  target?: GitTarget | null;
+  op?: string;
+  message?: string;
+  paths?: string[];
+  amend?: boolean;
+  branch?: string;
+  commit?: string;
+  stash?: number;
+  rebase?: boolean;
+  force?: boolean;
+  tag?: string;
+  /**
+   * worktree acts on the session worktree at target (merge, pull_request,
+   * remove_worktree); the daemon looks it up itself rather than trusting a
+   * caller-supplied Worktree.
+   */
+  worktree?: boolean;
+}
+
+/**
+ * GitServiceRunResponse identifies the asynchronous git job; its outcome
+ * arrives at on.gitDone({job, scopeKey, op, ok, output, error}).
+ */
+export interface GitServiceRunResponse {
+  job?: string;
+}
+
+/** ForgeServiceBranchStatusRequest asks for the forge status of a branch. */
+export interface ForgeServiceBranchStatusRequest {
+  target?: GitTarget | null;
+  branch?: string;
+}
+
+/**
+ * ForgeServiceBranchStatusResponse holds the pull request and CI summary for a
+ * branch on its forge.
+ */
+export interface ForgeServiceBranchStatusResponse {
+  forge?: string;
+  hasPr?: boolean;
+  prNumber?: number;
+  prTitle?: string;
+  prState?: string;
+  prChecks?: string;
+  runs?: number;
+  runsState?: string;
+  runNumber?: number;
+  runHead?: string;
 }
 
 /** WriteRequest is a line for the log. */

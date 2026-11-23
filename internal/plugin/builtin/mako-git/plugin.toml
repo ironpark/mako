@@ -1,0 +1,13 @@
+id = "mako-git"
+version = "1.0.0"
+publisher = "mako"
+api = 1
+entry = "main.js"
+permissions = ["git:read", "git:write", "forge:read"]
+
+[[contributes.block]]
+id = "panel"
+title = "Git"
+scope = "folder"
+chrome = "toolbar"
+hidden = true

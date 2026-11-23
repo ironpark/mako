@@ -129,6 +129,16 @@ type Config struct {
 	Asks AskHost
 	// Layout carries out layout:write; nil for none.
 	Layout LayoutHost
+	// Git carries out git:read and git:write; nil for unavailable.
+	Git GitHost
+	// Forge carries out forge:read; nil for unavailable.
+	Forge ForgeHost
+	// Bundled holds first-party plugins embedded in the binary, one folder per
+	// plugin ID at its root; nil for none.
+	Bundled fs.FS
+	// BundledDev is an optional on-disk folder overriding Bundled during
+	// development so edits hot-reload on the poll interval.
+	BundledDev string
 	// Changed is told when the list of plugins, or how one stands, changes.
 	Changed func()
 	// NodeID identifies this node in CRDT HLC stamps for db:sync replication.
@@ -195,10 +205,16 @@ func New(cfg Config) *Manager {
 	}
 	lim := cfg.Limits.withDefaults()
 	ctx, stop := context.WithCancel(context.Background())
+	var grant *grantStore
+	if cfg.DataDir != "" {
+		grant = loadGrants(filepath.Join(cfg.DataDir, "grants.json"), cfg.Log)
+	} else {
+		grant = &grantStore{data: map[string]grantEntry{}}
+	}
 	return &Manager{
 		cfg: cfg, lim: lim, ctx: ctx, stop: stop, installs: cfg.Installs,
 		net:       newFetcher(lim, cfg.Log, cfg.NetTest),
-		grant:     loadGrants(filepath.Join(cfg.DataDir, "grants.json"), cfg.Log),
+		grant:     grant,
 		plugins:   map[string]*plugin{},
 		syncClock: newSyncClock(cfg.NodeID),
 	}
@@ -211,6 +227,7 @@ func (m *Manager) Run(ctx context.Context) {
 	if len(m.cfg.NetTest) > 0 {
 		m.cfg.Log.Warn("plugins' HTTP is sent to test servers", "hosts", m.cfg.NetTest)
 	}
+	m.loadBundled()
 	m.scan()
 	t := time.NewTicker(m.cfg.Poll)
 	defer t.Stop()
@@ -234,11 +251,18 @@ func (m *Manager) shutdown() {
 func (m *Manager) scan() {
 	m.scanMu.Lock()
 	defer m.scanMu.Unlock()
-	entries, _ := os.ReadDir(m.cfg.Dir)
+	m.scanBundledDev()
+	var entries []os.DirEntry
+	if m.cfg.Dir != "" {
+		entries, _ = os.ReadDir(m.cfg.Dir)
+	}
 	seen := map[string]bool{}
 	for _, e := range entries {
 		name := e.Name()
 		if strings.HasPrefix(name, ".") || !pluginID.MatchString(name) {
+			continue
+		}
+		if m.isBundled(name) {
 			continue
 		}
 		seen[name] = true
@@ -258,6 +282,9 @@ func (m *Manager) scan() {
 	m.mu.Lock()
 	var gone []*plugin
 	for id, p := range m.plugins {
+		if p.bundled {
+			continue
+		}
 		if !seen[id] {
 			gone = append(gone, p)
 			delete(m.plugins, id)
@@ -304,10 +331,10 @@ func (m *Manager) List() []*protocol.PluginInfo {
 
 // blockPropsForScope returns the layoutdoc JSON schema for a plugin block's
 // props: global blocks take no props, while scoped blocks ("space", "project",
-// "session") accept an optional pinned "scope" string property.
+// "session", "folder") accept an optional pinned "scope" string property.
 func blockPropsForScope(scope string) map[string]any {
 	switch scope {
-	case protocol.ScopeSpace, protocol.ScopeProject, protocol.ScopeSession:
+	case protocol.ScopeSpace, protocol.ScopeProject, protocol.ScopeSession, protocol.ScopeFolder:
 		return map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -330,6 +357,9 @@ func (m *Manager) Blocks() []layoutdoc.Block {
 			continue
 		}
 		for _, b := range v.man.Blocks {
+			if b.Hidden {
+				continue
+			}
 			out = append(out, layoutdoc.Block{Name: blockName(p.id, b.ID), Title: b.Title, Props: blockPropsForScope(b.Scope)})
 		}
 	}
@@ -353,6 +383,9 @@ func (m *Manager) BlockProps(name string) (map[string]any, bool) {
 	}
 	for _, b := range v.man.Blocks {
 		if b.ID == block {
+			if b.Hidden {
+				return nil, false
+			}
 			return blockPropsForScope(b.Scope), true
 		}
 	}
@@ -473,6 +506,9 @@ func (g *grantStore) update(id string, fn func(*grantEntry)) error {
 		delete(g.data, id)
 	} else {
 		g.data[id] = e
+	}
+	if g.path == "" {
+		return nil
 	}
 	b, err := json.MarshalIndent(g.data, "", "  ")
 	if err != nil {

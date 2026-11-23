@@ -82,6 +82,8 @@ message PluginInfo {
   // and its limit on this node (revision 43).
   int64 db_used = 24;
   int64 db_quota = 25;
+  // bundled says the plugin ships inside mako itself (revision 46).
+  bool bundled = 26;
 }
 
 // PluginTool is an MCP tool a plugin contributes to running agents.
@@ -190,6 +192,33 @@ message PluginDone {
   // toast is a short status notice the plugin asked the front-end to show
   // via mako.toast (revision 41).
   string toast = 2;
+  // copy_text is text the plugin asked the front-end to copy to the
+  // clipboard via mako.copyText (revision 46).
+  string copy_text = 3;
+  // open holds gesture-gated window intents asked via mako.openDiff,
+  // mako.openFile, mako.openForge, or mako.createPullRequest (revision 46).
+  repeated PluginOpen open = 4;
+}
+
+// PluginOpen is a window intent a plugin asked for in answer to a user
+// gesture (revision 46).
+message PluginOpen {
+  // kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+  string kind = 1;
+  string node = 2;
+  string folder = 3;
+  string repo = 4;
+  string path = 5;
+  string from = 6;
+  string status = 7;
+  int64 added = 8;
+  int64 removed = 9;
+  bool binary = 10;
+  string commit = 11;
+  string base = 12;
+  int64 number = 13;
+  bool preview = 14;
+  int32 line = 15;
 }
 
 // WatchBlock follows a plugin's block, plugin:<id>/<block>: the daemon
@@ -202,11 +231,15 @@ message WatchBlock {
   // let in watches the blocks of the node that lets it in (revision 30).
   string node_id = 2;
   // scope is the canonical scope key ("" for global, "space:<id>",
-  // "project:<id>", "session:<id>", revision 42).
+  // "project:<id>", "session:<id>", revision 42; "folder:<node>/<b64path>",
+  // revision 46).
   string scope = 3;
   // locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
   // "ko-KR"; empty defaults to "en", revision 44).
   string locale = 4;
+  // standalone says this viewer displays the block solo rather than as one
+  // tab of a multi-tab stack (revision 46).
+  bool standalone = 5;
 }
 
 // BlockUpdate is a block's tree, whole or as the changes since the last.
@@ -238,6 +271,9 @@ message BlockUpdate {
   bool gone = 12;
   // scope is the canonical scope key of this block instance (revision 42).
   string scope = 13;
+  // chrome is the block's manifest chrome hint: "auto" or "toolbar"
+  // (revision 46).
+  string chrome = 14;
 }
 
 // BlockEvent is the user acting on a node of a block's tree: kind "tap",
@@ -347,6 +383,27 @@ message UiNode {
   // for a graph node (revision 44).
   repeated UiGraphNode graph_nodes = 32;
   repeated UiGraphEdge graph_edges = 33;
+  // badges are small trailing tags on a node (tree_item, button, text, chip,
+  // etc.; revision 46).
+  repeated UiBadge badges = 34;
+  // check is a checkbox's or tree_item's tri-state check value: "" (none),
+  // "on", "off", or "mixed" (revision 46).
+  string check = 35;
+  // checks says toggling check is answered by a BlockEvent of kind "check"
+  // with value "on" or "off" (revision 46).
+  bool checks = 36;
+  // context_menu names the key of a menu node (variant "context") in the
+  // same tree opened as this node's context menu (revision 46).
+  string context_menu = 37;
+  // context_arg (at most 256 chars) is carried as the value when an item of
+  // the node's context_menu is tapped (revision 46).
+  string context_arg = 38;
+  // rows are the data-driven rows of a dag node (revision 46).
+  repeated UiRow rows = 39;
+  // placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+  // accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+  // (revision 46).
+  string placeholder = 40;
 }
 
 // UiSeries is a series of a chart node: its name, colour token and values,
@@ -375,6 +432,28 @@ message UiGraphEdge {
   string label = 3;
   string tone = 4;
   bool dashed = 5;
+}
+
+// UiBadge is a small trailing tag on a node or dag row (revision 46).
+message UiBadge {
+  string text = 1;
+  string tone = 2;
+  // variant is "soft", "solid", "outline" or "mono".
+  string variant = 3;
+  string icon = 4;
+}
+
+// UiRow is one data-driven row of a dag node (revision 46).
+message UiRow {
+  string id = 1;
+  repeated string parents = 2;
+  string text = 3;
+  string detail = 4;
+  string meta = 5;
+  repeated UiBadge badges = 6;
+  string tone = 7;
+  bool strong = 8;
+  string icon = 9;
 }
 
 // UiOp is a change of a tree. op "replace" puts node in place of the node

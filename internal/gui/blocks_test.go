@@ -33,7 +33,7 @@ func TestTheWindowsBlocksAreRegistered(t *testing.T) {
 // nothing is refused.
 func TestBlocksRegisterInTheirNamespaces(t *testing.T) {
 	r := builtinBlocks()
-	draw := func(*model, map[string]any) blockView { return blockView{Body: widget.Box()} }
+	draw := func(*model, map[string]any, blockPlace) blockView { return blockView{Body: widget.Box()} }
 	for _, name := range []string{"plugin:ci-status/ci", "agent:822d51f133b0614b/board", "mako.extra"} {
 		if err := r.register(blockDef{Name: name, Title: name, Build: draw}); err != nil {
 			t.Errorf("%s: %v", name, err)

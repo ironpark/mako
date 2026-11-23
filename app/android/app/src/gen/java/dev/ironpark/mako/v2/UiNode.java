@@ -45,6 +45,12 @@ public  final class UiNode extends
     variant_ = "";
     graphNodes_ = emptyProtobufList();
     graphEdges_ = emptyProtobufList();
+    badges_ = emptyProtobufList();
+    check_ = "";
+    contextMenu_ = "";
+    contextArg_ = "";
+    rows_ = emptyProtobufList();
+    placeholder_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -2190,6 +2196,627 @@ public  final class UiNode extends
   private void removeGraphEdges(int index) {
     ensureGraphEdgesIsMutable();
     graphEdges_.remove(index);
+  }
+
+  public static final int BADGES_FIELD_NUMBER = 34;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiBadge> badges_;
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.UiBadge> getBadgesList() {
+    return badges_;
+  }
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.UiBadgeOrBuilder> 
+      getBadgesOrBuilderList() {
+    return badges_;
+  }
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  @java.lang.Override
+  public int getBadgesCount() {
+    return badges_.size();
+  }
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.UiBadge getBadges(int index) {
+    return badges_.get(index);
+  }
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  public dev.ironpark.mako.v2.UiBadgeOrBuilder getBadgesOrBuilder(
+      int index) {
+    return badges_.get(index);
+  }
+  private void ensureBadgesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiBadge> tmp = badges_;
+    if (!tmp.isModifiable()) {
+      badges_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  private void setBadges(
+      int index, dev.ironpark.mako.v2.UiBadge value) {
+    java.util.Objects.requireNonNull(value);
+    ensureBadgesIsMutable();
+    badges_.set(index, value);
+  }
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  private void addBadges(dev.ironpark.mako.v2.UiBadge value) {
+    java.util.Objects.requireNonNull(value);
+    ensureBadgesIsMutable();
+    badges_.add(value);
+  }
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  private void addBadges(
+      int index, dev.ironpark.mako.v2.UiBadge value) {
+    java.util.Objects.requireNonNull(value);
+    ensureBadgesIsMutable();
+    badges_.add(index, value);
+  }
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  private void addAllBadges(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.UiBadge> values) {
+    ensureBadgesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, badges_);
+  }
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  private void clearBadges() {
+    badges_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * badges are small trailing tags on a node (tree_item, button, text, chip,
+   * etc.; revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+   */
+  private void removeBadges(int index) {
+    ensureBadgesIsMutable();
+    badges_.remove(index);
+  }
+
+  public static final int CHECK_FIELD_NUMBER = 35;
+  private java.lang.String check_;
+  /**
+   * <pre>
+   * check is a checkbox's or tree_item's tri-state check value: "" (none),
+   * "on", "off", or "mixed" (revision 46).
+   * </pre>
+   *
+   * <code>string check = 35 [json_name = "check"];</code>
+   * @return The check.
+   */
+  @java.lang.Override
+  public java.lang.String getCheck() {
+    return check_;
+  }
+  /**
+   * <pre>
+   * check is a checkbox's or tree_item's tri-state check value: "" (none),
+   * "on", "off", or "mixed" (revision 46).
+   * </pre>
+   *
+   * <code>string check = 35 [json_name = "check"];</code>
+   * @return The bytes for check.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getCheckBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(check_);
+  }
+  /**
+   * <pre>
+   * check is a checkbox's or tree_item's tri-state check value: "" (none),
+   * "on", "off", or "mixed" (revision 46).
+   * </pre>
+   *
+   * <code>string check = 35 [json_name = "check"];</code>
+   * @param value The check to set.
+   */
+  private void setCheck(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    check_ = value;
+  }
+  /**
+   * <pre>
+   * check is a checkbox's or tree_item's tri-state check value: "" (none),
+   * "on", "off", or "mixed" (revision 46).
+   * </pre>
+   *
+   * <code>string check = 35 [json_name = "check"];</code>
+   */
+  private void clearCheck() {
+
+    check_ = getDefaultInstance().getCheck();
+  }
+  /**
+   * <pre>
+   * check is a checkbox's or tree_item's tri-state check value: "" (none),
+   * "on", "off", or "mixed" (revision 46).
+   * </pre>
+   *
+   * <code>string check = 35 [json_name = "check"];</code>
+   * @param value The bytes for check to set.
+   */
+  private void setCheckBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    check_ = value.toStringUtf8();
+
+  }
+
+  public static final int CHECKS_FIELD_NUMBER = 36;
+  private boolean checks_;
+  /**
+   * <pre>
+   * checks says toggling check is answered by a BlockEvent of kind "check"
+   * with value "on" or "off" (revision 46).
+   * </pre>
+   *
+   * <code>bool checks = 36 [json_name = "checks"];</code>
+   * @return The checks.
+   */
+  @java.lang.Override
+  public boolean getChecks() {
+    return checks_;
+  }
+  /**
+   * <pre>
+   * checks says toggling check is answered by a BlockEvent of kind "check"
+   * with value "on" or "off" (revision 46).
+   * </pre>
+   *
+   * <code>bool checks = 36 [json_name = "checks"];</code>
+   * @param value The checks to set.
+   */
+  private void setChecks(boolean value) {
+    
+    checks_ = value;
+  }
+  /**
+   * <pre>
+   * checks says toggling check is answered by a BlockEvent of kind "check"
+   * with value "on" or "off" (revision 46).
+   * </pre>
+   *
+   * <code>bool checks = 36 [json_name = "checks"];</code>
+   */
+  private void clearChecks() {
+
+    checks_ = false;
+  }
+
+  public static final int CONTEXT_MENU_FIELD_NUMBER = 37;
+  private java.lang.String contextMenu_;
+  /**
+   * <pre>
+   * context_menu names the key of a menu node (variant "context") in the
+   * same tree opened as this node's context menu (revision 46).
+   * </pre>
+   *
+   * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+   * @return The contextMenu.
+   */
+  @java.lang.Override
+  public java.lang.String getContextMenu() {
+    return contextMenu_;
+  }
+  /**
+   * <pre>
+   * context_menu names the key of a menu node (variant "context") in the
+   * same tree opened as this node's context menu (revision 46).
+   * </pre>
+   *
+   * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+   * @return The bytes for contextMenu.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getContextMenuBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(contextMenu_);
+  }
+  /**
+   * <pre>
+   * context_menu names the key of a menu node (variant "context") in the
+   * same tree opened as this node's context menu (revision 46).
+   * </pre>
+   *
+   * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+   * @param value The contextMenu to set.
+   */
+  private void setContextMenu(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    contextMenu_ = value;
+  }
+  /**
+   * <pre>
+   * context_menu names the key of a menu node (variant "context") in the
+   * same tree opened as this node's context menu (revision 46).
+   * </pre>
+   *
+   * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+   */
+  private void clearContextMenu() {
+
+    contextMenu_ = getDefaultInstance().getContextMenu();
+  }
+  /**
+   * <pre>
+   * context_menu names the key of a menu node (variant "context") in the
+   * same tree opened as this node's context menu (revision 46).
+   * </pre>
+   *
+   * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+   * @param value The bytes for contextMenu to set.
+   */
+  private void setContextMenuBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    contextMenu_ = value.toStringUtf8();
+
+  }
+
+  public static final int CONTEXT_ARG_FIELD_NUMBER = 38;
+  private java.lang.String contextArg_;
+  /**
+   * <pre>
+   * context_arg (at most 256 chars) is carried as the value when an item of
+   * the node's context_menu is tapped (revision 46).
+   * </pre>
+   *
+   * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+   * @return The contextArg.
+   */
+  @java.lang.Override
+  public java.lang.String getContextArg() {
+    return contextArg_;
+  }
+  /**
+   * <pre>
+   * context_arg (at most 256 chars) is carried as the value when an item of
+   * the node's context_menu is tapped (revision 46).
+   * </pre>
+   *
+   * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+   * @return The bytes for contextArg.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getContextArgBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(contextArg_);
+  }
+  /**
+   * <pre>
+   * context_arg (at most 256 chars) is carried as the value when an item of
+   * the node's context_menu is tapped (revision 46).
+   * </pre>
+   *
+   * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+   * @param value The contextArg to set.
+   */
+  private void setContextArg(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    contextArg_ = value;
+  }
+  /**
+   * <pre>
+   * context_arg (at most 256 chars) is carried as the value when an item of
+   * the node's context_menu is tapped (revision 46).
+   * </pre>
+   *
+   * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+   */
+  private void clearContextArg() {
+
+    contextArg_ = getDefaultInstance().getContextArg();
+  }
+  /**
+   * <pre>
+   * context_arg (at most 256 chars) is carried as the value when an item of
+   * the node's context_menu is tapped (revision 46).
+   * </pre>
+   *
+   * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+   * @param value The bytes for contextArg to set.
+   */
+  private void setContextArgBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    contextArg_ = value.toStringUtf8();
+
+  }
+
+  public static final int ROWS_FIELD_NUMBER = 39;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiRow> rows_;
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.UiRow> getRowsList() {
+    return rows_;
+  }
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.UiRowOrBuilder> 
+      getRowsOrBuilderList() {
+    return rows_;
+  }
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  @java.lang.Override
+  public int getRowsCount() {
+    return rows_.size();
+  }
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.UiRow getRows(int index) {
+    return rows_.get(index);
+  }
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  public dev.ironpark.mako.v2.UiRowOrBuilder getRowsOrBuilder(
+      int index) {
+    return rows_.get(index);
+  }
+  private void ensureRowsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiRow> tmp = rows_;
+    if (!tmp.isModifiable()) {
+      rows_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  private void setRows(
+      int index, dev.ironpark.mako.v2.UiRow value) {
+    java.util.Objects.requireNonNull(value);
+    ensureRowsIsMutable();
+    rows_.set(index, value);
+  }
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  private void addRows(dev.ironpark.mako.v2.UiRow value) {
+    java.util.Objects.requireNonNull(value);
+    ensureRowsIsMutable();
+    rows_.add(value);
+  }
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  private void addRows(
+      int index, dev.ironpark.mako.v2.UiRow value) {
+    java.util.Objects.requireNonNull(value);
+    ensureRowsIsMutable();
+    rows_.add(index, value);
+  }
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  private void addAllRows(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.UiRow> values) {
+    ensureRowsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, rows_);
+  }
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  private void clearRows() {
+    rows_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * rows are the data-driven rows of a dag node (revision 46).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+   */
+  private void removeRows(int index) {
+    ensureRowsIsMutable();
+    rows_.remove(index);
+  }
+
+  public static final int PLACEHOLDER_FIELD_NUMBER = 40;
+  private java.lang.String placeholder_;
+  /**
+   * <pre>
+   * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+   * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+   * @return The placeholder.
+   */
+  @java.lang.Override
+  public java.lang.String getPlaceholder() {
+    return placeholder_;
+  }
+  /**
+   * <pre>
+   * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+   * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+   * @return The bytes for placeholder.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getPlaceholderBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(placeholder_);
+  }
+  /**
+   * <pre>
+   * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+   * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+   * @param value The placeholder to set.
+   */
+  private void setPlaceholder(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    placeholder_ = value;
+  }
+  /**
+   * <pre>
+   * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+   * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+   */
+  private void clearPlaceholder() {
+
+    placeholder_ = getDefaultInstance().getPlaceholder();
+  }
+  /**
+   * <pre>
+   * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+   * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+   * @param value The bytes for placeholder to set.
+   */
+  private void setPlaceholderBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    placeholder_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.UiNode parseFrom(
@@ -4530,6 +5157,662 @@ public  final class UiNode extends
       return this;
     }
 
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.UiBadge> getBadgesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getBadgesList());
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    @java.lang.Override
+    public int getBadgesCount() {
+      return instance.getBadgesCount();
+    }/**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.UiBadge getBadges(int index) {
+      return instance.getBadges(index);
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    public Builder setBadges(
+        int index, dev.ironpark.mako.v2.UiBadge value) {
+      copyOnWrite();
+      instance.setBadges(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    public Builder setBadges(
+        int index, dev.ironpark.mako.v2.UiBadge.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBadges(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    public Builder addBadges(dev.ironpark.mako.v2.UiBadge value) {
+      copyOnWrite();
+      instance.addBadges(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    public Builder addBadges(
+        int index, dev.ironpark.mako.v2.UiBadge value) {
+      copyOnWrite();
+      instance.addBadges(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    public Builder addBadges(
+        dev.ironpark.mako.v2.UiBadge.Builder builderForValue) {
+      copyOnWrite();
+      instance.addBadges(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    public Builder addBadges(
+        int index, dev.ironpark.mako.v2.UiBadge.Builder builderForValue) {
+      copyOnWrite();
+      instance.addBadges(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    public Builder addAllBadges(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.UiBadge> values) {
+      copyOnWrite();
+      instance.addAllBadges(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    public Builder clearBadges() {
+      copyOnWrite();
+      instance.clearBadges();
+      return this;
+    }
+    /**
+     * <pre>
+     * badges are small trailing tags on a node (tree_item, button, text, chip,
+     * etc.; revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiBadge badges = 34 [json_name = "badges"];</code>
+     */
+    public Builder removeBadges(int index) {
+      copyOnWrite();
+      instance.removeBadges(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * check is a checkbox's or tree_item's tri-state check value: "" (none),
+     * "on", "off", or "mixed" (revision 46).
+     * </pre>
+     *
+     * <code>string check = 35 [json_name = "check"];</code>
+     * @return The check.
+     */
+    @java.lang.Override
+    public java.lang.String getCheck() {
+      return instance.getCheck();
+    }
+    /**
+     * <pre>
+     * check is a checkbox's or tree_item's tri-state check value: "" (none),
+     * "on", "off", or "mixed" (revision 46).
+     * </pre>
+     *
+     * <code>string check = 35 [json_name = "check"];</code>
+     * @return The bytes for check.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getCheckBytes() {
+      return instance.getCheckBytes();
+    }
+    /**
+     * <pre>
+     * check is a checkbox's or tree_item's tri-state check value: "" (none),
+     * "on", "off", or "mixed" (revision 46).
+     * </pre>
+     *
+     * <code>string check = 35 [json_name = "check"];</code>
+     * @param value The check to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCheck(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setCheck(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * check is a checkbox's or tree_item's tri-state check value: "" (none),
+     * "on", "off", or "mixed" (revision 46).
+     * </pre>
+     *
+     * <code>string check = 35 [json_name = "check"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCheck() {
+      copyOnWrite();
+      instance.clearCheck();
+      return this;
+    }
+    /**
+     * <pre>
+     * check is a checkbox's or tree_item's tri-state check value: "" (none),
+     * "on", "off", or "mixed" (revision 46).
+     * </pre>
+     *
+     * <code>string check = 35 [json_name = "check"];</code>
+     * @param value The bytes for check to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCheckBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setCheckBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * checks says toggling check is answered by a BlockEvent of kind "check"
+     * with value "on" or "off" (revision 46).
+     * </pre>
+     *
+     * <code>bool checks = 36 [json_name = "checks"];</code>
+     * @return The checks.
+     */
+    @java.lang.Override
+    public boolean getChecks() {
+      return instance.getChecks();
+    }
+    /**
+     * <pre>
+     * checks says toggling check is answered by a BlockEvent of kind "check"
+     * with value "on" or "off" (revision 46).
+     * </pre>
+     *
+     * <code>bool checks = 36 [json_name = "checks"];</code>
+     * @param value The checks to set.
+     * @return This builder for chaining.
+     */
+    public Builder setChecks(boolean value) {
+      copyOnWrite();
+      instance.setChecks(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * checks says toggling check is answered by a BlockEvent of kind "check"
+     * with value "on" or "off" (revision 46).
+     * </pre>
+     *
+     * <code>bool checks = 36 [json_name = "checks"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearChecks() {
+      copyOnWrite();
+      instance.clearChecks();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * context_menu names the key of a menu node (variant "context") in the
+     * same tree opened as this node's context menu (revision 46).
+     * </pre>
+     *
+     * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+     * @return The contextMenu.
+     */
+    @java.lang.Override
+    public java.lang.String getContextMenu() {
+      return instance.getContextMenu();
+    }
+    /**
+     * <pre>
+     * context_menu names the key of a menu node (variant "context") in the
+     * same tree opened as this node's context menu (revision 46).
+     * </pre>
+     *
+     * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+     * @return The bytes for contextMenu.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getContextMenuBytes() {
+      return instance.getContextMenuBytes();
+    }
+    /**
+     * <pre>
+     * context_menu names the key of a menu node (variant "context") in the
+     * same tree opened as this node's context menu (revision 46).
+     * </pre>
+     *
+     * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+     * @param value The contextMenu to set.
+     * @return This builder for chaining.
+     */
+    public Builder setContextMenu(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setContextMenu(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * context_menu names the key of a menu node (variant "context") in the
+     * same tree opened as this node's context menu (revision 46).
+     * </pre>
+     *
+     * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearContextMenu() {
+      copyOnWrite();
+      instance.clearContextMenu();
+      return this;
+    }
+    /**
+     * <pre>
+     * context_menu names the key of a menu node (variant "context") in the
+     * same tree opened as this node's context menu (revision 46).
+     * </pre>
+     *
+     * <code>string context_menu = 37 [json_name = "contextMenu"];</code>
+     * @param value The bytes for contextMenu to set.
+     * @return This builder for chaining.
+     */
+    public Builder setContextMenuBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setContextMenuBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * context_arg (at most 256 chars) is carried as the value when an item of
+     * the node's context_menu is tapped (revision 46).
+     * </pre>
+     *
+     * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+     * @return The contextArg.
+     */
+    @java.lang.Override
+    public java.lang.String getContextArg() {
+      return instance.getContextArg();
+    }
+    /**
+     * <pre>
+     * context_arg (at most 256 chars) is carried as the value when an item of
+     * the node's context_menu is tapped (revision 46).
+     * </pre>
+     *
+     * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+     * @return The bytes for contextArg.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getContextArgBytes() {
+      return instance.getContextArgBytes();
+    }
+    /**
+     * <pre>
+     * context_arg (at most 256 chars) is carried as the value when an item of
+     * the node's context_menu is tapped (revision 46).
+     * </pre>
+     *
+     * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+     * @param value The contextArg to set.
+     * @return This builder for chaining.
+     */
+    public Builder setContextArg(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setContextArg(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * context_arg (at most 256 chars) is carried as the value when an item of
+     * the node's context_menu is tapped (revision 46).
+     * </pre>
+     *
+     * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearContextArg() {
+      copyOnWrite();
+      instance.clearContextArg();
+      return this;
+    }
+    /**
+     * <pre>
+     * context_arg (at most 256 chars) is carried as the value when an item of
+     * the node's context_menu is tapped (revision 46).
+     * </pre>
+     *
+     * <code>string context_arg = 38 [json_name = "contextArg"];</code>
+     * @param value The bytes for contextArg to set.
+     * @return This builder for chaining.
+     */
+    public Builder setContextArgBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setContextArgBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.UiRow> getRowsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getRowsList());
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    @java.lang.Override
+    public int getRowsCount() {
+      return instance.getRowsCount();
+    }/**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.UiRow getRows(int index) {
+      return instance.getRows(index);
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    public Builder setRows(
+        int index, dev.ironpark.mako.v2.UiRow value) {
+      copyOnWrite();
+      instance.setRows(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    public Builder setRows(
+        int index, dev.ironpark.mako.v2.UiRow.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRows(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    public Builder addRows(dev.ironpark.mako.v2.UiRow value) {
+      copyOnWrite();
+      instance.addRows(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    public Builder addRows(
+        int index, dev.ironpark.mako.v2.UiRow value) {
+      copyOnWrite();
+      instance.addRows(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    public Builder addRows(
+        dev.ironpark.mako.v2.UiRow.Builder builderForValue) {
+      copyOnWrite();
+      instance.addRows(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    public Builder addRows(
+        int index, dev.ironpark.mako.v2.UiRow.Builder builderForValue) {
+      copyOnWrite();
+      instance.addRows(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    public Builder addAllRows(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.UiRow> values) {
+      copyOnWrite();
+      instance.addAllRows(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    public Builder clearRows() {
+      copyOnWrite();
+      instance.clearRows();
+      return this;
+    }
+    /**
+     * <pre>
+     * rows are the data-driven rows of a dag node (revision 46).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiRow rows = 39 [json_name = "rows"];</code>
+     */
+    public Builder removeRows(int index) {
+      copyOnWrite();
+      instance.removeRows(index);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+     * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+     * @return The placeholder.
+     */
+    @java.lang.Override
+    public java.lang.String getPlaceholder() {
+      return instance.getPlaceholder();
+    }
+    /**
+     * <pre>
+     * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+     * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+     * @return The bytes for placeholder.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getPlaceholderBytes() {
+      return instance.getPlaceholderBytes();
+    }
+    /**
+     * <pre>
+     * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+     * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+     * @param value The placeholder to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPlaceholder(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setPlaceholder(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+     * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPlaceholder() {
+      copyOnWrite();
+      instance.clearPlaceholder();
+      return this;
+    }
+    /**
+     * <pre>
+     * placeholder carries an input's/textarea's placeholder hint, or a tooltip /
+     * accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
+     * (revision 46).
+     * </pre>
+     *
+     * <code>string placeholder = 40 [json_name = "placeholder"];</code>
+     * @param value The bytes for placeholder to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPlaceholderBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setPlaceholderBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.UiNode)
   }
   @java.lang.Override
@@ -4583,14 +5866,23 @@ public  final class UiNode extends
             dev.ironpark.mako.v2.UiGraphNode.class,
             "graphEdges_",
             dev.ironpark.mako.v2.UiGraphEdge.class,
+            "badges_",
+            dev.ironpark.mako.v2.UiBadge.class,
+            "check_",
+            "checks_",
+            "contextMenu_",
+            "contextArg_",
+            "rows_",
+            dev.ironpark.mako.v2.UiRow.class,
+            "placeholder_",
           };
           java.lang.String info =
-              "\u0000!\u0000\u0000\u0001!!\u0000\u0007\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
-              "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a\u000b\u0000" +
-              "\f\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012\u001b\u0013" +
+              "\u0000(\u0000\u0000\u0001((\u0000\t\u0000\u0001\u0208\u0002\u0208\u0003\u0208\u0004" +
+              "\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a\u000b\u0000\f" +
+              "\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012\u001b\u0013" +
               "\u0208\u0014\u001b\u0015\u021a\u0016\u0208\u0017\u0007\u0018\u0208\u0019\u021a\u001a" +
               "\u0208\u001b\u0000\u001c\u0208\u001d\u0004\u001e\u0000\u001f\u0007 \u001b!\u001b" +
-              "";
+              "\"\u001b#\u0208$\u0007%\u0208&\u0208\'\u001b(\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

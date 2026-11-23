@@ -79,7 +79,7 @@ export default {
 	}{{"a", ca}, {"b", cb}} {
 		waitFor(t, "plugin listed on "+c.name, func() bool {
 			list, err := c.cli.Plugins(ctx)
-			return err == nil && len(list.GetPlugins()) == 1
+			return err == nil && findPlugin(list.GetPlugins(), "syncboard") != nil
 		})
 		if _, err := c.cli.PluginAction(ctx, &protocol.PluginAction{PluginId: "syncboard", Op: protocol.PluginGrant}); err != nil {
 			t.Fatal(err)

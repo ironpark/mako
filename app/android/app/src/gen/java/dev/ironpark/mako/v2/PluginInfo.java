@@ -1775,6 +1775,44 @@ public  final class PluginInfo extends
     dbQuota_ = 0L;
   }
 
+  public static final int BUNDLED_FIELD_NUMBER = 26;
+  private boolean bundled_;
+  /**
+   * <pre>
+   * bundled says the plugin ships inside mako itself (revision 46).
+   * </pre>
+   *
+   * <code>bool bundled = 26 [json_name = "bundled"];</code>
+   * @return The bundled.
+   */
+  @java.lang.Override
+  public boolean getBundled() {
+    return bundled_;
+  }
+  /**
+   * <pre>
+   * bundled says the plugin ships inside mako itself (revision 46).
+   * </pre>
+   *
+   * <code>bool bundled = 26 [json_name = "bundled"];</code>
+   * @param value The bundled to set.
+   */
+  private void setBundled(boolean value) {
+    
+    bundled_ = value;
+  }
+  /**
+   * <pre>
+   * bundled says the plugin ships inside mako itself (revision 46).
+   * </pre>
+   *
+   * <code>bool bundled = 26 [json_name = "bundled"];</code>
+   */
+  private void clearBundled() {
+
+    bundled_ = false;
+  }
+
   public static dev.ironpark.mako.v2.PluginInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -3696,6 +3734,46 @@ public  final class PluginInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * bundled says the plugin ships inside mako itself (revision 46).
+     * </pre>
+     *
+     * <code>bool bundled = 26 [json_name = "bundled"];</code>
+     * @return The bundled.
+     */
+    @java.lang.Override
+    public boolean getBundled() {
+      return instance.getBundled();
+    }
+    /**
+     * <pre>
+     * bundled says the plugin ships inside mako itself (revision 46).
+     * </pre>
+     *
+     * <code>bool bundled = 26 [json_name = "bundled"];</code>
+     * @param value The bundled to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBundled(boolean value) {
+      copyOnWrite();
+      instance.setBundled(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * bundled says the plugin ships inside mako itself (revision 46).
+     * </pre>
+     *
+     * <code>bool bundled = 26 [json_name = "bundled"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBundled() {
+      copyOnWrite();
+      instance.clearBundled();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginInfo)
   }
   @java.lang.Override
@@ -3743,13 +3821,14 @@ public  final class PluginInfo extends
             "storageQuota_",
             "dbUsed_",
             "dbQuota_",
+            "bundled_",
           };
           java.lang.String info =
-              "\u0000\u0019\u0000\u0001\u0001\u0019\u0019\u0000\b\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u001a\u0000\u0001\u0001\u001a\u001a\u0000\b\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0007\u0007\u021a\b\u021a\t\u021a\n\u001b" +
               "\u000b\u001b\f\u001b\r\u0007\u000e\u0208\u000f\u0208\u0010\u0208\u0011\u0208\u0012" +
               "\u1009\u0000\u0013\u0007\u0014\u001b\u0015\u001b\u0016\u0002\u0017\u0002\u0018\u0002" +
-              "\u0019\u0002";
+              "\u0019\u0002\u001a\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

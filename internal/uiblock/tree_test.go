@@ -554,3 +554,356 @@ func TestSpoofingChecksAllFieldsAndAllowsMultilineTextarea(t *testing.T) {
 		}
 	}
 }
+
+func TestRev46KindsEventsAndValidation(t *testing.T) {
+	treeJSON := `{
+		"kind": "column",
+		"fill": true,
+		"children": [
+			{
+				"kind": "row",
+				"key": "bar",
+				"variant": "toolbar",
+				"children": [
+					{
+						"kind": "menu",
+						"key": "branch",
+						"text": "main",
+						"icon": "git-branch",
+						"variant": "ghost",
+						"children": [
+							{"kind": "menu_item", "key": "m1", "text": "main", "checked": true, "onTap": ["checkout", "main"]},
+							{"kind": "divider"},
+							{
+								"kind": "menu",
+								"key": "sub",
+								"text": "More",
+								"children": [
+									{"kind": "menu_item", "key": "new", "text": "New branch", "icon": "plus", "onTap": ["askBranch"]}
+								]
+							}
+						]
+					},
+					{"kind": "button", "key": "pull", "text": "Pull", "badges": [{"text": "2", "tone": "accent", "variant": "soft"}], "onTap": ["pull"]}
+				]
+			},
+			{
+				"kind": "split",
+				"key": "sp",
+				"direction": "auto",
+				"ratio": 0.45,
+				"children": [
+					{
+						"kind": "column",
+						"key": "left",
+						"children": [
+							{
+								"kind": "tree",
+								"key": "changes",
+								"children": [
+									{
+										"kind": "tree_item",
+										"key": "f1",
+										"text": "main.go",
+										"icon": "file-diff",
+										"check": "mixed",
+										"onCheck": ["pick", "src"],
+										"badges": [
+											{"text": "+12", "tone": "success", "variant": "mono"},
+											{"text": "-3", "tone": "danger", "variant": "mono"}
+										],
+										"contextMenu": "file-ctx",
+										"contextArg": "src/main.go",
+										"onTap": ["open", "src/main.go"]
+									}
+								]
+							},
+							{"kind": "checkbox", "key": "amend", "text": "Amend", "check": "off", "onChange": ["toggleAmend"]},
+							{"kind": "checkbox", "key": "defcheck", "text": "Default off", "onChange": ["toggleDef"]}
+						]
+					},
+					{
+						"kind": "dag",
+						"key": "history",
+						"value": "c1",
+						"maxHeight": 500,
+						"contextMenu": "commit-ctx",
+						"onChange": ["selectCommit"],
+						"rows": [
+							{
+								"id": "c1",
+								"parents": ["c0"],
+								"text": "Initial commit",
+								"detail": "Ada",
+								"meta": "2m",
+								"strong": true,
+								"tone": "accent",
+								"icon": "git-commit-horizontal",
+								"badges": [{"text": "HEAD -> main", "tone": "accent", "variant": "soft", "icon": "git-branch"}]
+							},
+							{"id": "c0", "text": "Root"}
+						]
+					}
+				]
+			},
+			{
+				"kind": "dialog",
+				"key": "dlg",
+				"text": "Discard changes?",
+				"variant": "danger",
+				"onChange": ["closeDialog"],
+				"children": [
+					{"kind": "text", "text": "Are you sure?"},
+					{"kind": "button", "key": "ok", "text": "Discard", "variant": "danger", "onTap": ["confirmDiscard"]}
+				]
+			},
+			{
+				"kind": "menu",
+				"key": "file-ctx",
+				"variant": "context",
+				"children": [
+					{"kind": "menu_item", "key": "discard", "text": "Discard", "tone": "danger", "onTap": ["discardFile", "worktree"]},
+					{
+						"kind": "menu",
+						"key": "more",
+						"text": "More",
+						"children": [
+							{"kind": "menu_item", "key": "ignore", "text": "Ignore", "onTap": ["ignoreFile"]}
+						]
+					}
+				]
+			},
+			{
+				"kind": "menu",
+				"key": "commit-ctx",
+				"variant": "context",
+				"children": [
+					{"kind": "menu_item", "key": "copy", "text": "Copy hash", "onTap": ["copyHash"]}
+				]
+			},
+			{
+				"kind": "menu",
+				"key": "unused-ctx",
+				"variant": "context",
+				"children": [
+					{"kind": "menu_item", "key": "never", "text": "Never", "onTap": ["never"]}
+				]
+			}
+		]
+	}`
+
+	tr, err := Read([]byte(treeJSON))
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+
+	// Verify parsed fields.
+	bar := nodeOf(tr.Root, "/bar")
+	if bar == nil || bar.GetVariant() != "toolbar" {
+		t.Fatalf("toolbar = %+v", bar)
+	}
+	sp := nodeOf(tr.Root, "/sp")
+	if sp == nil || sp.GetDirection() != "auto" || sp.GetRatio() != 0.45 {
+		t.Fatalf("split = %+v", sp)
+	}
+	f1 := nodeOf(tr.Root, "/sp/left/changes/f1")
+	if f1 == nil || f1.GetCheck() != "mixed" || !f1.GetChecks() || len(f1.GetBadges()) != 2 || f1.GetContextMenu() != "file-ctx" || f1.GetContextArg() != "src/main.go" {
+		t.Fatalf("tree_item = %+v", f1)
+	}
+	defCheck := nodeOf(tr.Root, "/sp/left/defcheck")
+	if defCheck == nil || defCheck.GetCheck() != "off" {
+		t.Fatalf("default checkbox check = %+v", defCheck)
+	}
+	hist := nodeOf(tr.Root, "/sp/history")
+	if hist == nil || len(hist.GetRows()) != 2 || !hist.GetRows()[0].GetStrong() || hist.GetRows()[0].GetBadges()[0].GetText() != "HEAD -> main" {
+		t.Fatalf("dag = %+v", hist)
+	}
+
+	// Dropdown menu_item tap does NOT append value.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/bar/branch/m1", Kind: protocol.UiTap, Value: "ignored"}); err != nil || m.Name != "checkout" || len(m.Args) != 1 || string(m.Args[0]) != `"main"` {
+		t.Fatalf("dropdown menu_item tap = %+v, %v", m, err)
+	}
+
+	// Context menu_item tap validates opener arg and appends it last.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/file-ctx/discard", Kind: protocol.UiTap, Value: "src/main.go"}); err != nil || m.Name != "discardFile" || len(m.Args) != 2 || string(m.Args[0]) != `"worktree"` || string(m.Args[1]) != `"src/main.go"` {
+		t.Fatalf("context menu_item tap = %+v, %v", m, err)
+	}
+	// Context submenu item tap also validates opener arg and appends it last.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/file-ctx/more/ignore", Kind: protocol.UiTap, Value: "src/main.go"}); err != nil || m.Name != "ignoreFile" || len(m.Args) != 1 || string(m.Args[0]) != `"src/main.go"` {
+		t.Fatalf("context submenu_item tap = %+v, %v", m, err)
+	}
+	// Context menu_item tap with forged arg is refused.
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/file-ctx/discard", Kind: protocol.UiTap, Value: "../../etc/passwd"}); err == nil {
+		t.Fatal("forged context_arg was accepted")
+	}
+	// Context menu_item tap on unreferenced context menu is refused.
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/unused-ctx/never", Kind: protocol.UiTap, Value: ""}); err == nil {
+		t.Fatal("unreferenced context menu tap was accepted")
+	}
+
+	// Dag context menu_item tap accepts any row id in the dag and rejects unknown ids.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/commit-ctx/copy", Kind: protocol.UiTap, Value: "c1"}); err != nil || m.Name != "copyHash" || len(m.Args) != 1 || string(m.Args[0]) != `"c1"` {
+		t.Fatalf("dag context menu tap = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/commit-ctx/copy", Kind: protocol.UiTap, Value: "deadbeef"}); err == nil {
+		t.Fatal("forged dag row context_arg was accepted")
+	}
+
+	// tree_item check event (UiCheck).
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/sp/left/changes/f1", Kind: protocol.UiCheck, Value: "on"}); err != nil || m.Name != "pick" || len(m.Args) != 2 || string(m.Args[0]) != `"src"` || string(m.Args[1]) != `"on"` {
+		t.Fatalf("tree_item check = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/sp/left/changes/f1", Kind: protocol.UiCheck, Value: "mixed"}); err == nil {
+		t.Fatal("invalid check event value 'mixed' was accepted")
+	}
+
+	// checkbox change event & Values().
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/sp/left/amend", Kind: protocol.UiChange, Value: "on"}); err != nil || m.Name != "toggleAmend" || len(m.Args) != 1 || string(m.Args[0]) != `"on"` {
+		t.Fatalf("checkbox change = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/sp/left/amend", Kind: protocol.UiChange, Value: "true"}); err == nil {
+		t.Fatal("invalid checkbox change value 'true' was accepted")
+	}
+	if vals, err := tr.Values(map[string]string{"/sp/left/amend": "on"}); err != nil || vals["/sp/left/amend"] != "on" {
+		t.Fatalf("checkbox form values = %v, %v", vals, err)
+	}
+
+	// dialog dismiss event.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/dlg", Kind: protocol.UiChange, Value: "dismiss"}); err != nil || m.Name != "closeDialog" || len(m.Args) != 1 || string(m.Args[0]) != `"dismiss"` {
+		t.Fatalf("dialog dismiss = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/dlg", Kind: protocol.UiChange, Value: "other"}); err == nil {
+		t.Fatal("invalid dialog change value was accepted")
+	}
+
+	// dag row selection event.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/sp/history", Kind: protocol.UiChange, Value: "c0"}); err != nil || m.Name != "selectCommit" || len(m.Args) != 1 || string(m.Args[0]) != `"c0"` {
+		t.Fatalf("dag select = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/sp/history", Kind: protocol.UiChange, Value: "missing"}); err == nil {
+		t.Fatal("dag unknown row selection was accepted")
+	}
+}
+
+func TestRev46Rejections(t *testing.T) {
+	var manyBadges []string
+	for i := range maxBadges + 1 {
+		manyBadges = append(manyBadges, fmt.Sprintf(`{"text":"b%d"}`, i))
+	}
+	var manyRowBadges []string
+	for i := range maxDagRowBadges + 1 {
+		manyRowBadges = append(manyRowBadges, fmt.Sprintf(`{"text":"b%d"}`, i))
+	}
+	var manyRows []string
+	for i := range maxDagRows + 1 {
+		manyRows = append(manyRows, fmt.Sprintf(`{"id":"r%d","text":"t"}`, i))
+	}
+	var manyParents []string
+	for i := range maxDagParents + 1 {
+		manyParents = append(manyParents, fmt.Sprintf(`"p%d"`, i))
+	}
+
+	cases := map[string]struct{ tree, want string }{
+		"scroll-auto":         {`{"kind":"scroll","direction":"auto","children":[]}`, "not vertical or horizontal"},
+		"split-bad-dir":       {`{"kind":"split","direction":"diagonal","children":[{"kind":"text","text":"a"},{"kind":"text","text":"b"}]}`, "vertical, horizontal or auto"},
+		"menu-blank":          {`{"kind":"menu","children":[]}`, "menu requires text or icon"},
+		"menu-ctx-no-key":     {`{"kind":"column","children":[{"kind":"menu","variant":"context","children":[]}]}`, "context menu requires a valid key"},
+		"menu-ctx-dup-key":    {`{"kind":"column","children":[{"kind":"menu","key":"m","variant":"context","children":[]},{"kind":"column","children":[{"kind":"menu","key":"m","variant":"context","children":[]}]}]}`, "duplicate context menu key"},
+		"menu-ctx-nested":     {`{"kind":"menu","text":"M","children":[{"kind":"menu","key":"c","variant":"context","children":[]}]}`, "context menu cannot be nested"},
+		"menu-depth-3":        {`{"kind":"menu","text":"L1","children":[{"kind":"menu","text":"L2","children":[{"kind":"menu","text":"L3","children":[]}]}]}`, "menu nesting exceeds depth 2"},
+		"menu-bad-child":      {`{"kind":"menu","text":"M","children":[{"kind":"text","text":"nope"}]}`, "must be a menu_item, divider or menu"},
+		"menu-onTap":          {`{"kind":"menu","text":"M","onTap":["x"],"children":[]}`, "sends no messages"},
+		"menu-item-root":      {`{"kind":"menu_item","text":"x"}`, "must be inside a menu"},
+		"menu-item-in-col":    {`{"kind":"column","children":[{"kind":"menu_item","text":"x"}]}`, "must be inside a menu"},
+		"menu-item-blank":     {`{"kind":"menu","text":"M","children":[{"kind":"menu_item","text":""}]}`, "menu_item requires text"},
+		"menu-item-onChange":  {`{"kind":"menu","text":"M","children":[{"kind":"menu_item","text":"a","onChange":["x"]}]}`, "takes onTap, not onChange"},
+		"menu-item-children":  {`{"kind":"menu","text":"M","children":[{"kind":"menu_item","text":"a","children":[]}]}`, ""},
+		"menu-item-has-child": {`{"kind":"menu","text":"M","children":[{"kind":"menu_item","text":"a","children":[{"kind":"text","text":"b"}]}]}`, "holds no children"},
+		"checkbox-bad-check":  {`{"kind":"checkbox","text":"A","check":"yes"}`, "not on, off or mixed"},
+		"checkbox-onTap":      {`{"kind":"checkbox","text":"A","onTap":["x"]}`, "onChange, not onTap"},
+		"checkbox-onCheck":    {`{"kind":"checkbox","text":"A","check":"on","onCheck":["x"]}`, "only a tree_item takes onCheck"},
+		"check-on-text":       {`{"kind":"text","text":"A","check":"on"}`, "only a checkbox or tree_item"},
+		"onCheck-no-check":    {`{"kind":"tree","children":[{"kind":"tree_item","text":"a","onCheck":["x"]}]}`, "onCheck requires check"},
+		"dialog-two":          {`{"kind":"column","children":[{"kind":"dialog","text":"1","children":[]},{"kind":"dialog","text":"2","children":[]}]}`, "at most one dialog"},
+		"dialog-nested":       {`{"kind":"dialog","text":"1","children":[{"kind":"dialog","text":"2","children":[]}]}`, "at most one dialog"},
+		"dialog-bad-variant":  {`{"kind":"dialog","text":"1","variant":"primary","children":[]}`, "takes no variant"},
+		"dialog-onTap":        {`{"kind":"dialog","text":"1","onTap":["x"],"children":[]}`, "onChange, not onTap"},
+		"badge-too-many":      {`{"kind":"text","text":"x","badges":[` + strings.Join(manyBadges, ",") + `]}`, "at most 8 badges"},
+		"badge-empty":         {`{"kind":"text","text":"x","badges":[{}]}`, "requires text or icon"},
+		"badge-too-long":      {`{"kind":"text","text":"x","badges":[{"text":"` + strings.Repeat("a", maxBadgeText+1) + `"}]}`, "over 32 runes"},
+		"badge-bad-variant":   {`{"kind":"text","text":"x","badges":[{"text":"a","variant":"neon"}]}`, "not soft, solid, outline or mono"},
+		"badge-bad-tone":      {`{"kind":"text","text":"x","badges":[{"text":"a","tone":"#f00"}]}`, "colour token"},
+		"badge-spoof":         {`{"kind":"text","text":"x","badges":[{"text":"a\u202eb"}]}`, "reordering"},
+		"ctx-unknown":         {`{"kind":"text","text":"x","contextMenu":"nope"}`, "unknown context menu"},
+		"ctx-arg-no-menu":     {`{"kind":"text","text":"x","contextArg":"abc"}`, "contextArg requires contextMenu"},
+		"ctx-arg-long":        {`{"kind":"column","children":[{"kind":"text","text":"x","contextMenu":"m","contextArg":"` + strings.Repeat("a", maxContextArg+1) + `"},{"kind":"menu","key":"m","variant":"context","children":[]}]}`, "over 256 characters"},
+		"dag-too-many-rows":   {`{"kind":"dag","rows":[` + strings.Join(manyRows, ",") + `]}`, "at most 1000 rows"},
+		"dag-dup-id":          {`{"kind":"dag","rows":[{"id":"a","text":"1"},{"id":"a","text":"2"}]}`, "duplicated"},
+		"dag-empty-id":        {`{"kind":"dag","rows":[{"id":"","text":"1"}]}`, "invalid id"},
+		"dag-long-id":         {`{"kind":"dag","rows":[{"id":"` + strings.Repeat("a", maxDagID+1) + `","text":"1"}]}`, "invalid id"},
+		"dag-too-many-p":      {`{"kind":"dag","rows":[{"id":"a","parents":[` + strings.Join(manyParents, ",") + `],"text":"1"}]}`, "more than 8 parents"},
+		"dag-long-text":       {`{"kind":"dag","rows":[{"id":"a","text":"` + strings.Repeat("x", maxDagText+1) + `"}]}`, "over 320 characters"},
+		"dag-too-many-b":      {`{"kind":"dag","rows":[{"id":"a","text":"1","badges":[` + strings.Join(manyRowBadges, ",") + `]}]}`, "at most 6 badges"},
+		"dag-onTap":           {`{"kind":"dag","onTap":["x"],"rows":[]}`, "onChange, not onTap"},
+		"dag-children":        {`{"kind":"dag","rows":[],"children":[{"kind":"text","text":"x"}]}`, "holds no children"},
+		"rows-on-text":        {`{"kind":"text","text":"x","rows":[{"id":"a","text":"1"}]}`, "only a dag has rows"},
+		"dag-bad-maxHeight":   {`{"kind":"dag","maxHeight":-5,"rows":[]}`, "maxHeight is from 0 to 4000"},
+		"placeholder-too-long": {`{"kind":"button","icon":"plus","placeholder":"` + strings.Repeat("a", maxPlaceholder+1) + `"}`, "placeholder is over 256 characters"},
+	}
+	for name, c := range cases {
+		_, err := Read([]byte(c.tree))
+		if c.want == "" {
+			if err != nil {
+				t.Errorf("%s: unexpected error %v", name, err)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: got %v, want substring %q", name, err, c.want)
+		}
+	}
+}
+
+func TestPlaceholderPreservedAcrossKinds(t *testing.T) {
+	tr, err := Read([]byte(`{"kind":"column","children":[
+		{"kind":"button","key":"b","icon":"refresh-cw","placeholder":"Refresh","onTap":["r"]},
+		{"kind":"menu","key":"m","icon":"ellipsis","placeholder":"Git actions","children":[{"kind":"menu_item","text":"Fetch","onTap":["f"]}]},
+		{"kind":"tree","key":"t","children":[{"kind":"tree_item","key":"ti","text":"a.go","placeholder":"Commit a.go","check":"on","onCheck":["p"]}]},
+		{"kind":"checkbox","key":"cb","text":"Amend","placeholder":"Amend last commit","check":"off","onChange":["a"]},
+		{"kind":"icon","key":"ic","icon":"info","placeholder":"Details"},
+		{"kind":"pill","key":"pl","text":"ok","placeholder":"All checks passed"},
+		{"kind":"chip","key":"ch","text":"main","placeholder":"Current branch"},
+		{"kind":"input","key":"in","placeholder":"Type here","onChange":["c"]},
+		{"kind":"textarea","key":"ta","placeholder":"Commit message","onChange":["c"]}
+	]}`))
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	want := map[string]string{
+		"/b":    "Refresh",
+		"/m":    "Git actions",
+		"/t/ti": "Commit a.go",
+		"/cb":   "Amend last commit",
+		"/ic":   "Details",
+		"/pl":   "All checks passed",
+		"/ch":   "Current branch",
+		"/in":   "Type here",
+		"/ta":   "Commit message",
+	}
+	got := map[string]string{}
+	var walk func(n *protocol.UiNode)
+	walk = func(n *protocol.UiNode) {
+		if n.GetPlaceholder() != "" {
+			got[n.GetId()] = n.GetPlaceholder()
+		}
+		for _, c := range n.GetChildren() {
+			walk(c)
+		}
+	}
+	walk(tr.Root)
+	for id, wantPH := range want {
+		if got[id] != wantPH {
+			t.Errorf("node %s placeholder = %q, want %q", id, got[id], wantPH)
+		}
+	}
+}

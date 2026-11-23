@@ -19,10 +19,10 @@ import (
 // not start, leaves the last that did running, the error shown beside it;
 // with none, the plugin has failed.
 func (p *plugin) reload() {
-	if p.m.installs.Settle(p.id) {
+	if !p.bundled && p.m.installs.Settle(p.id) {
 		_ = p.disown()
 	}
-	next, err := readVersion(p.m.cfg.Dir, p.id)
+	next, err := p.readVersion()
 	if err == nil {
 		err = p.check(next)
 	}
@@ -202,6 +202,7 @@ func (p *plugin) kill(why string) {
 }
 
 func (p *plugin) closeRuntime() {
+	p.stopAllGitWatches()
 	if p.rt != nil {
 		p.rt.close()
 		p.rt = nil

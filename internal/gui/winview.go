@@ -33,27 +33,48 @@ func (v *layoutDraw) node(n *layoutdoc.Node, root bool) ggui.Widget {
 	case layoutdoc.KindPanes:
 		return layoutView(v.m)
 	}
-	return v.block(n).Body
+	return v.renderBlockNode(nil, n, blockPlace{Solo: true}, nil)
 }
 
-// block draws a block, or what stands for one the registry does not hold.
-// A plugin's or an agent's block follows the registry, as it comes and
-// goes.
-func (v *layoutDraw) block(n *layoutdoc.Node) blockView {
-	if strings.HasPrefix(n.Block, "plugin:") || strings.HasPrefix(n.Block, "agent:") {
-		return blockView{Body: ggui.View(v.m.blocks.rev, func(int) ggui.Widget {
-			def, ok := v.m.blocks.lookup(n.Block)
-			if !ok {
-				return missingPluginBlock(v.m, n.Block)
+// isDynamicBlock reports whether a block name comes from a plugin or an agent,
+// whose registration may appear or disappear at runtime.
+func isDynamicBlock(name string) bool {
+	return strings.HasPrefix(name, "plugin:") || strings.HasPrefix(name, "agent:")
+}
+
+// renderBlockNode draws a block node inside its placement chrome (solo dock
+// header when at.Solo and chromePanel, tabbed page when !at.Solo and
+// chromePanel, bare Body for chromeBare). For plugin/agent blocks it reacts to
+// v.m.blocks.rev so missing blocks seamlessly appear once registered.
+// If onMenu is non-nil, it receives the built blockView's Menu callback.
+func (v *layoutDraw) renderBlockNode(stackNode, child *layoutdoc.Node, at blockPlace, onMenu func(func() []ggui.Widget)) ggui.Widget {
+	build := func() ggui.Widget {
+		def, ok := v.m.blocks.lookup(child.Block)
+		if !ok {
+			if onMenu != nil {
+				onMenu(nil)
 			}
-			return def.Build(v.m, n.Props).Body
-		})}
+			if isDynamicBlock(child.Block) {
+				return missingPluginBlock(v.m, child.Block)
+			}
+			return missingBlock(child.Block)
+		}
+		bv := def.Build(v.m, child.Props, at)
+		if onMenu != nil {
+			onMenu(bv.Menu)
+		}
+		if def.Chrome == chromePanel {
+			if at.Solo {
+				return soloPanel(v.m, stackNode, child, def, bv)
+			}
+			return tabbedPage(bv)
+		}
+		return bv.Body
 	}
-	def, ok := v.m.blocks.lookup(n.Block)
-	if !ok {
-		return blockView{Body: missingBlock(n.Block)}
+	if isDynamicBlock(child.Block) {
+		return ggui.View(v.m.blocks.rev, func(int) ggui.Widget { return build() })
 	}
-	return def.Build(v.m, n.Props)
+	return build()
 }
 
 // line draws a row or a column: a sized child as a panel that slides and
@@ -126,7 +147,19 @@ func (v *layoutDraw) panel(n *layoutdoc.Node, vertical, trailing bool) ggui.Widg
 	}
 	var child ggui.Widget
 	if n.Kind == layoutdoc.KindBlock {
-		child = ggui.Component(func() ggui.Widget { return arrange(v.block(n)) })
+		child = ggui.Component(func() ggui.Widget {
+			if !isDynamicBlock(n.Block) {
+				if def, ok := v.m.blocks.lookup(n.Block); ok {
+					bv := def.Build(v.m, n.Props, blockPlace{Solo: true})
+					body := bv.Body
+					if def.Chrome == chromePanel {
+						body = soloPanel(v.m, nil, n, def, bv)
+					}
+					return arrange(blockView{Body: body, Edge: bv.Edge})
+				}
+			}
+			return arrange(blockView{Body: v.renderBlockNode(nil, n, blockPlace{Solo: true}, nil)})
+		})
 	} else {
 		child = arrange(blockView{Body: v.node(n, false)})
 	}
@@ -171,28 +204,37 @@ func resizeEdge(m *model, edge ggui.Widget, st *nodeState, dir float64, vertical
 		})
 }
 
-// stack draws a stack as the right panel has always been drawn: a strip
-// of its blocks' names over the one shown. Each block is built once, so
-// it keeps its scroll and open folders across tabs.
+// stack draws a stack: when it holds a single panel block it renders the
+// unified solo dock header; with two or more children it draws the tab strip
+// over the active page. Each block is built once, so it keeps its scroll and
+// open folders across tabs.
 func (v *layoutDraw) stack(n *layoutdoc.Node) ggui.Widget {
+	if len(n.Children) == 1 {
+		return v.renderBlockNode(n, n.Children[0], blockPlace{Solo: true}, nil)
+	}
 	st := v.m.nodeState(n)
 	pages := make([]ggui.Widget, len(n.Children))
+	pageMenus := make([]func() []ggui.Widget, len(n.Children))
+	menuRefs := make([]func() []ggui.Widget, len(n.Children))
 	for i, c := range n.Children {
-		pages[i] = v.block(c).Body
+		idx := i
+		pages[i] = v.renderBlockNode(n, c, blockPlace{Solo: false}, func(fn func() []ggui.Widget) {
+			pageMenus[idx] = fn
+		})
+		menuRefs[i] = func() []ggui.Widget {
+			if fn := pageMenus[idx]; fn != nil {
+				return fn()
+			}
+			return nil
+		}
 	}
 	shown := ggui.Map(st.active, func(name string) int { return layoutdoc.StackIndex(n, name) })
 	labels := ggui.Derived(func() []string {
 		v.m.blocks.rev.Get() // a plugin's block's title comes with it
 		out := make([]string, len(n.Children))
 		for i, c := range n.Children {
-			switch def, ok := v.m.blocks.lookup(c.Block); {
-			case !ok:
-				out[i] = c.Block
-			case def.Label != nil:
-				out[i] = def.Label(v.m)
-			default:
-				out[i] = T(def.Title)
-			}
+			def, _ := v.m.blocks.lookup(c.Block)
+			out[i] = blockLabel(v.m, def, c.Block)
 		}
 		return out
 	}).WithEqual(slices.Equal)
@@ -202,7 +244,7 @@ func (v *layoutDraw) stack(n *layoutdoc.Node) ggui.Widget {
 		ggui.If(v.m.StackDragging, func() ggui.Widget { return newStackDropZones(v.m, n) }),
 	).Expand()
 	return widget.Box(widget.Column(
-		ggui.View(labels, func(l []string) ggui.Widget { return stackTabs(v.m, n, shown, choose, l) }),
+		ggui.View(labels, func(l []string) ggui.Widget { return stackTabs(v.m, n, shown, choose, l, menuRefs) }),
 		hline(),
 		widget.Expanded(body),
 	).Stretch()).Fill(skin.Surface0)

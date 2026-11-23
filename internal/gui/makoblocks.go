@@ -7,6 +7,7 @@ import (
 
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/layoutdoc"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // The right panel's tabs, which the panel, a stack in the default
@@ -17,12 +18,15 @@ const (
 	gitTab    = layoutdoc.BlockGit
 	agentsTab = layoutdoc.BlockAgents
 	forgeTab  = layoutdoc.BlockForge
+
+	// gitPluginBlock is the bundled Git plugin block aliased by mako.git.
+	gitPluginBlock = "plugin:mako-git/panel"
 )
 
 // makoViews are what the window's own blocks draw, by name; layoutdoc
 // declares the blocks themselves.
 var makoViews = map[string]blockDef{
-	layoutdoc.BlockSidebar: {Build: func(m *model, _ map[string]any) blockView {
+	layoutdoc.BlockSidebar: {Build: func(m *model, _ map[string]any, _ blockPlace) blockView {
 		// The space's colour washes the sidebar and the edge beside it
 		// as one.
 		tint := spaceTint(m)
@@ -35,14 +39,19 @@ var makoViews = map[string]blockDef{
 			},
 		}
 	}},
-	layoutdoc.BlockHeader: {Build: func(m *model, _ map[string]any) blockView { return blockView{Body: workspaceHeader(m)} }},
-	filesTab:              {Build: func(m *model, _ map[string]any) blockView { return blockView{Body: filesPanel(m)} }},
-	gitTab:                {Build: func(m *model, _ map[string]any) blockView { return blockView{Body: gitPanel(m)} }},
-	agentsTab:             {Build: func(m *model, _ map[string]any) blockView { return blockView{Body: projectAgentsPanel(m)} }},
+	layoutdoc.BlockHeader: {Build: func(m *model, _ map[string]any, _ blockPlace) blockView { return blockView{Body: workspaceHeader(m)} }},
+	filesTab:              {Chrome: chromePanel, Icon: "folder", Build: func(m *model, _ map[string]any, at blockPlace) blockView { return filesPanelView(m, at) }},
+	gitTab: {Chrome: chromePanel, Icon: "git-branch",
+		Build: func(m *model, _ map[string]any, at blockPlace) blockView {
+			bv := treeBlockView(m, gitPluginBlock, blockOrigin{plugin: "mako-git"}, T("Git"), protocol.ScopeFolder, nil, at)
+			bv.Body = withRootPicker(m, bv.Body)
+			return bv
+		}},
+	agentsTab: {Chrome: chromePanel, Icon: "users", Build: func(m *model, _ map[string]any, at blockPlace) blockView { return projectAgentsPanelView(m, at) }},
 	// The forge's tab is named for the project's forge.
-	forgeTab: {Label: func(m *model) string { return forgeLabel(m.forgeOf()) },
-		Build: func(m *model, _ map[string]any) blockView { return blockView{Body: forgePanel(m)} }},
-	layoutdoc.BlockAvatar: {Build: func(m *model, _ map[string]any) blockView { return blockView{Body: avatarBlockPanel(m)} }},
+	forgeTab: {Chrome: chromePanel, Icon: "git-pull-request", Label: func(m *model) string { return forgeLabel(m.forgeOf()) },
+		Build: func(m *model, _ map[string]any, at blockPlace) blockView { return forgePanelView(m, at) }},
+	layoutdoc.BlockAvatar: {Chrome: chromePanel, Icon: "bot", Build: func(m *model, _ map[string]any, _ blockPlace) blockView { return blockView{Body: avatarBlockPanel(m)} }},
 }
 
 // builtinBlocks is a registry of the window's own blocks.

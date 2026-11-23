@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -38,6 +39,9 @@ type pluginsState struct {
 	// SettingScope is the scope currently picked in Settings ▸ Plugins for
 	// each plugin ID ("" for global default).
 	SettingScope *ggui.StateValue[map[string]string]
+	// blockCache preserves the last BlockUpdate feed and blockForm per
+	// (block, scope) across solo <-> tabbed WinDoc remounts. UI goroutine only.
+	blockCache map[blockCacheKey]*cachedBlockState
 }
 
 // secretStore is where a node keeps its plugins' secrets.
@@ -59,6 +63,7 @@ func newPluginsState() *pluginsState {
 		Later:        ggui.State(map[string]bool{}),
 		Secrets:      ggui.State(secretStore{}),
 		SettingScope: ggui.State(map[string]string{}).WithEqual(maps.Equal[map[string]string]),
+		blockCache:   map[blockCacheKey]*cachedBlockState{},
 	}
 }
 
@@ -90,11 +95,13 @@ func (m *model) setPluginList(pl *protocol.Plugins) {
 		for _, b := range p.GetBlocks() {
 			name, title, id, scope := b.GetName(), b.GetTitle(), p.GetId(), b.GetScope()
 			def := blockDef{
-				Name:  name,
-				Title: title,
-				Scope: scope,
-				Build: func(m *model, props map[string]any) blockView {
-					return blockView{Body: pluginBlock(m, name, id, title, scope, props)}
+				Name:   name,
+				Title:  title,
+				Scope:  scope,
+				Chrome: chromePanel,
+				Icon:   "package",
+				Build: func(m *model, props map[string]any, at blockPlace) blockView {
+					return pluginBlockView(m, name, id, title, scope, props, at)
 				},
 			}
 			if isScoped(scope) {
@@ -116,6 +123,24 @@ func (m *model) pluginOf(id string) *protocol.PluginInfo {
 	return nil
 }
 
+// isBundledPlugin reports whether plugin id is shipped bundled inside Mako.
+func (m *model) isBundledPlugin(id string) bool {
+	if id == "" {
+		return false
+	}
+	if m != nil {
+		if p := m.pluginOf(id); p != nil {
+			return p.GetBundled()
+		}
+	}
+	return strings.HasPrefix(id, "mako-")
+}
+
+// pluginBundledBadge is the compact "Built-in" pill shown for bundled plugins.
+func pluginBundledBadge() ggui.Widget {
+	return pill(T("Built-in"), skin.AccentBright)
+}
+
 // actOnPlugin asks the daemon to act on a plugin for the user, and lists
 // them again; a link the plugin asked to open in answer is opened.
 func (m *model) actOnPlugin(req *protocol.PluginAction) {
@@ -132,8 +157,7 @@ func (m *model) actOnPlugin(req *protocol.PluginAction) {
 		if err != nil {
 			m.connErr(errors.New(errorText(err)))
 		} else {
-			openPluginLink(done.GetOpenUrl())
-			m.showPluginToast(done.GetToast())
+			m.handlePluginDone(done)
 		}
 		m.link.pluginsStale.Store(true)
 		m.link.pollNow()
@@ -154,8 +178,7 @@ func (m *model) blockEvent(block, scope, node, kind, value string, values map[st
 			m.connErr(err)
 			return
 		}
-		openPluginLink(done.GetOpenUrl())
-		m.showPluginToast(done.GetToast())
+		m.handlePluginDone(done)
 	})
 }
 
@@ -206,6 +229,12 @@ func permissionText(p string) string {
 		return T("Ask the decision model short typed questions, with the API keys set in Settings")
 	case "agents:ask":
 		return T("List this node's agents and ask them questions, which runs them and may cost money")
+	case "git:read":
+		return T("Read git status, branches, stashes, and commit history in this node's repositories")
+	case "git:write":
+		return T("Run git commands such as commit, checkout, pull, push, and stash in this node's repositories")
+	case "forge:read":
+		return T("Read pull requests and CI workflow status for this node's repositories")
 	}
 	return p
 }
@@ -341,6 +370,7 @@ func (m *model) removePluginBlock(blockName string) {
 	if !removeNodeAndCollapse(next, leaf.ID) {
 		return
 	}
+	m.evictCachedBlock(blockName)
 	m.commitLayoutDoc(docName, next, "")
 }
 

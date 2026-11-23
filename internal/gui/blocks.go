@@ -21,19 +21,35 @@ import (
 // agent:<session>/<id>, in the same registry, so a document names them
 // all alike.
 
+// blockChrome says whether the layout frames a block with chrome (a tab label
+// when tabbed, a dock header when solo) or draws it bare.
+type blockChrome int
+
+const (
+	chromeBare  blockChrome = iota // sidebar, header: no chrome from the layout
+	chromePanel                    // a tab label when tabbed, a dock header when solo
+)
+
+// blockPlace is where the layout draws a block.
+type blockPlace struct {
+	Solo bool // only child of a stack, or a bare panel block
+}
+
 // blockDef is a registered block.
 type blockDef struct {
 	Name  string
 	Title string // in English, drawn through T
-	Scope string // "", "global", "space", "project", or "session"
+	Scope string // "", "global", "space", "project", "session", or "folder"
 	// Props is the JSON Schema of the block's props: an object schema whose
 	// properties each give a type. A document's props for the block are
 	// checked against it (layoutdoc.CheckProps).
-	Props map[string]any
+	Props  map[string]any
+	Chrome blockChrome
+	Icon   string // dock header / tab glyph; "" none
 	// Label, when set, is the block's name on a stack's tab, read as it
 	// changes; otherwise the tab reads T(Title).
 	Label func(m *model) string
-	Build func(m *model, props map[string]any) blockView
+	Build func(m *model, props map[string]any, at blockPlace) blockView
 }
 
 // blockView is a block as drawn: its body, and, for one a document sizes,
@@ -43,6 +59,23 @@ type blockDef struct {
 type blockView struct {
 	Body ggui.Widget
 	Edge func(line ggui.Widget, vertical bool) ggui.Widget
+	// Tools are the block's header controls. The layout draws them in the dock
+	// header when solo, or as a slim row atop Body when tabbed. nil means none.
+	Tools ggui.Widget
+	// Accessory goes right of Tools: the scope chip, and the provenance badge
+	// for third-party plugins. nil means none.
+	Accessory ggui.Widget
+	// Menu adds items to the header ⋯ menu and to the tab's context menu
+	// (Reload, Pin scope ▸ …).
+	Menu func() []ggui.Widget
+	// TitleInTools: Tools replace the title in the dock header (a plugin's
+	// chrome = "toolbar", e.g. Git's branch dropdown).
+	TitleInTools bool
+
+	// Optional reactive overrides for blocks whose toolbar or chrome arrives
+	// asynchronously (plugin blocks) or depends on active state (files/forge).
+	hasTools       ggui.Readable[bool]
+	titleInToolsOf ggui.Readable[bool]
 }
 
 // blockRegistry holds the blocks by name, in the order registered. The
@@ -66,6 +99,7 @@ func (r *blockRegistry) replaceOf(prefix string, defs []blockDef) bool {
 	want := map[string]blockDef{}
 	for _, d := range defs {
 		if strings.HasPrefix(d.Name, prefix) && layoutdoc.CheckBlockName(d.Name) == nil {
+			d.Chrome = chromePanel
 			want[d.Name] = d
 		}
 	}
@@ -79,7 +113,8 @@ func (r *blockRegistry) replaceOf(prefix string, defs []blockDef) bool {
 		if wantProps == nil {
 			wantProps = layoutdoc.NoProps()
 		}
-		if keep && d.Title == r.defs[name].Title && d.Scope == r.defs[name].Scope && reflect.DeepEqual(wantProps, r.defs[name].Props) {
+		cur := r.defs[name]
+		if keep && d.Title == cur.Title && d.Scope == cur.Scope && d.Chrome == cur.Chrome && d.Icon == cur.Icon && reflect.DeepEqual(wantProps, cur.Props) {
 			delete(want, name)
 			continue
 		}

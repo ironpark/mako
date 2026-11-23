@@ -151,7 +151,8 @@ public  final class WatchBlock extends
   /**
    * <pre>
    * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+   * revision 46).
    * </pre>
    *
    * <code>string scope = 3 [json_name = "scope"];</code>
@@ -164,7 +165,8 @@ public  final class WatchBlock extends
   /**
    * <pre>
    * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+   * revision 46).
    * </pre>
    *
    * <code>string scope = 3 [json_name = "scope"];</code>
@@ -178,7 +180,8 @@ public  final class WatchBlock extends
   /**
    * <pre>
    * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+   * revision 46).
    * </pre>
    *
    * <code>string scope = 3 [json_name = "scope"];</code>
@@ -193,7 +196,8 @@ public  final class WatchBlock extends
   /**
    * <pre>
    * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+   * revision 46).
    * </pre>
    *
    * <code>string scope = 3 [json_name = "scope"];</code>
@@ -205,7 +209,8 @@ public  final class WatchBlock extends
   /**
    * <pre>
    * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+   * revision 46).
    * </pre>
    *
    * <code>string scope = 3 [json_name = "scope"];</code>
@@ -288,6 +293,47 @@ public  final class WatchBlock extends
     checkByteStringIsUtf8(value);
     locale_ = value.toStringUtf8();
 
+  }
+
+  public static final int STANDALONE_FIELD_NUMBER = 5;
+  private boolean standalone_;
+  /**
+   * <pre>
+   * standalone says this viewer displays the block solo rather than as one
+   * tab of a multi-tab stack (revision 46).
+   * </pre>
+   *
+   * <code>bool standalone = 5 [json_name = "standalone"];</code>
+   * @return The standalone.
+   */
+  @java.lang.Override
+  public boolean getStandalone() {
+    return standalone_;
+  }
+  /**
+   * <pre>
+   * standalone says this viewer displays the block solo rather than as one
+   * tab of a multi-tab stack (revision 46).
+   * </pre>
+   *
+   * <code>bool standalone = 5 [json_name = "standalone"];</code>
+   * @param value The standalone to set.
+   */
+  private void setStandalone(boolean value) {
+    
+    standalone_ = value;
+  }
+  /**
+   * <pre>
+   * standalone says this viewer displays the block solo rather than as one
+   * tab of a multi-tab stack (revision 46).
+   * </pre>
+   *
+   * <code>bool standalone = 5 [json_name = "standalone"];</code>
+   */
+  private void clearStandalone() {
+
+    standalone_ = false;
   }
 
   public static dev.ironpark.mako.v2.WatchBlock parseFrom(
@@ -520,7 +566,8 @@ public  final class WatchBlock extends
     /**
      * <pre>
      * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+     * revision 46).
      * </pre>
      *
      * <code>string scope = 3 [json_name = "scope"];</code>
@@ -533,7 +580,8 @@ public  final class WatchBlock extends
     /**
      * <pre>
      * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+     * revision 46).
      * </pre>
      *
      * <code>string scope = 3 [json_name = "scope"];</code>
@@ -547,7 +595,8 @@ public  final class WatchBlock extends
     /**
      * <pre>
      * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+     * revision 46).
      * </pre>
      *
      * <code>string scope = 3 [json_name = "scope"];</code>
@@ -563,7 +612,8 @@ public  final class WatchBlock extends
     /**
      * <pre>
      * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+     * revision 46).
      * </pre>
      *
      * <code>string scope = 3 [json_name = "scope"];</code>
@@ -577,7 +627,8 @@ public  final class WatchBlock extends
     /**
      * <pre>
      * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+     * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+     * revision 46).
      * </pre>
      *
      * <code>string scope = 3 [json_name = "scope"];</code>
@@ -665,6 +716,49 @@ public  final class WatchBlock extends
       return this;
     }
 
+    /**
+     * <pre>
+     * standalone says this viewer displays the block solo rather than as one
+     * tab of a multi-tab stack (revision 46).
+     * </pre>
+     *
+     * <code>bool standalone = 5 [json_name = "standalone"];</code>
+     * @return The standalone.
+     */
+    @java.lang.Override
+    public boolean getStandalone() {
+      return instance.getStandalone();
+    }
+    /**
+     * <pre>
+     * standalone says this viewer displays the block solo rather than as one
+     * tab of a multi-tab stack (revision 46).
+     * </pre>
+     *
+     * <code>bool standalone = 5 [json_name = "standalone"];</code>
+     * @param value The standalone to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStandalone(boolean value) {
+      copyOnWrite();
+      instance.setStandalone(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * standalone says this viewer displays the block solo rather than as one
+     * tab of a multi-tab stack (revision 46).
+     * </pre>
+     *
+     * <code>bool standalone = 5 [json_name = "standalone"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStandalone() {
+      copyOnWrite();
+      instance.clearStandalone();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.WatchBlock)
   }
   @java.lang.Override
@@ -685,10 +779,11 @@ public  final class WatchBlock extends
             "nodeId_",
             "scope_",
             "locale_",
+            "standalone_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

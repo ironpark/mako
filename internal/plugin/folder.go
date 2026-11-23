@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -57,10 +58,25 @@ func openPluginRoot(dir, id string) (*os.Root, error) {
 	return os.OpenRoot(p)
 }
 
+// rootFS wraps an os.Root's fs.FS with Lstat so readBoundedFS refuses symbolic
+// links even when they point inside the folder.
+type rootFS struct {
+	fs.FS
+	root *os.Root
+}
+
+func (r rootFS) Lstat(name string) (fs.FileInfo, error) { return r.root.Lstat(name) }
+
 // walkPlugin calls fn with each file of a plugin's folder read, by its
 // path there, refusing a symbolic link, and a folder too deep.
 func walkPlugin(root *os.Root, fn func(name string, fi fs.FileInfo) error) error {
-	return fs.WalkDir(root.FS(), ".", func(name string, d fs.DirEntry, err error) error {
+	return walkPluginFS(root.FS(), fn)
+}
+
+// walkPluginFS walks a plugin's fs.FS, calling fn for each regular file while
+// refusing symbolic links and directories deeper than maxFolderDepth.
+func walkPluginFS(fsys fs.FS, fn func(name string, fi fs.FileInfo) error) error {
+	return fs.WalkDir(fsys, ".", func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -111,17 +127,28 @@ func fingerprint(dir, id string) string {
 // readVersion reads and checks a plugin's folder: its manifest, of the
 // folder's ID, and its modules, the entry among them.
 func readVersion(dir, id string) (*version, error) {
+	return readVersionDir(dir, id, false)
+}
+
+func readVersionDir(dir, id string, bundled bool) (*version, error) {
 	print := fingerprint(dir, id)
 	root, err := openPluginRoot(dir, id)
 	if err != nil {
 		return nil, err
 	}
 	defer root.Close()
-	data, err := readBounded(root, ManifestName, maxManifest)
+	return readVersionFS(rootFS{FS: root.FS(), root: root}, id, print, bundled)
+}
+
+// readVersionFS reads and validates a plugin's manifest and modules from fsys.
+// When print is empty (e.g. an embedded bundled plugin), v.print is set to the
+// content hash v.sum.
+func readVersionFS(fsys fs.FS, id, print string, bundled bool) (*version, error) {
+	data, err := readBoundedFS(fsys, ManifestName, maxManifest)
 	if err != nil {
 		return nil, err
 	}
-	man, err := ParseManifest(data)
+	man, err := parseManifest(data, bundled)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +157,7 @@ func readVersion(dir, id string) (*version, error) {
 	}
 	v := &version{man: man, src: map[string]string{}, print: print}
 	total := 0
-	err = walkPlugin(root, func(name string, fi fs.FileInfo) error {
+	err = walkPluginFS(fsys, func(name string, fi fs.FileInfo) error {
 		if path.Ext(name) != ".js" || !entryPath.MatchString(name) {
 			return nil
 		}
@@ -141,7 +168,7 @@ func readVersion(dir, id string) (*version, error) {
 		if total > maxSourceBytes {
 			return fmt.Errorf("the modules are over %d MiB", maxSourceBytes>>20)
 		}
-		b, err := readBounded(root, name, maxSourceBytes)
+		b, err := readBoundedFS(fsys, name, maxSourceBytes)
 		if err != nil {
 			return err
 		}
@@ -164,13 +191,75 @@ func readVersion(dir, id string) (*version, error) {
 		fmt.Fprintf(h, "%s\x00%d\x00%s", name, len(v.src[name]), v.src[name])
 	}
 	v.sum = hex.EncodeToString(h.Sum(nil))
+	if v.print == "" {
+		v.print = v.sum
+	}
+	v.order = topoOrderModules(v.src, v.order)
 	return v, nil
 }
 
-// readBounded reads a file of root, refusing a symbolic link, and one
-// over max bytes.
-func readBounded(root *os.Root, name string, max int) ([]byte, error) {
-	fi, err := root.Lstat(name)
+// staticImportRE matches static ES module import/re-export specifiers with
+// relative paths (./ or ../) so modules load after their dependencies in
+// QuickJS's sequential LoadModule pass.
+var staticImportRE = regexp.MustCompile(`(?s)(?:^|[;\n])[ \t]*(?:import|export)\s+(?:[^'";]*?\s+from\s+)?["'](\.\.?/[^"']+)["']`)
+
+func topoOrderModules(src map[string]string, sorted []string) []string {
+	if len(sorted) <= 1 {
+		return sorted
+	}
+	deps := make(map[string][]string, len(sorted))
+	for _, name := range sorted {
+		dir := path.Dir(name)
+		matches := staticImportRE.FindAllStringSubmatch(src[name], -1)
+		for _, m := range matches {
+			spec := m[1]
+			target := path.Clean(path.Join(dir, spec))
+			if _, ok := src[target]; ok && target != name {
+				if !slices.Contains(deps[name], target) {
+					deps[name] = append(deps[name], target)
+				}
+			}
+		}
+		slices.Sort(deps[name])
+	}
+	// Deterministic DFS post-order; cycles fall back cleanly without looping.
+	const (
+		unvisited = 0
+		visiting  = 1
+		visited   = 2
+	)
+	state := make(map[string]int, len(sorted))
+	out := make([]string, 0, len(sorted))
+	var visit func(name string)
+	visit = func(name string) {
+		if state[name] != unvisited {
+			return
+		}
+		state[name] = visiting
+		for _, dep := range deps[name] {
+			visit(dep)
+		}
+		state[name] = visited
+		out = append(out, name)
+	}
+	for _, name := range sorted {
+		visit(name)
+	}
+	return out
+}
+
+// readBoundedFS reads a regular file of fsys up to max bytes, refusing symlinks
+// when fsys supports Lstat.
+func readBoundedFS(fsys fs.FS, name string, max int) ([]byte, error) {
+	var (
+		fi  fs.FileInfo
+		err error
+	)
+	if lfs, ok := fsys.(interface{ Lstat(string) (fs.FileInfo, error) }); ok {
+		fi, err = lfs.Lstat(name)
+	} else {
+		fi, err = fs.Stat(fsys, name)
+	}
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, fmt.Errorf("%s is missing", name)
@@ -180,7 +269,7 @@ func readBounded(root *os.Root, name string, max int) ([]byte, error) {
 	if !fi.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", name)
 	}
-	f, err := root.Open(name)
+	f, err := fsys.Open(name)
 	if err != nil {
 		return nil, err
 	}

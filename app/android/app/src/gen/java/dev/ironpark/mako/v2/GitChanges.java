@@ -28,6 +28,7 @@ public  final class GitChanges extends
     remoteBranches_ = emptyProtobufList();
     operation_ = "";
   }
+  private int bitField0_;
   public static final int ROOT_FIELD_NUMBER = 1;
   private java.lang.String root_;
   /**
@@ -722,6 +723,73 @@ public  final class GitChanges extends
     checkByteStringIsUtf8(value);
     operation_ = value.toStringUtf8();
 
+  }
+
+  public static final int WORKTREE_FIELD_NUMBER = 12;
+  private dev.ironpark.mako.v2.Worktree worktree_;
+  /**
+   * <pre>
+   * the session worktree at path, if any (revision 46)
+   * </pre>
+   *
+   * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+   */
+  @java.lang.Override
+  public boolean hasWorktree() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * the session worktree at path, if any (revision 46)
+   * </pre>
+   *
+   * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Worktree getWorktree() {
+    return worktree_ == null ? dev.ironpark.mako.v2.Worktree.getDefaultInstance() : worktree_;
+  }
+  /**
+   * <pre>
+   * the session worktree at path, if any (revision 46)
+   * </pre>
+   *
+   * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+   */
+  private void setWorktree(dev.ironpark.mako.v2.Worktree value) {
+    java.util.Objects.requireNonNull(value);
+    worktree_ = value;
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <pre>
+   * the session worktree at path, if any (revision 46)
+   * </pre>
+   *
+   * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeWorktree(dev.ironpark.mako.v2.Worktree value) {
+    java.util.Objects.requireNonNull(value);
+    if (worktree_ != null &&
+        worktree_ != dev.ironpark.mako.v2.Worktree.getDefaultInstance()) {
+      worktree_ =
+        dev.ironpark.mako.v2.Worktree.newBuilder(worktree_).mergeFrom(value).buildPartial();
+    } else {
+      worktree_ = value;
+    }
+    bitField0_ |= 0x00000001;
+  }
+  /**
+   * <pre>
+   * the session worktree at path, if any (revision 46)
+   * </pre>
+   *
+   * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+   */
+  private void clearWorktree() {
+    worktree_ = null;
+    bitField0_ = (bitField0_ & ~0x00000001);
   }
 
   public static dev.ironpark.mako.v2.GitChanges parseFrom(
@@ -1549,6 +1617,77 @@ public  final class GitChanges extends
       return this;
     }
 
+    /**
+     * <pre>
+     * the session worktree at path, if any (revision 46)
+     * </pre>
+     *
+     * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+     */
+    @java.lang.Override
+    public boolean hasWorktree() {
+      return instance.hasWorktree();
+    }
+    /**
+     * <pre>
+     * the session worktree at path, if any (revision 46)
+     * </pre>
+     *
+     * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Worktree getWorktree() {
+      return instance.getWorktree();
+    }
+    /**
+     * <pre>
+     * the session worktree at path, if any (revision 46)
+     * </pre>
+     *
+     * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+     */
+    public Builder setWorktree(dev.ironpark.mako.v2.Worktree value) {
+      copyOnWrite();
+      instance.setWorktree(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * the session worktree at path, if any (revision 46)
+     * </pre>
+     *
+     * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+     */
+    public Builder setWorktree(
+        dev.ironpark.mako.v2.Worktree.Builder builderForValue) {
+      copyOnWrite();
+      instance.setWorktree(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * the session worktree at path, if any (revision 46)
+     * </pre>
+     *
+     * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+     */
+    public Builder mergeWorktree(dev.ironpark.mako.v2.Worktree value) {
+      copyOnWrite();
+      instance.mergeWorktree(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * the session worktree at path, if any (revision 46)
+     * </pre>
+     *
+     * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+     */
+    public Builder clearWorktree() {  copyOnWrite();
+      instance.clearWorktree();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.GitChanges)
   }
   @java.lang.Override
@@ -1565,6 +1704,7 @@ public  final class GitChanges extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "root_",
             "branch_",
             "notRepo_",
@@ -1578,11 +1718,12 @@ public  final class GitChanges extends
             dev.ironpark.mako.v2.GitStash.class,
             "remoteBranches_",
             "operation_",
+            "worktree_",
           };
           java.lang.String info =
-              "\u0000\u000b\u0000\u0000\u0001\u000b\u000b\u0000\u0004\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0007\u0004\u001b\u0005\u0208\u0006\u0002\u0007\u0002\b\u021a\t\u001b\n\u021a" +
-              "\u000b\u0208";
+              "\u0000\f\u0000\u0001\u0001\f\f\u0000\u0004\u0000\u0001\u0208\u0002\u0208\u0003\u0007" +
+              "\u0004\u001b\u0005\u0208\u0006\u0002\u0007\u0002\b\u021a\t\u001b\n\u021a\u000b\u0208" +
+              "\f\u1009\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

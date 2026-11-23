@@ -20,8 +20,11 @@ type ScopeContext struct {
 	ProjectID   string   `json:"projectId"`
 	ProjectName string   `json:"projectName"`
 	SessionID   string   `json:"sessionId"`
+	Node        string   `json:"node"`
+	Folder      string   `json:"folder"`
 	Roots       []string `json:"roots"`
 	Locale      string   `json:"locale"`
+	View        View     `json:"view"`
 }
 
 // localeRe validates a safe BCP-47 language tag (e.g. "en", "ko", "ko-KR", "zh-Hans-CN").
@@ -55,7 +58,11 @@ var allowedScopes = []string{
 	protocol.ScopeSpace,
 	protocol.ScopeProject,
 	protocol.ScopeSession,
+	protocol.ScopeFolder,
 }
+
+// maxFolderScopeID bounds the <node>/<base64path> portion of a folder scope key.
+const maxFolderScopeID = 1024
 
 // scopeIDRe bounds a canonical scope key's <id> part: safe ASCII identifier
 // characters (including `:` and `/` used by Mako's repo:<host>/<owner>/<repo>
@@ -82,24 +89,32 @@ func validateScopeID(id string) error {
 }
 
 // parseScopeKey validates a canonical scope key: "" (global), "space:<id>",
-// "project:<id>", or "session:<id>".
+// "project:<id>", "session:<id>", or "folder:<node>/<base64url-nopad(path)>".
 func parseScopeKey(scopeKey string) (kind, id string, err error) {
 	if scopeKey == "" {
 		return protocol.ScopeGlobal, "", nil
 	}
 	kind, id, ok := strings.Cut(scopeKey, ":")
 	if !ok {
-		return "", "", fmt.Errorf("scope %q must be empty or <space|project|session>:<id>", scopeKey)
+		return "", "", fmt.Errorf("scope %q must be empty or <space|project|session|folder>:<id>", scopeKey)
 	}
 	switch kind {
 	case protocol.ScopeSpace, protocol.ScopeProject, protocol.ScopeSession:
+		if err := validateScopeID(id); err != nil {
+			return "", "", fmt.Errorf("scope %q: %w", scopeKey, err)
+		}
+		return kind, id, nil
+	case protocol.ScopeFolder:
+		if len(id) == 0 || len(id) > maxFolderScopeID {
+			return "", "", fmt.Errorf("scope %q: folder scope id must be 1 to %d bytes", scopeKey, maxFolderScopeID)
+		}
+		if _, _, ok := protocol.ParseFolderScope(scopeKey); !ok {
+			return "", "", fmt.Errorf("scope %q is not a canonical folder scope", scopeKey)
+		}
+		return kind, id, nil
 	default:
-		return "", "", fmt.Errorf("scope %q has unknown kind %q (want space, project, or session)", scopeKey, kind)
+		return "", "", fmt.Errorf("scope %q has unknown kind %q (want space, project, session, or folder)", scopeKey, kind)
 	}
-	if err := validateScopeID(id); err != nil {
-		return "", "", fmt.Errorf("scope %q: %w", scopeKey, err)
-	}
-	return kind, id, nil
 }
 
 // instanceKey builds the unique map key for a (blockID, scopeKey) runtime
@@ -140,6 +155,7 @@ func (m *Manager) resolveScope(scopeKey string) ScopeContext {
 		ScopeKey: scopeKey,
 		Roots:    []string{},
 	}
+	var folderNode, folderPath string
 	switch kind {
 	case protocol.ScopeSpace:
 		sc.SpaceID = id
@@ -147,6 +163,13 @@ func (m *Manager) resolveScope(scopeKey string) ScopeContext {
 		sc.ProjectID = id
 	case protocol.ScopeSession:
 		sc.SessionID = id
+	case protocol.ScopeFolder:
+		if node, folder, ok := protocol.ParseFolderScope(scopeKey); ok {
+			folderNode, folderPath = node, folder
+			sc.Node = node
+			sc.Folder = folder
+			sc.Roots = []string{folder}
+		}
 	}
 	if m.cfg.ResolveScope != nil {
 		r := m.cfg.ResolveScope(scopeKey)
@@ -164,6 +187,12 @@ func (m *Manager) resolveScope(scopeKey string) ScopeContext {
 		}
 		if r.SessionID != "" {
 			sc.SessionID = r.SessionID
+		}
+		if r.Node != "" {
+			sc.Node = r.Node
+		}
+		if r.Folder != "" {
+			sc.Folder = r.Folder
 		}
 		if len(r.Roots) > 0 {
 			sc.Roots = slices.Clone(r.Roots)
@@ -184,6 +213,16 @@ func (m *Manager) resolveScope(scopeKey string) ScopeContext {
 			if sc.SessionID == "" {
 				sc.SessionID = id
 			}
+		case protocol.ScopeFolder:
+			if sc.Node == "" {
+				sc.Node = folderNode
+			}
+			if sc.Folder == "" {
+				sc.Folder = folderPath
+			}
+			if len(sc.Roots) == 0 && sc.Folder != "" {
+				sc.Roots = []string{sc.Folder}
+			}
 		}
 	}
 	if sc.Roots == nil {
@@ -198,6 +237,9 @@ func (m *Manager) resolveToolScope(declaredScope string, provided ScopeContext) 
 	decl, err := normalizeScope(declaredScope)
 	if err != nil {
 		return ScopeContext{}, err
+	}
+	if decl == protocol.ScopeFolder {
+		return ScopeContext{}, fmt.Errorf("folder scope is not supported for tools")
 	}
 	var scopeKey string
 	switch decl {

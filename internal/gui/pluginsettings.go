@@ -148,14 +148,17 @@ func pluginCardBody(m *model, p *protocol.PluginInfo) ggui.Widget {
 		toggle = ui.Button(T("Enable"), act(protocol.PluginEnable)).Outline()
 	}
 	buttons := []ggui.Widget{pill(T(stateLabels[p.GetState()]), toneColor(stateTone(p.GetState())))}
-	if p.GetInstalled() {
+	switch {
+	case p.GetBundled():
+		// Bundled plugins ship inside mako: no Remove or Reload actions.
+	case p.GetInstalled():
 		// What it is, and whose, is the package's: there is nothing to
 		// read again by hand.
 		if p.GetUpdate() != "" {
 			buttons = append(buttons, ui.Button(Tf("Update to %s", p.GetUpdate()), func() { m.installPlugin(protocol.UpdateOp, id, "") }).Secondary())
 		}
 		buttons = append(buttons, ui.Button(T("Remove"), func() { m.installPlugin(protocol.RemoveOp, id, "") }).Outline())
-	} else {
+	default:
 		buttons = append(buttons, ui.Button(T("Reload"), act(protocol.PluginReload)).Outline())
 	}
 	if p.GetState() != protocol.PluginBlocked {
@@ -163,15 +166,25 @@ func pluginCardBody(m *model, p *protocol.PluginInfo) ggui.Widget {
 	}
 	origin := muted(widget.Text(Tf("by %s", p.GetPublisher())).Size(12))
 	var originRow ggui.Widget = origin
-	if p.GetInstalled() {
+	switch {
+	case p.GetBundled():
+		originRow = muted(widget.Text(Tf("by %s", p.GetPublisher()) + " · " + T("comes with mako")).Size(12))
+	case p.GetInstalled():
 		originRow = originLine(p.GetPublisher(), pack.Fingerprint(p.GetKey()), p.GetSource(), "")
-	} else if m.storeOpen() {
+	case m.storeOpen():
 		originRow = muted(widget.Text(Tf("by %s · a folder of plugins/, in development", p.GetPublisher())).Size(12))
+	}
+	titleRow := []ggui.Widget{
+		widget.Text(id).Size(13.5).Weight(ggui.WeightMedium),
+		muted(widget.Text(p.GetVersion()).Size(12)),
+	}
+	if p.GetBundled() {
+		titleRow = append(titleRow, pluginBundledBadge())
 	}
 	head := widget.Box(widget.Row(
 		icon("package").Size(18).Color(skin.Muted),
 		widget.Expanded(widget.Column(
-			widget.Row(widget.Text(id).Size(13.5).Weight(ggui.WeightMedium), muted(widget.Text(p.GetVersion()).Size(12))).Gap(8),
+			widget.Row(titleRow...).Gap(8).Align(widget.AlignCenter),
 			originRow,
 		).Gap(3).Stretch()),
 		widget.Row(buttons...).Gap(10).Align(widget.AlignCenter),
@@ -318,6 +331,9 @@ func pluginPermissions(m *model, p *protocol.PluginInfo, act func(string) func()
 			widget.Expanded(widget.Text(permissionText(perm)).Size(12.5)),
 			chip(perm),
 		).Gap(8).Align(widget.AlignCenter))
+	}
+	if p.GetBundled() {
+		return stackedRow(T("Permissions"), T("Included with Mako."), widget.Column(lines...).Gap(6).Stretch())
 	}
 	var buttons []ggui.Widget
 	if len(p.GetAsked()) > 0 {

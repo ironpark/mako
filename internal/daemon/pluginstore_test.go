@@ -75,8 +75,8 @@ func TestPluginStoreOverTheSocket(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ps := list.GetPlugins(); len(ps) == 1 && ps[0].GetInstalled() && ps[0].GetState() == protocol.PluginWaiting &&
-			ps[0].GetKey() == pack.PublicKey(priv) {
+		if p := findPlugin(list.GetPlugins(), "hello"); p != nil && p.GetInstalled() && p.GetState() == protocol.PluginWaiting &&
+			p.GetKey() == pack.PublicKey(priv) {
 			break
 		}
 		select {
@@ -88,7 +88,7 @@ func TestPluginStoreOverTheSocket(t *testing.T) {
 	if _, err := c.InstallPlugin(ctx, &protocol.InstallPlugin{Op: protocol.RemoveOp, Id: "hello"}); err != nil {
 		t.Fatal(err)
 	}
-	if list, _ := c.Plugins(ctx); len(list.GetPlugins()) != 0 {
+	if list, _ := c.Plugins(ctx); findPlugin(list.GetPlugins(), "hello") != nil {
 		t.Fatalf("after removing: %v", list)
 	}
 	// A refusal comes over the socket with its code and what it names,

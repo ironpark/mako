@@ -66,16 +66,36 @@ func (d *Daemon) handleWriteFile(ctx context.Context, stream *transport.Stream, 
 func (d *Daemon) handleGitStatus(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeGitChanges,
 		func(r *protocol.GitStatus) (*protocol.GitChanges, error) {
-			if err := absolute(r.GetPath()); err != nil {
-				return nil, err
-			}
-			if r.GetBase() != "" {
-				return inRepo(ctx, r.GetPath(), func(ctx context.Context) (*protocol.GitChanges, error) {
-					return gitstat.BaseStatus(ctx, r.GetPath(), r.GetBase())
-				})
-			}
-			return gitstat.Status(ctx, r.GetPath())
+			return d.gitStatusLocal(ctx, r)
 		})
+}
+
+func (d *Daemon) gitStatusLocal(ctx context.Context, r *protocol.GitStatus) (*protocol.GitChanges, error) {
+	if err := absolute(r.GetPath()); err != nil {
+		return nil, err
+	}
+	var (
+		ch  *protocol.GitChanges
+		err error
+	)
+	if r.GetBase() != "" {
+		ch, err = inRepo(ctx, r.GetPath(), func(ctx context.Context) (*protocol.GitChanges, error) {
+			return gitstat.BaseStatus(ctx, r.GetPath(), r.GetBase())
+		})
+	} else {
+		ch, err = gitstat.Status(ctx, r.GetPath())
+	}
+	if err != nil {
+		return nil, err
+	}
+	if ch != nil && !ch.GetNotRepo() {
+		if wt := d.localWorktreeAt(r.GetPath()); wt != nil {
+			ch.Worktree = wt
+		} else if ch.GetRoot() != "" {
+			ch.Worktree = d.localWorktreeAt(ch.GetRoot())
+		}
+	}
+	return ch, nil
 }
 
 func (d *Daemon) handleGitDiff(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
@@ -119,46 +139,64 @@ func inRepo[T any](ctx context.Context, root string, work func(context.Context) 
 func (d *Daemon) handleGitLog(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeGitHistory,
 		func(r *protocol.GitLog) (*protocol.GitHistory, error) {
-			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitHistory, error) {
-				return gitstat.Log(ctx, r.GetRoot(), int(r.GetMax()), r.GetKnown())
-			})
+			return d.gitLogLocal(ctx, r)
 		})
+}
+
+func (d *Daemon) gitLogLocal(ctx context.Context, r *protocol.GitLog) (*protocol.GitHistory, error) {
+	return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitHistory, error) {
+		return gitstat.Log(ctx, r.GetRoot(), int(r.GetMax()), r.GetKnown())
+	})
 }
 
 func (d *Daemon) handleGitShow(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeGitCommitInfo,
 		func(r *protocol.GitShow) (*protocol.GitCommitInfo, error) {
-			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitCommitInfo, error) {
-				return gitstat.Show(ctx, r.GetRoot(), r.GetHash())
-			})
+			return d.gitShowLocal(ctx, r)
 		})
+}
+
+func (d *Daemon) gitShowLocal(ctx context.Context, r *protocol.GitShow) (*protocol.GitCommitInfo, error) {
+	return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitCommitInfo, error) {
+		return gitstat.Show(ctx, r.GetRoot(), r.GetHash())
+	})
 }
 
 func (d *Daemon) handleGitRun(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeGitResult,
 		func(r *protocol.GitRun) (*protocol.GitResult, error) {
-			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
-				run := gitstat.Run
-				if r.GetOp() == protocol.GitOpPR {
-					// A pull request is opened through GitHub's CLI.
-					if r.GetWorktree() == nil {
-						return nil, errors.New("no worktree named")
-					}
-					run = func(ctx context.Context, r *protocol.GitRun) (string, error) {
-						return forge.WorktreePR(ctx, r.GetWorktree())
-					}
-				}
-				out, err := run(ctx, r)
-				return &protocol.GitResult{Output: out}, err
-			})
+			return d.gitRunLocal(ctx, r)
 		})
+}
+
+func (d *Daemon) gitRunLocal(ctx context.Context, r *protocol.GitRun) (*protocol.GitResult, error) {
+	return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
+		run := gitstat.Run
+		if r.GetOp() == protocol.GitOpPR {
+			// A pull request is opened through GitHub's CLI.
+			if r.GetWorktree() == nil {
+				return nil, errors.New("no worktree named")
+			}
+			run = func(ctx context.Context, r *protocol.GitRun) (string, error) {
+				return forge.WorktreePR(ctx, r.GetWorktree())
+			}
+		}
+		out, err := run(ctx, r)
+		return &protocol.GitResult{Output: out}, err
+	})
 }
 
 func (d *Daemon) handleGitHubList(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeForgeItems,
 		func(r *protocol.ForgeList) (*protocol.ForgeItems, error) {
-			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.ForgeItems, error) { return forge.List(ctx, r) })
+			return d.forgeListLocal(ctx, r)
 		})
+}
+
+func (d *Daemon) forgeListLocal(ctx context.Context, r *protocol.ForgeList) (*protocol.ForgeItems, error) {
+	return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.ForgeItems, error) {
+		return forge.List(ctx, r)
+	})
 }
 
 func (d *Daemon) handleGitHubView(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {

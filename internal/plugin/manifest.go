@@ -10,6 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/uiblock"
 )
 
@@ -53,12 +54,22 @@ type ToolParamDecl struct {
 	Required    bool
 }
 
+// Block chrome hints declared on [[contributes.block]].
+const (
+	BlockChromeAuto    = "auto"
+	BlockChromeToolbar = "toolbar"
+)
+
+var blockChromes = []string{BlockChromeAuto, BlockChromeToolbar}
+
 // BlockDecl is a block a manifest contributes.
 type BlockDecl struct {
-	ID    string
-	Title string
-	Slots []string
-	Scope string
+	ID     string
+	Title  string
+	Slots  []string
+	Scope  string
+	Chrome string
+	Hidden bool
 }
 
 // CommandDecl is a command a manifest contributes.
@@ -130,10 +141,12 @@ type rawManifest struct {
 	Permissions []string `toml:"permissions"`
 	Contributes struct {
 		Block []struct {
-			ID    string   `toml:"id"`
-			Title string   `toml:"title"`
-			Slots []string `toml:"slots"`
-			Scope string   `toml:"scope"`
+			ID     string   `toml:"id"`
+			Title  string   `toml:"title"`
+			Slots  []string `toml:"slots"`
+			Scope  string   `toml:"scope"`
+			Chrome string   `toml:"chrome"`
+			Hidden bool     `toml:"hidden"`
 		} `toml:"block"`
 		Command []struct {
 			ID    string `toml:"id"`
@@ -164,6 +177,10 @@ type rawManifest struct {
 // know, a value of the wrong type, or anything out of its grammar or
 // bounds is refused, saying what.
 func ParseManifest(data []byte) (*Manifest, error) {
+	return parseManifest(data, false)
+}
+
+func parseManifest(data []byte, bundled bool) (*Manifest, error) {
 	if len(data) > maxManifest {
 		return nil, fmt.Errorf("%s is over %d KiB", ManifestName, maxManifest>>10)
 	}
@@ -183,12 +200,14 @@ func ParseManifest(data []byte) (*Manifest, error) {
 	switch {
 	case !pluginID.MatchString(m.ID):
 		return nil, fmt.Errorf("id %q is not lowercase letters, digits and hyphens", m.ID)
-	case strings.HasPrefix(m.ID, "mako"):
+	case strings.HasPrefix(m.ID, "mako") && (!bundled || !strings.HasPrefix(m.ID, "mako-")):
 		return nil, fmt.Errorf("id %q: IDs starting with mako are mako's own", m.ID)
 	case !semver.MatchString(m.Version):
 		return nil, fmt.Errorf("version %q is not major.minor.patch", m.Version)
 	case !pluginID.MatchString(m.Publisher):
 		return nil, fmt.Errorf("publisher %q is not lowercase letters, digits and hyphens", m.Publisher)
+	case !bundled && m.Publisher == "mako":
+		return nil, fmt.Errorf("publisher %q is mako's own", m.Publisher)
 	case m.API != APIVersion:
 		return nil, fmt.Errorf("api %d is not supported: this mako carries out api %d", m.API, APIVersion)
 	}
@@ -220,7 +239,17 @@ func ParseManifest(data []byte) (*Manifest, error) {
 		if err != nil {
 			return nil, fmt.Errorf("block %s: %w", b.ID, err)
 		}
-		m.Blocks = append(m.Blocks, BlockDecl{ID: b.ID, Title: b.Title, Slots: b.Slots, Scope: scope})
+		chrome := b.Chrome
+		if chrome == "" {
+			chrome = BlockChromeAuto
+		}
+		if !slices.Contains(blockChromes, chrome) {
+			return nil, fmt.Errorf("block %s: chrome %q is not one of %s", b.ID, chrome, strings.Join(blockChromes, ", "))
+		}
+		if b.Hidden && !bundled {
+			return nil, fmt.Errorf("block %s: hidden is only for bundled plugins", b.ID)
+		}
+		m.Blocks = append(m.Blocks, BlockDecl{ID: b.ID, Title: b.Title, Slots: b.Slots, Scope: scope, Chrome: chrome, Hidden: b.Hidden})
 	}
 	if len(raw.Contributes.Command) > maxCommands {
 		return nil, fmt.Errorf("more than %d commands", maxCommands)
@@ -253,6 +282,9 @@ func ParseManifest(data []byte) (*Manifest, error) {
 		scope, err := normalizeScope(tl.Scope)
 		if err != nil {
 			return nil, fmt.Errorf("tool %s: %w", tl.ID, err)
+		}
+		if scope == protocol.ScopeFolder {
+			return nil, fmt.Errorf("tool %s: scope %q is not supported for tools", tl.ID, scope)
 		}
 		if len(tl.Params) > maxToolParams {
 			return nil, fmt.Errorf("tool %s: more than %d params", tl.ID, maxToolParams)

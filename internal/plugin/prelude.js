@@ -324,6 +324,50 @@ function makeContext(ctxJson) {
     },
     cancel: (requestId) => agentsApi.cancel(requestId),
   });
+  const node = raw.node || "";
+  const folder = raw.folder || "";
+  const view = Object.freeze({ standalone: Boolean(raw.view && raw.view.standalone) });
+  const defaultTarget = () => (scopeKey
+    ? { scope: scopeKey }
+    : (node || folder ? { node, path: folder } : {}));
+  const withTarget = (req) => {
+    const r = req || {};
+    return { ...r, target: r.target || defaultTarget() };
+  };
+  const scopedGit = Object.freeze({
+    status: (req) => host.git.status(withTarget(req)),
+    history: (req) => host.git.history(withTarget(req)),
+    showCommit: (req) => host.git.showCommit(
+      typeof req === "string" ? { target: defaultTarget(), hash: req } : withTarget(req),
+    ),
+    watch: (req) => host.git.watch(withTarget(req)),
+    unwatch: (req) => host.git.unwatch(withTarget(req)),
+    run: (req) => host.git.run(withTarget(req)),
+  });
+  const scopedForge = Object.freeze({
+    branchStatus: (req) => host.forge.branchStatus(
+      typeof req === "string" ? { target: defaultTarget(), branch: req } : withTarget(req),
+    ),
+  });
+  const withFolder = (o) => {
+    const r = { ...(o || {}) };
+    if (r.node === undefined || r.node === "") r.node = node;
+    if (r.folder === undefined || r.folder === "") r.folder = folder;
+    return r;
+  };
+  const scopedUi = Object.freeze({
+    openDiff: (o) => host.commands.runCommand({ id: "mako.openDiff", arg: JSON.stringify(withFolder(o)) }),
+    openFile: (o) => {
+      const r = typeof o === "string" ? { path: o } : { ...(o || {}) };
+      if (r.node === undefined || r.node === "") r.node = node;
+      return host.commands.runCommand({ id: "mako.openFile", arg: JSON.stringify(r) });
+    },
+    copy: (text) => host.commands.runCommand({ id: "mako.copyText", arg: String(text ?? "") }),
+    openForge: (o) => host.commands.runCommand({ id: "mako.openForge", arg: JSON.stringify(withFolder(o)) }),
+    createPullRequest: (o) => host.commands.runCommand({ id: "mako.createPullRequest", arg: JSON.stringify(withFolder(o)) }),
+    toast: (msg) => host.commands.runCommand({ id: "mako.toast", arg: String(msg ?? "") }),
+    openUrl: (url) => host.commands.runCommand({ id: "mako.openUrl", arg: String(url ?? "") }),
+  });
   return Object.freeze({
     scope,
     scopeKey,
@@ -332,6 +376,9 @@ function makeContext(ctxJson) {
     projectId: raw.projectId || "",
     projectName: raw.projectName || "",
     sessionId: raw.sessionId || "",
+    node,
+    folder,
+    view,
     roots: Object.freeze(Array.isArray(raw.roots) ? [...raw.roots] : []),
     locale,
     t,
@@ -340,6 +387,9 @@ function makeContext(ctxJson) {
     db: scopedDb,
     datafs: scopedDatafs,
     agents: scopedAgents,
+    git: scopedGit,
+    forge: scopedForge,
+    ui: scopedUi,
   });
 }
 
@@ -398,6 +448,45 @@ const mako = Object.freeze({
     t: (key, params, locale) => translate(key, params, locale),
   }),
 });
+
+function normalizeCheck(v) {
+  if (v === true) return "on";
+  if (v === false) return "off";
+  if (v === null || v === undefined) return "";
+  return String(v);
+}
+
+function normalizeBadge(b) {
+  if (typeof b === "string") return { text: b };
+  const out = { text: String(b?.text ?? "") };
+  if (b?.tone !== undefined && b.tone !== "") out.tone = String(b.tone);
+  if (b?.variant !== undefined && b.variant !== "") out.variant = String(b.variant);
+  if (b?.icon !== undefined && b.icon !== "") out.icon = String(b.icon);
+  return out;
+}
+
+function normalizeBadges(list) {
+  return children(list).map(normalizeBadge);
+}
+
+function normalizeRow(r) {
+  const out = {
+    id: String(r?.id ?? ""),
+    parents: Array.isArray(r?.parents) ? r.parents.map(String) : [],
+    text: String(r?.text ?? ""),
+  };
+  if (r?.detail !== undefined && r.detail !== "") out.detail = String(r.detail);
+  if (r?.meta !== undefined && r.meta !== "") out.meta = String(r.meta);
+  if (Array.isArray(r?.badges) && r.badges.length > 0) out.badges = normalizeBadges(r.badges);
+  if (r?.tone !== undefined && r.tone !== "") out.tone = String(r.tone);
+  if (r?.strong) out.strong = true;
+  if (r?.icon !== undefined && r.icon !== "") out.icon = String(r.icon);
+  return out;
+}
+
+function normalizeRows(list) {
+  return children(list).map(normalizeRow);
+}
 
 // The UI vocabulary. A node is a plain description; its methods set what
 // the options do, and JSON.stringify writes it as the daemon reads it.
@@ -464,6 +553,27 @@ class UiNode {
     this.n.disabled = !!on;
     return this;
   }
+  badges(list) {
+    this.n.badges = normalizeBadges(list);
+    return this;
+  }
+  check(state) {
+    this.n.check = normalizeCheck(state);
+    return this;
+  }
+  onCheck(name, ...args) {
+    this.n.onCheck = [name, ...args];
+    return this;
+  }
+  contextMenu(key, arg) {
+    this.n.contextMenu = String(key ?? "");
+    if (arg !== undefined) this.n.contextArg = String(arg ?? "");
+    return this;
+  }
+  contextArg(arg) {
+    this.n.contextArg = String(arg ?? "");
+    return this;
+  }
   onTap(name, ...args) {
     this.n.onTap = [name, ...args];
     return this;
@@ -499,6 +609,7 @@ const options = [
   "key", "text", "tone", "variant", "weight", "size", "grow", "gap", "columns", "ratio", "fill",
   "icon", "checked", "value", "disabled", "onTap", "onChange", "onSubmit", "onLink",
   "drag", "dragGroup", "onDrop", "dropAccept", "direction", "maxHeight", "placeholder", "labels",
+  "badges", "check", "onCheck", "contextMenu", "contextArg", "rows",
 ];
 
 function node(kind, fields, opts) {
@@ -506,8 +617,14 @@ function node(kind, fields, opts) {
   for (const [k, v] of Object.entries(opts || {})) {
     if (!options.includes(k)) throw new Error(`${k} is not an option of a node`);
     if (v === undefined) continue;
-    if (k === "key" || k === "text" || k === "drag" || k === "dragGroup" || k === "direction" || k === "variant" || k === "value") {
+    if (k === "key" || k === "text" || k === "drag" || k === "dragGroup" || k === "direction" || k === "variant" || k === "value" || k === "contextMenu" || k === "contextArg" || k === "placeholder") {
       n.n[k] = String(v ?? "");
+    } else if (k === "check") {
+      n.n.check = normalizeCheck(v);
+    } else if (k === "badges") {
+      n.n.badges = normalizeBadges(v);
+    } else if (k === "rows") {
+      n.n.rows = normalizeRows(v);
     } else if (k === "labels" || k === "dropAccept") {
       n.n[k] = children(v).map(String);
     } else if (k === "maxHeight" || k === "columns" || k === "ratio") {
@@ -529,6 +646,7 @@ function children(c) {
 const ui = Object.freeze({
   column: (c, o) => node("column", { children: children(c) }, o),
   row: (c, o) => node("row", { children: children(c) }, o),
+  toolbar: (c, o) => node("row", { variant: "toolbar", children: children(c) }, o),
   stack: (c, o) => node("stack", { children: children(c) }, o),
   card: (c, o) => node("card", { children: children(c) }, o),
   scroll: (c, o) => node("scroll", { children: children(c) }, o),
@@ -545,6 +663,24 @@ const ui = Object.freeze({
   treeItem: (label, childrenOrOpts, o) => (Array.isArray(childrenOrOpts)
     ? node("tree_item", { text: String(label ?? ""), children: childrenOrOpts }, o)
     : node("tree_item", { text: String(label ?? "") }, childrenOrOpts)),
+  menu: (face, items, o) => {
+    const base = (face !== null && typeof face === "object")
+      ? {
+          ...(face.text !== undefined ? { text: String(face.text) } : {}),
+          ...(face.icon !== undefined ? { icon: String(face.icon) } : {}),
+          children: children(items),
+        }
+      : { text: String(face ?? ""), children: children(items) };
+    return node("menu", base, o);
+  },
+  contextMenu: (key, items, o) => node("menu", { key: String(key ?? ""), variant: "context", children: children(items) }, o),
+  menuItem: (text, o) => node("menu_item", { text: String(text ?? "") }, o),
+  checkbox: (state, label, o) => {
+    const c = state === undefined || state === null || state === "" ? "off" : normalizeCheck(state);
+    return node("checkbox", { check: c, text: String(label ?? "") }, o);
+  },
+  dialog: (title, items, o) => node("dialog", { text: String(title ?? ""), children: children(items) }, o),
+  dag: (rows, o) => node("dag", { rows: normalizeRows(rows) }, o),
   text: (t, o) => node("text", { text: String(t) }, o),
   icon: (name, o) => node("icon", { icon: String(name) }, o),
   pill: (t, o) => node("pill", { text: String(t) }, o),
@@ -726,6 +862,19 @@ const R = {
     const on = (plugin && plugin.on) || {};
     const h = Object.prototype.hasOwnProperty.call(on, "dbSync") ? on.dbSync : undefined;
     if (typeof h === "function") await h.call(plugin, ev);
+  },
+  async gitDone(json) {
+    const ev = JSON.parse(json);
+    const on = (plugin && plugin.on) || {};
+    const h = Object.prototype.hasOwnProperty.call(on, "gitDone") ? on.gitDone : undefined;
+    if (typeof h !== "function") return;
+    const prevScope = activeScope;
+    activeScope = (ev && typeof ev.scopeKey === "string") ? ev.scopeKey : "";
+    try {
+      await h.call(plugin, ev);
+    } finally {
+      activeScope = prevScope;
+    }
   },
   save(id, scopeKey) {
     const sk = scopeKey || "";

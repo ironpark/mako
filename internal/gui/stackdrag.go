@@ -26,7 +26,9 @@ type stackTabDrag struct {
 // stackTabs draws a KindStack's tab strip identically to panelTabs when idle,
 // while letting the user drag any tab to reorder it within the stack, move it
 // to another stack, or drag it onto a stack's body to split top/bottom.
-func stackTabs(m *model, n *layoutdoc.Node, chosen ggui.Readable[int], choose func(int), labels []string) ggui.Widget {
+// Third-party plugin tabs get a compact package glyph before the label, and
+// each tab carries a right-click context menu.
+func stackTabs(m *model, n *layoutdoc.Node, chosen ggui.Readable[int], choose func(int), labels []string, menus []func() []ggui.Widget) ggui.Widget {
 	return ggui.View(chosen, func(current int) ggui.Widget {
 		cells := make([]ggui.Widget, len(labels))
 		for i, label := range labels {
@@ -36,9 +38,21 @@ func stackTabs(m *model, n *layoutdoc.Node, chosen ggui.Readable[int], choose fu
 			if i == current {
 				fg, line = skin.Fg, skin.AccentBright
 			}
-			btn := ui.ButtonOf(widget.Box(widget.Row(widget.Text(label).Size(13).Color(fg).NoWrap())).Height(headerHeight),
+			var content []ggui.Widget
+			if isThirdPartyPluginBlock(m, child.Block) {
+				content = append(content, icon("package").Size(12).Color(fg))
+			}
+			content = append(content, widget.Text(label).Size(13).Color(fg).NoWrap())
+			btn := ui.ButtonOf(widget.Box(widget.Row(content...).Gap(5).Align(widget.AlignCenter)).Height(headerHeight),
 				func() { choose(idx) }).Ghost().Pad(0, 9).Radius(0).Name(label)
-			var cell ggui.Widget = &underlined{child: btn, color: line}
+			var menuFn func() []ggui.Widget
+			if idx < len(menus) {
+				menuFn = menus[idx]
+			}
+			btnWithMenu := ui.ContextMenuFunc(btn, func() []ggui.Widget {
+				return tabContextMenuItems(m, n, child, menuFn)
+			})
+			var cell ggui.Widget = &underlined{child: btnWithMenu, color: line}
 
 			// Show a crisp vertical accent bar on the left or right side of the
 			// hovered tab while another stack tab is dragged over it.
@@ -151,6 +165,10 @@ func newStackDropZones(m *model, n *layoutdoc.Node) *stackDropZones {
 			if d.BlockID == "" {
 				return false
 			}
+			if n.Kind == layoutdoc.KindBlock {
+				// Bare panel block: reject dropping itself onto itself.
+				return !(d.StackID == "" && d.BlockID == n.ID)
+			}
 			if e == dropCenter {
 				return d.StackID != n.ID
 			}
@@ -261,16 +279,92 @@ func (m *model) commitLayoutDoc(docName string, next *layoutdoc.Doc, revealBlock
 	}
 }
 
+// wrapInStack materializes a KindStack around a bare KindBlock node in doc,
+// transferring the block's Size, Grow, and Collapsible onto the new stack so
+// moveStackBlock and splitStackBlock treat bare panel blocks identically to
+// one-child stacks. If blockID is already a KindStack or already inside a
+// KindStack, that stack is returned unchanged.
+func wrapInStack(doc *layoutdoc.Doc, blockID string) *layoutdoc.Node {
+	if doc == nil || blockID == "" {
+		return nil
+	}
+	path := doc.PathTo(func(n *layoutdoc.Node) bool { return n.ID == blockID })
+	if len(path) < 2 {
+		return nil
+	}
+	parent, blk := path[len(path)-2], path[len(path)-1]
+	if blk.Kind == layoutdoc.KindStack {
+		return blk
+	}
+	if blk.Kind != layoutdoc.KindBlock {
+		return nil
+	}
+	if parent.Kind == layoutdoc.KindStack {
+		return parent
+	}
+	idx := slices.Index(parent.Children, blk)
+	if idx < 0 {
+		return nil
+	}
+	st := &layoutdoc.Node{
+		Kind:        layoutdoc.KindStack,
+		ID:          uniqueLayoutNodeID(doc, blk.ID+"-stack"),
+		Size:        blk.Size,
+		Grow:        blk.Grow,
+		Collapsible: blk.Collapsible,
+		Children:    []*layoutdoc.Node{blk},
+		Active:      0,
+	}
+	blk.Size, blk.Grow, blk.Collapsible = 0, 0, false
+	parent.Children[idx] = st
+	return st
+}
+
+// closeLayoutBlock removes a block node from the active layout document,
+// collapsing any emptied stack or single-child split column, and commits it.
+func (m *model) closeLayoutBlock(id string) {
+	if id == "" {
+		return
+	}
+	docName, doc := m.activeLayoutDoc()
+	var closedBlock string
+	if n := doc.Node(id); n != nil {
+		closedBlock = n.Block
+	}
+	next := doc.Clone()
+	m.syncStackActives(next)
+	if !removeNodeAndCollapse(next, id) {
+		return
+	}
+	if closedBlock != "" {
+		m.evictCachedBlock(closedBlock)
+	}
+	m.commitLayoutDoc(docName, next, "")
+}
+
 // moveStackBlock reorders blockID within fromStackID, or moves it from
 // fromStackID into toStackID at targetIndex (-1 appends). Emptying a split
 // stack automatically collapses its parent column back into a single stack.
+// Bare panel blocks (fromStackID == "" or toStackID naming a KindBlock) are
+// wrapped in a stack lazily before moving.
 func (m *model) moveStackBlock(fromStackID, blockID, toStackID string, targetIndex int) {
 	docName, doc := m.activeLayoutDoc()
 	next := doc.Clone()
 	m.syncStackActives(next)
 
-	from := next.Node(fromStackID)
+	var from *layoutdoc.Node
+	if fromStackID == "" {
+		from = wrapInStack(next, blockID)
+	} else {
+		from = next.Node(fromStackID)
+		if from != nil && from.Kind == layoutdoc.KindBlock {
+			from = wrapInStack(next, from.ID)
+		}
+	}
 	to := next.Node(toStackID)
+	if to != nil && to.Kind == layoutdoc.KindBlock {
+		to = wrapInStack(next, to.ID)
+	}
 	if from == nil || to == nil || from.Kind != layoutdoc.KindStack || to.Kind != layoutdoc.KindStack {
 		return
 	}
@@ -319,14 +413,25 @@ func (m *model) moveStackBlock(fromStackID, blockID, toStackID string, targetInd
 
 // splitStackBlock moves blockID from fromStackID into a new KindStack placed
 // above or below targetStackID inside a vertical column with a draggable
-// horizontal resize divider.
+// horizontal resize divider. Bare panel blocks are lazily wrapped in a stack.
 func (m *model) splitStackBlock(fromStackID, blockID, targetStackID string, above bool) {
 	docName, doc := m.activeLayoutDoc()
 	next := doc.Clone()
 	m.syncStackActives(next)
 
-	from := next.Node(fromStackID)
+	var from *layoutdoc.Node
+	if fromStackID == "" {
+		from = wrapInStack(next, blockID)
+	} else {
+		from = next.Node(fromStackID)
+		if from != nil && from.Kind == layoutdoc.KindBlock {
+			from = wrapInStack(next, from.ID)
+		}
+	}
 	target := next.Node(targetStackID)
+	if target != nil && target.Kind == layoutdoc.KindBlock {
+		target = wrapInStack(next, target.ID)
+	}
 	if from == nil || target == nil || from.Kind != layoutdoc.KindStack || target.Kind != layoutdoc.KindStack {
 		return
 	}

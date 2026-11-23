@@ -13,9 +13,12 @@ const (
 	PermDbSync         = "db:sync"
 	PermDecision       = "decision"
 	PermExec           = "exec"
+	PermForgeRead      = "forge:read"
 	PermFsData         = "fs:data"
 	PermFsProject      = "fs:project"
 	PermFsProjectWrite = "fs:project:write"
+	PermGitRead        = "git:read"
+	PermGitWrite       = "git:write"
 	PermLayoutWrite    = "layout:write"
 	PermNet            = "net"
 	PermSecrets        = "secrets"
@@ -25,11 +28,38 @@ const (
 )
 
 // Permissions are those a manifest may ask for, by the names above.
-var Permissions = []string{PermAgentsAsk, PermDb, PermDbSync, PermDecision, PermExec, PermFsData, PermFsProject, PermFsProjectWrite, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
+var Permissions = []string{PermAgentsAsk, PermDb, PermDbSync, PermDecision, PermExec, PermForgeRead, PermFsData, PermFsProject, PermFsProjectWrite, PermGitRead, PermGitWrite, PermLayoutWrite, PermNet, PermSecrets, PermSessionsRead, PermSessionsWrite, PermStorage}
 
 // Handler carries out the Host API's methods that are available; Dispatch
 // calls one only once the caller's permission for it is checked.
 type Handler interface {
+	// GitStatus carries out git.status.
+	// Status reads the working tree changes, branches, stashes, and operation
+	// state of a repository.
+	GitStatus(ctx context.Context, req *GitServiceStatusRequest) (*GitServiceStatusResponse, error)
+	// GitHistory carries out git.history.
+	// History lists recent commits of a repository, skipping the commit list
+	// when the repository fingerprint matches known.
+	GitHistory(ctx context.Context, req *GitServiceHistoryRequest) (*GitServiceHistoryResponse, error)
+	// GitShowCommit carries out git.showCommit.
+	// ShowCommit reads one commit's metadata and changed files.
+	GitShowCommit(ctx context.Context, req *GitServiceShowCommitRequest) (*GitServiceShowCommitResponse, error)
+	// GitWatch carries out git.watch.
+	// Watch subscribes the calling block instance to reloads whenever the
+	// target repository changes.
+	GitWatch(ctx context.Context, req *GitServiceWatchRequest) (*GitServiceWatchResponse, error)
+	// GitUnwatch carries out git.unwatch.
+	// Unwatch stops watching the target repository for the calling block
+	// instance.
+	GitUnwatch(ctx context.Context, req *GitServiceUnwatchRequest) (*GitServiceUnwatchResponse, error)
+	// GitRun carries out git.run.
+	// Run executes a mutating git operation asynchronously in answer to a user
+	// gesture; the outcome arrives at on.gitDone.
+	GitRun(ctx context.Context, req *GitServiceRunRequest) (*GitServiceRunResponse, error)
+	// ForgeBranchStatus carries out forge.branchStatus.
+	// BranchStatus returns the pull request and CI runs of a branch, as the
+	// Git panel's forge line shows them.
+	ForgeBranchStatus(ctx context.Context, req *ForgeServiceBranchStatusRequest) (*ForgeServiceBranchStatusResponse, error)
 	// LogWrite carries out log.write.
 	// Write puts a line in the daemon's log.
 	LogWrite(ctx context.Context, req *WriteRequest) (*WriteResponse, error)
@@ -210,6 +240,13 @@ type Handler interface {
 // Methods are the Host API's methods, as the bindings name them, in the
 // schema's order.
 var Methods = []Method{
+	{Name: "git.status", Permission: PermGitRead},
+	{Name: "git.history", Permission: PermGitRead},
+	{Name: "git.showCommit", Permission: PermGitRead},
+	{Name: "git.watch", Permission: PermGitRead},
+	{Name: "git.unwatch", Permission: PermGitRead},
+	{Name: "git.run", Permission: PermGitWrite},
+	{Name: "forge.branchStatus", Permission: PermForgeRead},
 	{Name: "log.write", Permission: PermNone},
 	{Name: "settings.getSetting", Permission: PermNone},
 	{Name: "settings.listSettings", Permission: PermNone},
@@ -266,6 +303,41 @@ var Methods = []Method{
 // the request.
 func Dispatch(ctx context.Context, grants Grants, h Handler, name string, req []byte) ([]byte, error) {
 	switch name {
+	case "git.status":
+		if !grants.Has(PermGitRead) {
+			return nil, &DeniedError{Method: name, Permission: PermGitRead}
+		}
+		return call(ctx, req, new(GitServiceStatusRequest), h.GitStatus)
+	case "git.history":
+		if !grants.Has(PermGitRead) {
+			return nil, &DeniedError{Method: name, Permission: PermGitRead}
+		}
+		return call(ctx, req, new(GitServiceHistoryRequest), h.GitHistory)
+	case "git.showCommit":
+		if !grants.Has(PermGitRead) {
+			return nil, &DeniedError{Method: name, Permission: PermGitRead}
+		}
+		return call(ctx, req, new(GitServiceShowCommitRequest), h.GitShowCommit)
+	case "git.watch":
+		if !grants.Has(PermGitRead) {
+			return nil, &DeniedError{Method: name, Permission: PermGitRead}
+		}
+		return call(ctx, req, new(GitServiceWatchRequest), h.GitWatch)
+	case "git.unwatch":
+		if !grants.Has(PermGitRead) {
+			return nil, &DeniedError{Method: name, Permission: PermGitRead}
+		}
+		return call(ctx, req, new(GitServiceUnwatchRequest), h.GitUnwatch)
+	case "git.run":
+		if !grants.Has(PermGitWrite) {
+			return nil, &DeniedError{Method: name, Permission: PermGitWrite}
+		}
+		return call(ctx, req, new(GitServiceRunRequest), h.GitRun)
+	case "forge.branchStatus":
+		if !grants.Has(PermForgeRead) {
+			return nil, &DeniedError{Method: name, Permission: PermForgeRead}
+		}
+		return call(ctx, req, new(ForgeServiceBranchStatusRequest), h.ForgeBranchStatus)
 	case "log.write":
 		return call(ctx, req, new(WriteRequest), h.LogWrite)
 	case "settings.getSetting":

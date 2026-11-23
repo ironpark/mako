@@ -42,7 +42,12 @@ The daemon reads the folder again whenever a file in it changes, as in
 development (see [Developing one](#developing-one)). A folder is written
 there by hand, or by the daemon installing a signed package from a
 registry ([Installing](#installing-from-a-registry)); the daemon runs both
-alike, and tells them apart by what it installed.
+alike, and tells them apart by what it installed. First-party plugins
+shipped inside mako itself (such as `mako-git`, which backs the built-in
+`mako.git` panel; revision 46) are loaded from an embedded bundle using
+the reserved `mako-` ID prefix and `publisher = "mako"`; their declared
+permissions are granted automatically (while honoring user disablement)
+and they cannot be uninstalled or replaced by registry packages.
 
 [examples/plugins/ci-status](../examples/plugins/ci-status) is a complete
 plugin: a block of a GitHub repository's latest Actions runs, kept in its
@@ -64,7 +69,8 @@ permissions = ["net:api.github.com", "storage", "sessions:read"]
 id = "ci"                 # registered as plugin:ci-status/ci
 title = "CI"
 slots = ["right", "bottom"]   # where a layout might place it: left, right, top, bottom
-# scope = "project"       # optional: global (default), space, project, or session
+# scope = "project"       # optional: global (default), space, project, session, or folder
+# chrome = "auto"         # optional: "auto" (default) or "toolbar" (revision 46)
 
 [[contributes.command]]
 id = "rerun"
@@ -89,16 +95,16 @@ Plugins and in its blocks' places.
 
 | Key | |
 |---|---|
-| `id` | Lowercase letters, digits and inner hyphens, at most 64; not starting with `mako`. It must be the folder's name. |
+| `id` | Lowercase letters, digits and inner hyphens, at most 64; not starting with `mako` (`mako-` is reserved for bundled first-party plugins). It must be the folder's name. |
 | `version` | `major.minor.patch`, with an optional `-pre` part. |
-| `publisher` | As `id`. |
+| `publisher` | As `id` (`"mako"` is reserved for bundled first-party plugins). |
 | `api` | 1. |
 | `entry` | A relative path to a `.js` file in the folder: no `..`, no leading `/` or `./`, no backslash. |
 | `permissions` | At most 16; see [Permissions](#permissions). |
-| `contributes.block` | At most 16: `id` (lowercase letters, digits, hyphens, at most 32), `title` (at most 80 characters), `slots`, and optional `scope` (`global` default, `space`, `project`, or `session`; see [Scopes](#scopes)). |
+| `contributes.block` | At most 16: `id` (lowercase letters, digits, hyphens, at most 32), `title` (at most 80 characters), `slots`, optional `scope` (`global` default, `space`, `project`, `session`, or `folder`; see [Scopes](#scopes)), optional `chrome` (`"auto"` default, or `"toolbar"` so a leading `ui.toolbar` replaces the solo dock header title; revision 46), and optional `hidden = true` (bundled first-party plugins only, omitting the block from catalogs when placed via a `mako.*` alias). |
 | `contributes.command` | At most 32: `id`, `title`. |
-| `contributes.tool` | At most 16: `id`, `description` (at most 240 characters), optional `scope` (`global` default, `space`, `project`, or `session`), and optional `params` map (`[contributes.tool.params]` with `type` `string`/`number`/`boolean`, `description`, `required`, at most 16). Exposed to running agents via Mako's built-in MCP server as `plugin_<id>_<tool>`. |
-| `contributes.settings` | At most 32, by key (lowercase letters, digits, `_`): `type` (`string`, `secret`, `boolean`, `number`, `select`), `label`, `description`, `options` (a select's, and only a select's), `default` (of the type; none for a secret), and optional `scope` (`global` default, `space`, `project`, or `session`). A secret's value is kept in the system's keychain ([Secrets](#secrets)), at most 2 048 bytes. |
+| `contributes.tool` | At most 16: `id`, `description` (at most 240 characters), optional `scope` (`global` default, `space`, `project`, or `session`; `folder` is not supported for tools), and optional `params` map (`[contributes.tool.params]` with `type` `string`/`number`/`boolean`, `description`, `required`, at most 16). Exposed to running agents via Mako's built-in MCP server as `plugin_<id>_<tool>`. |
+| `contributes.settings` | At most 32, by key (lowercase letters, digits, `_`): `type` (`string`, `secret`, `boolean`, `number`, `select`), `label`, `description`, `options` (a select's, and only a select's), `default` (of the type; none for a secret), and optional `scope` (`global` default, `space`, `project`, `session`, or `folder`). A secret's value is kept in the system's keychain ([Secrets](#secrets)), at most 2 048 bytes. |
 
 Titles, labels and options may not hold control characters or the Unicode
 marks that reorder or hide text.
@@ -166,9 +172,9 @@ point your editor at it.
 
 ## Scopes
 
-Protocol revision 42 introduces four plugin scopes so blocks, MCP tools,
-settings, and storage can be isolated per workspace target rather than sharing
-one global instance:
+Protocol revision 42 introduces workspace scopes (extended with `folder` in
+revision 46) so blocks, MCP tools, settings, and storage can be isolated per
+workspace target rather than sharing one global instance:
 
 | Scope | Canonical `scopeKey` | Isolated per |
 |---|---|---|
@@ -176,10 +182,12 @@ one global instance:
 | `space` | `space:<spaceId>` | A workspace space. |
 | `project` | `project:<projectId>` | A project (for example, one Kanban board per project). |
 | `session` | `session:<sessionId>` | A single running agent or terminal session. |
+| `folder` (rev 46) | `folder:<node>/<base64url-nopad(path)>` | A single folder (work tree or directory) on one node (`<node>` is `local` for the local node or a peer node ID). Supported on blocks and settings, not tools. |
 
-Canonical scope IDs must be 1 to 128 safe ASCII identifier characters
-(`[A-Za-z0-9_][A-Za-z0-9._-]{0,127}`, without `..`); invalid scope keys are
-refused everywhere.
+Canonical scope IDs for `space`, `project`, and `session` must be 1 to 256 safe
+ASCII identifier characters (`[A-Za-z0-9_][A-Za-z0-9._:/+-]{0,255}`, without
+`..`); `folder` scope IDs (`<node>/<base64url-nopad(path)>`) may be up to 1 024
+bytes. Invalid scope keys are refused everywhere.
 
 ### Manifest declarations
 
@@ -207,14 +215,19 @@ tool handlers `(args, ctx)` receive a frozen `ScopeContext`:
 
 | Field / helper | Description |
 |---|---|
-| `ctx.scope` | `"global"`, `"space"`, `"project"`, or `"session"`. |
-| `ctx.scopeKey` | Canonical scope key (`""`, `"space:<id>"`, `"project:<id>"`, or `"session:<id>"`). |
+| `ctx.scope` | `"global"`, `"space"`, `"project"`, `"session"`, or `"folder"`. |
+| `ctx.scopeKey` | Canonical scope key (`""`, `"space:<id>"`, `"project:<id>"`, `"session:<id>"`, or `"folder:<node>/<b64path>"`). |
 | `ctx.spaceId`, `ctx.spaceName` | Resolved space ID and human-readable name (when applicable). |
 | `ctx.projectId`, `ctx.projectName` | Resolved project ID and human-readable name (when applicable). |
-| `ctx.roots` | Read-only array of project root directories on this node. |
+| `ctx.roots` | Read-only array of project root directories on this node (for `folder` scope, `[ctx.folder]`). |
 | `ctx.sessionId` | Resolved session ID (when applicable). |
+| `ctx.node`, `ctx.folder` | Resolved node ID (or `"local"`) and absolute folder path for `folder`-scoped calls (revision 46). |
+| `ctx.view` | Frozen `{ standalone: boolean }` (revision 46). `true` when every active viewer displays the block solo (AND across viewers) rather than as one tab of a multi-tab stack; re-renders automatically when the aggregate flips. Combine with `ui.split(..., { direction: "auto" })` to adapt layout to panel width. |
 | `ctx.storage` | Bound storage helper (`getItem(key)`, `setItem(key, value)`, `deleteItem(key)`, `listKeys(prefix?)`) auto-forwarding `{ scope: ctx.scopeKey }`. Scoped keys are isolated under `@scope/<scopeKey>/<key>` and share the plugin's storage quota; raw `@scope/` keys are refused. |
 | `ctx.settings` | Bound settings helper (`getSetting(key)`, `listSettings()`) auto-forwarding `{ scope: ctx.scopeKey }`. |
+| `ctx.db`, `ctx.datafs`, `ctx.agents` | Scoped helpers for SQLite (`query`, `exec`, `batch`, `stats`, `syncEnable`, `syncPut`, `syncDelete`), private files (`read`, `write`, `list`, `stat`, `mkdir`, `delete`, `move`, `stats`), and agent asks (`list`, `ask`, `cancel`). |
+| `ctx.git`, `ctx.forge` | Scoped Git (`status`, `history`, `showCommit`, `watch`, `unwatch`, `run`) and Forge (`branchStatus`) helpers auto-filling `target` from `ctx.scopeKey` (or `{ node, path }`) (revision 46). |
+| `ctx.ui` | Window-intent helpers (`openDiff`, `openFile`, `copy`, `openForge`, `createPullRequest`, `toast`, `openUrl`) forwarding gesture-gated `commands.runCommand` calls with `ctx.node`/`ctx.folder` filled by default (revision 46). |
 
 Inside a block's `on` event handlers, call `mako.blocks.context(blockId)` to
 retrieve the active `ScopeContext`. `mako.blocks.state(id, scopeKey?)`,
@@ -273,15 +286,26 @@ Tool arguments can never override or specify another scope:
 ### Follow / Pin, empty-scope state, and settings UI
 
 - **Follow vs. Pin (Desktop & Mobile)**: A scoped block follows the window's
-  active space, project, or session by default and automatically re-subscribes
-  when you switch context. Click the scope chip in the block frame header to
-  **Pin** that block instance to a specific space, project, or session (stored
-  as `"scope"` in that layout node's `props`) or switch back to **Follow
-  active**. On Android, tapping the scope chip in the block header opens a menu
-  to switch targets on that computer.
-- **Empty-scope behavior**: When a `space`, `project`, or `session` block is in
-  Follow mode and no matching target is currently active, the window (and
-  Android app) does not open a block stream; instead it renders a native
+  active space, project, session, or folder by default and automatically
+  re-subscribes when you switch context. Click the scope chip in the block's
+  header (or use *Pin scope ▸* in the header `⋯` / tab context menu) to
+  **Pin** that block instance to a specific target (stored as `"scope"` in that
+  layout node's `props`) or switch back to **Follow active**. On Android,
+  tapping the scope chip in the block header opens a menu to switch targets on
+  that computer.
+- **Standalone panel chrome & toolbars (revision 46)**: When a plugin block is
+  drawn inside a window layout, the layout provides one header row — either a
+  dock header when solo (a bare panel block or a one-child stack) or a tab strip
+  plus optional slim tools row when tabbed — with third-party provenance shown
+  in the header accessory and tab. If the tree root's first child is a `row`
+  with `variant: "toolbar"` (`ui.toolbar(...)`), the window lifts it into that
+  header; setting `chrome = "toolbar"` on `[[contributes.block]]` lets the
+  lifted toolbar replace the title text in the solo dock header. `ctx.view.standalone`
+  reflects whether all active viewers of that `(block, scope)` instance display
+  it solo (AND aggregation across viewers).
+- **Empty-scope behavior**: When a `space`, `project`, `session`, or `folder`
+  block is in Follow mode and no matching target is currently active, the window
+  (and Android app) does not open a block stream; instead it renders a native
   placeholder prompting you to select or pin a target.
 - **Settings scope selector & CLI**: In **Settings ▸ Plugins**, any plugin with
   scoped settings shows a scope selector (**Global default** plus available
@@ -300,16 +324,16 @@ Tool arguments can never override or specify another scope:
 
 | Kind | Builder | |
 |---|---|---|
-| `column`, `row`, `stack` | `ui.column(children, opts)` | Children one over another, side by side, or over each other. A child with `grow` shares the room left. Set `fill: true` on a root `column`, `row`, or `split` to skip outer auto-scroll and let inner `ui.scroll(..., { grow: 1 })` panes scroll independently. |
+| `column`, `row`, `stack` | `ui.column(children, opts)`, `ui.row(children, opts)`, `ui.toolbar(children, opts)`, `ui.stack(children, opts)` | Children one over another, side by side, or over each other. A child with `grow` shares the room left. Set `fill: true` on a root `column`, `row`, or `split` to skip outer auto-scroll and let inner `ui.scroll(..., { grow: 1 })` panes scroll independently. `row` supports `variant: "toolbar"` (`ui.toolbar`, revision 46): lifted into the window's panel chrome when it is the root's first child, or drawn as a compact inline toolbar elsewhere. |
 | `card` | `ui.card(children, opts)` | A bordered surface container for grouping items (such as a Kanban card or summary tile); supports `variant` (`primary`, `secondary`, `outline`, `ghost`, `danger`, `soft`). |
 | `scroll` | `ui.scroll(children, opts)` | Scrollable container: `direction` (`vertical` default, or `horizontal`), `maxHeight` (px, up to 4000) for vertical scroll areas, and `variant: "follow"` to keep the scroll pinned to the end (revision 45). |
 | `wrap` | `ui.wrap(children, opts)` | Flex-wrap container that flows children onto multiple lines with `gap`. |
 | `grid` | `ui.grid(columns, children, opts)` | N-column grid (`columns` 1 to 6, `gap`). |
-| `split` | `ui.split(first, second, opts)` | Resizable 2-pane split container: `direction` (`horizontal` default, or `vertical`), `ratio` (0.1 to 0.9, default 0.5), `fill` when at root, and exactly 2 children. |
+| `split` | `ui.split(first, second, opts)` | Resizable 2-pane split container: `direction` (`horizontal` default, `vertical`, or `auto` — horizontal at ≥ 640 px and vertical below, revision 46), `ratio` (0.1 to 0.9, default 0.5), `fill` when at root, and exactly 2 children. |
 | `collapsible` | `ui.collapsible(title, children, opts)` | Disclosure/accordion section: `text` (title), `icon`, `tone`, `checked` (initially expanded), optional `onChange` (receives boolean), and nested children. |
 | `breadcrumb` | `ui.breadcrumb(segments, opts)` | Clickable path trail (`options`: segment labels); `onChange` fires with the clicked segment's 0-based index as a decimal string (`"0"`, `"1"`, ...). |
 | `tree` | `ui.tree(items, opts)` | Native hierarchical tree container holding `tree_item` children. |
-| `tree_item` | `ui.treeItem(label, [children], opts)` | Hierarchical tree node inside `tree` or `tree_item`: `text` (primary label), `value` (optional secondary/meta text), `icon`, `tone`, `variant` (`badge` applies tone to icon only and renders `value` as a rounded badge, revision 45), `checked` (expanded/selected state), `onTap`, optional `onChange` (boolean expand/collapse), `drag`, `dragGroup`, `onDrop`, `dropAccept`, and optional nested `tree_item` children. |
+| `tree_item` | `ui.treeItem(label, [children], opts)` | Hierarchical tree node inside `tree` or `tree_item`: `text` (primary label), `value` (optional secondary/meta text), `icon`, `tone`, `variant` (`badge` applies tone to icon only and renders `value` as a rounded badge, revision 45), `checked` (expanded/selected state), `check` (`"on"`, `"off"`, `"mixed"`, revision 46) with `onCheck` (fires `"on"` or `"off"`), `badges`, `contextMenu`/`contextArg`, `onTap`, optional `onChange` (boolean expand/collapse), `drag`, `dragGroup`, `onDrop`, `dropAccept`, and optional nested `tree_item` children. |
 | `list` | `ui.list(items, (item, i) => node, opts)` | A column of rows; a row that sends a tap lights up under the pointer, as the window's lists do. |
 | `table` | `ui.table(headers, rows, opts)` | Structured rows with optional header columns (`labels`). |
 | `text` | `ui.text(text, opts)` | `weight` (`medium`, `semibold`), `size` (`small`, `large`), `tone`. |
@@ -328,12 +352,20 @@ Tool arguments can never override or specify another scope:
 | `divider` | `ui.divider(opts)` | A hairline. |
 | `chart` | `ui.chart(type, series, opts)` | `type` `line`, `bar`, `sparkline` (1 to 4 series of up to 200 finite numbers, 600 in all), or `donut` / `pie` (revision 44: 1 series of 1 to 16 non-negative values with matching `opts.labels`); `opts.caption` titles the chart. A series's colour is its `tone`, or the theme's chart colours in order. It sends no messages. |
 | `graph` | `ui.graph(nodes, edges, opts)` | Declarative interactive node-edge graph canvas (revision 44): up to 120 nodes (`{id, label, group, tone, subtitle, weight}`) and 400 edges (`{from, to, label, tone, dashed}`), `value` for the focused/selected node ID, optional `maxHeight` (120 to 1200 px), `caption`, and `onChange` firing with the clicked node ID. |
+| `menu` | `ui.menu(face, items, opts)`, `ui.contextMenu(key, items, opts)` | Dropdown menu (`face` is a label string or `{text, icon}`, `variant`: `""`, `"ghost"`, or `"outline"`) or non-rendered context-menu declaration (`variant: "context"`, unique `key` across the tree; revision 46). Children must be `menu_item`, `divider`, or nested `menu` (max nesting depth 2). Sends no messages itself. |
+| `menu_item` | `ui.menuItem(text, opts)` | Action entry inside a `menu` (revision 46): `text`, optional `icon`, `tone` (`"danger"`), `disabled`, `checked`, and `onTap`. When opened as a context menu, the opener's `contextArg` (or a `dag` row's `id`) is appended as the last argument to `onTap`. |
+| `checkbox` | `ui.checkbox(state, label, opts)` | Tri-state checkbox (revision 46): `check` (`"on"`, `"off"`, `"mixed"`, or boolean), `text` label, `disabled`; `onChange` fires with `"on"` or `"off"`. |
+| `dialog` | `ui.dialog(title, children, opts)` | Modal dialog (revision 46): `text` title, optional `variant: "danger"`, children (body text, inputs, buttons). At most one per tree; `onChange` fires with `"dismiss"` on Escape or close, and form values ride with button taps. Third-party plugin dialogs display a `<plugin id> asks` footer. |
+| `dag` | `ui.dag(rows, opts)` | Virtualized commit/DAG graph (revision 46): up to 1 000 data-driven `rows` (`{id, parents, text, detail?, meta?, badges?, tone?, strong?, icon?}`, ≤ 8 parents, ≤ 6 badges per row, unique `id` ≤ 64 chars, `text`/`detail` ≤ 320 chars, `meta` ≤ 128 chars), `value` (selected row ID), optional `contextMenu` (passes row `id` as `contextArg`), `maxHeight` (up to 4 000 px); `onChange` fires with the clicked row's `id`. |
 
-Options (`opts`, or the node's methods of the same names): `key`, `tone`,
-`variant`, `weight`, `size`, `grow`, `gap`, `columns`, `ratio`, `fill`,
-`icon`, `checked`, `value`, `disabled`, `onTap`, `onChange`, `onSubmit`,
-`onLink`, `drag`, `dragGroup`, `onDrop`, `dropAccept`, `direction`,
-`maxHeight`, `placeholder`, `caption`, and a chart's or table's `labels`.
+Options (`opts`, or the node's methods of the same names): `key`, `text`,
+`tone`, `variant`, `weight`, `size`, `grow`, `gap`, `columns`, `ratio`, `fill`,
+`icon`, `checked`, `value`, `disabled`, `badges` (up to 8 `{text, tone?, variant?, icon?}` trailing tags with `variant` in `soft`/`solid`/`outline`/`mono` and text ≤ 32 runes; `.badges([...])`),
+`check` (`.check(state)`), `onCheck` (`.onCheck(name, ...args)`),
+`contextMenu` (`.contextMenu(key, arg?)`), `contextArg` (at most 256 chars; `.contextArg(arg)`),
+`rows`, `onTap`, `onChange`, `onSubmit`, `onLink`, `drag`, `dragGroup`,
+`onDrop`, `dropAccept`, `direction`, `maxHeight`, `placeholder`, `caption`, and
+a chart's or table's `labels`.
 
 ### Localization (`mako.i18n`, `ctx.locale`, `ctx.t`)
 
@@ -422,7 +454,7 @@ plugin lacks the permission. The schema, with every field, is
 | `sessions.subscribe({events})` | `sessions:read` | `{events}`: has the plugin told of events of those kinds, by its default export's `on`. |
 | `sessions.unsubscribe({events})` | `sessions:read` | `{events}` left; none named stops them all. |
 | `http.fetch({url, method, headers, body})` | `net:<host>` | `{status, headers, body}`; see [Permissions](#permissions). |
-| `commands.runCommand({id, arg})` | none | `mako.openUrl` with an http(s) link opens it in the browser, and `mako.toast` with a short message (at most 240 bytes) shows a transient notice in the window or app — both only in answer to a user's tap, event or command. |
+| `commands.runCommand({id, arg})` | none | Runs a window intent command: `mako.openUrl` (http/https URL), `mako.toast` (notice ≤ 240 runes), and (revision 46) `mako.copyText` (UTF-8 text ≤ 64 KiB), `mako.openDiff`, `mako.openFile`, `mako.openForge`, and `mako.createPullRequest`. All except `mako.toast` require a user gesture (at most 8 intents per gesture); prelude exposes `ctx.ui.*` helpers. See [Window intents](#window-intents). |
 | `messages.sendMessage({sessionId, text})` | `sessions:write` | `{id}`: leaves a message for a session's agent, headed as the plugin's; see [Agents](#agents). |
 | `messages.startAgent({agent, profile, project, root, prompt, name})` | `sessions:write` | `{requestId, asked}`: asks to start an agent; its outcome comes to `on.agentStarted` or `on.agentRefused`. |
 | `messages.stopAgent({sessionId})` | `sessions:write` | Stops an agent the plugin started. |
@@ -441,6 +473,13 @@ plugin lacks the permission. The schema, with every field, is
 | `agents.listAgents()` | `agents:ask` | `{agents}`: lists this node's agents and profiles with `installed`, `askable`, `reason`, and `alwaysAllowed`. Prelude exposes `mako.agents.list()`. |
 | `agents.askAgent({agent, profile, project, root, prompt, format, jsonSchema, timeoutMs, title, tag})` | `agents:ask` | `{requestId, asked}`: asks an agent a non-interactive, one-shot question without YOLO in a project folder (up to 96 KiB prompt, 64 KiB output); when a waiting ask is approved, `on.agentAskStarted` fires as it starts, and results arrive at `on.agentAnswered` or `on.agentAskFailed`. Prelude exposes `mako.agents.ask(...)` and `ctx.agents.ask(...)`. |
 | `agents.cancelAsk({requestId})` | `agents:ask` | `{found}`: cancels a waiting or running agent question. Prelude exposes `mako.agents.cancel(requestId)`. |
+| `git.status({target, base})` | `git:read` | `{root, node, branch, notRepo, files, upstream, ahead, behind, branches, remoteBranches, stashes, operation, worktree, base}`: reads a work tree's changes, branches, stashes, in-progress operation, and session worktree (revision 46). See [Git and Forge](#git-and-forge). |
+| `git.history({target, max, known})` | `git:read` | `{commits, current, more, fingerprint, unchanged}`: lists up to 500 recent commits, skipping `commits` when `fingerprint` matches `known` (revision 46). |
+| `git.showCommit({target, hash})` | `git:read` | `{commit, email, body, files}`: reads one commit's metadata, body, and changed files (revision 46). |
+| `git.watch({target})` | `git:read` | `{root}`: binds a repository watcher to the calling block instance (up to 16 watches per plugin; idempotent), reloading the instance after a 300 ms debounce on changes (revision 46). |
+| `git.unwatch({target})` | `git:read` | Stops watching `target` for the calling block instance (revision 46). |
+| `git.run({target, op, message, paths, amend, branch, commit, stash, rebase, force, tag, worktree})` | `git:write` | `{job}`: runs a mutating git operation asynchronously in answer to a user gesture (2 min timeout); outcome arrives at `on.gitDone({job, scopeKey, op, ok, output, error})` (revision 46). |
+| `forge.branchStatus({target, branch})` | `forge:read` | `{forge, hasPr, prNumber, prTitle, prState, prChecks, runs, runsState, runNumber, runHead}`: reads pull request and CI status for a branch on its forge (revision 46). |
 | `exec.runProcess` | `exec` | Not available: no manifest may ask for `exec` in this version. |
 
 ### Transcripts and events
@@ -517,6 +556,9 @@ the user allows, all of them at once, before the plugin runs at all:
 | `layout:write` | Change the window's layout, as the user allows each change or allowed this plugin such changes; see [The layout](#the-layout). |
 | `decision` | Ask this node's configured decision model short typed questions (`choice`, `score`, `noul`) using the user's Settings ▸ API keys defaults; see [Decision model & Agent questions](#decision-and-agent-asks). |
 | `agents:ask` | List this node's agents and ask them one-shot questions without YOLO (user-approved per agent/profile pair); see [Decision model & Agent questions](#decision-and-agent-asks). |
+| `git:read` | Read repository status, commit history, and commit details, and watch repositories on allowed project/session/folder targets across the mesh (revision 46); see [Git and Forge](#git-and-forge). |
+| `git:write` | Run mutating git operations asynchronously in answer to a user gesture (revision 46); see [Git and Forge](#git-and-forge). |
+| `forge:read` | Read pull request and CI run status for branches on the repository's forge (revision 46); see [Git and Forge](#git-and-forge). |
 
 **Asking.** A plugin that asks for what the user has not allowed waits:
 the window shows a bar over itself, which no layout can cover, and the
@@ -577,6 +619,20 @@ starts an hour, asks included.
 <a id="decision-and-agent-asks"></a>**Decision model & Agent questions (revision 45).**
 - **Decision (`decision`)**: Uses the provider, model, and API keys configured in Settings ▸ API keys; any `provider` or `model` in the plugin's request is ignored, and API keys are never exposed. Up to 60 calls a minute (`evaluate` and `submit` combined), 256 KiB and 32 questions per request, 20 s max for synchronous `evaluate`, 45 s max and 2 concurrent for asynchronous `submit`. Prelude helpers: `mako.decision.status()`, `evaluate(req, opts)`, `tryEvaluate(req, opts)`, `submit(req, {timeoutMs, tag})`, `score(state, instructions, levels, opts)`, `choice(state, instructions, options, opts)`, and `yes(state, instructions, opts)`. Asynchronous outcomes arrive at `on.decisionAnswered(ev)` (`requestId`, `tag`, `responseJson`, `elapsedMs`) or `on.decisionFailed(ev)` (`requestId`, `tag`, `code`, `error`, `elapsedMs`) without a subscription.
 - **Agent questions (`agents:ask`)**: Lists this node's offered agents/profiles (`mako.agents.list()`) and runs one-shot, non-interactive questions (`mako.agents.ask(...)` / `ctx.agents.ask(...)`) with YOLO forcibly disabled and any YOLO flags stripped from profile arguments, inside a verified project folder (`root`, defaulting to the project's first folder), with a plugin-origin prompt header. Only installed native one-shot agents with `allow_template` enabled are askable. The first ask for an `(agent, profile)` pair prompts the user in the window bar (**Allow once**, **Always allow this agent**, or **Deny**); **Ask again** (`forget_agents`) or revoking permissions clears all saved pairs. At most 2 asks wait or run at once, 30 asks an hour, prompt 1–96 KiB, optional `jsonSchema` ≤16 KiB, output cut at 64 KiB (`truncated: true`), timeout 15–300 s (default 120 s). When a pending ask (`asked: true`) is approved and begins executing, `on.agentAskStarted(ev)` (`requestId`, `tag`, `agent`, `profile`) fires without a subscription; outcomes arrive at `on.agentAnswered(ev)` (`requestId`, `tag`, `output`, `truncated`, `elapsedMs`) or `on.agentAskFailed(ev)` (`requestId`, `tag`, `code` in `refused|canceled|timeout|unavailable|failed`, `error`, `elapsedMs`) without a subscription; `mako.agents.cancel(requestId)` cancels a waiting or running ask.
+
+<a id="git-and-forge"></a>**Git and Forge (revision 46).**
+- **Targets & authorization**: `GitService` and `ForgeService` take a `target: { scope?, node?, path? }`. A `scope` target must be a canonical `folder` scope key matching an actively watched folder block instance of this plugin; an explicit `{ node, path }` target must lie within a known project location or a session folder/worktree on that node (local or peer over the mesh). Prelude helpers `ctx.git.*` and `ctx.forge.branchStatus` fill `target` automatically from `ctx.scopeKey` (or `{ node, path }`).
+- **Reads & watches (`git:read`, `forge:read`)**: Up to 120 git reads/min (`status`, `history` ≤ 500 commits, `showCommit`, `watch`), 30 forge calls/min (`forge.branchStatus`), and 16 active watches per plugin. `git.watch` is idempotent and bound to the calling block instance: filesystem changes, peer `watch_files`, and session git-stamp updates debounce for 300 ms and reload the instance (`load` + `render`) automatically, with a 5 s poll fallback when native watchers are unavailable. Watches stop on `git.unwatch`, instance eviction, sleep, or plugin reload.
+- **Mutations (`git:write`)**: `git.run` requires a user gesture (an event or command; up to 30 runs/min) and runs asynchronously with a 2-minute timeout so long pushes/pulls never hold the 30 s plugin call limit. Allowed `op` values: `commit`, `push`, `pull`, `fetch`, `checkout`, `branch`, `merge`, `pull_request`, `remove_worktree`, `discard_files`, `ignore`, `stash`, `stash_apply`, `stash_pop`, `stash_drop`, `track`, `delete_branch`, `merge_branch`, `rebase`, `detach`, `cherry_pick`, `revert`, `tag`, `continue`, `abort` (`discard_hunk` is intentionally omitted). Setting `worktree: true` acts on the daemon-verified session worktree at `target`. Outcomes arrive without a subscription at the default export's `on.gitDone({ job, scopeKey, op, ok, output, error })` (`output` capped at 64 KiB).
+
+<a id="window-intents"></a>**Window intents (revision 46).**
+Plugins trigger window actions in answer to a user gesture via `commands.runCommand({ id, arg })` (or the `ctx.ui.*` prelude helpers, which default `node`/`folder` from `ctx`), with up to 8 intents queued per gesture and paths validated against the active folder or allowed project/session roots:
+- `mako.copyText` (`ctx.ui.copy(text)`): copies UTF-8 text (≤ 64 KiB) to the clipboard.
+- `mako.openDiff` (`ctx.ui.openDiff({ node?, folder?, repo?, path, from?, status?, added?, removed?, binary?, commit?, base?, preview? })`): opens a diff tab in the window.
+- `mako.openFile` (`ctx.ui.openFile({ node?, path, line? })`): opens a file in the editor tab.
+- `mako.openForge` (`ctx.ui.openForge({ node?, folder?, kind: "pr"|"runs", number })`): opens a pull request or workflow run in the Forge panel.
+- `mako.createPullRequest` (`ctx.ui.createPullRequest({ node?, folder? })`): opens the native create-pull-request dialog for the repository.
+- `mako.openUrl` (`ctx.ui.openUrl(url)`) and `mako.toast` (`ctx.ui.toast(msg)`): opens an http(s) link or displays a short notice.
 
 <a id="the-layout"></a>**The layout.** `layout.patchLayout` takes `ops`, the JSON of
 `patch_layout`'s operations ([agent-mcp.md](agent-mcp.md#the-windows-layout)),
@@ -865,8 +921,9 @@ and the package; the URL may redirect, to https, 3 times at most.
 | `proto/mako/plugin/v1` | The Host API's schema: services, each method with its permission (`options.proto`). The only definition. |
 | `internal/plugin/apigen` | The generator, run by buf as `protoc-gen-makoplugin` (`make proto`). It takes only what WIT can say: see its package comment. |
 | `internal/plugin/hostapi` | Generated: the messages, the dispatcher that checks a permission before reading a call (`dispatch_gen.go`), `mako.js`, `mako.d.ts`, `mako.wit`, and the schema kept (`hostapi.binpb`), from which a test generates everything again and fails on a difference. |
-| `internal/plugin` | Manifests, the runtime (qngg), limits, the Host API's handlers, trees and the folder's reading. |
-| `internal/daemon/plugins.go` | The requests of [protocol.md](protocol.md#plugins). |
+| `internal/plugin` | Manifests, the runtime (qngg), limits, the Host API's handlers (including `git.go`, `githost.go`, `bundled.go`), trees and the folder's reading. |
+| `internal/plugin/builtin` | Embedded bundled first-party plugins (`mako-git`), overridable from disk during development with `MAKO_DEV_BUNDLED_PLUGINS=<path>` (e.g. `MAKO_DEV_BUNDLED_PLUGINS=$PWD/internal/plugin/builtin`) for live hot-reload. |
+| `internal/daemon/plugins.go` | The requests of [protocol.md](protocol.md#plugins), plus `plugin_git.go` for local and peer-forwarded Git/Forge hosts. |
 | `internal/gui/plugin*.go` | The blocks' frames and trees, the bar asking, Settings ▸ Plugins, the store (`pluginstore*.go`) and the placeholder offering to install (`pluginmissing.go`). |
 | `internal/plugin/pack` | The `.makoplugin` package: packing, signing, opening, keys. |
 | `internal/plugin/registry` | A registry's index, its URL, and the fetcher of indexes and packages. |

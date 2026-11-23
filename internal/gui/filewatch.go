@@ -220,9 +220,7 @@ func (m *model) filesChanged(node string, ch *protocol.FilesChanged) {
 			m.openPreview(p.fileItem)
 		}
 	}
-	if root := ggui.Peek(m.git.View).Root; root.Node == node && slices.Contains(ch.GetTrees(), root.Path) {
-		m.loadGit(root)
-	}
+	m.diffTreesChanged(node, ch.GetTrees())
 }
 
 // rereadNode reads again all the window shows of node's files, as after
@@ -238,9 +236,7 @@ func (m *model) rereadNode(node string) {
 			m.checkDoc(id)
 		}
 	}
-	if root := ggui.Peek(m.git.View).Root; root.Node == node {
-		m.loadGit(root)
-	}
+	m.rereadDiffChanges(node)
 }
 
 // parentPath is the folder p is in, with either separator.

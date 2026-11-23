@@ -4,6 +4,8 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ironpark/ggui"
@@ -14,6 +16,133 @@ import (
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
+
+// activeBlockTrees tracks the last full UiNode tree rendered for each live
+// (model, block, scope) stream so GUI tests can inspect rendered plugin trees
+// without modifying model.go. Entries are cleared when the block's Effect ends.
+type blockTreeKey struct {
+	model *model
+	block string
+	scope string
+}
+
+type blockTreeEntry struct {
+	tree *protocol.UiNode
+	gen  uint64
+}
+
+var (
+	activeBlockTreesMu sync.RWMutex
+	activeBlockTrees   = map[blockTreeKey]blockTreeEntry{}
+	blockTreeGen       atomic.Uint64
+	// watchBlockFunc overrides Client.WatchBlockView in unit tests when non-nil.
+	watchBlockFunc func(ctx context.Context, block, scope, locale string, standalone bool, fn func(*protocol.BlockUpdate)) error
+)
+
+func recordBlockTree(m *model, block, scope string, tree *protocol.UiNode, gen uint64) {
+	if m == nil || block == "" {
+		return
+	}
+	activeBlockTreesMu.Lock()
+	defer activeBlockTreesMu.Unlock()
+	k := blockTreeKey{model: m, block: block, scope: scope}
+	if tree == nil {
+		if cur, ok := activeBlockTrees[k]; ok && (gen == 0 || cur.gen == gen) {
+			delete(activeBlockTrees, k)
+		}
+		return
+	}
+	if cur, ok := activeBlockTrees[k]; ok && gen != 0 && cur.gen > gen {
+		return
+	}
+	activeBlockTrees[k] = blockTreeEntry{tree: tree, gen: gen}
+}
+
+func clearBlockTree(m *model, block, scope string, gen uint64) {
+	if m == nil || block == "" {
+		return
+	}
+	activeBlockTreesMu.Lock()
+	k := blockTreeKey{model: m, block: block, scope: scope}
+	if cur, ok := activeBlockTrees[k]; ok && (gen == 0 || cur.gen == gen) {
+		delete(activeBlockTrees, k)
+	}
+	activeBlockTreesMu.Unlock()
+}
+
+// blockTreeFor returns the latest full UiNode tree rendered for block in this
+// model. If an explicit non-empty scope is given, it matches that canonical
+// scope key; otherwise it returns the active tree for block under any scope.
+func (m *model) blockTreeFor(name string, scope ...string) *protocol.UiNode {
+	if m == nil || name == "" {
+		return nil
+	}
+	activeBlockTreesMu.RLock()
+	defer activeBlockTreesMu.RUnlock()
+	if len(scope) > 0 && scope[0] != "" {
+		return activeBlockTrees[blockTreeKey{model: m, block: name, scope: scope[0]}].tree
+	}
+	if e, ok := activeBlockTrees[blockTreeKey{model: m, block: name, scope: ""}]; ok && e.tree != nil {
+		return e.tree
+	}
+	for k, e := range activeBlockTrees {
+		if k.model == m && k.block == name && e.tree != nil {
+			return e.tree
+		}
+	}
+	return nil
+}
+
+type blockCacheKey struct {
+	block string
+	scope string
+}
+
+type cachedBlockState struct {
+	feed blockFeed
+	form *blockForm
+}
+
+func (m *model) cachedBlock(name, scope string) *cachedBlockState {
+	if m == nil || m.plugins == nil || name == "" {
+		return nil
+	}
+	return m.plugins.blockCache[blockCacheKey{block: name, scope: scope}]
+}
+
+func (m *model) saveCachedBlock(name, scope string, feed blockFeed, form *blockForm) {
+	if m == nil || m.plugins == nil || name == "" {
+		return
+	}
+	if m.plugins.blockCache == nil {
+		m.plugins.blockCache = map[blockCacheKey]*cachedBlockState{}
+	}
+	m.plugins.blockCache[blockCacheKey{block: name, scope: scope}] = &cachedBlockState{
+		feed: feed,
+		form: form,
+	}
+}
+
+func (m *model) deleteCachedBlock(name, scope string) {
+	if m == nil || m.plugins == nil || name == "" {
+		return
+	}
+	delete(m.plugins.blockCache, blockCacheKey{block: name, scope: scope})
+}
+
+func (m *model) evictCachedBlock(name string) {
+	if m == nil || m.plugins == nil || name == "" {
+		return
+	}
+	for k := range m.plugins.blockCache {
+		if k.block == name {
+			delete(m.plugins.blockCache, k)
+		}
+	}
+	if name == gitTab {
+		m.evictCachedBlock(gitPluginBlock)
+	}
+}
 
 // A plugin's or an agent's block is drawn inside a frame the window
 // draws, naming the block and where it comes from, the plugin or the
@@ -52,7 +181,7 @@ type scopeOption struct {
 
 // isScoped reports whether scope is one of the non-global scopes.
 func isScoped(scope string) bool {
-	return scope == protocol.ScopeSpace || scope == protocol.ScopeProject || scope == protocol.ScopeSession
+	return scope == protocol.ScopeSpace || scope == protocol.ScopeProject || scope == protocol.ScopeSession || scope == protocol.ScopeFolder
 }
 
 // blockPropScope returns the raw string value of props["scope"], or "".
@@ -146,6 +275,13 @@ func (m *model) resolveActiveScope(blockScope string) string {
 			}
 		}
 		return ""
+
+	case protocol.ScopeFolder:
+		r := m.repoFolder()
+		if r.Path == "" {
+			return ""
+		}
+		return protocol.FolderScope(m.remoteID(r.Node), r.Path)
 	}
 	return ""
 }
@@ -185,6 +321,44 @@ func (m *model) scopeOptions(kind string) []scopeOption {
 				})
 			}
 		}
+	case protocol.ScopeFolder:
+		if roots := m.Roots.Get().Roots; len(roots) > 0 {
+			for _, r := range roots {
+				if r.Path == "" {
+					continue
+				}
+				key := protocol.FolderScope(m.remoteID(r.Node), r.Path)
+				if key == "" {
+					continue
+				}
+				label := r.Label
+				if label == "" {
+					label = projectName(r.Path)
+				}
+				out = append(out, scopeOption{Key: key, Label: label})
+			}
+			break
+		}
+		seen := map[string]bool{}
+		for _, proj := range m.spaces().Projects {
+			for _, r := range proj.Roots {
+				for _, loc := range r.Locations {
+					if loc.Path == "" {
+						continue
+					}
+					key := protocol.FolderScope(m.remoteID(loc.Node), loc.Path)
+					if key == "" || seen[key] {
+						continue
+					}
+					seen[key] = true
+					label := r.label()
+					if label == "" {
+						label = projectName(loc.Path)
+					}
+					out = append(out, scopeOption{Key: key, Label: label})
+				}
+			}
+		}
 	}
 	return out
 }
@@ -216,6 +390,19 @@ func (m *model) scopeLabel(scopeKey string) string {
 			return sessionTitle(s, titles[id])
 		}
 		return short(id)
+	case protocol.ScopeFolder:
+		node, path, ok := protocol.ParseFolderScope(scopeKey)
+		if !ok {
+			return id
+		}
+		for _, r := range m.Roots.Get().Roots {
+			if r.Path == path && (m.remoteID(r.Node) == node || (node == protocol.LocalScopeNode && m.remoteID(r.Node) == "")) {
+				if r.Label != "" {
+					return r.Label
+				}
+			}
+		}
+		return projectName(path)
 	}
 	return id
 }
@@ -240,12 +427,248 @@ func (m *model) currentLocale() string {
 }
 
 // pluginBlock follows the block of the name, of plugin id, while it is
-// drawn; title is its title as listed, until the daemon sends one.
+// drawn in standalone card-framed contexts (previews, store, compact views).
 func pluginBlock(m *model, name, id, title, blockScope string, props map[string]any) ggui.Widget {
 	return treeBlock(m, name, blockOrigin{plugin: id}, title, blockScope, props)
 }
 
-// treeBlock follows a block of a tree while it is drawn.
+// pluginBlockView follows a plugin block inside layout chrome, returning a
+// blockView whose Tools, Accessory, Menu, and TitleInTools integrate directly
+// with the solo dock header or tabbed stack bar.
+func pluginBlockView(m *model, name, id, title, blockScope string, props map[string]any, at blockPlace) blockView {
+	return treeBlockView(m, name, blockOrigin{plugin: id}, title, blockScope, props, at)
+}
+
+// pluginUpdateShowsTree reports whether u is in a state that renders its tree
+// (rather than a waiting/denied/blocked/disabled notice).
+func pluginUpdateShowsTree(u *protocol.BlockUpdate) bool {
+	if u == nil || u.GetGone() || u.GetTree() == nil {
+		return false
+	}
+	switch u.GetState() {
+	case protocol.PluginWaiting, protocol.PluginDenied, protocol.PluginBlocked, protocol.PluginDisabled:
+		return false
+	}
+	return true
+}
+
+// provenanceBadge renders the non-droppable provenance indicator for third-party
+// plugins (package glyph + plugin id chip with "Plugin · <id>" tooltip) and for
+// agent blocks (bot glyph + agent · session chip). Bundled first-party plugins
+// return nil.
+func provenanceBadge(m *model, origin blockOrigin) ggui.Widget {
+	if origin.plugin != "" {
+		if m.isBundledPlugin(origin.plugin) {
+			return nil
+		}
+		tip := Tf("Plugin · %s", origin.plugin)
+		badge := widget.Row(
+			icon("package").Size(12).Color(skin.Muted),
+			chip(origin.plugin),
+		).Gap(4).Align(widget.AlignCenter)
+		return ui.Tooltip(&semLabeled{child: badge, label: tip}, tip)
+	}
+	who := cmpTone(origin.agent, T("Agent")) + " · " + short(origin.session)
+	return widget.Row(
+		icon("bot").Size(12).Color(skin.Muted),
+		chip(who),
+	).Gap(4).Align(widget.AlignCenter)
+}
+
+// treeBlockView follows a plugin or agent UI tree block and returns a blockView
+// integrated with layout chrome: Body has no outer card frame, a leading
+// variant:"toolbar" row is lifted into Tools, Accessory holds the scope chip
+// and third-party/agent provenance badge, Menu provides Reload and Pin scope,
+// and at.Solo is propagated to WatchBlock.Standalone.
+func treeBlockView(m *model, name string, origin blockOrigin, title, blockScope string, props map[string]any, at blockPlace) blockView {
+	pinned := pinnedBlockScope(blockScope, props)
+	resolved := ggui.Derived(func() string {
+		if !isScoped(blockScope) {
+			return ""
+		}
+		if pinned != "" {
+			return pinned
+		}
+		return m.resolveActiveScope(blockScope)
+	})
+	initScope := ggui.Untrack(resolved.Get)
+	var initFeed blockFeed
+	var form *blockForm
+	if cached := m.cachedBlock(name, initScope); cached != nil && cached.form != nil {
+		initFeed = cached.feed
+		form = cached.form
+	} else {
+		initFeed = blockFeed{Scope: initScope}
+		form = newBlockForm()
+		m.saveCachedBlock(name, initScope, initFeed, form)
+	}
+	feed := ggui.State(initFeed)
+	solo := ggui.State(at.Solo)
+
+	currentUpdate := func() *protocol.BlockUpdate {
+		f := feed.Get()
+		scopeKey := resolved.Get()
+		if f.Scope == scopeKey {
+			return f.Update
+		}
+		return nil
+	}
+
+	showScopeChip := origin.plugin != "" && isScoped(blockScope) && name != gitPluginBlock
+	thirdParty := origin.plugin != "" && !m.isBundledPlugin(origin.plugin)
+	isAgent := origin.plugin == ""
+	hasStaticAccessory := showScopeChip || thirdParty || isAgent
+
+	body := ggui.Component(func() ggui.Widget {
+		ggui.Effect(func() ggui.Cleanup {
+			scopeKey := resolved.Get()
+			locale := m.activeLocale()
+			isSolo := solo.Get()
+			gen := blockTreeGen.Add(1)
+			if ggui.Peek(feed).Scope != scopeKey {
+				if cached := m.cachedBlock(name, scopeKey); cached != nil && cached.feed.Scope == scopeKey {
+					feed.Set(cached.feed)
+					form.reset()
+					if cached.form != nil && cached.form != form {
+						form.copyFrom(cached.form)
+					}
+					m.saveCachedBlock(name, scopeKey, cached.feed, form)
+				} else {
+					next := blockFeed{Scope: scopeKey}
+					feed.Set(next)
+					form.reset()
+					m.saveCachedBlock(name, scopeKey, next, form)
+				}
+			}
+			if isScoped(blockScope) && scopeKey == "" {
+				clearBlockTree(m, name, scopeKey, 0)
+				return nil // empty-scope: do not open a stream
+			}
+			if cur := ggui.Peek(feed); cur.Scope == scopeKey && cur.Update != nil && cur.Update.GetTree() != nil {
+				recordBlockTree(m, name, scopeKey, cur.Update.GetTree(), gen)
+			}
+			if m.post == nil && watchBlockFunc == nil {
+				return nil // not started, as under a test without a watch hook
+			}
+			post := m.post
+			if post == nil {
+				post = func(fn func()) { fn() }
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			go m.followBlockScoped(ctx, name, scopeKey, locale, isSolo, func(u *protocol.BlockUpdate) {
+				post(func() {
+					if ctx.Err() != nil {
+						return
+					}
+					recordBlockTree(m, name, scopeKey, u.GetTree(), gen)
+					var next blockFeed
+					feed.Update(func(f blockFeed) blockFeed {
+						next = blockFeed{Update: u, Scope: scopeKey, Seq: f.Seq + 1}
+						return next
+					})
+					if u.GetGone() {
+						m.deleteCachedBlock(name, scopeKey)
+					} else {
+						m.saveCachedBlock(name, scopeKey, next, form)
+					}
+				})
+			})
+			return func() {
+				cancel()
+				clearBlockTree(m, name, scopeKey, gen)
+			}
+		})
+		return ggui.Reactive(func() ggui.Widget {
+			scopeKey := resolved.Get()
+			u := currentUpdate()
+			st := blockScopeState{BlockScope: blockScope, Pinned: pinned, Key: scopeKey}
+			return blockBodyContent(m, name, origin, st, u, form, true)
+		})
+	})
+
+	tools := ggui.Reactive(func() ggui.Widget {
+		u := currentUpdate()
+		if !pluginUpdateShowsTree(u) {
+			return widget.Box()
+		}
+		tree := u.GetTree()
+		tb, _ := liftToolbar(tree)
+		if tb == nil {
+			return widget.Box()
+		}
+		return renderTreeNode(m, name, resolved.Get(), origin.plugin, form, tree, tb)
+	})
+
+	var accessory ggui.Widget
+	if hasStaticAccessory {
+		accessory = ggui.Reactive(func() ggui.Widget {
+			var parts []ggui.Widget
+			if showScopeChip {
+				st := blockScopeState{BlockScope: blockScope, Pinned: pinned, Key: resolved.Get()}
+				parts = append(parts, blockScopeChip(m, name, st))
+			}
+			if badge := provenanceBadge(m, origin); badge != nil {
+				parts = append(parts, badge)
+			}
+			if len(parts) == 0 {
+				return widget.Box()
+			}
+			if len(parts) == 1 {
+				return parts[0]
+			}
+			return widget.Row(parts...).Gap(6).Align(widget.AlignCenter)
+		})
+	}
+
+	hasTools := ggui.Derived(func() bool {
+		if hasStaticAccessory {
+			return true
+		}
+		u := currentUpdate()
+		if !pluginUpdateShowsTree(u) {
+			return false
+		}
+		tb, _ := liftToolbar(u.GetTree())
+		return tb != nil
+	})
+
+	titleInToolsOf := ggui.Derived(func() bool {
+		u := currentUpdate()
+		if !pluginUpdateShowsTree(u) {
+			return false
+		}
+		return u.GetChrome() == "toolbar"
+	})
+
+	menu := func() []ggui.Widget {
+		var items []ggui.Widget
+		if origin.plugin != "" {
+			pid := origin.plugin
+			if p := m.pluginOf(pid); p != nil && !p.GetInstalled() && !p.GetBundled() {
+				items = append(items, ui.MenuItem(T("Reload block"), func() {
+					m.actOnPlugin(&protocol.PluginAction{PluginId: pid, Op: protocol.PluginReload})
+				}))
+			}
+			if showScopeChip {
+				st := blockScopeState{BlockScope: blockScope, Pinned: pinned, Key: ggui.Untrack(resolved.Get)}
+				items = append(items, ui.MenuSub(T("Pin scope"), blockScopeMenuItems(m, name, st)...))
+			}
+		}
+		return items
+	}
+
+	return blockView{
+		Body:           body,
+		Tools:          tools,
+		Accessory:      accessory,
+		Menu:           menu,
+		hasTools:       hasTools,
+		titleInToolsOf: titleInToolsOf,
+	}
+}
+
+// treeBlock follows a block of a tree while it is drawn inside the standalone
+// card frame (for contexts without layout chrome such as previews and tests).
 func treeBlock(m *model, name string, origin blockOrigin, title, blockScope string, props map[string]any) ggui.Widget {
 	return ggui.Component(func() ggui.Widget {
 		pinned := pinnedBlockScope(blockScope, props)
@@ -270,21 +693,30 @@ func treeBlock(m *model, name string, origin blockOrigin, title, blockScope stri
 			if isScoped(blockScope) && scopeKey == "" {
 				return nil // empty-scope: do not open a stream
 			}
-			if m.post == nil {
+			if m.post == nil && watchBlockFunc == nil {
 				return nil // not started, as under a test
 			}
+			post := m.post
+			if post == nil {
+				post = func(fn func()) { fn() }
+			}
 			ctx, cancel := context.WithCancel(context.Background())
-			go m.followBlockScoped(ctx, name, scopeKey, locale, func(u *protocol.BlockUpdate) {
-				m.post(func() {
+			gen := blockTreeGen.Add(1)
+			go m.followBlockScoped(ctx, name, scopeKey, locale, false, func(u *protocol.BlockUpdate) {
+				post(func() {
 					if ctx.Err() != nil {
 						return
 					}
+					recordBlockTree(m, name, scopeKey, u.GetTree(), gen)
 					feed.Update(func(f blockFeed) blockFeed {
 						return blockFeed{Update: u, Scope: scopeKey, Seq: f.Seq + 1}
 					})
 				})
 			})
-			return cancel
+			return func() {
+				cancel()
+				clearBlockTree(m, name, scopeKey, gen)
+			}
 		})
 		return ggui.Reactive(func() ggui.Widget {
 			f := feed.Get()
@@ -299,15 +731,19 @@ func treeBlock(m *model, name string, origin blockOrigin, title, blockScope stri
 	})
 }
 
-// followBlockScoped watches a block on the daemon under scope and locale,
-// applying each update to the tree it holds and handing on the whole, until ctx ends.
-func (m *model) followBlockScoped(ctx context.Context, name, scope, locale string, fn func(*protocol.BlockUpdate)) {
+// followBlockScoped watches a block on the daemon under scope, locale, and
+// standalone view flag, applying each update to the tree it holds and handing
+// on the whole, until ctx ends.
+func (m *model) followBlockScoped(ctx context.Context, name, scope, locale string, standalone bool, fn func(*protocol.BlockUpdate)) {
 	followStream(ctx, func(ctx context.Context, each func(*protocol.BlockUpdate)) error {
+		if watchBlockFunc != nil {
+			return watchBlockFunc(ctx, name, scope, locale, standalone, each)
+		}
 		c, err := m.link.client(ctx)
 		if err != nil {
 			return err
 		}
-		return c.WatchBlockWithLocale(ctx, name, scope, locale, each)
+		return c.WatchBlockView(ctx, name, scope, locale, standalone, each)
 	}, time.Second, fn)
 }
 
@@ -327,11 +763,15 @@ func followStream(ctx context.Context, watch func(context.Context, func(*protoco
 	for ctx.Err() == nil {
 		started := time.Now()
 		var tree *protocol.UiNode
+		var chrome string
 		stream, restart := context.WithCancel(ctx)
 		lost := false
 		err := watch(stream, func(u *protocol.BlockUpdate) {
 			if lost {
 				return
+			}
+			if c := u.GetChrome(); c != "" {
+				chrome = c
 			}
 			switch {
 			case u.GetTree() != nil:
@@ -347,7 +787,7 @@ func followStream(ctx context.Context, watch func(context.Context, func(*protoco
 			}
 			whole := &protocol.BlockUpdate{Block: u.GetBlock(), Seq: u.GetSeq(), Tree: tree, Plugin: u.GetPlugin(),
 				SessionId: u.GetSessionId(), Agent: u.GetAgent(), Title: u.GetTitle(), State: u.GetState(),
-				Error: u.GetError(), Stale: u.GetStale(), Gone: u.GetGone(), Scope: u.GetScope()}
+				Error: u.GetError(), Stale: u.GetStale(), Gone: u.GetGone(), Scope: u.GetScope(), Chrome: chrome}
 			fn(whole)
 		})
 		restart()
@@ -418,7 +858,7 @@ func blockFrame(m *model, name string, origin blockOrigin, title string, st bloc
 	)
 	if origin.plugin != "" {
 		pid := origin.plugin
-		if p := m.pluginOf(pid); p != nil && !p.GetInstalled() {
+		if p := m.pluginOf(pid); p != nil && !p.GetInstalled() && !p.GetBundled() {
 			headItems = append(headItems, ui.Tooltip(
 				ui.ButtonOf(icon("refresh-cw").Size(12).Color(skin.Muted), func() {
 					m.actOnPlugin(&protocol.PluginAction{PluginId: pid, Op: protocol.PluginReload})
@@ -446,7 +886,7 @@ func scopeKindIcon(kind string) string {
 	switch kind {
 	case protocol.ScopeSpace:
 		return "layers"
-	case protocol.ScopeProject:
+	case protocol.ScopeProject, protocol.ScopeFolder:
 		return "folder"
 	case protocol.ScopeSession:
 		return "terminal"
@@ -464,6 +904,8 @@ func scopeFollowLabel(kind string) string {
 		return T("Follow active project")
 	case protocol.ScopeSession:
 		return T("Follow active session")
+	case protocol.ScopeFolder:
+		return T("Follow active folder")
 	default:
 		return T("Global default")
 	}
@@ -478,14 +920,16 @@ func scopeEmptyChipLabel(kind string) string {
 		return T("No project")
 	case protocol.ScopeSession:
 		return T("No session")
+	case protocol.ScopeFolder:
+		return T("No folder")
 	default:
 		return ""
 	}
 }
 
-// blockScopeChip renders the compact clickable scope chip in a scoped block's
-// header, letting the user switch between Follow active and Pin to a target.
-func blockScopeChip(m *model, name string, st blockScopeState) ggui.Widget {
+// blockScopeMenuItems returns the menu items for switching between Follow
+// active and Pin to a target (shared by blockScopeChip and Pin scope submenus).
+func blockScopeMenuItems(m *model, name string, st blockScopeState) []ggui.Widget {
 	opts := m.scopeOptions(st.BlockScope)
 	items := []ggui.Widget{
 		ui.MenuItem(scopeFollowLabel(st.BlockScope), func() {
@@ -500,6 +944,8 @@ func blockScopeChip(m *model, name string, st blockScopeState) ggui.Widget {
 			none = T("No spaces available")
 		case protocol.ScopeProject:
 			none = T("No projects available")
+		case protocol.ScopeFolder:
+			none = T("No folders available")
 		default:
 			none = T("No sessions available")
 		}
@@ -518,6 +964,13 @@ func blockScopeChip(m *model, name string, st blockScopeState) ggui.Widget {
 			m.setPluginBlockScope(name, st.Pinned, pinnedKey)
 		}).Checked(true))
 	}
+	return items
+}
+
+// blockScopeChip renders the compact clickable scope chip in a scoped block's
+// header, letting the user switch between Follow active and Pin to a target.
+func blockScopeChip(m *model, name string, st blockScopeState) ggui.Widget {
+	items := blockScopeMenuItems(m, name, st)
 
 	label := scopeEmptyChipLabel(st.BlockScope)
 	if st.Key != "" {
@@ -555,6 +1008,10 @@ func emptyScopeCard(m *model, name string, st blockScopeState) ggui.Widget {
 		title = T("Select a project to view this block")
 		hint = T("Open a session or pick a project in the sidebar, or pin this block to a project.")
 		pinLabel = T("Pin to a project")
+	case protocol.ScopeFolder:
+		title = T("Select a folder to view this block")
+		hint = T("Open a session to see its changes.")
+		pinLabel = T("Pin to a folder")
 	default:
 		title = T("Select a session to view this block")
 		hint = T("Focus a session tab, or pin this block to a session.")
@@ -565,27 +1022,35 @@ func emptyScopeCard(m *model, name string, st blockScopeState) ggui.Widget {
 		widget.Text(title).Size(13).Weight(ggui.WeightMedium),
 		muted(widget.Text(hint).Size(12)),
 	}
-	if opts := m.scopeOptions(st.BlockScope); len(opts) > 0 {
-		items := make([]ggui.Widget, 0, len(opts))
-		for _, opt := range opts {
-			key := opt.Key
-			items = append(items, ui.MenuItem(opt.Label, func() {
-				m.setPluginBlockScope(name, st.Pinned, key)
-			}))
+	if name != gitPluginBlock {
+		if opts := m.scopeOptions(st.BlockScope); len(opts) > 0 {
+			items := make([]ggui.Widget, 0, len(opts))
+			for _, opt := range opts {
+				key := opt.Key
+				items = append(items, ui.MenuItem(opt.Label, func() {
+					m.setPluginBlockScope(name, st.Pinned, key)
+				}))
+			}
+			face := widget.Row(
+				icon("pin").Size(13).Color(skin.Muted),
+				widget.Text(pinLabel).Size(12.5).NoWrap(),
+				icon("chevron-down").Size(13).Color(skin.Muted),
+			).Gap(6).Align(widget.AlignCenter)
+			rows = append(rows, widget.Box().Height(4), ui.MenuOf(face, items...).Name(pinLabel))
 		}
-		face := widget.Row(
-			icon("pin").Size(13).Color(skin.Muted),
-			widget.Text(pinLabel).Size(12.5).NoWrap(),
-			icon("chevron-down").Size(13).Color(skin.Muted),
-		).Gap(6).Align(widget.AlignCenter)
-		rows = append(rows, widget.Box().Height(4), ui.MenuOf(face, items...).Name(pinLabel))
 	}
 	return widget.Center(widget.Box(widget.Column(rows...).Gap(6).Align(widget.AlignCenter)).
 		Pad(18, 22).Fill(skin.Surface1).Border(1, skin.Border).Radius(10).MaxWidth(340))
 }
 
-// blockBody is what goes in the frame.
+// blockBody is what goes in the frame (without lifting a leading toolbar).
 func blockBody(m *model, name string, origin blockOrigin, st blockScopeState, u *protocol.BlockUpdate, form *blockForm) ggui.Widget {
+	return blockBodyContent(m, name, origin, st, u, form, false)
+}
+
+// blockBodyContent renders the block's inner body; when liftTB is true, a
+// leading toolbar row is stripped because the layout chrome draws it in Tools.
+func blockBodyContent(m *model, name string, origin blockOrigin, st blockScopeState, u *protocol.BlockUpdate, form *blockForm, liftTB bool) ggui.Widget {
 	if origin.plugin != "" && isScoped(st.BlockScope) && st.Key == "" {
 		return emptyScopeCard(m, name, st)
 	}
@@ -615,11 +1080,24 @@ func blockBody(m *model, name string, origin blockOrigin, st blockScopeState, u 
 	}
 	if tree := u.GetTree(); tree != nil {
 		form.redraw()
-		v := &treeView{m: m, block: name, scope: st.Key, form: form}
+		renderRoot := tree
+		lifted := false
+		if liftTB {
+			if tb, rest := liftToolbar(tree); tb != nil {
+				renderRoot = rest
+				lifted = true
+			}
+		}
+		v := newTreeView(m, name, st.Key, form, tree)
+		v.plugin = origin.plugin
 		if tree.GetFill() {
-			rows = append(rows, widget.Expanded(widget.Padding(v.node(tree, false), 10, 12)))
+			content := v.node(renderRoot, false)
+			if !(lifted && u.GetChrome() == "toolbar") {
+				content = widget.Padding(content, 10, 12)
+			}
+			rows = append(rows, widget.Expanded(content))
 		} else {
-			rows = append(rows, widget.Expanded(widget.Scroll(widget.Padding(v.node(tree, false), 10, 12)).Bar(skin.Surface3)))
+			rows = append(rows, widget.Expanded(widget.Scroll(widget.Padding(v.node(renderRoot, false), 10, 12)).Bar(skin.Surface3)))
 		}
 	} else if u.GetError() == "" {
 		rows = append(rows, widget.Expanded(emptyNote("loader-circle", T("Starting…"))))

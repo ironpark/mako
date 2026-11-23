@@ -20,6 +20,9 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 	v := p.current()
 	switch a.GetOp() {
 	case protocol.PluginGrant:
+		if p.bundled {
+			return &protocol.PluginDone{}, nil
+		}
 		if v == nil {
 			return nil, errors.New("the plugin's manifest has not been read")
 		}
@@ -48,6 +51,9 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 			p.signalRecheck()
 		}
 	case protocol.PluginDeny:
+		if p.bundled {
+			return nil, errors.New("bundled plugin permissions cannot be refused")
+		}
 		var perms []string
 		if v != nil {
 			perms = v.man.Permissions
@@ -99,21 +105,20 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 		sc := m.resolveScope(scopeKey)
 		sc.Locale = normalizeLocale(a.GetLocale())
 		ctxJSON := marshalScopeContext(sc)
-		var open, toast string
+		var done *protocol.PluginDone
 		err := p.do(ctx, func() error {
 			if err := p.ensure(); err != nil {
 				return err
 			}
 			_, err := p.invoke("command", true, a.GetCommand(), ctxJSON)
-			open, toast = p.openURL, p.toast
-			p.openURL, p.toast = "", ""
+			done = p.drainEffects()
 			p.afterCall(scopeKey)
 			return err
 		})
 		if err != nil {
 			return nil, err
 		}
-		return &protocol.PluginDone{OpenUrl: open, Toast: toast}, nil
+		return done, nil
 	case protocol.PluginSet:
 		if v == nil {
 			return nil, errors.New("the plugin's manifest has not been read")

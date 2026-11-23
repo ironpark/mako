@@ -22,7 +22,7 @@ func oldWindowMain(m *model) ggui.Widget {
 	tabs := []string{filesTab, gitTab, agentsTab, forgeTab}
 	tab := ggui.Map(m.DetailTab, func(s string) int { return slices.Index(tabs, s) })
 	details := func() ggui.Widget {
-		pages := []ggui.Widget{filesPanel(m), gitPanel(m), projectAgentsPanel(m), forgePanel(m)}
+		pages := []ggui.Widget{filesPanel(m), makoViews[gitTab].Build(m, nil, blockPlace{Solo: false}).Body, projectAgentsPanel(m), forgePanel(m)}
 		return widget.Box(widget.Column(
 			ggui.View(ggui.Derived(m.forgeOf), func(f string) ggui.Widget {
 				return panelTabs(tab, func(i int) { m.DetailTab.Set(tabs[i]) }, T("Files"), T("Git"), T("Agents"), forgeLabel(f))
@@ -74,8 +74,17 @@ func windowProbe(t *testing.T, main func(*model) ggui.Widget, change func(*model
 // window with mako-gui -render-dir before and after a change.
 func drawn(p *ggui.Probe) string {
 	var b strings.Builder
-	b.WriteString(p.Semantics().String())
+	for _, line := range strings.Split(p.Semantics().String(), "\n") {
+		if strings.TrimSpace(line) == `menu "Context menu" collapsed` {
+			continue
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
 	for _, f := range p.FindAll("") {
+		if f.Role == ggui.RoleMenu && f.Label == "Context menu" {
+			continue
+		}
 		fmt.Fprintf(&b, "%s %q %v\n", f.Role, f.Label, f.Rect)
 	}
 	return b.String()

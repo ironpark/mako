@@ -351,16 +351,19 @@ func (p *plugin) tellAskFailed(ask *agentAsk, code, why string, elapsed uint32) 
 	p.post(func() { p.deliver(ev, hostapi.PermAgentsAsk) })
 }
 
-// cancelPending cancels all in-flight asynchronous decision and agent ask jobs
-// and drops any waiting agent approval ask.
+// cancelPending cancels all in-flight asynchronous decision, agent ask, and
+// git run jobs and drops any waiting agent approval ask.
 func (p *plugin) cancelPending(why string) {
 	p.dropAsk(why)
 	p.pendingMu.Lock()
-	cancels := make([]context.CancelFunc, 0, len(p.askJobs)+len(p.decJobs))
+	cancels := make([]context.CancelFunc, 0, len(p.askJobs)+len(p.decJobs)+len(p.gitJobs))
 	for _, c := range p.askJobs {
 		cancels = append(cancels, c)
 	}
 	for _, c := range p.decJobs {
+		cancels = append(cancels, c)
+	}
+	for _, c := range p.gitJobs {
 		cancels = append(cancels, c)
 	}
 	p.pendingMu.Unlock()

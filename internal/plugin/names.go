@@ -13,7 +13,7 @@ import (
 func ValidID(s string) bool { return pluginID.MatchString(s) && !strings.HasPrefix(s, "mako") }
 
 // ValidPublisher says s is a publisher's name a manifest may give.
-func ValidPublisher(s string) bool { return pluginID.MatchString(s) }
+func ValidPublisher(s string) bool { return pluginID.MatchString(s) && s != "mako" }
 
 // ValidVersion says s is a version a manifest may give.
 func ValidVersion(s string) bool { return semver.MatchString(s) }

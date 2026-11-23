@@ -219,4 +219,26 @@ public interface BlockUpdateOrBuilder extends
    */
   com.google.protobuf.ByteString
       getScopeBytes();
+
+  /**
+   * <pre>
+   * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string chrome = 14 [json_name = "chrome"];</code>
+   * @return The chrome.
+   */
+  java.lang.String getChrome();
+  /**
+   * <pre>
+   * chrome is the block's manifest chrome hint: "auto" or "toolbar"
+   * (revision 46).
+   * </pre>
+   *
+   * <code>string chrome = 14 [json_name = "chrome"];</code>
+   * @return The bytes for chrome.
+   */
+  com.google.protobuf.ByteString
+      getChromeBytes();
 }

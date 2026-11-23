@@ -593,7 +593,30 @@ func (m *model) submitPR() {
 // View ----------------------------------------------------------------------
 
 func forgePanel(m *model) ggui.Widget {
+	return forgePanelBody(m, ggui.Derived(m.repoFolder), true)
+}
+
+func forgePanelView(m *model, at blockPlace) blockView {
 	root := ggui.Derived(m.repoFolder)
+	hasRoot := ggui.Map(root, func(r fileRoot) bool { return r.Path != "" })
+	name := ggui.Derived(m.forgeOf)
+	tools := ggui.Reactive(func() ggui.Widget {
+		if root.Get().Path == "" {
+			return widget.Box()
+		}
+		if o := m.Forge.Open.Get(); o.Kind != "" {
+			return forgeDetailHeaderRow(m, o)
+		}
+		return forgeListHeaderRow(m, root, name, !at.Solo)
+	})
+	return blockView{
+		Body:     forgePanelBody(m, root, false),
+		Tools:    tools,
+		hasTools: hasRoot,
+	}
+}
+
+func forgePanelBody(m *model, root *ggui.DerivedValue[fileRoot], withHeader bool) ggui.Widget {
 	// Read again as the repository moves, a push opening runs.
 	stamp := ggui.Derived(func() string { return repoStamp(m.Sessions.Get(), root.Get(), "") })
 	ggui.Effect(func() ggui.Cleanup {
@@ -612,7 +635,7 @@ func forgePanel(m *model) ggui.Widget {
 		})
 	})
 	open := ggui.Map(m.Forge.Open, func(o forgeOpen) bool { return o.Kind != "" })
-	list, detail := forgeListView(m, root), forgeDetailView(m)
+	list, detail := forgeListView(m, root, withHeader), forgeDetailView(m, withHeader)
 	return withRootPicker(m, ggui.Key(root, func(r fileRoot) ggui.Widget {
 		if r.Path == "" {
 			return widget.Box(muted(widget.Text(T("Open a session to see its repository's pull requests, issues and runs.")).Size(13))).Pad(16)
@@ -623,34 +646,41 @@ func forgePanel(m *model) ggui.Widget {
 	}))
 }
 
-func forgeListView(m *model, root ggui.Readable[fileRoot]) ggui.Widget {
+func forgeListHeaderRow(m *model, root ggui.Readable[fileRoot], name ggui.Readable[string], showIcon bool) ggui.Widget {
+	kind, filter := m.Forge.Kind.Get(), m.Forge.Filter.Get()
+	var row []ggui.Widget
+	if showIcon {
+		row = append(row, widget.Box(icon(forgeIcon(name.Get())).Size(15)).Pad(0, 6, 0, 0))
+	}
+	for _, k := range []string{protocol.ForgePR, protocol.ForgeIssue, protocol.ForgeRuns} {
+		row = append(row, kindChip(forgeKindLabel(k), k == kind, func() { m.Forge.Kind.Set(k) }))
+	}
+	row = append(row, widget.Spacer())
+	if kind != protocol.ForgeRuns {
+		var items []ggui.Widget
+		for _, f := range []string{"open", "closed", "all"} {
+			label := forgeFilterLabel(f)
+			if f == filter {
+				label = "✓ " + label
+			}
+			items = append(items, ui.MenuItem(label, func() { m.Forge.Filter.Set(f) }))
+		}
+		face := widget.Row(muted(widget.Text(forgeFilterLabel(filter)).Size(12.5).NoWrap()), icon("chevron-down").Size(12).Color(skin.ExtraMuted)).Gap(3)
+		row = append(row, borderless(ui.MenuOf(face, items...).Name(T("Which to list"))))
+	}
+	if kind == protocol.ForgePR {
+		row = append(row, iconButton("plus", T("New pull request…"), m.askPR))
+	}
+	row = append(row, iconButton("refresh-cw", T("Refresh"), func() { m.loadForgeList(ggui.Peek(root)) }))
+	return widget.Row(row...).Gap(2).Align(widget.AlignCenter)
+}
+
+func forgeListView(m *model, root ggui.Readable[fileRoot], withHeader bool) ggui.Widget {
 	// One line: what is listed, as flat chips; which of it, as a menu; and
 	// making a pull request and reading the list again.
 	name := ggui.Derived(m.forgeOf) // read here, the header is built again only as it changes
 	header := ggui.Reactive(func() ggui.Widget {
-		kind, filter := m.Forge.Kind.Get(), m.Forge.Filter.Get()
-		row := []ggui.Widget{widget.Box(icon(forgeIcon(name.Get())).Size(15)).Pad(0, 6, 0, 0)}
-		for _, k := range []string{protocol.ForgePR, protocol.ForgeIssue, protocol.ForgeRuns} {
-			row = append(row, kindChip(forgeKindLabel(k), k == kind, func() { m.Forge.Kind.Set(k) }))
-		}
-		row = append(row, widget.Spacer())
-		if kind != protocol.ForgeRuns {
-			var items []ggui.Widget
-			for _, f := range []string{"open", "closed", "all"} {
-				label := forgeFilterLabel(f)
-				if f == filter {
-					label = "✓ " + label
-				}
-				items = append(items, ui.MenuItem(label, func() { m.Forge.Filter.Set(f) }))
-			}
-			face := widget.Row(muted(widget.Text(forgeFilterLabel(filter)).Size(12.5).NoWrap()), icon("chevron-down").Size(12).Color(skin.ExtraMuted)).Gap(3)
-			row = append(row, borderless(ui.MenuOf(face, items...).Name(T("Which to list"))))
-		}
-		if kind == protocol.ForgePR {
-			row = append(row, iconButton("plus", T("New pull request…"), m.askPR))
-		}
-		row = append(row, iconButton("refresh-cw", T("Refresh"), func() { m.loadForgeList(ggui.Peek(root)) }))
-		return widget.Box(widget.Row(row...).Gap(2).Align(widget.AlignCenter)).Height(tabBarHeight).Pad(0, 6, 0, 12)
+		return widget.Box(forgeListHeaderRow(m, root, name, true)).Height(tabBarHeight).Pad(0, 6, 0, 12)
 	})
 	body := ggui.View(m.Forge.List, func(v forgeList) ggui.Widget {
 		switch {
@@ -671,6 +701,9 @@ func forgeListView(m *model, root ggui.Readable[fileRoot]) ggui.Widget {
 		}
 		return widget.Scroll(widget.Box(widget.Column(rows...).Stretch()).Pad(5, 0)).Bar(skin.Surface3)
 	})
+	if !withHeader {
+		return widget.Column(statusLine(m.Forge.Busy, m.Forge.Note), widget.Expanded(body)).Stretch()
+	}
 	return widget.Column(header, hline(), statusLine(m.Forge.Busy, m.Forge.Note), widget.Expanded(body)).Stretch()
 }
 
@@ -860,26 +893,30 @@ func forgeItemMenu(m *model, root fileRoot, forgeName string, ops []string, it *
 	)
 }
 
-func forgeDetailView(m *model) ggui.Widget {
+func forgeDetailHeaderRow(m *model, o forgeOpen) ggui.Widget {
+	label := fmt.Sprintf("#%d", o.Number)
+	switch {
+	case o.Kind == protocol.ForgeRuns:
+		label = cmp.Or(o.Detail.GetItem().GetWorkflow(), T("Run"))
+	case o.Number == 0 && o.Detail.GetItem() != nil:
+		label = fmt.Sprintf("#%d", o.Detail.GetItem().GetNumber())
+	}
+	children := []ggui.Widget{
+		iconButton("arrow-left", T("Back"), m.closeForge),
+		widget.Expanded(widget.Text(label).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
+	}
+	if it := o.Detail.GetItem(); it != nil {
+		children = append(children,
+			iconButton("external-link", Tf("Open on %s", forgeLabel(o.Detail.GetForge())), func() { _ = runtime.OpenURL(it.GetUrl()) }),
+			iconMenu(ui.MenuOf(icon("ellipsis"), forgeItemMenu(m, o.Root, o.Detail.GetForge(), o.Detail.GetOps(), it, o.Detail)...).Width(240).Name(Tf("%s actions", label)), 6),
+		)
+	}
+	return widget.Row(append(children, iconButton("refresh-cw", T("Refresh"), m.readForge))...).Gap(8).Align(widget.AlignCenter)
+}
+
+func forgeDetailView(m *model, withHeader bool) ggui.Widget {
 	head := ggui.View(m.Forge.Open, func(o forgeOpen) ggui.Widget {
-		label := fmt.Sprintf("#%d", o.Number)
-		switch {
-		case o.Kind == protocol.ForgeRuns:
-			label = cmp.Or(o.Detail.GetItem().GetWorkflow(), T("Run"))
-		case o.Number == 0 && o.Detail.GetItem() != nil:
-			label = fmt.Sprintf("#%d", o.Detail.GetItem().GetNumber())
-		}
-		children := []ggui.Widget{
-			iconButton("arrow-left", T("Back"), m.closeForge),
-			widget.Expanded(widget.Text(label).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
-		}
-		if it := o.Detail.GetItem(); it != nil {
-			children = append(children,
-				iconButton("external-link", Tf("Open on %s", forgeLabel(o.Detail.GetForge())), func() { _ = runtime.OpenURL(it.GetUrl()) }),
-				iconMenu(ui.MenuOf(icon("ellipsis"), forgeItemMenu(m, o.Root, o.Detail.GetForge(), o.Detail.GetOps(), it, o.Detail)...).Width(240).Name(Tf("%s actions", label)), 6),
-			)
-		}
-		return panelHeader(append(children, iconButton("refresh-cw", T("Refresh"), m.readForge))...)
+		return widget.Box(forgeDetailHeaderRow(m, o)).Height(tabBarHeight).Pad(0, 6, 0, 12)
 	})
 	body := ggui.View(m.Forge.Open, func(o forgeOpen) ggui.Widget {
 		d := o.Detail
@@ -896,6 +933,9 @@ func forgeDetailView(m *model) ggui.Widget {
 		}
 		return forgeDetailBody(m, o)
 	})
+	if !withHeader {
+		return widget.Column(statusLine(m.Forge.Busy, m.Forge.Note), widget.Expanded(body)).Stretch()
+	}
 	return widget.Column(head, hline(), statusLine(m.Forge.Busy, m.Forge.Note), widget.Expanded(body)).Stretch()
 }
 
@@ -1080,41 +1120,6 @@ func forgeComposer(m *model, root fileRoot, it *protocol.ForgeItem) ggui.Widget 
 	}
 	btns = append(btns, ui.Button(T("Comment"), send(protocol.ForgeOpComment, "", T("Commenting…"))))
 	return widget.Box(widget.Column(field, widget.Row(btns...).Gap(8).Align(widget.AlignCenter)).Gap(8).Stretch()).Pad(8, 12, 16, 12)
-}
-
-// forgeBranchLine is the Git tab's line for the branch on its forge: its pull
-// request, or a button to open one, and its newest commit's runs.
-func forgeBranchLine(m *model) ggui.Widget {
-	return ggui.View(m.Forge.Branch, func(b forgeBranch) ggui.Widget {
-		if b.Root.Path == "" || b.Err != "" || ggui.Untrack(m.repoFolder) != b.Root {
-			return widget.Box()
-		}
-		var parts []ggui.Widget
-		if pr := b.PR; pr != nil {
-			label := widget.Row(itemIcon(pr), widget.Box(widget.Text(fmt.Sprintf("#%d %s", pr.GetNumber(), pr.GetTitle())).Size(12).NoWrap().Ellipsis()).MaxWidth(200), rollupIcon(pr.GetChecks())).Gap(6).Align(widget.AlignCenter)
-			parts = append(parts, ui.ButtonOf(label, func() { m.openForge(b.Root, protocol.ForgePR, pr.GetNumber()) }).Ghost().Pad(3, 6).Radius(6).Name(pr.GetTitle()))
-		} else {
-			parts = append(parts, ui.ButtonOf(widget.Row(iconColored("git-pull-request", skin.Muted).Size(14), muted(widget.Text(T("Create pull request")).Size(12))).Gap(6),
-				m.askPR).Ghost().Pad(3, 6).Radius(6).Name(T("Create pull request")))
-		}
-		parts = append(parts, widget.Spacer())
-		if len(b.Runs) > 0 {
-			state := runsState(b.Runs)
-			label := map[string]string{"pending": T("Running"), "failure": T("Failed"), "success": T("Passed")}[state]
-			icon := rollupIcon(state)
-			first := b.Runs[0]
-			for _, r := range b.Runs {
-				if r.GetState() != "completed" || protocol.Failed(r.GetChecks()) {
-					first = r // the run to look at
-					break
-				}
-			}
-			parts = append(parts, ui.Tooltip(ui.ButtonOf(widget.Row(icon, muted(widget.Text(label).Size(12))).Gap(5),
-				func() { m.openForge(b.Root, protocol.ForgeRuns, first.GetNumber()) }).Ghost().Pad(3, 6).Radius(6).Name(T("Actions")),
-				Tf("%d runs of %s", len(b.Runs), shortHash(first.GetHeadOid()))))
-		}
-		return widget.Column(widget.Box(widget.Row(parts...).Gap(4).Align(widget.AlignCenter)).Pad(2, 6, 2, 6), hline()).Stretch()
-	})
 }
 
 // forgeDialogs is the new pull request dialog.

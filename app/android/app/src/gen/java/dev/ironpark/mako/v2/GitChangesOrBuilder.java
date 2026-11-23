@@ -177,4 +177,23 @@ public interface GitChangesOrBuilder extends
    */
   com.google.protobuf.ByteString
       getOperationBytes();
+
+  /**
+   * <pre>
+   * the session worktree at path, if any (revision 46)
+   * </pre>
+   *
+   * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+   * @return Whether the worktree field is set.
+   */
+  boolean hasWorktree();
+  /**
+   * <pre>
+   * the session worktree at path, if any (revision 46)
+   * </pre>
+   *
+   * <code>.mako.v2.Worktree worktree = 12 [json_name = "worktree"];</code>
+   * @return The worktree.
+   */
+  dev.ironpark.mako.v2.Worktree getWorktree();
 }

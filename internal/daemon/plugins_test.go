@@ -17,6 +17,7 @@ import (
 	"github.com/ironpark/mako/internal/layoutdoc"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transport"
 	"github.com/ironpark/mako/internal/workspace"
 )
 
@@ -69,7 +70,7 @@ title = "Hello"
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginWaiting {
+		if p := findPlugin(list.GetPlugins(), "hello"); p != nil && p.GetState() == protocol.PluginWaiting {
 			// A test reaches no keychain: the listing says secrets are
 			// kept in files, and why.
 			if list.GetSecrets() != "file" || list.GetSecretsNote() == "" {
@@ -118,6 +119,15 @@ title = "Hello"
 		t.Fatal(err)
 	}
 	wait("Taps 1")
+}
+
+func findPlugin(list []*protocol.PluginInfo, id string) *protocol.PluginInfo {
+	for _, p := range list {
+		if p.GetId() == id {
+			return p
+		}
+	}
+	return nil
 }
 
 func blockNames(bs []layoutdoc.Block) string {
@@ -251,7 +261,7 @@ export default {
 	})
 	waitFor(t, "the plugin to be listed", func() bool {
 		list, err := ca.Plugins(ctx)
-		return err == nil && len(list.GetPlugins()) == 1
+		return err == nil && findPlugin(list.GetPlugins(), "ears") != nil
 	})
 	if _, err := ca.PluginAction(ctx, &protocol.PluginAction{PluginId: "ears", Op: protocol.PluginGrant}); err != nil {
 		t.Fatal(err)
@@ -317,7 +327,7 @@ export default {
 	})
 	waitFor(t, "the plugin to be listed", func() bool {
 		list, err := c.Plugins(ctx)
-		return err == nil && len(list.GetPlugins()) == 1
+		return err == nil && findPlugin(list.GetPlugins(), "wired") != nil
 	})
 	if _, err := c.PluginAction(ctx, &protocol.PluginAction{PluginId: "wired", Op: protocol.PluginGrant}); err != nil {
 		t.Fatal(err)
@@ -365,7 +375,8 @@ b = { type = "number", required = true }
 	})
 	waitFor(t, "helper plugin ready", func() bool {
 		list, err := c.Plugins(ctx)
-		return err == nil && len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginReady
+		p := findPlugin(list.GetPlugins(), "helper")
+		return err == nil && p != nil && p.GetState() == protocol.PluginReady
 	})
 	tools := d.plugins.Tools()
 	if len(tools) != 1 || tools[0].PluginID != "helper" || tools[0].ID != "echo_sum" {
@@ -483,7 +494,8 @@ scope = "project"
 
 	waitFor(t, "scoped plugin listed", func() bool {
 		list, err := c.Plugins(ctx)
-		return err == nil && len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginWaiting
+		p := findPlugin(list.GetPlugins(), "scoped")
+		return err == nil && p != nil && p.GetState() == protocol.PluginWaiting
 	})
 	if _, err := c.PluginAction(ctx, &protocol.PluginAction{PluginId: "scoped", Op: protocol.PluginGrant}); err != nil {
 		t.Fatal(err)
@@ -695,7 +707,8 @@ scope = "global"
 
 	waitFor(t, "scopedtools plugin ready", func() bool {
 		list, err := c.Plugins(ctx)
-		return err == nil && len(list.GetPlugins()) == 1 && list.GetPlugins()[0].GetState() == protocol.PluginReady
+		p := findPlugin(list.GetPlugins(), "scopedtools")
+		return err == nil && p != nil && p.GetState() == protocol.PluginReady
 	})
 
 	connectAgent := func(id, dir string) (*agentPeer, *sdk.ClientSession) {
@@ -854,5 +867,292 @@ scope = "global"
 	}
 	if gotOtherSess["scopeKey"] != "session:agent-other" || gotOtherSess["projectId"] != "" {
 		t.Fatalf("session_echo for unregistered dir = %+v", gotOtherSess)
+	}
+}
+
+// TestBundledMakoGitAutoLoadsAndHiddenFromCatalog checks that the bundled
+// mako-git plugin loads automatically in Ready state without a grant prompt,
+// and that its hidden panel block is excluded from list_blocks, BlockProps,
+// and ListPanels while mako.git remains in the catalog.
+func TestBundledMakoGitAutoLoadsAndHiddenFromCatalog(t *testing.T) {
+	d := meshDaemon(t, "a")
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	waitFor(t, "bundled mako-git ready", func() bool {
+		list, err := c.Plugins(ctx)
+		if err != nil {
+			return false
+		}
+		p := findPlugin(list.GetPlugins(), "mako-git")
+		return p != nil && p.GetBundled() && p.GetState() == protocol.PluginReady
+	})
+
+	// Hidden block must not appear in daemon catalog, BlockProps, or ListPanels.
+	names := blockNames(d.blocks())
+	if !strings.Contains(names, layoutdoc.BlockGit) {
+		t.Fatalf("d.blocks() missing %s: %s", layoutdoc.BlockGit, names)
+	}
+	if strings.Contains(names, "plugin:mako-git/panel") {
+		t.Fatalf("d.blocks() unexpectedly exposed hidden block: %s", names)
+	}
+	if _, ok := d.blockCatalog().BlockProps("plugin:mako-git/panel"); ok {
+		t.Fatal("blockCatalog().BlockProps unexpectedly exposed hidden block")
+	}
+	for _, panel := range d.panels() {
+		if panel.GetBlock() == "plugin:mako-git/panel" {
+			t.Fatalf("d.panels() unexpectedly exposed hidden block: %+v", panel)
+		}
+	}
+
+	// Verify MCP list_blocks tool omits plugin:mako-git/panel and includes mako.git.
+	dir := t.TempDir()
+	_, cleanup := d.projectAgents.server(ctx, "", "catalog-agent", "")
+	t.Cleanup(cleanup)
+	s, err := session.Start(session.Spec{
+		ID: "catalog-agent", NodeID: d.config().NodeID, Agent: "claude", Project: dir,
+		Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	d.sessions.add(s)
+	peer := d.projectAgents.activate(s)
+	if peer == nil {
+		t.Fatal("failed to activate agent peer")
+	}
+	srv, _ := d.newProjectAgentServer(peer, d.agentMCPSnapshot(), true)
+	ct, st := sdk.NewInMemoryTransports()
+	ss, err := srv.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ss.Close() })
+	cli := sdk.NewClient(&sdk.Implementation{Name: "test-agent", Version: "1"}, nil)
+	cs, err := cli.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = cs.Close() })
+
+	res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: toolListBlocks})
+	if err != nil {
+		t.Fatalf("list_blocks MCP call failed: %v", err)
+	}
+	raw, err := json.Marshal(res.StructuredContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), layoutdoc.BlockGit) {
+		t.Fatalf("MCP list_blocks missing %s: %s", layoutdoc.BlockGit, string(raw))
+	}
+	if strings.Contains(string(raw), "plugin:mako-git/panel") {
+		t.Fatalf("MCP list_blocks exposed hidden plugin:mako-git/panel: %s", string(raw))
+	}
+}
+
+// TestWatchBlockStandaloneView verifies that WatchBlock.Standalone is wired to
+// plugin.Manager.WatchScopedView both locally (including AND aggregation across
+// concurrent viewers) and when relayed across peers.
+func TestWatchBlockStandaloneView(t *testing.T) {
+	p := newBlockPair(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	writePlugin(t, p.server, "viewmode", map[string]string{
+		"plugin.toml": `id = "viewmode"
+version = "1.0.0"
+publisher = "test"
+api = 1
+entry = "main.js"
+permissions = []
+
+[[contributes.block]]
+id = "panel"
+title = "View Mode"
+`,
+		"main.js": `export default {
+  activate(m) {
+    m.blocks.register("panel", {
+      state: {},
+      render: (s, ui, ctx) => ui.text(ctx.view && ctx.view.standalone ? "STANDALONE" : "COMPACT"),
+    });
+  },
+};`,
+	})
+
+	waitForWithin(t, 20*time.Second, "viewmode plugin ready", func() bool {
+		pi := findPlugin(p.server.plugins.List(), "viewmode")
+		return pi != nil && pi.GetState() == protocol.PluginReady
+	})
+
+	watchView := func(sock, node string, standalone bool) (<-chan string, context.CancelFunc) {
+		wctx, wcancel := context.WithCancel(ctx)
+		out := make(chan string, 16)
+		go func() {
+			stream, _, err := transport.Dial(wctx, sock, &protocol.Hello{Name: "test"})
+			if err != nil {
+				return
+			}
+			defer stream.Close()
+			go func() {
+				<-wctx.Done()
+				_ = stream.Close()
+			}()
+			if err := stream.Send(protocol.TypeWatchBlock, "1", &protocol.WatchBlock{
+				NodeId:     node,
+				Block:      "plugin:viewmode/panel",
+				Standalone: standalone,
+			}); err != nil {
+				return
+			}
+			var tree *protocol.UiNode
+			for {
+				env, err := stream.Recv()
+				if err != nil {
+					return
+				}
+				u, err := protocol.Body[*protocol.BlockUpdate](env)
+				if err != nil {
+					continue
+				}
+				if u.GetTree() != nil {
+					tree = u.GetTree()
+				} else if len(u.GetOps()) > 0 && tree != nil {
+					next, err := protocol.ApplyUi(tree, u.GetOps())
+					if err != nil {
+						return
+					}
+					tree = next
+				}
+				if tree != nil {
+					select {
+					case out <- strings.TrimSpace(treeText(tree)):
+					case <-wctx.Done():
+						return
+					}
+				}
+			}
+		}()
+		return out, wcancel
+	}
+
+	waitText := func(ch <-chan string, want string) {
+		t.Helper()
+		deadline := time.After(10 * time.Second)
+		for {
+			select {
+			case got := <-ch:
+				if got == want {
+					return
+				}
+			case <-deadline:
+				t.Fatalf("timed out waiting for %q", want)
+			}
+		}
+	}
+
+	// Single standalone watcher over peer relay sees STANDALONE.
+	ch1, stop1 := watchView(p.phone.Socket(), p.server.config().NodeID, true)
+	defer stop1()
+	waitText(ch1, "STANDALONE")
+
+	// Adding a non-standalone local watcher flips the aggregate to COMPACT.
+	ch2, stop2 := watchView(p.server.Socket(), "", false)
+	waitText(ch2, "COMPACT")
+	waitText(ch1, "COMPACT")
+
+	// Closing the non-standalone watcher flips the remaining solo watcher back to STANDALONE.
+	stop2()
+	waitText(ch1, "STANDALONE")
+}
+
+// TestResolvePluginScopeFolder verifies folder scope resolution for local
+// folders (with matching project/space/session), subdirectories, remote node
+// workspace locations, and invalid keys.
+func TestResolvePluginScopeFolder(t *testing.T) {
+	d := meshDaemon(t, "a")
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	dirBSub := filepath.Join(dirB, "sub")
+	if err := os.MkdirAll(dirBSub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	setTestWorkspaceSpaceAndProjects(t, d, dirA, dirB)
+
+	// Add a remote node project location to the workspace.
+	remoteNode := "peer-remote"
+	remoteDelta := &protocol.WorkspaceState{
+		Spaces: map[string]*protocol.SpaceEntry{
+			"sp-rem": {
+				CreatedAt: mark(),
+				Name:      &protocol.StringReg{Value: "RemoteSpace"},
+				Projects: map[string]*protocol.ElementMeta{
+					"p-rem": {AddedAt: mark()},
+				},
+			},
+		},
+		Projects: map[string]*protocol.ProjectEntry{
+			"p-rem": {
+				CreatedAt: mark(),
+				Name:      &protocol.StringReg{Value: "Gamma"},
+				Roots: map[string]*protocol.ProjectRootEntry{
+					"r-rem": {
+						CreatedAt: mark(),
+						Locations: map[string]*protocol.ElementMeta{
+							workspace.LocationKey(remoteNode, "/srv/gamma"): {AddedAt: mark()},
+						},
+					},
+				},
+			},
+		},
+	}
+	if !d.workspace.edit(remoteDelta) {
+		t.Fatal("remote workspace edit had no effect")
+	}
+
+	s, err := session.Start(session.Spec{
+		ID: "sess-folder-a", NodeID: d.config().NodeID, Agent: "claude", Project: dirA,
+		Command: []string{"sh", "-c", "sleep 30"}, Cols: 40, Rows: 6,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	d.sessions.add(s)
+
+	keyA := protocol.FolderScope(protocol.LocalScopeNode, dirA)
+	scA := d.resolvePluginScope(keyA)
+	if scA.Scope != protocol.ScopeFolder || scA.ScopeKey != keyA ||
+		scA.Node != protocol.LocalScopeNode || scA.Folder != dirA ||
+		!slices.Equal(scA.Roots, []string{dirA}) ||
+		scA.ProjectID != "p1" || scA.ProjectName != "Alpha" ||
+		scA.SpaceID != "sp1" || scA.SpaceName != "Engineering" ||
+		scA.SessionID != "sess-folder-a" {
+		t.Fatalf("folder scope A = %+v", scA)
+	}
+
+	keyBSub := protocol.FolderScope(d.config().NodeID, dirBSub)
+	scB := d.resolvePluginScope(keyBSub)
+	if scB.Scope != protocol.ScopeFolder || scB.Node != d.config().NodeID ||
+		scB.Folder != dirBSub || !slices.Equal(scB.Roots, []string{dirBSub}) ||
+		scB.ProjectID != "p2" || scB.ProjectName != "Beta" ||
+		scB.SpaceID != "" || scB.SessionID != "" {
+		t.Fatalf("folder scope B/sub = %+v", scB)
+	}
+
+	keyRem := protocol.FolderScope(remoteNode, "/srv/gamma/api")
+	scRem := d.resolvePluginScope(keyRem)
+	if scRem.Scope != protocol.ScopeFolder || scRem.Node != remoteNode ||
+		scRem.Folder != "/srv/gamma/api" || !slices.Equal(scRem.Roots, []string{"/srv/gamma/api"}) ||
+		scRem.ProjectID != "p-rem" || scRem.ProjectName != "Gamma" ||
+		scRem.SpaceID != "sp-rem" || scRem.SpaceName != "RemoteSpace" {
+		t.Fatalf("remote folder scope = %+v", scRem)
+	}
+
+	if bad := d.resolvePluginScope("folder:not-valid"); bad.Scope != protocol.ScopeGlobal {
+		t.Fatalf("invalid folder scope = %+v, want global fallback", bad)
 	}
 }

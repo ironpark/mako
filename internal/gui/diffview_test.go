@@ -104,3 +104,52 @@ func TestALongDiffDrawsOnlyTheLinesInView(t *testing.T) {
 		p.Close()
 	}
 }
+
+func TestLineCountFormatting(t *testing.T) {
+	if lineCount(2712) != "2.7k" || lineCount(2000) != "2k" || lineCount(320) != "320" {
+		t.Fatalf("unexpected lineCount formatting: %q %q %q", lineCount(2712), lineCount(2000), lineCount(320))
+	}
+}
+
+func TestDiffTabSiblingsAndFollowChanges(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "127.0.0.1:1")
+	m.post = func(func()) {}
+	root := fileRoot{Node: "n", Path: "/p"}
+	a := &protocol.GitFile{Path: "a.go", Status: protocol.GitModified, Added: 1}
+	b := &protocol.GitFile{Path: "b.go", Status: protocol.GitModified, Added: 2}
+	m.openDiffTab(root, "/p", "", "", a, true)
+
+	g := diffGroup{Root: root, Repo: "/p"}
+	m.diffChanges.Groups.Set(map[diffGroup]*protocol.GitChanges{
+		g: {Root: "/p", Files: []*protocol.GitFile{a, b}},
+	})
+	if sibs := m.siblings(ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)]); len(sibs) != 2 || sibs[1].GetPath() != "b.go" {
+		t.Fatalf("worktree siblings = %+v, want [a.go b.go]", sibs)
+	}
+	m.stepDiff(1)
+	if sel := ggui.Peek(m.Selected); !strings.HasSuffix(sel, "b.go") {
+		t.Fatalf("stepDiff(1) selected %q, want b.go", sel)
+	}
+
+	// followChanges clears a diff whose file is no longer changed.
+	m.followChanges(g, &protocol.GitChanges{Root: "/p", Files: []*protocol.GitFile{a}})
+	cur := ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)]
+	if cur.Diff == nil || len(cur.Diff.GetLines()) != 0 || cur.Err != "" {
+		t.Fatalf("after followChanges cleared b.go: %+v", cur)
+	}
+
+	// Commit diff siblings come from diffChanges.Commits.
+	c1 := &protocol.GitFile{Path: "x.go", Status: protocol.GitAdded}
+	c2 := &protocol.GitFile{Path: "y.go", Status: protocol.GitModified}
+	m.openDiffTab(root, "/p", "abc1234", "", c1, true)
+	ck := diffCommitKey{Root: root, Repo: "/p", Commit: "abc1234"}
+	m.diffChanges.Commits.Set(map[diffCommitKey][]*protocol.GitFile{ck: {c1, c2}})
+	if sibs := m.siblings(ggui.Peek(m.Diffs)[ggui.Peek(m.Selected)]); len(sibs) != 2 || sibs[1].GetPath() != "y.go" {
+		t.Fatalf("commit siblings = %+v, want [x.go y.go]", sibs)
+	}
+	m.stepDiff(1)
+	if sel := ggui.Peek(m.Selected); !strings.HasSuffix(sel, "y.go") {
+		t.Fatalf("commit stepDiff(1) selected %q, want y.go", sel)
+	}
+}

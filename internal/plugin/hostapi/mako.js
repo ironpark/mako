@@ -4,6 +4,17 @@
 // returns a promise of the method's response.
 export function hostApi(call) {
   return Object.freeze({
+    git: Object.freeze({
+      status: (req) => call("git.status", req),
+      history: (req) => call("git.history", req),
+      showCommit: (req) => call("git.showCommit", req),
+      watch: (req) => call("git.watch", req),
+      unwatch: (req) => call("git.unwatch", req),
+      run: (req) => call("git.run", req),
+    }),
+    forge: Object.freeze({
+      branchStatus: (req) => call("forge.branchStatus", req),
+    }),
     log: Object.freeze({
       write: (req) => call("log.write", req),
     }),

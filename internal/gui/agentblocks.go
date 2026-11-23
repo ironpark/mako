@@ -31,9 +31,9 @@ func (m *model) setAgentBlocks(list []*protocol.AgentBlock) {
 	for _, b := range list {
 		name, origin, title := b.GetName(), blockOrigin{session: b.GetSessionId(), agent: b.GetAgent()}, b.GetTitle()
 		label := cmpTone(title, cmpTone(b.GetAgent(), T("Agent")))
-		defs = append(defs, blockDef{Name: name, Title: label,
-			Build: func(m *model, _ map[string]any) blockView {
-				return blockView{Body: treeBlock(m, name, origin, title, "", nil)}
+		defs = append(defs, blockDef{Name: name, Title: label, Chrome: chromePanel, Icon: "bot",
+			Build: func(m *model, _ map[string]any, at blockPlace) blockView {
+				return treeBlockView(m, name, origin, title, "", nil, at)
 			}})
 	}
 	m.blocks.replaceOf("agent:", defs)

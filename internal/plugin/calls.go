@@ -34,7 +34,7 @@ func (p *plugin) invoke(method string, gesture bool, args ...any) (string, error
 	switch {
 	case errors.As(err, &over):
 		p.kill(over.msg)
-	case method == "load" || method == "event" || method == "command" || method == "sessionEvent" || method == "callTool":
+	case method == "load" || method == "event" || method == "command" || method == "sessionEvent" || method == "callTool" || method == "gitDone":
 		p.count(&p.failures, "calls", err)
 	}
 	return out, err
@@ -59,6 +59,7 @@ func (p *plugin) count(n *int, what string, err error) {
 // state and the live JS runtime.
 func (p *plugin) evictInstances(keys []string) {
 	for _, key := range keys {
+		p.stopGitWatchesForInstance(key)
 		delete(p.saved, key)
 		if p.rt != nil {
 			blockID, scopeKey := splitInstanceKey(key)
@@ -117,12 +118,16 @@ func (p *plugin) render(key string) {
 		p.mu.Unlock()
 		return
 	}
-	blockID, scopeKey, locale := in.id, in.scopeKey, in.locale
+	blockID, scopeKey, locale, standalone := in.id, in.scopeKey, in.locale, in.standaloneLocked()
 	p.mu.Unlock()
 	sc := p.m.resolveScope(scopeKey)
 	sc.Locale = normalizeLocale(locale)
+	sc.View = View{Standalone: standalone}
 	ctxJSON := marshalScopeContext(sc)
+	prevInst := p.activeInstance
+	p.activeInstance = key
 	out, err := p.invoke("render", false, blockID, scopeKey, ctxJSON)
+	p.activeInstance = prevInst
 	var t *uiblock.Tree
 	var over *limitError
 	if err == nil {
@@ -198,6 +203,20 @@ func (p *plugin) showAll() {
 
 // load runs a block instance's load hook with its ScopeContext.
 func (p *plugin) load(in *instance) {
+	p.mu.Lock()
+	in.loading = true
+	in.dirty = false
+	locale, standalone := in.locale, in.standaloneLocked()
+	p.mu.Unlock()
+	defer func() {
+		p.mu.Lock()
+		in.loading = false
+		requeue := in.dirty && in.subs > 0
+		p.mu.Unlock()
+		if requeue {
+			p.post(func() { p.reloadInstance(in.key) })
+		}
+	}()
 	in.loaded, in.lastLoad = true, time.Now()
 	if r, err := p.invoke("refresh", false, in.id); err == nil {
 		secs, _ := strconv.ParseFloat(r, 64)
@@ -209,13 +228,15 @@ func (p *plugin) load(in *instance) {
 	if p.rt == nil {
 		return
 	}
-	p.mu.Lock()
-	locale := in.locale
-	p.mu.Unlock()
 	sc := p.m.resolveScope(in.scopeKey)
 	sc.Locale = normalizeLocale(locale)
+	sc.View = View{Standalone: standalone}
 	ctxJSON := marshalScopeContext(sc)
-	if _, err := p.invoke("load", false, in.id, in.scopeKey, ctxJSON); err != nil {
+	prevInst := p.activeInstance
+	p.activeInstance = in.key
+	_, err := p.invoke("load", false, in.id, in.scopeKey, ctxJSON)
+	p.activeInstance = prevInst
+	if err != nil {
 		p.setErr(in.key, fmt.Errorf("load: %w", err))
 		return
 	}

@@ -438,6 +438,50 @@ func (m *model) insertPath(id, path string) {
 // Panel -------------------------------------------------------------------------
 
 func filesPanel(m *model) ggui.Widget {
+	return filesPanelBody(m, true)
+}
+
+func filesPanelView(m *model, at blockPlace) blockView {
+	shown := m.Roots
+	hasRoots := ggui.Map(shown, func(p panelRoots) bool { return len(p.Roots) > 0 })
+	tools := ggui.View(shown, func(p panelRoots) ggui.Widget {
+		if len(p.Roots) == 0 {
+			return widget.Box()
+		}
+		return filesHeaderRow(m, p, !at.Solo)
+	})
+	return blockView{
+		Body:     filesPanelBody(m, false),
+		Tools:    tools,
+		hasTools: hasRoots,
+	}
+}
+
+func filesHeaderRow(m *model, p panelRoots, showIcon bool) ggui.Widget {
+	r := p.own()
+	name, where := projectName(r.Path), prettyPath(r.Path)
+	if p.multi() {
+		name, where = p.Name, Tf("%d folders", len(p.Roots))
+	}
+	items := make([]ggui.Widget, 0, 3)
+	if showIcon {
+		items = append(items, icon("folder-open").Size(15))
+	}
+	items = append(items,
+		widget.Expanded(widget.Row(
+			widget.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap(),
+			widget.Expanded(widget.Text(where).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
+		).Gap(8).Align(widget.AlignBaseline)),
+		widget.Row(
+			hiddenFilesToggle(m),
+			newInRoot(m, r),
+			iconButton("refresh-cw", T("Refresh"), m.refreshFiles),
+		).Gap(2),
+	)
+	return widget.Row(items...).Gap(8).Align(widget.AlignCenter)
+}
+
+func filesPanelBody(m *model, withHeader bool) ggui.Widget {
 	shown := m.Roots
 	// The project is read when it is shown, and a new one clears the
 	// preview of the last. Of a project of several folders, the session's
@@ -471,7 +515,7 @@ func filesPanel(m *model) ggui.Widget {
 		if len(p.Roots) == 0 {
 			return widget.Box(muted(widget.Text(T("Open a session to browse its project.")).Size(13))).Pad(16)
 		}
-		return filesView(m, p)
+		return filesView(m, p, withHeader)
 	})
 }
 
@@ -489,7 +533,7 @@ func (m *model) rootItems(p panelRoots) []fileItem {
 	return items
 }
 
-func filesView(m *model, p panelRoots) ggui.Widget {
+func filesView(m *model, p panelRoots, withHeader bool) ggui.Widget {
 	r := p.own()
 	roots := ggui.Derived(func() []fileItem { return m.rootItems(p) })
 	// A folder of the project inside another is shown at the top, and not
@@ -561,29 +605,12 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 		}).
 		Name(T("Files"))
 
-	name, where := projectName(r.Path), prettyPath(r.Path)
-	if p.multi() {
-		name, where = p.Name, Tf("%d folders", len(p.Roots))
-	}
-	header := panelHeader(
-		icon("folder-open").Size(15),
-		widget.Expanded(widget.Row(
-			widget.Text(name).Size(13).Weight(ggui.WeightMedium).NoWrap(),
-			widget.Expanded(widget.Text(where).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()),
-		).Gap(8).Align(widget.AlignBaseline)),
-		widget.Row(
-			hiddenFilesToggle(m),
-			newInRoot(m, r),
-			iconButton("refresh-cw", T("Refresh"), m.refreshFiles),
-		).Gap(2),
-	)
-	// A failed delete says why under the header.
-	header = widget.Column(header, reveal(ggui.Map(m.files.Note, func(s string) bool { return s != "" }), func() ggui.Widget {
+	note := reveal(ggui.Map(m.files.Note, func(s string) bool { return s != "" }), func() ggui.Widget {
 		return widget.Box(widget.Row(
 			widget.Expanded(widget.TextOf(m.files.Note).Size(12).Color(skin.DotDown)),
 			iconButton("x", T("Dismiss"), func() { m.files.Note.Set("") }),
 		).Gap(6)).Pad(4, 6, 4, 12)
-	})).Stretch()
+	})
 	hasPreview := ggui.Map(m.files.Preview, func(p filePreview) bool { return p.Key != "" })
 	// Files dropped below the folders go into the project, from the
 	// desktop and from the tab; a right click there makes or pastes there.
@@ -595,6 +622,17 @@ func filesView(m *model, p panelRoots) ggui.Widget {
 	list = ui.ContextMenuFunc(list, func() []ggui.Widget {
 		return append(folderItems(m, root, m.askFile), ui.MenuDivider(), ui.MenuItem(T("Refresh"), m.refreshFiles))
 	}).Name(T("File actions"))
+	if !withHeader {
+		split := ggui.State(0.55)
+		content := ggui.If(hasPreview, func() ggui.Widget {
+			return ui.Resizable(split, list, previewPane(m)).Vertical().MinSizes(80, 80).Hairline().Name(T("Preview divider"))
+		}).Else(func() ggui.Widget { return list })
+		return widget.Column(note, widget.Expanded(content)).Stretch()
+	}
+	header := widget.Column(
+		widget.Box(filesHeaderRow(m, p, true)).Height(tabBarHeight).Pad(0, 6, 0, 12),
+		note,
+	).Stretch()
 	return treeOverPane(header, list,
 		hasPreview, 0.55, func() ggui.Widget { return previewPane(m) }, T("Preview divider"))
 }

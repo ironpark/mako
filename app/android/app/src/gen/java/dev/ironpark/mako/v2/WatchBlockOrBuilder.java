@@ -47,7 +47,8 @@ public interface WatchBlockOrBuilder extends
   /**
    * <pre>
    * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+   * revision 46).
    * </pre>
    *
    * <code>string scope = 3 [json_name = "scope"];</code>
@@ -57,7 +58,8 @@ public interface WatchBlockOrBuilder extends
   /**
    * <pre>
    * scope is the canonical scope key ("" for global, "space:&lt;id&gt;",
-   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42).
+   * "project:&lt;id&gt;", "session:&lt;id&gt;", revision 42; "folder:&lt;node&gt;/&lt;b64path&gt;",
+   * revision 46).
    * </pre>
    *
    * <code>string scope = 3 [json_name = "scope"];</code>
@@ -87,4 +89,15 @@ public interface WatchBlockOrBuilder extends
    */
   com.google.protobuf.ByteString
       getLocaleBytes();
+
+  /**
+   * <pre>
+   * standalone says this viewer displays the block solo rather than as one
+   * tab of a multi-tab stack (revision 46).
+   * </pre>
+   *
+   * <code>bool standalone = 5 [json_name = "standalone"];</code>
+   * @return The standalone.
+   */
+  boolean getStandalone();
 }

@@ -177,8 +177,8 @@ func TestANodeLetInTapsAPluginsBlock(t *testing.T) {
 		}
 	}
 	waitForWithin(t, 20*time.Second, "the plugin listed, waiting", func() bool {
-		list := p.server.plugins.List()
-		return len(list) == 1 && list[0].GetState() == protocol.PluginWaiting
+		p := findPlugin(p.server.plugins.List(), "hello")
+		return p != nil && p.GetState() == protocol.PluginWaiting
 	})
 	server := p.server.config().NodeID
 	got, ended := followBlock(ctx, p.c, server, "plugin:hello/hi")
@@ -302,8 +302,8 @@ scope = "project"
 };`,
 	})
 	waitForWithin(t, 20*time.Second, "the scoped plugin ready", func() bool {
-		list := p.server.plugins.List()
-		return len(list) == 1 && list[0].GetState() == protocol.PluginReady
+		p := findPlugin(p.server.plugins.List(), "rscope")
+		return p != nil && p.GetState() == protocol.PluginReady
 	})
 
 	server := p.server.config().NodeID

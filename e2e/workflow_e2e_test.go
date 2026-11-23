@@ -150,17 +150,26 @@ func TestWorkflow1OfflinePluginPipeline(t *testing.T) {
 	waitPluginState(protocol.PluginDenied)
 
 	env.mustCLI("plugins", "remove", "kanban")
+	nonBundledCount := func(list *protocol.Plugins) int {
+		n := 0
+		for _, p := range list.GetPlugins() {
+			if !p.GetBundled() {
+				n++
+			}
+		}
+		return n
+	}
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		list, err := c.Plugins(ctx)
-		if err == nil && len(list.GetPlugins()) == 0 {
+		if err == nil && nonBundledCount(list) == 0 {
 			break
 		}
 		time.Sleep(30 * time.Millisecond)
 	}
 	list, err := c.Plugins(ctx)
-	if err != nil || len(list.GetPlugins()) != 0 {
-		t.Fatalf("expected 0 plugins after remove, got %+v err=%v", list, err)
+	if err != nil || nonBundledCount(list) != 0 {
+		t.Fatalf("expected 0 non-bundled plugins after remove, got %+v err=%v", list, err)
 	}
 
 	d.stop(t)
