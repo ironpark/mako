@@ -43,6 +43,9 @@ type projectAsk struct {
 	// SettingsOpen edits a copy of the project, Draft, until it is saved.
 	SettingsOpen *ggui.StateValue[bool]
 	Draft        *ggui.StateValue[project]
+
+	// Import scans a folder for git repositories to add to the sidebar.
+	Import *importAsk
 }
 
 func newProjectAsk() *projectAsk {
@@ -52,6 +55,7 @@ func newProjectAsk() *projectAsk {
 		MergeOpen: ggui.State(false), MergeQuery: ggui.State(""),
 		SettingsOpen: ggui.State(false),
 		Draft:        ggui.State(project{}).WithEqual(deepEqual[project]),
+		Import:       newImportAsk(),
 	}
 }
 
@@ -395,7 +399,7 @@ func projectDialogs(m *model) ggui.Widget {
 		Title: T("Rename project"), Field: T("Project name"), Action: T("Rename"),
 		Placeholder: T("Its folder's name"), Submit: m.submitProjectName,
 	})
-	return widget.Stack(name, addFolderDialog(m), a.merge.dialog(), projectSettingsDialog(m))
+	return widget.Stack(name, addFolderDialog(m), a.merge.dialog(), projectSettingsDialog(m), importProjectsDialog(m))
 }
 
 // addFolderDialog asks for a folder to add to a project: the node it is

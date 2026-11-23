@@ -89,6 +89,9 @@ type prefs struct {
 	AgentSort    string `json:"agent_sort"`
 	AgentCompact bool   `json:"agent_compact,omitempty"`
 	AgentFilter  string `json:"agent_filter,omitempty"`
+	// ProjectMachine filters the sidebar's project list to a single machine
+	// by node ID; "" shows projects on every machine.
+	ProjectMachine string `json:"project_machine,omitempty"`
 	// OldPinnedProjects and OldPinned are the pins as gui.json kept them
 	// before the workspace shared them (spaceList's); read to move them
 	// there, then dropped.

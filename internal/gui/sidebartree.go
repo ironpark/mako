@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image/color"
 	"slices"
+	"strings"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/runtime"
@@ -203,30 +204,214 @@ func (m *model) spaceSections(st sidebarState, i int) []sessionGroup {
 	return p.spaceGroups(i, groupProjects(m.Sessions.Get(), m.Nodes.Get(), st.kept.Get(), p.Projects, p.Names))
 }
 
+// setProjectMachine sets the machine filter for the sidebar's project list
+// ("" for all machines).
+func (m *model) setProjectMachine(nodeID string) {
+	m.Prefs.Update(func(p prefs) prefs { p.ProjectMachine = nodeID; return p })
+}
+
+// groupHasMachine reports whether project section g has a folder or session on
+// machine ("" matches every section).
+func groupHasMachine(g sessionGroup, machine string) bool {
+	if machine == "" || g.NodeID == machine {
+		return true
+	}
+	for _, r := range g.Roots {
+		if r.Node == machine {
+			return true
+		}
+	}
+	for _, s := range g.Sessions {
+		if s.GetNodeId() == machine {
+			return true
+		}
+	}
+	return false
+}
+
+// rootHasMachine reports whether root j of project section g has a location or
+// session on machine ("" matches every root).
+func rootHasMachine(g sessionGroup, j int, r projectRoot, machine string) bool {
+	if machine == "" {
+		return true
+	}
+	for _, l := range r.Locations {
+		if l.Node == machine {
+			return true
+		}
+	}
+	for _, s := range g.Sessions {
+		if s.GetNodeId() == machine {
+			if at, ok := g.RootOf[s.GetId()]; ok && at == j {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// filterGroupsByMachine returns the project sections that belong to machine,
+// preserving order without modifying the sections.
+func filterGroupsByMachine(groups []sessionGroup, machine string) []sessionGroup {
+	if machine == "" {
+		return groups
+	}
+	var out []sessionGroup
+	for _, g := range groups {
+		if groupHasMachine(g, machine) {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// projectMachines returns the machine IDs offered in the project list's machine
+// filter: those referenced by groups, known non-mobile nodes, and any active
+// selection, with this machine first and the rest by name.
+func projectMachines(groups []sessionGroup, nodes []*protocol.Node, selected string) []string {
+	seen := map[string]bool{}
+	add := func(id string) {
+		if id != "" {
+			seen[id] = true
+		}
+	}
+	for _, g := range groups {
+		add(g.NodeID)
+		for _, r := range g.Roots {
+			add(r.Node)
+		}
+		for _, s := range g.Sessions {
+			add(s.GetNodeId())
+		}
+	}
+	for _, n := range nodes {
+		if n.GetOs() == "android" || n.GetOs() == "ios" {
+			continue
+		}
+		add(n.GetId())
+	}
+	add(selected)
+	out := make([]string, 0, len(seen))
+	for id := range seen {
+		out = append(out, id)
+	}
+	slices.SortStableFunc(out, func(a, b string) int {
+		na, _ := nodeIn(nodes, a)
+		nb, _ := nodeIn(nodes, b)
+		return cmp.Or(
+			cmp.Compare(pick(na.GetSource() == "self", 0, 1), pick(nb.GetSource() == "self", 0, 1)),
+			cmp.Compare(strings.ToLower(nodeName(nodes, a)), strings.ToLower(nodeName(nodes, b))),
+			cmp.Compare(a, b),
+		)
+	})
+	return out
+}
+
+// projectsPanel is the sidebar's project list in space i: the machine filter
+// heading when several machines are known (or a filter is active), over the
+// scrollable project tree.
+func projectsPanel(m *model, st sidebarState, i int) ggui.Widget {
+	head := ggui.Reactive(func() ggui.Widget {
+		return projectMachineBar(m, m.spaceSections(st, i), m.Nodes.Get(), st.projectMachine.Get())
+	})
+	tree := widget.Scroll(widget.Padding(projectTree(m, st, i), 6, 8, 10, 8)).Bar(skin.Surface3)
+	return widget.Column(head, widget.Expanded(tree)).Stretch()
+}
+
+// projectMachineBar is the heading above the project tree when more than one
+// machine is available or a machine filter is active.
+func projectMachineBar(m *model, allGroups []sessionGroup, nodes []*protocol.Node, machine string) ggui.Widget {
+	machines := projectMachines(allGroups, nodes, machine)
+	if len(machines) <= 1 && machine == "" {
+		return widget.Box().Height(4)
+	}
+	shownCount := len(filterGroupsByMachine(allGroups, machine))
+	items := make([]ggui.Widget, 0, len(machines)+2)
+	items = append(items,
+		ui.MenuItem(T("All machines"), func() { m.setProjectMachine("") }).
+			Icon(icon("monitor").Size(13)).
+			Checked(machine == "").
+			Shortcut(fmt.Sprint(len(allGroups))),
+		ui.MenuDivider(),
+	)
+	for _, id := range machines {
+		nodeID := id
+		n, _ := nodeIn(nodes, nodeID)
+		count := len(filterGroupsByMachine(allGroups, nodeID))
+		items = append(items, ui.MenuItem(nodeName(nodes, nodeID), func() { m.setProjectMachine(nodeID) }).
+			Icon(icon(osIcon(n.GetOs())).Size(13)).
+			Checked(machine == nodeID).
+			Shortcut(fmt.Sprint(count)))
+	}
+	glyph, label := "monitor", T("All machines")
+	glyphColor, textColor := color.Color(skin.Muted), color.Color(skin.Muted)
+	if machine != "" {
+		n, _ := nodeIn(nodes, machine)
+		glyph, label = osIcon(n.GetOs()), nodeName(nodes, machine)
+		glyphColor, textColor = skin.AccentBright, skin.Fg
+	}
+	labelText := widget.Text(label).Size(12).Color(textColor).NoWrap().Ellipsis()
+	if machine != "" {
+		labelText.Weight(ggui.WeightMedium)
+	}
+	face := widget.Box(widget.Row(
+		icon(glyph).Size(12.5).Color(glyphColor),
+		widget.Box(labelText).MaxWidth(120),
+		icon("chevron-down").Size(10).Color(pick[color.Color](machine != "", skin.Muted, skin.ExtraMuted)),
+	).Gap(4).Align(widget.AlignCenter)).Pad(0, 6).Height(24)
+	if machine != "" {
+		face = face.Fill(skin.Surface2).Radius(6)
+	}
+	menu := iconMenu(ui.MenuOf(face, items...).Name(T("Filter projects by machine")), 0)
+	count := widget.Box(widget.Text(fmt.Sprint(shownCount)).Size(11).Color(skin.Muted).NoWrap()).Pad(1, 6).Radius(9).Fill(skin.Surface2)
+	row := []ggui.Widget{
+		widget.Text(T("Projects")).Size(13).Weight(ggui.WeightSemibold).NoWrap(),
+		count,
+		widget.Spacer(),
+		menu,
+	}
+	if machine != "" {
+		row = append(row, ui.Tooltip(
+			ui.ButtonOf(icon("x").Size(12).Color(skin.Muted), func() { m.setProjectMachine("") }).
+				Ghost().Pad(4).Radius(6).Name(T("Show all machines")),
+			T("Show all machines"),
+		))
+	}
+	return widget.Box(widget.Row(row...).Gap(4).Align(widget.AlignCenter)).Pad(8, 8, 2, 16)
+}
+
 // projectTree is the sidebar's projects in space i: those pinned, then
 // every other one under its owner. A project pinned shows at the top as
 // it would below, its folders under it; a folder pinned shows there on
 // its own, and neither shows again below.
 func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
-		groups := m.spaceSections(st, i)
+		allGroups := m.spaceSections(st, i)
 		nodes := m.Nodes.Get()
+		machine := st.projectMachine.Get()
+		groups := filterGroupsByMachine(allGroups, machine)
 		scope := m.scopeIn(i)
 		pins := st.pinnedProjects.Get()
 		looks := m.spaces().Looks
-		if len(groups) == 0 {
+		if len(allGroups) == 0 {
 			empty := T("No projects yet. Add a folder with +.")
 			if _, ok := m.spaces().spaceOf(i); ok {
 				empty = T("No projects in this space. Add a folder with +, or move a project here from its menu.")
 			}
 			return widget.Box(muted(widget.Text(empty).Size(12))).Pad(8)
 		}
+		if len(groups) == 0 {
+			return widget.Box(widget.Column(
+				muted(widget.Text(Tf("No projects on %s.", nodeName(nodes, machine))).Size(12)),
+				widget.Align(ui.ButtonOf(widget.Text(T("Show all machines")).Size(12).Color(skin.Fg).NoWrap(), func() { m.setProjectMachine("") }).Outline().Pad(4, 8).Radius(6).Name(T("Show all machines"))).Left(),
+			).Gap(6)).Pad(8)
+		}
 		labels := projectLabels(groups, nodes)
 		var spColor color.Color
 		if sp, ok := m.spaces().spaceOf(i); ok {
 			spColor = sp.color()
 		}
-		tree := treeRows{m: m, scope: scope, pins: pins, looks: looks, labels: labels, spaceColor: spColor}
+		tree := treeRows{m: m, scope: scope, pins: pins, looks: looks, labels: labels, spaceColor: spColor, machine: machine}
 		var rows []ggui.Widget
 		if pinned := tree.pinnedRows(groups); len(pinned) > 0 {
 			rows = append(rows, widget.Column(append([]ggui.Widget{treeHeading(icon("pin").Size(13), T("Pinned"), nil)}, pinned...)...).Gap(1).Stretch(),
@@ -260,6 +445,7 @@ type treeRows struct {
 	looks      map[string]projectLook
 	labels     map[string]string
 	spaceColor color.Color
+	machine    string
 }
 
 // pinned reports whether k is pinned.
@@ -331,10 +517,21 @@ func (t treeRows) project(g sessionGroup) []ggui.Widget {
 	}
 	// A folder pinned shows with the pins, unless the project is pinned
 	// too and shows there whole.
+	var matching []int
+	for j, r := range g.Def.Roots {
+		if rootHasMachine(g, j, r, t.machine) {
+			matching = append(matching, j)
+		}
+	}
+	if len(matching) == 0 {
+		for j := range g.Def.Roots {
+			matching = append(matching, j)
+		}
+	}
 	whole := t.pinned(key)
 	var shown []int
-	for j, r := range g.Def.Roots {
-		if whole || !t.pinned(scopeKey{Section: g.Key, Root: rootKey(r)}) {
+	for _, j := range matching {
+		if whole || !t.pinned(scopeKey{Section: g.Key, Root: rootKey(g.Def.Roots[j])}) {
 			shown = append(shown, j)
 		}
 	}
@@ -403,7 +600,7 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 		if g.Def != nil {
 			j = slices.IndexFunc(g.Def.Roots, func(r projectRoot) bool { return rootKey(r) == k.Root })
 		}
-		if j < 0 {
+		if j < 0 || !rootHasMachine(g, j, g.Def.Roots[j], t.machine) {
 			continue
 		}
 		var sessions []*protocol.SessionInfo

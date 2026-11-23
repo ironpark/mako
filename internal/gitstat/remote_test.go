@@ -22,3 +22,13 @@ func TestConfigReadsAPullRequestsUpstream(t *testing.T) {
 		t.Errorf("an unset key = %q", m)
 	}
 }
+
+func TestConfigRemote(t *testing.T) {
+	owner, remote := ConfigRemote([]byte("[remote \"origin\"]\n\turl = git@github.com:IronPark/Mako.git\n"))
+	if owner != "github.com/IronPark" || remote != "github.com/ironpark/mako" {
+		t.Fatalf("ConfigRemote = (%q, %q), want (github.com/IronPark, github.com/ironpark/mako)", owner, remote)
+	}
+	if o, r := ConfigRemote(nil); o != "" || r != "" {
+		t.Fatalf("ConfigRemote(nil) = (%q, %q)", o, r)
+	}
+}

@@ -281,3 +281,137 @@ func TestPickSubProjectSwitchesActiveTab(t *testing.T) {
 		t.Fatalf("active tab = %q, want %q", got, gguiSession)
 	}
 }
+
+func TestProjectMachineFilterHelpers(t *testing.T) {
+	nodes := []*protocol.Node{
+		{Id: "box", Name: "build-box", Os: "linux", Source: "mesh"},
+		{Id: "phone", Name: "Pixel", Os: "android", Source: "mesh"},
+		{Id: "studio", Name: "MacStudio", Os: "darwin", Source: "self"},
+		{Id: "air", Name: "Air", Os: "darwin", Source: "mesh"},
+	}
+	groups := []sessionGroup{
+		{
+			Key:    "p1",
+			NodeID: "studio",
+			Roots:  []fileRoot{{Node: "studio", Path: "/w/a"}, {Node: "box", Path: "/srv/a"}},
+			Sessions: []*protocol.SessionInfo{
+				{Id: "s1", NodeId: "studio"},
+				{Id: "s2", NodeId: "air"},
+			},
+		},
+		{
+			Key:    "p2",
+			NodeID: "studio",
+			Roots:  []fileRoot{{Node: "studio", Path: "/w/b"}},
+		},
+	}
+
+	// Self machine comes first, then alphabetical; mobile nodes without projects are excluded.
+	got := projectMachines(groups, nodes, "")
+	want := []string{"studio", "air", "box"}
+	if len(got) != len(want) {
+		t.Fatalf("projectMachines = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("projectMachines = %v, want %v", got, want)
+		}
+	}
+
+	// An active selection for an offline/unknown machine stays listed so it can be cleared.
+	withOffline := projectMachines(groups, nodes, "gone")
+	if len(withOffline) != 4 {
+		t.Fatalf("expected offline selection included, got %v", withOffline)
+	}
+
+	// Filtering matches by NodeID, Roots, or Sessions without mutating groups.
+	if got := filterGroupsByMachine(groups, ""); len(got) != 2 {
+		t.Fatalf("empty filter returned %d groups, want 2", len(got))
+	}
+	if got := filterGroupsByMachine(groups, "studio"); len(got) != 2 {
+		t.Fatalf("studio filter returned %d groups, want 2", len(got))
+	}
+	if got := filterGroupsByMachine(groups, "box"); len(got) != 1 || got[0].Key != "p1" || len(got[0].Roots) != 2 {
+		t.Fatalf("box filter returned %+v", got)
+	}
+	if got := filterGroupsByMachine(groups, "air"); len(got) != 1 || got[0].Key != "p1" {
+		t.Fatalf("air filter returned %+v", got)
+	}
+	if got := filterGroupsByMachine(groups, "desk"); len(got) != 0 {
+		t.Fatalf("desk filter returned %d groups, want 0", len(got))
+	}
+}
+
+func TestProjectsPanelMachineFilterUI(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	sidebarPreview(m) // 4 machines: studio, air, box, desk
+	st := newSidebarState(m)
+	p := ggui.ProbeBuilder(func() ggui.Widget { return projectsPanel(m, st, 0) }, ggui.Sz(280, 1200))
+	defer p.Close()
+	p.Frame()
+
+	has := func(name string) bool { _, ok := p.Semantics().Find(ggui.RoleButton, name); return ok }
+	hasMenu := func(name string) bool { _, ok := p.Semantics().Find(ggui.RoleMenu, name); return ok }
+
+	// Multi-machine setup shows the machine filter dropdown and all projects.
+	if !hasMenu(T("Filter projects by machine")) {
+		t.Fatalf("expected machine filter dropdown in multi-machine sidebar:\n%s", p.Semantics().String())
+	}
+	if !has("acp-go") || !has("XXGG/MAKO") || !has("XXGG/MAKO / ggui") || !has("#mako") || !has("#ggwd") {
+		t.Fatalf("expected all projects before filtering:\n%s", p.Semantics().String())
+	}
+
+	// Filtering to "desk" shows only XXGG/MAKO and its #ggwd root (where desk has a session),
+	// hides studio-only projects and non-desk sub-projects including pinned ggui.
+	m.setProjectMachine("desk")
+	for range 3 {
+		p.Frame()
+	}
+	if !has("XXGG/MAKO") || !has("#ggwd") {
+		t.Fatalf("expected XXGG/MAKO and #ggwd on desk:\n%s", p.Semantics().String())
+	}
+	if has("acp-go") || has("gostty") || has("qngg") || has("#mako") || has("#ggfx") || has("XXGG/MAKO / ggui") {
+		t.Fatalf("unexpected non-desk projects shown:\n%s", p.Semantics().String())
+	}
+
+	// Agents list remains unfiltered by ProjectMachine.
+	agents := m.listAgents(st, 0, agentView{Group: agentGroupNone})
+	if agents.shown() != len(ggui.Peek(m.Sessions)) {
+		t.Fatalf("agents list affected by project machine filter: got %d, want %d", agents.shown(), len(ggui.Peek(m.Sessions)))
+	}
+
+	// Filtering to a machine with no projects shows the reset button, and clicking it clears the filter.
+	m.setProjectMachine("empty-node")
+	for range 3 {
+		p.Frame()
+	}
+	if has("XXGG/MAKO") {
+		t.Fatalf("expected no projects on empty-node:\n%s", p.Semantics().String())
+	}
+	resetBtn, ok := p.Semantics().Find(ggui.RoleButton, T("Show all machines"))
+	if !ok {
+		t.Fatalf("expected reset button when machine filter is active:\n%s", p.Semantics().String())
+	}
+	p.Click(resetBtn.Rect.Origin.Add(ggui.Pt(resetBtn.Rect.Size.W/2, resetBtn.Rect.Size.H/2)))
+	for range 3 {
+		p.Frame()
+	}
+	if got := ggui.Peek(m.Prefs).ProjectMachine; got != "" {
+		t.Fatalf("ProjectMachine = %q after reset click, want empty", got)
+	}
+	if !has("acp-go") || !has("XXGG/MAKO") {
+		t.Fatalf("expected all projects restored after reset:\n%s", p.Semantics().String())
+	}
+
+	// Single-machine setup hides the machine filter dropdown.
+	m.Nodes.Set([]*protocol.Node{{Id: "studio", Name: "MacStudio.local", Os: "darwin", Source: "self"}})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s1", NodeId: "studio", Project: "/w/acp-go", Agent: "claude", State: protocol.StateRunning}})
+	m.Spaces.Set(spaceList{})
+	for range 3 {
+		p.Frame()
+	}
+	if hasMenu(T("Filter projects by machine")) {
+		t.Fatalf("expected machine filter dropdown hidden on single-machine setup:\n%s", p.Semantics().String())
+	}
+}

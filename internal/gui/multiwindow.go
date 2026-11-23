@@ -981,12 +981,12 @@ func spaceWindowSidebar(m *model, sw *spaceWindowState) ggui.Widget {
 			return widget.Box(widget.Row(
 				icon("messages-square").Size(17),
 				widget.Expanded(widget.Row(parts...).Gap(6).Align(widget.AlignCenter)),
-				iconButton("plus", T("Add a project"), m.addProjectFolder),
+				addProjectMenu(m),
 			).Gap(6).Align(widget.AlignCenter)).Pad(0, 8, 0, 12).Height(headerHeight)
 		})
 		grip := spaceWindowSidebarGrip(sw)
 		body := &sidebarBody{
-			top:    widget.Scroll(widget.Padding(spaceWindowProjectTree(m, st, sw), 10, 8, 10, 8)).Bar(skin.Surface3),
+			top:    spaceWindowProjectsPanel(m, st, sw),
 			grip:   grip,
 			bottom: spaceWindowAgentsPanel(m, st, sw),
 			split:  sw.sidebarSplit,
@@ -1023,6 +1023,19 @@ func spaceWindowSidebarGrip(sw *spaceWindowState) ggui.Widget {
 		})
 }
 
+func spaceWindowProjectsPanel(m *model, st sidebarState, sw *spaceWindowState) ggui.Widget {
+	head := ggui.Reactive(func() ggui.Widget {
+		set := m.spaces()
+		idx, _, ok := spaceIndexInSet(set, sw.spaceID)
+		if !ok {
+			return widget.Box().Height(4)
+		}
+		return projectMachineBar(m, m.spaceSections(st, idx), m.Nodes.Get(), st.projectMachine.Get())
+	})
+	tree := widget.Scroll(widget.Padding(spaceWindowProjectTree(m, st, sw), 6, 8, 10, 8)).Bar(skin.Surface3)
+	return widget.Column(head, widget.Expanded(tree)).Stretch()
+}
+
 func spaceWindowProjectTree(m *model, st sidebarState, sw *spaceWindowState) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		set := m.spaces()
@@ -1030,16 +1043,24 @@ func spaceWindowProjectTree(m *model, st sidebarState, sw *spaceWindowState) ggu
 		if !ok {
 			return widget.Box()
 		}
-		groups := m.spaceSections(st, idx)
+		allGroups := m.spaceSections(st, idx)
 		nodes := m.Nodes.Get()
+		machine := st.projectMachine.Get()
+		groups := filterGroupsByMachine(allGroups, machine)
 		scope := sw.scope.Get()
 		looks := set.Looks
-		if len(groups) == 0 {
+		if len(allGroups) == 0 {
 			empty := T("No projects yet. Add a folder with +.")
 			if sw.spaceID != allSpaceID {
 				empty = T("No projects in this space. Add a folder with +, or move a project here from its menu.")
 			}
 			return widget.Box(muted(widget.Text(empty).Size(12))).Pad(8)
+		}
+		if len(groups) == 0 {
+			return widget.Box(widget.Column(
+				muted(widget.Text(Tf("No projects on %s.", nodeName(nodes, machine))).Size(12)),
+				widget.Align(ui.ButtonOf(widget.Text(T("Show all machines")).Size(12).Color(skin.Fg).NoWrap(), func() { m.setProjectMachine("") }).Outline().Pad(4, 8).Radius(6).Name(T("Show all machines"))).Left(),
+			).Gap(6)).Pad(8)
 		}
 		labels := projectLabels(groups, nodes)
 		spColor := sp.color()
@@ -1089,8 +1110,19 @@ func spaceWindowProjectTree(m *model, st sidebarState, sw *spaceWindowState) ggu
 				}).Ghost().Pad(6, 8, 6, 6).Radius(7).Name(name)
 				rows = append(rows, selectedRow(btn, scope == key))
 				if grp.multiRoot() {
+					var shown []int
 					for j, r := range grp.Def.Roots {
-						root := r
+						if rootHasMachine(grp, j, r, machine) {
+							shown = append(shown, j)
+						}
+					}
+					if len(shown) == 0 {
+						for j := range grp.Def.Roots {
+							shown = append(shown, j)
+						}
+					}
+					for n, j := range shown {
+						root := grp.Def.Roots[j]
 						rKey := scopeKey{Section: grp.Key, Root: rootKey(root)}
 						rSel := scope == rKey
 						rLabel := root.label()
@@ -1100,7 +1132,7 @@ func spaceWindowProjectTree(m *model, st sidebarState, sw *spaceWindowState) ggu
 						).Gap(6).Align(widget.AlignCenter), func() {
 							m.spaceWindowPickScope(sw, rKey)
 						}).Ghost().Pad(5, 8, 5, 6).Radius(7).Name("#" + rLabel)
-						rows = append(rows, &treeBranch{child: selectedRow(rBtn, rSel), last: j == len(grp.Def.Roots)-1})
+						rows = append(rows, &treeBranch{child: selectedRow(rBtn, rSel), last: n == len(shown)-1})
 					}
 				}
 			}

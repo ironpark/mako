@@ -186,6 +186,10 @@ func (m *model) commands() []command {
 			Run: func() { m.openSettings("skills") }},
 		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: m.shortcutChord("open_settings"), Run: func() { m.openSettings("") }},
 	)
+	cmds = append(cmds,
+		command{ID: "Add project folder…", Category: "Sidebar", Keys: []string{"project", "folder", "add"}, Run: m.addProjectFolder},
+		command{ID: "Import git projects…", Category: "Sidebar", Keys: []string{"project", "folder", "git", "repo", "scan", "import"}, Run: m.openImportProjects},
+	)
 	for _, by := range agentGroups {
 		cmds = append(cmds, command{ID: agentGroupCommands[by], Category: "Sidebar", Keys: []string{"group", "agents", "sessions"},
 			Run: func() { m.setAgentView(func(p *prefs) { p.AgentGroup = by }) }})

@@ -167,7 +167,7 @@ func sidebarIn(m *model, tint ggui.Readable[color.NRGBA]) ggui.Widget {
 		icon("messages-square").Size(17),
 		widget.Expanded(widget.Align(spaceSwitcher(m)).Left()),
 		waitingPill(m),
-		iconButton("plus", T("Add a project"), m.addProjectFolder),
+		addProjectMenu(m),
 	).Gap(6).Align(widget.AlignCenter)).Pad(0, 8, 0, 0).Height(headerHeight))
 
 	st := newSidebarState(m)
@@ -189,8 +189,7 @@ func sidebarIn(m *model, tint ggui.Readable[color.NRGBA]) ggui.Widget {
 			if i < 0 {
 				return widget.Box()
 			}
-			tree := widget.Scroll(widget.Padding(projectTree(m, st, i), 10, 8, 10, 8)).Bar(skin.Surface3)
-			return &sidebarBody{top: tree, grip: sidebarGrip(m), bottom: agentsPanel(m, st, i), split: m.SidebarSplit}
+			return &sidebarBody{top: projectsPanel(m, st, i), grip: sidebarGrip(m), bottom: agentsPanel(m, st, i), split: m.SidebarSplit}
 		})
 	}
 	column := widget.Column(

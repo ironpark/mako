@@ -112,6 +112,7 @@ type sidebarState struct {
 	kept           ggui.Readable[[]keptProject]
 	pinned         ggui.Readable[[]string]
 	pinnedProjects ggui.Readable[[]scopeKey]
+	projectMachine ggui.Readable[string]
 	view           ggui.Readable[agentView]
 }
 
@@ -120,6 +121,7 @@ func newSidebarState(m *model) sidebarState {
 		kept:           ggui.Map(m.Prefs, func(p prefs) []keptProject { return p.Projects }).WithEqual(slices.Equal),
 		pinned:         ggui.Map(m.Spaces, func(l spaceList) []string { return l.Pinned }).WithEqual(slices.Equal),
 		pinnedProjects: ggui.Map(m.Spaces, func(l spaceList) []scopeKey { return l.PinnedProjects }).WithEqual(slices.Equal),
+		projectMachine: ggui.Map(m.Prefs, func(p prefs) string { return p.ProjectMachine }),
 		view: ggui.Map(m.Prefs, func(p prefs) agentView {
 			return agentView{Group: p.AgentGroup, Sort: p.AgentSort, Filter: p.AgentFilter, Compact: p.AgentCompact}
 		}),

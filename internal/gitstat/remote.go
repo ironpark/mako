@@ -39,6 +39,10 @@ func configAt(common string) *config.Config {
 	if err != nil {
 		return nil
 	}
+	return parseConfigBytes(b)
+}
+
+func parseConfigBytes(b []byte) *config.Config {
 	cfg := config.NewConfig()
 	if cfg.Unmarshal(b) == nil {
 		return cfg
@@ -62,6 +66,18 @@ func configAt(common string) *config.Config {
 	}
 	cfg.Raw = raw // as written, for Config
 	return cfg
+}
+
+// ConfigRemote parses raw .git/config bytes and returns the repository's
+// owner ("host/owner") and remote ("host/owner/repo") from its fetch URL,
+// or ("", "") when no remote URL is present.
+func ConfigRemote(data []byte) (owner, remote string) {
+	cfg := parseConfigBytes(data)
+	if cfg == nil {
+		return "", ""
+	}
+	url := fetchURL(cfg)
+	return urlOwner(url), urlRemote(url)
 }
 
 // FetchURL is the URL the repository dir is in fetches from: its origin's,
