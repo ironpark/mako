@@ -370,18 +370,13 @@ func (m *model) newInScope(l agentList) {
 		m.openNew("", "")
 		return
 	}
-	node, dir := g.NodeID, g.Project
 	if l.scope.Root != "" && g.Def != nil {
 		if j := slices.IndexFunc(g.Def.Roots, func(r projectRoot) bool { return rootKey(r) == l.scope.Root }); j >= 0 {
-			locs := g.Def.Roots[j].Locations
-			if k := slices.IndexFunc(locs, func(f fileRoot) bool { return m.onThisMachine(f.Node) }); k >= 0 {
-				node, dir = locs[k].Node, locs[k].Path
-			} else if len(locs) > 0 {
-				node, dir = locs[0].Node, locs[0].Path
-			}
+			m.openNew(m.rootLocation(*g, g.Def.Roots[j]))
+			return
 		}
 	}
-	m.openNew(node, dir)
+	m.openNew(m.groupLocation(*g))
 }
 
 // agentFilter picks the status the agents are of, each but All counting

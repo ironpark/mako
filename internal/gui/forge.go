@@ -478,7 +478,8 @@ func (m *model) sendToSession(text string) {
 // startOn opens the new session dialog in the project, its message box to
 // hold prompt.
 func (m *model) startOn(root fileRoot, prompt string) {
-	m.openNew(root.Node, root.Path).Form.Update(func(f newSession) newSession { f.Prompt = prompt; return f })
+	node, dir := m.preferLocalLocation(root.Node, root.Path, "", "")
+	m.openNew(node, dir).Form.Update(func(f newSession) newSession { f.Prompt = prompt; return f })
 }
 
 // issuePrompt asks an agent to resolve an issue.

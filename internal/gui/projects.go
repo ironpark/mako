@@ -227,20 +227,27 @@ func groupProjects(sessions []*protocol.SessionInfo, nodes []*protocol.Node, kep
 }
 
 // projectGroup is the section of project p, before its sessions: its
-// folders, the one a new session starts in by default the first root's
-// on this machine, else its first, and the owner its roots share.
+// folders, the one a new session starts in by default preferring a folder
+// on this machine (the first root's if local, else any local root), else
+// its first, and the owner its roots share.
 func projectGroup(p project, nodes []*protocol.Node) sessionGroup {
 	g := sessionGroup{Key: p.ID, Name: p.Name, Def: &p, RootOf: map[string]int{}, Roots: p.locations()}
+	self := selfNode(nodes)
 	if len(p.Roots) > 0 && len(p.Roots[0].Locations) > 0 {
 		first := p.Roots[0].Locations
 		at := first[0]
-		self := selfNode(nodes)
-		if i := slices.IndexFunc(first, func(l fileRoot) bool { return l.Node == self }); i >= 0 {
+		if i := slices.IndexFunc(first, func(l fileRoot) bool { return isLocalNode(self, l.Node) && l.Path != "" }); i >= 0 {
 			at = first[i]
+		} else if i := slices.IndexFunc(g.Roots, func(l fileRoot) bool { return isLocalNode(self, l.Node) && l.Path != "" }); i >= 0 {
+			at = g.Roots[i]
 		}
 		g.NodeID, g.Project = at.Node, at.Path
 	} else if len(g.Roots) > 0 {
-		g.NodeID, g.Project = g.Roots[0].Node, g.Roots[0].Path
+		at := g.Roots[0]
+		if i := slices.IndexFunc(g.Roots, func(l fileRoot) bool { return isLocalNode(self, l.Node) && l.Path != "" }); i >= 0 {
+			at = g.Roots[i]
+		}
+		g.NodeID, g.Project = at.Node, at.Path
 	}
 	for i, r := range p.Roots {
 		if i == 0 {
@@ -264,6 +271,80 @@ func selfNode(nodes []*protocol.Node) string {
 		}
 	}
 	return ""
+}
+
+// isLocalNode reports whether node is this machine's node.
+func isLocalNode(self, node string) bool {
+	return node == "" || (self != "" && node == self)
+}
+
+// localLocationOf resolves (nodeID, project) to this machine's folder for
+// the same project root or repository when one is available locally, and
+// returns (nodeID, project) unchanged otherwise.
+func localLocationOf(self, nodeID, project, repo, remote string, defs []project, sessions []*protocol.SessionInfo, kept []keptProject) (string, string) {
+	if isLocalNode(self, nodeID) || project == "" {
+		return nodeID, project
+	}
+	if pl := placeIn(defs, nodeID, project, repo, remote); pl.At >= 0 {
+		r := defs[pl.At].Roots[pl.Root]
+		if k := slices.IndexFunc(r.Locations, func(l fileRoot) bool {
+			return isLocalNode(self, l.Node) && l.Path != ""
+		}); k >= 0 {
+			return r.Locations[k].Node, r.Locations[k].Path
+		}
+		if remote == "" {
+			remote = r.Remote
+		}
+	}
+	if remote == "" {
+		bestDepth := -1
+		for _, s := range sessions {
+			if s.GetNodeId() == nodeID && s.GetRemote() != "" {
+				root := projectOf(s)
+				if pathscope.Covers(root, project, repo) && len(root) > bestDepth {
+					remote, bestDepth = s.GetRemote(), len(root)
+				}
+			}
+		}
+		for _, r := range kept {
+			if r.Node == nodeID && r.Remote != "" && pathscope.Covers(r.Path, project, repo) && len(r.Path) > bestDepth {
+				remote, bestDepth = r.Remote, len(r.Path)
+			}
+		}
+	}
+	if remote != "" {
+		for _, p := range defs {
+			for _, r := range p.Roots {
+				if r.Remote != remote {
+					continue
+				}
+				if k := slices.IndexFunc(r.Locations, func(l fileRoot) bool {
+					return isLocalNode(self, l.Node) && l.Path != ""
+				}); k >= 0 {
+					return r.Locations[k].Node, r.Locations[k].Path
+				}
+			}
+		}
+		for _, s := range sessions {
+			if isLocalNode(self, s.GetNodeId()) && s.GetRemote() == remote {
+				if dir := projectOf(s); dir != "" {
+					return s.GetNodeId(), dir
+				}
+			}
+		}
+		for _, r := range kept {
+			if isLocalNode(self, r.Node) && r.Remote == remote && r.Path != "" {
+				return r.Node, r.Path
+			}
+		}
+	}
+	return nodeID, project
+}
+
+// preferLocalLocation is localLocationOf against the model's current state.
+func (m *model) preferLocalLocation(nodeID, project, repo, remote string) (string, string) {
+	self := cmp.Or(ggui.Peek(m.Conn).Self.GetId(), selfNode(ggui.Peek(m.Nodes)))
+	return localLocationOf(self, nodeID, project, repo, remote, m.projectsNow(), ggui.Peek(m.Sessions), ggui.Peek(m.Prefs).Projects)
 }
 
 // groupName is how a section is named and sorted: its project's name, or

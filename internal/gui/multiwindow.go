@@ -1176,7 +1176,15 @@ func spaceWindowAgentsPanel(m *model, st sidebarState, sw *spaceWindowState) ggu
 				node, dir := "", ""
 				if scope.Section != "" {
 					if at := slices.IndexFunc(groups, func(g sessionGroup) bool { return g.Key == scope.Section }); at >= 0 {
-						node, dir = groups[at].NodeID, groups[at].Project
+						g := groups[at]
+						if scope.Root != "" && g.Def != nil {
+							if j := slices.IndexFunc(g.Def.Roots, func(r projectRoot) bool { return rootKey(r) == scope.Root }); j >= 0 {
+								node, dir = m.rootLocation(g, g.Def.Roots[j])
+							}
+						}
+						if node == "" && dir == "" {
+							node, dir = m.groupLocation(g)
+						}
 					}
 				}
 				m.openNewInKey(sw.peekLayoutKey(), ggui.Peek(sw.focusGroup), node, dir)
@@ -1340,14 +1348,17 @@ func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup]
 		hosts := index.tabHosts(g.Tabs)
 		active := cmp.Or(hosts[g.Active], g.Active)
 
-		nodeID := m.Conn.Get().Self.GetId()
+		self := cmp.Or(m.Conn.Get().Self.GetId(), selfNode(m.Nodes.Get()))
+		defs := m.Spaces.Get().Projects
+		kept := m.Prefs.Get().Projects
+		nodeID := self
 		project := m.launchProject(nodeID)
 		if cur, ok := sessionIn(sessions, g.Active); ok {
-			nodeID, project = cur.GetNodeId(), cur.GetProject()
+			nodeID, project = localLocationOf(self, cur.GetNodeId(), cur.GetProject(), cur.GetRepo(), cur.GetRemote(), defs, sessions, kept)
 		} else if d, ok := docs[g.Active]; ok && d.Root.Path != "" {
-			nodeID, project = d.Root.Node, d.Root.Path
+			nodeID, project = localLocationOf(self, d.Root.Node, d.Root.Path, "", "", defs, sessions, kept)
 		} else if d, ok := diffs[g.Active]; ok && d.Root.Path != "" {
-			nodeID, project = d.Root.Node, d.Root.Path
+			nodeID, project = localLocationOf(self, d.Root.Node, d.Root.Path, "", "", defs, sessions, kept)
 		}
 
 		var children []ggui.Widget

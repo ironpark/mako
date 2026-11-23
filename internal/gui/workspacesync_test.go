@@ -548,3 +548,84 @@ func TestAWindowLeavesItsDaemonsWorkspace(t *testing.T) {
 		t.Fatalf("a daemon holding nothing was given %d spaces", got)
 	}
 }
+
+// A new-session launch tab stays open and active across local workspace saves
+// (including when a prior tab edit flushes right after opening it) and across
+// remote workspace syncs in both the current and background layouts.
+func TestLaunchTabSurvivesWorkspaceSaveAndSync(t *testing.T) {
+	da, db := newFakeDaemon("a", true), newFakeDaemon("b", true)
+	m, p := windowOn(t, da)
+	m.showTab("s1")
+	m.showTab("s2")
+	p.Frame()
+	m.saveWorkspace()
+
+	// 1. Opening a launch tab while a non-first tab ("s2") is active must not
+	// send a spurious active-tab flip or drop the launch tab on saveWorkspace.
+	givenBefore := len(da.given)
+	l := m.openNew("n", "/work/a")
+	l.Form.Update(func(f newSession) newSession { f.Prompt = "keep me"; return f })
+	launchID := ggui.Peek(m.Selected)
+	if !isLaunchTab(launchID) {
+		t.Fatalf("expected launch tab selected, got %q", launchID)
+	}
+	p.Frame()
+	m.saveWorkspace()
+	if len(da.given) != givenBefore {
+		t.Fatalf("opening a launch tab sent a spurious workspace edit (%d -> %d)", givenBefore, len(da.given))
+	}
+	if got := ggui.Peek(m.Selected); got != launchID || m.launches[launchID] != l {
+		t.Fatalf("launch tab lost after idle save: selected=%q tabs=%v", got, ggui.Peek(m.Tabs))
+	}
+
+	// 2. A pending layout edit (switching/opening "s3") followed immediately by
+	// opening a launch tab and flushing saveWorkspace (daemon reply -> showDoc)
+	// must keep the launch tab open and active.
+	m.closeLaunch(launchID)
+	m.showTab("s3")
+	l2 := m.openNew("n", "/work/b")
+	l2.Form.Update(func(f newSession) newSession { f.Prompt = "draft"; return f })
+	launchID2 := ggui.Peek(m.Selected)
+	p.Frame()
+	m.saveWorkspace()
+	if got := ggui.Peek(m.Selected); got != launchID2 || !slices.Contains(ggui.Peek(m.Tabs), launchID2) {
+		t.Fatalf("launch tab lost when prior edit flushed: selected=%q tabs=%v", got, ggui.Peek(m.Tabs))
+	}
+	if m.launches[launchID2] != l2 || ggui.Peek(l2.Form).Prompt != "draft" {
+		t.Fatalf("launch state lost after saveWorkspace: %+v", m.launches[launchID2])
+	}
+
+	// 3. A remote peer syncing a new tab into the same layout (and adding a
+	// space) must preserve both the active launch tab and a background layout's
+	// launch tab.
+	otherKey := layoutKey(allSpaceID, projectContext("other"))
+	bgLaunch := m.openNewInKey(otherKey, 1, "n", "/work/bg")
+	bgTabs := m.ws.layouts[otherKey].groups()[0].Tabs
+	if len(bgTabs) != 1 || !isLaunchTab(bgTabs[0]) {
+		t.Fatalf("expected background launch tab, got %v", bgTabs)
+	}
+	bgID := bgTabs[0]
+
+	db.pull(da)
+	db.edit(t, workspaceDoc{
+		spaceList: spaceList{Spaces: []space{{ID: "sp-remote", Name: "Remote"}}},
+		Layouts: map[string]*layoutNode{
+			layoutKey(allSpaceID, ""): {ID: 1, Group: &tabGroup{ID: 1, Tabs: []string{"s1", "s2", "s3", "s4"}, Active: "s4"}},
+		},
+	})
+	da.pull(db)
+	m.takeWorkspace(da.get())
+	p.Frame()
+	if got := ggui.Peek(m.Selected); got != launchID2 {
+		t.Fatalf("remote sync stole selection from launch tab: got %q, want %q (tabs=%v)", got, launchID2, ggui.Peek(m.Tabs))
+	}
+	if tabs := ggui.Peek(m.Tabs); !slices.Contains(tabs, "s4") || !slices.Contains(tabs, launchID2) {
+		t.Fatalf("tabs after remote sync = %v, want both s4 and %q", tabs, launchID2)
+	}
+	if m.launches[launchID2] != l2 || ggui.Peek(l2.Form).Prompt != "draft" {
+		t.Fatal("launch state lost on remote sync")
+	}
+	if got := m.ws.layouts[otherKey]; got == nil || !slices.Contains(got.groups()[0].Tabs, bgID) || m.launches[bgID] != bgLaunch {
+		t.Fatalf("background launch tab lost on remote sync: layout=%v", got)
+	}
+}

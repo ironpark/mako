@@ -55,6 +55,8 @@ func (m *model) bringBack(id string) bool {
 	case isDiffTab(id):
 		_, open := ggui.Peek(m.Diffs)[id]
 		return open
+	case isLaunchTab(id):
+		return m.launches[id] != nil
 	case isDocTab(id):
 		node, path := splitKey(strings.TrimPrefix(id, docPrefix))
 		m.ensureDoc(fileItem{Node: node, Path: path, Name: baseName(path)}, fileRoot{Node: node, Path: parentDir(path)})

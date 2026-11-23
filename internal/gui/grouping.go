@@ -153,7 +153,7 @@ func byRemote(groups []sessionGroup, nodes []*protocol.Node) []sessionGroup {
 		m := &out[i]
 		m.Roots = append(m.Roots, root)
 		m.Sessions = append(m.Sessions, g.Sessions...)
-		if g.NodeID == self && m.NodeID != self {
+		if isLocalNode(self, g.NodeID) && !isLocalNode(self, m.NodeID) {
 			m.NodeID, m.Project = g.NodeID, g.Project
 		}
 	}

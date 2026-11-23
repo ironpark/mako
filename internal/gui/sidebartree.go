@@ -92,12 +92,13 @@ func (m *model) scopeLocation() (node, dir string, ok bool) {
 				return node, dir, node != "" || dir != ""
 			}
 		}
-		return g.NodeID, g.Project, g.NodeID != "" || g.Project != ""
+		node, dir = m.groupLocation(g)
+		return node, dir, node != "" || dir != ""
 	}
 	groups := groupProjects(m.Sessions.Get(), nodes, m.Prefs.Get().Projects, p.Projects, p.Names)
 	if i := slices.IndexFunc(groups, func(g sessionGroup) bool { return g.Key == cur.Section }); i >= 0 {
-		g := groups[i]
-		return g.NodeID, g.Project, g.NodeID != "" || g.Project != ""
+		node, dir = m.groupLocation(groups[i])
+		return node, dir, node != "" || dir != ""
 	}
 	return "", "", false
 }
@@ -503,7 +504,7 @@ func (t treeRows) project(g sessionGroup) []ggui.Widget {
 		pinButton(m, key, name, hover),
 	}
 	if !g.multiRoot() {
-		cells = append(cells, newSessionButton(name, hover, func() { m.openNew(g.NodeID, g.Project) }))
+		cells = append(cells, newSessionButton(name, hover, func() { m.openNew(m.groupLocation(g)) }))
 	}
 	row := widget.Row(cells...).Gap(0).Align(widget.AlignCenter)
 	var w ggui.Widget = t.selectedRow(row, t.scope == key)
@@ -657,7 +658,7 @@ func (t treeRows) selectedRow(row ggui.Widget, selected bool) ggui.Widget {
 // projectRowMenu is a project row's menu: starting a session in it,
 // opening its folder, its pin, and the project's own entries.
 func projectRowMenu(m *model, g sessionGroup, name string, key scopeKey) []ggui.Widget {
-	items := []ggui.Widget{ui.MenuItem(T("New session here"), func() { m.openNew(g.NodeID, g.Project) })}
+	items := []ggui.Widget{ui.MenuItem(T("New session here"), func() { m.openNew(m.groupLocation(g)) })}
 	if len(g.Roots) > 1 {
 		items = append(items, ui.MenuSub(T("New session in…"), startItems(m, g, ggui.Peek(m.Nodes))...))
 	}
@@ -685,11 +686,26 @@ func folderRowMenu(m *model, g sessionGroup, j int, r projectRoot) []ggui.Widget
 // rootLocation picks where a sub-project root lives: on this machine when
 // it is here, else its first location, else the section's own.
 func (m *model) rootLocation(g sessionGroup, r projectRoot) (node, path string) {
-	if k := slices.IndexFunc(r.Locations, func(f fileRoot) bool { return m.onThisMachine(f.Node) }); k >= 0 {
+	if k := slices.IndexFunc(r.Locations, func(f fileRoot) bool { return m.onThisMachine(f.Node) && f.Path != "" }); k >= 0 {
 		return r.Locations[k].Node, r.Locations[k].Path
 	}
 	if len(r.Locations) > 0 {
 		return r.Locations[0].Node, r.Locations[0].Path
+	}
+	return m.groupLocation(g)
+}
+
+// groupLocation picks where a project section starts a new session by
+// default: on this machine when any of its folders is here (preferring the
+// first root's local folder), else the section's default location.
+func (m *model) groupLocation(g sessionGroup) (node, path string) {
+	if g.Def != nil && len(g.Def.Roots) > 0 {
+		if k := slices.IndexFunc(g.Def.Roots[0].Locations, func(f fileRoot) bool { return m.onThisMachine(f.Node) && f.Path != "" }); k >= 0 {
+			return g.Def.Roots[0].Locations[k].Node, g.Def.Roots[0].Locations[k].Path
+		}
+	}
+	if k := slices.IndexFunc(g.Roots, func(f fileRoot) bool { return m.onThisMachine(f.Node) && f.Path != "" }); k >= 0 {
+		return g.Roots[k].Node, g.Roots[k].Path
 	}
 	return g.NodeID, g.Project
 }

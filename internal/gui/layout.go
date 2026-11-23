@@ -170,15 +170,36 @@ func (n *layoutNode) remove(tab string) {
 	}
 }
 
-// insert puts tab into pane g at index i, clamped, and shows it.
 // removeTabs takes out the tabs drop says, leaving panes without tabs for
-// prune.
+// prune. If a pane's active tab is dropped, the nearest preceding kept tab
+// (or the first kept tab) becomes active so stripping transient tabs does
+// not jump to tab 0.
 func (n *layoutNode) removeTabs(drop func(id string) bool) {
 	for _, g := range n.groups() {
-		g.Tabs = slices.DeleteFunc(g.Tabs, drop)
+		kept := make([]string, 0, len(g.Tabs))
+		activeDropped := false
+		prevKept := ""
+		for _, id := range g.Tabs {
+			if drop(id) {
+				if id == g.Active {
+					activeDropped = true
+				}
+				continue
+			}
+			if !activeDropped {
+				prevKept = id
+			}
+			kept = append(kept, id)
+		}
+		if len(kept) == 0 {
+			g.Tabs, g.Active = nil, ""
+			continue
+		}
+		g.Tabs = kept
 		if !slices.Contains(g.Tabs, g.Active) {
-			g.Active = ""
-			if len(g.Tabs) > 0 {
+			if prevKept != "" {
+				g.Active = prevKept
+			} else {
 				g.Active = g.Tabs[0]
 			}
 		}

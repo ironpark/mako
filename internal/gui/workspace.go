@@ -258,10 +258,19 @@ func (m *model) showLayout(key string) {
 // setLayout shows root's panes, bringing back what each tab shows, as
 // its kind does (bringBack); a tab that cannot come back leaves.
 func (m *model) setLayout(root *layoutNode) {
+	m.setLayoutFocus(root, 0)
+}
+
+// setLayoutFocus is setLayout, keeping focus on pane focus when it is
+// non-zero and present in root rather than resetting to the first pane.
+func (m *model) setLayoutFocus(root *layoutNode, focus int) {
 	root = root.clone()
 	root.removeTabs(func(id string) bool { return !m.bringBack(id) })
 	m.editLayout(func(r *layoutNode) int {
 		*r = *root
+		if focus != 0 && root.group(focus) != nil {
+			return focus
+		}
 		return root.groups()[0].ID
 	})
 	m.forgetClosedTabs()
@@ -488,19 +497,54 @@ var emptyDoc, _ = json.Marshal(workspaceDoc{})
 
 // showDoc shows the document doc in place of the window's: the space shown
 // stays shown, by its ID, if doc has it, and the panes shown are doc's for
-// it, but for files with edits not saved, which stay open. UI goroutine.
+// it, keeping open window-local tabs (new-session launch tabs, open diff
+// tabs, and files with unsaved edits). UI goroutine.
 func (m *model) showDoc(doc workspaceDoc) {
 	shownKey, shown := m.ws.layoutKey, ggui.Peek(m.Layout).clone()
+	prevFocus := ggui.Peek(m.FocusGroup)
+	prevLayouts := m.ws.layouts
 	m.Spaces.Set(doc.spaceList)
 	m.ws.layouts = keyedLayouts(doc.Layouts)
 	maps.Copy(m.tabNodes, doc.TabNodes)
 	m.migrateProjectKeys()
 	m.followSections()
+	// Keep window-local transient tabs (launch tabs and open diff tabs) in
+	// background layouts and secondary windows.
+	for key, prev := range prevLayouts {
+		if prev == nil || key == shownKey || !m.hasOpenTransient(prev) {
+			continue
+		}
+		cur := m.ws.layouts[key]
+		if sameLayout(nonNilLayout(cur), keptLayout(prev)) {
+			m.ws.layouts[key] = prev
+			continue
+		}
+		m.ws.layouts[key] = m.restoreTransientTabs(cur, prev, 0)
+	}
 	m.ws.layoutKey = m.shownKey()
 	root := m.takeLayout(m.ws.layoutKey)
-	if m.ws.layoutKey == shownKey && sameLayout(root, shown) {
-		m.bumpWorkspaceRev()
-		return // the panes shown are as they were
+	if m.ws.layoutKey == shownKey {
+		// If the persisted (kept) layout for the current view did not change,
+		// keep the live layout intact so transient tabs, splits and focus are
+		// untouched.
+		if sameLayout(root, shown) || (m.hasOpenTransient(shown) && sameLayout(root, keptLayout(shown))) {
+			m.bumpWorkspaceRev()
+			return
+		}
+		if m.hasOpenTransient(shown) {
+			root = m.restoreTransientTabs(root, shown, prevFocus)
+			if sameLayout(root, shown) {
+				m.bumpWorkspaceRev()
+				return
+			}
+		}
+	} else if m.hasOpenTransient(shown) {
+		cur := m.ws.layouts[shownKey]
+		if sameLayout(nonNilLayout(cur), keptLayout(shown)) {
+			m.ws.layouts[shownKey] = shown
+		} else {
+			m.ws.layouts[shownKey] = m.restoreTransientTabs(cur, shown, prevFocus)
+		}
 	}
 	// A file with edits not saved stays open, whatever the other node had.
 	for _, id := range m.dirtyDocs() {
@@ -509,7 +553,118 @@ func (m *model) showDoc(doc workspaceDoc) {
 			g.insert(id, len(g.Tabs))
 		}
 	}
-	m.setLayout(root)
+	focus := 0
+	if m.ws.layoutKey == shownKey && root.group(prevFocus) != nil {
+		focus = prevFocus
+	}
+	m.setLayoutFocus(root, focus)
+}
+
+// isOpenTransient reports whether id is an open window-local tab (a new
+// session's launch tab or an open diff tab) not written down with the
+// workspace.
+func (m *model) isOpenTransient(id string) bool {
+	switch {
+	case isLaunchTab(id):
+		return m.launches[id] != nil
+	case isDiffTab(id):
+		_, open := ggui.Peek(m.Diffs)[id]
+		return open
+	}
+	return false
+}
+
+// hasOpenTransient reports whether root holds any open window-local tab.
+func (m *model) hasOpenTransient(root *layoutNode) bool {
+	if root == nil {
+		return false
+	}
+	for _, g := range root.groups() {
+		if slices.ContainsFunc(g.Tabs, m.isOpenTransient) {
+			return true
+		}
+	}
+	return false
+}
+
+// nonNilLayout returns root, or a fresh empty layout when root is nil.
+func nonNilLayout(root *layoutNode) *layoutNode {
+	if root == nil {
+		return newLayout()
+	}
+	return root
+}
+
+// keptLayout returns root stripped of transient tabs and pruned, matching
+// what workspaceDocNow writes down for a layout.
+func keptLayout(root *layoutNode) *layoutNode {
+	if root == nil {
+		return newLayout()
+	}
+	c := root.clone()
+	c.removeTabs(func(id string) bool { return !keptTab(id) })
+	if c = c.prune(); c == nil {
+		return newLayout()
+	}
+	return c
+}
+
+// restoreTransientTabs re-inserts open window-local tabs from prev into a
+// copy of dst at their relative positions, keeping active transient tabs
+// selected in their pane.
+func (m *model) restoreTransientTabs(dst, prev *layoutNode, prevFocus int) *layoutNode {
+	if prev == nil || !m.hasOpenTransient(prev) {
+		return dst
+	}
+	out := nonNilLayout(dst).clone()
+	for _, pg := range prev.groups() {
+		if !slices.ContainsFunc(pg.Tabs, m.isOpenTransient) {
+			continue
+		}
+		tg := out.group(pg.ID)
+		if tg == nil {
+			for _, id := range pg.Tabs {
+				if keptTab(id) {
+					if g := out.groupOf(id); g != nil {
+						tg = g
+						break
+					}
+				}
+			}
+		}
+		if tg == nil {
+			tg = out.groups()[0]
+		}
+		for i, id := range pg.Tabs {
+			if !m.isOpenTransient(id) || out.groupOf(id) != nil {
+				continue
+			}
+			at := len(tg.Tabs)
+			found := false
+			for j := i - 1; j >= 0; j-- {
+				if k := slices.Index(tg.Tabs, pg.Tabs[j]); k >= 0 {
+					at, found = k+1, true
+					break
+				}
+			}
+			if !found {
+				for j := i + 1; j < len(pg.Tabs); j++ {
+					if k := slices.Index(tg.Tabs, pg.Tabs[j]); k >= 0 {
+						at = k
+						break
+					}
+				}
+			}
+			tg.Tabs = slices.Insert(tg.Tabs, at, id)
+			if tg.Active == "" {
+				tg.Active = id
+			}
+		}
+		if m.isOpenTransient(pg.Active) && (tg.ID == pg.ID || pg.ID == prevFocus) && slices.Contains(tg.Tabs, pg.Active) {
+			tg.Active = pg.Active
+		}
+	}
+	return out
 }
 
 // sameLayout reports whether two pane trees are the same, as written down.

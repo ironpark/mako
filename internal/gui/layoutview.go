@@ -188,22 +188,28 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// the sidebar's selected scope, else the default place on this node.
 		scope := m.Scope.Get()
 		spaces := m.spaces()
+		nodes := m.Nodes.Get()
+		kept := m.Prefs.Get().Projects
+		self := cmp.Or(m.Conn.Get().Self.GetId(), selfNode(nodes))
 		scopedHere := scope.Section != "" && scope.Space == spaces.spaceID(spaces.Space)
-		nodeID := m.Conn.Get().Self.GetId()
+		nodeID := self
 		project := m.launchProject(nodeID)
 		tabLocated := false
 		if cur, ok := sessionIn(sessions, g.Active); ok {
-			nodeID, project, tabLocated = cur.GetNodeId(), cur.GetProject(), true
+			nodeID, project = localLocationOf(self, cur.GetNodeId(), cur.GetProject(), cur.GetRepo(), cur.GetRemote(), spaces.Projects, sessions, kept)
+			tabLocated = true
 			if scopedHere && !scope.scopeKey.holds(sessionScope(spaces.Projects, cur)) {
 				tabLocated = false
 			}
 		} else if d, ok := docs[g.Active]; ok && d.Root.Path != "" {
-			nodeID, project, tabLocated = d.Root.Node, d.Root.Path, true
+			nodeID, project = localLocationOf(self, d.Root.Node, d.Root.Path, "", "", spaces.Projects, sessions, kept)
+			tabLocated = true
 			if scopedHere && !scope.scopeKey.holds(rootScope(spaces.Projects, d.Root)) {
 				tabLocated = false
 			}
 		} else if d, ok := diffs[g.Active]; ok && d.Root.Path != "" {
-			nodeID, project, tabLocated = d.Root.Node, d.Root.Path, true
+			nodeID, project = localLocationOf(self, d.Root.Node, d.Root.Path, "", "", spaces.Projects, sessions, kept)
+			tabLocated = true
 			if scopedHere && !scope.scopeKey.holds(rootScope(spaces.Projects, d.Root)) {
 				tabLocated = false
 			}
@@ -212,11 +218,11 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			if n, d, ok := m.scopeLocation(); ok {
 				nodeID, project = n, d
 			} else {
-				nodeID = m.Conn.Get().Self.GetId()
+				nodeID = self
 				project = m.launchProject(nodeID)
 			}
 		}
-		targets := nodeTargets(m.Nodes.Get(), nodeID, m.Agents.Get())
+		targets := nodeTargets(nodes, nodeID, m.Agents.Get())
 		focus := func() { m.focusGroup(id) }
 		newSession := func() { focus(); m.openNew(nodeID, project) }
 		// The tabs scroll sideways rather than squeeze when the pane is
