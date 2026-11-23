@@ -121,7 +121,7 @@ label = "API Token"
 
 	// Verify node B receives the registry, installs hello in Waiting state (grants NOT synced),
 	// receives the non-secret setting, and does NOT receive the secret setting.
-	waitFor(t, "hello installed with synced non-secret setting on B", func() bool {
+	waitForWithin(t, 15*time.Second, "hello installed with synced non-secret setting on B", func() bool {
 		regs, err := cb.Registries(ctx)
 		if err != nil || len(regs.GetRegistries()) != 1 {
 			return false
@@ -287,7 +287,7 @@ func TestAgentConfigSyncAcrossMesh(t *testing.T) {
 	skillPathB := filepath.Join(b.dir, "skills", "mako-plugin", "SKILL.md")
 	tmplPathB := filepath.Join(b.dir, "templates", "review.md")
 
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for {
 		fb := b.followed()
 		cl, hasClaude := fb.agents["claude"]

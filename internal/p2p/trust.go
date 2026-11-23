@@ -77,7 +77,8 @@ type trust struct {
 	own     ssh.PublicKey // owner's public half
 
 	mu    sync.Mutex
-	self  intro // what this host says of itself
+	gen   uint64 // incremented on every reconsider() so in-flight introductions re-run if keys changed
+	self  intro  // what this host says of itself
 	peers map[peer.ID]*trustState
 	// changed is told of a peer each time it introduces itself again.
 	changed func(Peer)
@@ -90,10 +91,12 @@ type trust struct {
 // introduction holds on to the state it began with, and what it brings
 // for a state no longer the peer's is dropped.
 type trustState struct {
-	started bool
-	done    chan struct{}
-	err     error
-	peer    Peer
+	started  bool
+	done     chan struct{}
+	err      error
+	peer     Peer
+	peerGen  uint64 // t.gen at which peer was last evaluated
+	introGen uint64 // highest t.gen for which an introduction has been scheduled
 }
 
 func newTrust(keys, sshKeys *Keys, self intro, owner ssh.Signer, log *slog.Logger) *trust {
@@ -136,7 +139,8 @@ func (t *trust) attach(h host.Host) {
 		t.mu.Lock()
 		st := t.state(p)
 		t.mu.Unlock()
-		t.settle(p, st, t.exchange(st, s))
+		gen, err := t.exchange(st, s)
+		t.settle(p, st, gen, err)
 	})
 	h.Network().Notify(&network.NotifyBundle{
 		ConnectedF: func(_ network.Network, c network.Conn) {
@@ -264,10 +268,11 @@ func (t *trust) introduce(p peer.ID, st *trustState) {
 	defer cancel()
 	s, err := t.h.NewStream(network.WithAllowLimitedConn(ctx, "mako-trust"), p, trustProtocol)
 	if err != nil {
-		t.settle(p, st, err)
+		t.settle(p, st, 0, err)
 		return
 	}
-	t.settle(p, st, t.exchange(st, s))
+	gen, err := t.exchange(st, s)
+	t.settle(p, st, gen, err)
 }
 
 // reconsider introduces this host again to every peer, as when its keys
@@ -284,8 +289,11 @@ func (t *trust) reconsider() {
 	}
 	var all []stand
 	t.mu.Lock()
+	t.gen++
+	gen := t.gen
 	for p, st := range t.peers {
 		if info, ok := settled(st); ok {
+			st.introGen = gen
 			all = append(all, stand{p, st, info})
 		}
 	}
@@ -293,7 +301,7 @@ func (t *trust) reconsider() {
 	t.mu.Unlock()
 	for _, s := range all {
 		if trusts := t.lets(s.info.Key, s.info.Owner); trusts != s.info.Trusts {
-			info, still := t.update(s.p, s.st, func(pe *Peer) { pe.Trusts = trusts })
+			info, still := t.update(s.p, s.st, gen, func(pe *Peer) { pe.Trusts = trusts })
 			if still && changed != nil {
 				changed(info)
 			}
@@ -322,9 +330,9 @@ func (t *trust) shut(p peer.ID) {
 
 // exchange introduces the two hosts on s, which either side opened: each
 // says who it is, then whether it lets the other in. It records where the
-// peer stands in st, and returns an error if the peer cannot be told
-// apart.
-func (t *trust) exchange(st *trustState, s network.Stream) error {
+// peer stands in st, and returns the reconsider generation at which lets() was
+// evaluated along with any error.
+func (t *trust) exchange(st *trustState, s network.Stream) (uint64, error) {
 	defer s.Close()
 	_ = s.SetDeadline(time.Now().Add(trustTimeout))
 	p := s.Conn().RemotePeer()
@@ -332,16 +340,16 @@ func (t *trust) exchange(st *trustState, s network.Stream) error {
 	self := t.self
 	t.mu.Unlock()
 	if err := writeJSON(s, self); err != nil {
-		return err
+		return 0, err
 	}
 	var theirs intro
 	if err := readJSON(s, &theirs); err != nil {
-		return err
+		return 0, err
 	}
 	key, err := PeerKey(p)
 	if err != nil {
 		_ = s.Reset()
-		return err
+		return 0, err
 	}
 	var owner ssh.PublicKey
 	if theirs.Cert != nil {
@@ -350,27 +358,34 @@ func (t *trust) exchange(st *trustState, s network.Stream) error {
 			owner = nil
 		}
 	}
+	t.mu.Lock()
+	gen := t.gen
+	t.mu.Unlock()
 	trusts := t.lets(key, owner)
 	if err := writeJSON(s, verdict{Trusts: trusts}); err != nil {
-		return err
+		return gen, err
 	}
 	var v verdict
 	if err := readJSON(s, &v); err != nil {
-		return err
+		return gen, err
 	}
-	t.update(p, st, func(pe *Peer) {
+	t.update(p, st, gen, func(pe *Peer) {
 		*pe = Peer{ID: p, Node: theirs.Node, Name: theirs.Name, OS: theirs.OS, Arch: theirs.Arch, Key: key, Owner: owner, Addr: s.Conn().RemoteMultiaddr(), Trusts: trusts, TrustedBy: v.Trusts}
 	})
-	return nil
+	return gen, nil
 }
 
 // update sets how this host stands with p in st, through set, and cuts the
 // streams p opened if it let p in and no longer does. It reports the peer
-// as set, and whether st is still p's link.
-func (t *trust) update(p peer.ID, st *trustState, set func(*Peer)) (Peer, bool) {
+// as set, and whether st is still p's link. Older evaluations (gen < peerGen)
+// do not overwrite newer ones.
+func (t *trust) update(p peer.ID, st *trustState, gen uint64, set func(*Peer)) (Peer, bool) {
 	t.mu.Lock()
 	was, ok := settled(st)
-	set(&st.peer)
+	if gen >= st.peerGen {
+		set(&st.peer)
+		st.peerGen = gen
+	}
 	info, still := st.peer, t.peers[p] == st
 	t.mu.Unlock()
 	if still && ok && was.Trusts && !info.Trusts {
@@ -384,7 +399,7 @@ func (t *trust) update(p peer.ID, st *trustState, set func(*Peer)) (Peer, bool) 
 // then or later: a peer that will not introduce itself again cannot say
 // whether it still lets this host in, and the next link starts afresh. Of
 // a link gone, nothing is recorded.
-func (t *trust) settle(p peer.ID, st *trustState, err error) {
+func (t *trust) settle(p peer.ID, st *trustState, gen uint64, err error) {
 	t.mu.Lock()
 	if t.peers[p] != st {
 		t.mu.Unlock()
@@ -399,11 +414,19 @@ func (t *trust) settle(p peer.ID, st *trustState, err error) {
 	// clears an earlier failure.
 	st.err = err
 	info, changed := st.peer, t.changed
+	reintro := false
+	if err == nil && t.gen > gen && t.gen > st.introGen {
+		st.introGen = t.gen
+		reintro = true
+	}
 	t.mu.Unlock()
 	if err != nil {
 		t.log.Debug("peer could not introduce itself", "peer", p, "err", err)
 		_ = t.h.Network().ClosePeer(p)
 		return
+	}
+	if reintro {
+		go t.introduce(p, st)
 	}
 	if changed != nil {
 		changed(info)

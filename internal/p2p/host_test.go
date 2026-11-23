@@ -433,8 +433,8 @@ func TestATrustStateGoesWithItsLink(t *testing.T) {
 	default:
 		t.Fatal("an introduction of a link gone still pending")
 	}
-	tr.settle(p, old, errors.New("stream reset"))
-	tr.settle(p, old, nil)
+	tr.settle(p, old, 0, errors.New("stream reset"))
+	tr.settle(p, old, 0, nil)
 	tr.mu.Lock()
 	left := tr.peers[p] != nil
 	tr.mu.Unlock()
@@ -446,13 +446,47 @@ func TestATrustStateGoesWithItsLink(t *testing.T) {
 	st := tr.state(p)
 	st.peer = Peer{ID: p, Trusts: true}
 	tr.mu.Unlock()
-	tr.settle(p, st, errors.New("timed out"))
+	tr.settle(p, st, 0, errors.New("timed out"))
 	if tr.trusts(p) {
 		t.Fatal("trusted after a failed introduction")
 	}
-	tr.settle(p, st, nil)
+	tr.settle(p, st, 0, nil)
 	if !tr.trusts(p) {
 		t.Fatal("a later introduction did not clear the failure")
+	}
+}
+
+func TestReconsiderDuringInFlightIntroduction(t *testing.T) {
+	a := newHost(t)
+	b := newHost(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Connect b -> a and immediately add mutual trust keys while the initial
+	// introduction may still be in flight.
+	if err := b.Ensure(ctx, a.ID().String(), a.Addrs()); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Keys().Add(b.Key(), "b"); err != nil {
+		t.Fatal(err)
+	}
+	a.Reconsider()
+	if err := b.Keys().Add(a.Key(), "a"); err != nil {
+		t.Fatal(err)
+	}
+	b.Reconsider()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		pa, oka := a.Peer(b.ID().String())
+		pb, okb := b.Peer(a.ID().String())
+		if oka && okb && pa.Trusts && pa.TrustedBy && pb.Trusts && pb.TrustedBy {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("mutual trust never settled: a->b=(%v,%+v) b->a=(%v,%+v)", oka, pa, okb, pb)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
