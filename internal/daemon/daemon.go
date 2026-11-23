@@ -77,23 +77,23 @@ type Daemon struct {
 	// keyPrint and ownerPrint are the fingerprints of the host's own key
 	// and of the SSH key vouching for it.
 	keyPrint, ownerPrint string
-	access               accessRequests      // the peers asking to be let in
-	pairing              pairing             // the pairing code waiting to be read
-	heads                heads               // the projects' branches
-	remote               peerReports         // what peers say of their sessions and routes; see routes.go
-	changes              notifier            // tells watching front-ends what changed
-	statusPoke           chan struct{}       // a session's status changed; see watchState
-	workspace            workspaces          // the spaces, projects and layouts; see workspace.go
-	pluginConfigSync     pluginConfigSync    // plugin registries, installs, disabled & non-secret settings; see plugin_config_sync.go
-	agentSync            agentConfigSync     // agent definitions, MCP servers, skills & templates; see agent_sync.go
-	fetching             map[string]bool     // the peers whose workspace is being asked for
-	syncingPluginDB      map[string]bool     // the peers whose plugin DB sync is in flight
-	syncingPluginConfig  map[string]bool     // the peers whose plugin config sync is in flight
-	syncingAgentConfig   map[string]bool     // the peers whose agent config sync is in flight
-	projects             projectStore        // the projects of several folders; see projects.go
-	linking              map[string]*linkTry // peer ID -> how its link is being made, until one holds
-	stateSenders         stateSenders        // coalesced per-peer state senders; see mesh.go
-	ctx                  context.Context     // Run's, for work that outlasts a request
+	access               accessRequests            // the peers asking to be let in
+	pairing              pairing                   // the pairing code waiting to be read
+	heads                heads                     // the projects' branches
+	remote               peerReports               // what peers say of their sessions and routes; see routes.go
+	changes              notifier                  // tells watching front-ends what changed
+	statusPoke           chan struct{}             // a session's status changed; see watchState
+	workspace            workspaces                // the spaces, projects and layouts; see workspace.go
+	pluginConfigSync     pluginConfigSync          // plugin registries, installs, disabled & non-secret settings; see plugin_config_sync.go
+	agentSync            agentConfigSync           // agent definitions, MCP servers, skills & templates; see agent_sync.go
+	fetching             map[string]bool           // the peers whose workspace is being asked for
+	syncingPluginDB      map[string]bool           // the peers whose plugin DB sync is in flight
+	syncingPluginConfig  map[string]*peerSyncState // the peers whose plugin config sync is in flight
+	syncingAgentConfig   map[string]*peerSyncState // the peers whose agent config sync is in flight
+	projects             projectStore              // the projects of several folders; see projects.go
+	linking              map[string]*linkTry       // peer ID -> how its link is being made, until one holds
+	stateSenders         stateSenders              // coalesced per-peer state senders; see mesh.go
+	ctx                  context.Context           // Run's, for work that outlasts a request
 
 	kinds  map[string]device.Kind // the kinds of device; see devices.go
 	claims claims                 // the devices of this node lent to others

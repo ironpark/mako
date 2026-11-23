@@ -287,29 +287,31 @@ func TestAgentConfigSyncAcrossMesh(t *testing.T) {
 	skillPathB := filepath.Join(b.dir, "skills", "mako-plugin", "SKILL.md")
 	tmplPathB := filepath.Join(b.dir, "templates", "review.md")
 
-	waitFor(t, "agent config, MCP server, skill, and template synced to B", func() bool {
+	deadline := time.Now().Add(5 * time.Second)
+	for {
 		fb := b.followed()
-		cl, ok := fb.agents["claude"]
-		if !ok || !cl.Yolo || !slices.Equal(cl.Args, []string{"--verbose"}) {
-			return false
+		cl, hasClaude := fb.agents["claude"]
+		_, hasMybot := fb.agents["mybot"]
+		srv, hasMCP := fb.servers["localmcp"]
+		skData, skErr := os.ReadFile(skillPathB)
+		tmData, tmErr := os.ReadFile(tmplPathB)
+		if hasClaude && cl.Yolo && slices.Equal(cl.Args, []string{"--verbose"}) &&
+			hasMybot &&
+			hasMCP && srv.Command != nil && slices.Equal(srv.Command.Args, []string{"-y", "srv"}) &&
+			skErr == nil && string(skData) == skillContent &&
+			tmErr == nil && string(tmData) == tmplContent {
+			break
 		}
-		if _, ok := fb.agents["mybot"]; !ok {
-			return false
+		if time.Now().After(deadline) {
+			stA, digA := a.agentSync.snapshot()
+			stB, digB := b.agentSync.snapshot()
+			t.Fatalf("agent config, MCP server, skill, and template not synced to B:\n"+
+				"claude=%+v mybot=%v mcp=%+v skErr=%v tmErr=%v\n"+
+				"digA=%x digB=%x\nstA=%+v\nstB=%+v",
+				cl, hasMybot, srv, skErr, tmErr, digA, digB, stA, stB)
 		}
-		srv, ok := fb.servers["localmcp"]
-		if !ok || srv.Command == nil || !slices.Equal(srv.Command.Args, []string{"-y", "srv"}) {
-			return false
-		}
-		skData, err := os.ReadFile(skillPathB)
-		if err != nil || string(skData) != skillContent {
-			return false
-		}
-		tmData, err := os.ReadFile(tmplPathB)
-		if err != nil || string(tmData) != tmplContent {
-			return false
-		}
-		return true
-	})
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Verify Node B's local Env secrets were preserved and Node A's secrets never leaked.
 	fb := b.followed()

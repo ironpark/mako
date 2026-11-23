@@ -262,17 +262,16 @@ func (d *Daemon) captureLocalAgentConfigLocked() bool {
 	changed := syncstate.HealAgentConfig(st, a.clock, now)
 
 	// 1. Agents (skip untouched built-in defaults unless already tracked in CRDT state,
-	// and once baseline is ready only stamp entries that actually changed locally)
+	// and once baseline is ready only re-stamp already-tracked entries that changed locally)
 	for name, val := range agentsSnap {
 		cur := st.GetAgents()[name]
-		if a.base.ready {
-			prevVal, hadPrev := a.base.agents[name]
-			localChanged := (!hadPrev && !syncstate.IsDefaultAgent(name, curAgents[name])) || (hadPrev && !bytes.Equal(prevVal, val))
-			if !localChanged {
+		if cur == nil && syncstate.IsDefaultAgent(name, curAgents[name]) {
+			continue
+		}
+		if cur != nil && a.base.ready {
+			if prevVal, hadPrev := a.base.agents[name]; hadPrev && bytes.Equal(prevVal, val) {
 				continue
 			}
-		} else if cur == nil && syncstate.IsDefaultAgent(name, curAgents[name]) {
-			continue
 		}
 		if cur == nil || cur.GetDeleted() || !bytes.Equal(cur.GetValue(), val) {
 			if st.Agents == nil {
@@ -302,12 +301,12 @@ func (d *Daemon) captureLocalAgentConfigLocked() bool {
 	// 2. MCP Context Servers, Skill Overrides, and Prompt Templates
 	syncBytesMap := func(dst *map[string]*protocol.BytesReg, curSnap, prevSnap map[string][]byte) {
 		for k, val := range curSnap {
-			if a.base.ready {
+			cur := (*dst)[k]
+			if cur != nil && a.base.ready {
 				if prevVal, hadPrev := prevSnap[k]; hadPrev && bytes.Equal(prevVal, val) {
 					continue
 				}
 			}
-			cur := (*dst)[k]
 			if cur == nil || cur.GetDeleted() || !bytes.Equal(cur.GetValue(), val) {
 				if *dst == nil {
 					*dst = map[string]*protocol.BytesReg{}
@@ -379,8 +378,9 @@ func (d *Daemon) applyAgentConfigSync() {
 	skillsChanged := d.applySyncedSkills(st.GetSkills())
 	templatesChanged := d.applySyncedTemplates(st.GetTemplates())
 
-	// Refresh baseline so applied files are not re-stamped as new local edits.
-	d.refreshAgentLocalBaselineLocked()
+	// Refresh baseline only for keys reconciled from st so concurrent unrelated
+	// local writes are never swallowed as already-captured.
+	d.refreshAgentLocalBaselineLocked(st)
 	a.applyMu.Unlock()
 
 	if skillsChanged {
@@ -393,16 +393,35 @@ func (d *Daemon) applyAgentConfigSync() {
 	}
 }
 
-func (d *Daemon) refreshAgentLocalBaselineLocked() {
+func (d *Daemon) refreshAgentLocalBaselineLocked(st *protocol.AgentSyncState) {
 	_, agentsSnap, serversSnap, skillsSnap, templatesSnap := d.readCurrentAgentSnapshot()
 	a := &d.agentSync
 	a.mu.Lock()
-	a.base.ready = true
-	a.base.agents = cloneBytesMap(agentsSnap)
-	a.base.servers = cloneBytesMap(serversSnap)
-	a.base.skills = cloneBytesMap(skillsSnap)
-	a.base.templates = cloneBytesMap(templatesSnap)
-	a.mu.Unlock()
+	defer a.mu.Unlock()
+	if !a.base.ready {
+		a.base.ready = true
+		a.base.agents = cloneBytesMap(agentsSnap)
+		a.base.servers = cloneBytesMap(serversSnap)
+		a.base.skills = cloneBytesMap(skillsSnap)
+		a.base.templates = cloneBytesMap(templatesSnap)
+		return
+	}
+	updateMap := func(dst *map[string][]byte, regs map[string]*protocol.BytesReg, snap map[string][]byte) {
+		if *dst == nil {
+			*dst = map[string][]byte{}
+		}
+		for k := range regs {
+			if v, ok := snap[k]; ok {
+				(*dst)[k] = bytes.Clone(v)
+			} else {
+				delete(*dst, k)
+			}
+		}
+	}
+	updateMap(&a.base.agents, st.GetAgents(), agentsSnap)
+	updateMap(&a.base.servers, st.GetContextServers(), serversSnap)
+	updateMap(&a.base.skills, st.GetSkills(), skillsSnap)
+	updateMap(&a.base.templates, st.GetTemplates(), templatesSnap)
 }
 
 func (d *Daemon) applySyncedAgentsAndServers(agentRegs, serverRegs map[string]*protocol.BytesReg) (bool, error) {
@@ -638,52 +657,74 @@ func (d *Daemon) takeAgentSyncDigest(fromNodeID string, remoteDigest []byte) {
 	if bytes.Equal(remoteDigest, localDigest) {
 		return
 	}
-	d.syncAgentConfigWithPeer(fromNodeID)
+	d.syncAgentConfigWithPeer(fromNodeID, remoteDigest)
 }
 
-func (d *Daemon) syncAgentConfigWithPeer(nodeID string) {
+func (d *Daemon) syncAgentConfigWithPeer(nodeID string, remoteDigest []byte) {
 	d.mu.Lock()
 	if d.syncingAgentConfig == nil {
-		d.syncingAgentConfig = map[string]bool{}
+		d.syncingAgentConfig = map[string]*peerSyncState{}
 	}
-	if d.syncingAgentConfig[nodeID] {
+	st := d.syncingAgentConfig[nodeID]
+	if st == nil {
+		st = &peerSyncState{}
+		d.syncingAgentConfig[nodeID] = st
+	}
+	st.digest = bytes.Clone(remoteDigest)
+	if st.busy {
 		d.mu.Unlock()
 		return
 	}
-	d.syncingAgentConfig[nodeID] = true
+	st.busy = true
 	d.mu.Unlock()
 
 	go func() {
-		defer func() {
+		for {
 			d.mu.Lock()
+			attempted := bytes.Clone(st.digest)
+			d.mu.Unlock()
+
+			ok := d.syncAgentConfigOnce(nodeID)
+
+			d.mu.Lock()
+			if ok && !bytes.Equal(st.digest, attempted) && !bytes.Equal(st.digest, d.agentSync.currentDigest()) {
+				d.mu.Unlock()
+				continue
+			}
+			st.busy = false
 			delete(d.syncingAgentConfig, nodeID)
 			d.mu.Unlock()
-		}()
-		node, err := d.node(nodeID)
-		if err != nil {
 			return
-		}
-		if node.GetRevision() > 0 && node.GetRevision() < protocol.RevisionConfigSync {
-			return
-		}
-		ctx, cancel := context.WithTimeout(d.ctx, 20*time.Second)
-		defer cancel()
-		stream, err := d.peerStream(ctx, node)
-		if err != nil {
-			return
-		}
-		defer stream.Close()
-
-		d.captureLocalAgentConfig()
-		localState, _ := d.agentSync.snapshot()
-		remoteState, err := transport.Ask[*protocol.AgentSyncState](ctx, stream, protocol.TypeSyncAgentConfig, &protocol.SyncAgentConfig{State: localState})
-		if err != nil {
-			return
-		}
-		if _, changed := d.agentSync.merge(remoteState); changed {
-			d.applyAgentConfigSync()
 		}
 	}()
+}
+
+func (d *Daemon) syncAgentConfigOnce(nodeID string) bool {
+	node, err := d.node(nodeID)
+	if err != nil {
+		return false
+	}
+	if node.GetRevision() > 0 && node.GetRevision() < protocol.RevisionConfigSync {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(d.ctx, 20*time.Second)
+	defer cancel()
+	stream, err := d.peerStream(ctx, node)
+	if err != nil {
+		return false
+	}
+	defer stream.Close()
+
+	d.captureLocalAgentConfig()
+	localState, _ := d.agentSync.snapshot()
+	remoteState, err := transport.Ask[*protocol.AgentSyncState](ctx, stream, protocol.TypeSyncAgentConfig, &protocol.SyncAgentConfig{State: localState})
+	if err != nil {
+		return false
+	}
+	if _, changed := d.agentSync.merge(remoteState); changed {
+		d.applyAgentConfigSync()
+	}
+	return true
 }
 
 func (d *Daemon) handleSyncAgentConfig(_ context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {

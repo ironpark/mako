@@ -183,7 +183,7 @@ func (d *Daemon) captureLocalPluginConfig() bool {
 
 	// 1. Custom registries
 	for u := range curAdded {
-		if p.base.ready && p.base.added[u] {
+		if st.GetRegistries()[u] != nil && p.base.ready && p.base.added[u] {
 			continue
 		}
 		if !syncstate.ElementLive(st.GetRegistries()[u], "plugin:reg:"+u) {
@@ -218,7 +218,7 @@ func (d *Daemon) captureLocalPluginConfig() bool {
 
 	// 2. Built-in default registry removal flag (unset by default on fresh nodes)
 	if storeSnap.NoDefault {
-		if (!p.base.ready || !p.base.noDefault) && (st.NoDefaultRegistry == nil || !st.NoDefaultRegistry.GetValue()) {
+		if (st.NoDefaultRegistry == nil || !p.base.ready || !p.base.noDefault) && (st.NoDefaultRegistry == nil || !st.NoDefaultRegistry.GetValue()) {
 			st.NoDefaultRegistry = &protocol.BoolReg{Value: true, Clock: syncstate.FromHLC(p.clock.Now(now))}
 			changed = true
 		}
@@ -231,12 +231,12 @@ func (d *Daemon) captureLocalPluginConfig() bool {
 
 	// 3. Store-installed plugins
 	for id, in := range storeSnap.Installs {
-		if p.base.ready {
+		cur := st.GetInstalls()[id]
+		if cur != nil && p.base.ready {
 			if prev, hadPrev := p.base.installs[id]; hadPrev && prev.Registry == in.Registry && prev.Key == in.Key && prev.Version == in.Version {
 				continue
 			}
 		}
-		cur := st.GetInstalls()[id]
 		if cur == nil || !cur.GetInstalled() || cur.GetRegistry() != in.Registry || cur.GetKey() != in.Key || cur.GetVersion() != in.Version {
 			if st.Installs == nil {
 				st.Installs = map[string]*protocol.PluginInstallSyncEntry{}
@@ -273,7 +273,7 @@ func (d *Daemon) captureLocalPluginConfig() bool {
 		cur := st.GetDisabled()[id]
 		wasOff, hadBase := p.base.disabled[id]
 		if off {
-			if (!p.base.ready || !hadBase || !wasOff) && (cur == nil || !cur.GetValue()) {
+			if (cur == nil || !p.base.ready || !hadBase || !wasOff) && (cur == nil || !cur.GetValue()) {
 				if st.Disabled == nil {
 					st.Disabled = map[string]*protocol.BoolReg{}
 				}
@@ -293,12 +293,12 @@ func (d *Daemon) captureLocalPluginConfig() bool {
 
 	// 5. Non-secret settings for loaded plugins
 	for k, val := range settingsSnap {
-		if p.base.ready {
+		cur := st.GetSettings()[k]
+		if cur != nil && p.base.ready {
 			if prev, hadPrev := p.base.settings[k]; hadPrev && bytes.Equal(prev, val) {
 				continue
 			}
 		}
-		cur := st.GetSettings()[k]
 		if cur == nil || cur.GetDeleted() || !bytes.Equal(cur.GetValue(), val) {
 			if st.Settings == nil {
 				st.Settings = map[string]*protocol.BytesReg{}
@@ -416,8 +416,9 @@ func (d *Daemon) applyPluginConfigSync(ctx context.Context) {
 		anyChanged = true
 	}
 
-	// Refresh local baseline so applied state is never mistaken for a local edit.
-	d.refreshPluginLocalBaseline()
+	// Refresh local baseline only for keys reconciled from st so concurrent
+	// unrelated local edits are never swallowed.
+	d.refreshPluginLocalBaseline(st)
 
 	if anyChanged {
 		d.changes.firePlugins()
@@ -466,12 +467,12 @@ func (d *Daemon) applyPendingPluginSettings() {
 		return
 	}
 	if d.applySyncedPluginSettings(st) {
-		d.refreshPluginLocalBaseline()
+		d.refreshPluginLocalBaseline(st)
 		d.changes.firePlugins()
 	}
 }
 
-func (d *Daemon) refreshPluginLocalBaseline() {
+func (d *Daemon) refreshPluginLocalBaseline(st *protocol.PluginConfigSyncState) {
 	if d.plugins == nil || d.store == nil {
 		return
 	}
@@ -485,13 +486,64 @@ func (d *Daemon) refreshPluginLocalBaseline() {
 	}
 	p := &d.pluginConfigSync
 	p.mu.Lock()
-	p.base.ready = true
-	p.base.added = curAdded
-	p.base.noDefault = storeSnap.NoDefault
-	p.base.installs = store.CloneInstalls(storeSnap.Installs)
-	p.base.disabled = maps.Clone(disabledSnap)
-	p.base.settings = cloneBytesMap(settingsSnap)
-	p.mu.Unlock()
+	defer p.mu.Unlock()
+	if !p.base.ready {
+		p.base.ready = true
+		p.base.added = curAdded
+		p.base.noDefault = storeSnap.NoDefault
+		p.base.installs = store.CloneInstalls(storeSnap.Installs)
+		p.base.disabled = maps.Clone(disabledSnap)
+		p.base.settings = cloneBytesMap(settingsSnap)
+		return
+	}
+	if p.base.added == nil {
+		p.base.added = map[string]bool{}
+	}
+	for u := range st.GetRegistries() {
+		if curAdded[u] {
+			p.base.added[u] = true
+		} else {
+			delete(p.base.added, u)
+		}
+	}
+	if st.GetNoDefaultRegistry() != nil {
+		p.base.noDefault = storeSnap.NoDefault
+	}
+	if p.base.installs == nil {
+		p.base.installs = map[string]store.Install{}
+	}
+	for id := range st.GetInstalls() {
+		if in, ok := storeSnap.Installs[id]; ok {
+			p.base.installs[id] = in
+		} else {
+			delete(p.base.installs, id)
+		}
+	}
+	if p.base.disabled == nil {
+		p.base.disabled = map[string]bool{}
+	}
+	for id := range st.GetDisabled() {
+		if off, ok := disabledSnap[id]; ok {
+			p.base.disabled[id] = off
+		} else {
+			delete(p.base.disabled, id)
+		}
+	}
+	if p.base.settings == nil {
+		p.base.settings = map[string][]byte{}
+	}
+	for k := range st.GetSettings() {
+		if v, ok := settingsSnap[k]; ok {
+			p.base.settings[k] = bytes.Clone(v)
+		} else {
+			delete(p.base.settings, k)
+		}
+	}
+}
+
+type peerSyncState struct {
+	busy   bool
+	digest []byte
 }
 
 func (d *Daemon) takePluginConfigSyncDigest(fromNodeID string, remoteDigest []byte) {
@@ -505,54 +557,76 @@ func (d *Daemon) takePluginConfigSyncDigest(fromNodeID string, remoteDigest []by
 	if bytes.Equal(remoteDigest, localDigest) {
 		return
 	}
-	d.syncPluginConfigWithPeer(fromNodeID)
+	d.syncPluginConfigWithPeer(fromNodeID, remoteDigest)
 }
 
-func (d *Daemon) syncPluginConfigWithPeer(nodeID string) {
+func (d *Daemon) syncPluginConfigWithPeer(nodeID string, remoteDigest []byte) {
 	d.mu.Lock()
 	if d.syncingPluginConfig == nil {
-		d.syncingPluginConfig = map[string]bool{}
+		d.syncingPluginConfig = map[string]*peerSyncState{}
 	}
-	if d.syncingPluginConfig[nodeID] {
+	st := d.syncingPluginConfig[nodeID]
+	if st == nil {
+		st = &peerSyncState{}
+		d.syncingPluginConfig[nodeID] = st
+	}
+	st.digest = bytes.Clone(remoteDigest)
+	if st.busy {
 		d.mu.Unlock()
 		return
 	}
-	d.syncingPluginConfig[nodeID] = true
+	st.busy = true
 	d.mu.Unlock()
 
 	go func() {
-		defer func() {
+		for {
 			d.mu.Lock()
+			attempted := bytes.Clone(st.digest)
+			d.mu.Unlock()
+
+			ok := d.syncPluginConfigOnce(nodeID)
+
+			d.mu.Lock()
+			if ok && !bytes.Equal(st.digest, attempted) && !bytes.Equal(st.digest, d.pluginConfigSync.currentDigest()) {
+				d.mu.Unlock()
+				continue
+			}
+			st.busy = false
 			delete(d.syncingPluginConfig, nodeID)
 			d.mu.Unlock()
-		}()
-		node, err := d.node(nodeID)
-		if err != nil {
 			return
-		}
-		if node.GetRevision() > 0 && node.GetRevision() < protocol.RevisionConfigSync {
-			return
-		}
-		ctx, cancel := context.WithTimeout(d.ctx, 20*time.Second)
-		defer cancel()
-		stream, err := d.peerStream(ctx, node)
-		if err != nil {
-			return
-		}
-		defer stream.Close()
-
-		d.captureLocalPluginConfig()
-		localState, _ := d.pluginConfigSync.snapshot()
-		remoteState, err := transport.Ask[*protocol.PluginConfigSyncState](ctx, stream, protocol.TypeSyncPluginConfig, &protocol.SyncPluginConfig{State: localState})
-		if err != nil {
-			return
-		}
-		if _, changed := d.pluginConfigSync.merge(remoteState); changed {
-			applyCtx, applyCancel := context.WithTimeout(d.ctx, 2*time.Minute)
-			defer applyCancel()
-			d.applyPluginConfigSync(applyCtx)
 		}
 	}()
+}
+
+func (d *Daemon) syncPluginConfigOnce(nodeID string) bool {
+	node, err := d.node(nodeID)
+	if err != nil {
+		return false
+	}
+	if node.GetRevision() > 0 && node.GetRevision() < protocol.RevisionConfigSync {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(d.ctx, 20*time.Second)
+	defer cancel()
+	stream, err := d.peerStream(ctx, node)
+	if err != nil {
+		return false
+	}
+	defer stream.Close()
+
+	d.captureLocalPluginConfig()
+	localState, _ := d.pluginConfigSync.snapshot()
+	remoteState, err := transport.Ask[*protocol.PluginConfigSyncState](ctx, stream, protocol.TypeSyncPluginConfig, &protocol.SyncPluginConfig{State: localState})
+	if err != nil {
+		return false
+	}
+	if _, changed := d.pluginConfigSync.merge(remoteState); changed {
+		applyCtx, applyCancel := context.WithTimeout(d.ctx, 2*time.Minute)
+		defer applyCancel()
+		d.applyPluginConfigSync(applyCtx)
+	}
+	return true
 }
 
 func (d *Daemon) handleSyncPluginConfig(_ context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
