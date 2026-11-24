@@ -223,6 +223,33 @@ func (w *workspaces) holdsProjects() bool {
 	return len(w.state.GetProjects()) > 0
 }
 
+// projectLocations returns all (node_id -> []paths) locations for projectID in
+// the workspace CRDT state, in root/location order without duplicates.
+func (w *workspaces) projectLocations(projectID string) map[string][]string {
+	w.mu.Lock()
+	st := w.state
+	w.mu.Unlock()
+	if st == nil || projectID == "" {
+		return nil
+	}
+	for _, p := range workspace.Projects(st) {
+		if p.GetId() != projectID {
+			continue
+		}
+		out := map[string][]string{}
+		for _, r := range workspace.Roots(p) {
+			for _, key := range workspace.Members(r.GetLocations()) {
+				n, path, ok := workspace.SplitLocation(key)
+				if ok && n != "" && path != "" && !slices.Contains(out[n], path) {
+					out[n] = append(out[n], path)
+				}
+			}
+		}
+		return out
+	}
+	return nil
+}
+
 // save writes the workspace down, off the lock that readers take.
 func (w *workspaces) save() {
 	w.writeMu.Lock()

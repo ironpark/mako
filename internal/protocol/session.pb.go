@@ -455,9 +455,12 @@ type SessionInfo struct {
 	// user of an attention_seq it had not seen before: every front-end, on
 	// every node, so, the same. The numbers start again with the session's
 	// program.
-	StateSeq      uint64 `protobuf:"varint,38,opt,name=state_seq,json=stateSeq,proto3" json:"state_seq,omitempty"`
-	AttentionSeq  uint64 `protobuf:"varint,39,opt,name=attention_seq,json=attentionSeq,proto3" json:"attention_seq,omitempty"`
-	SeenSeq       uint64 `protobuf:"varint,40,opt,name=seen_seq,json=seenSeq,proto3" json:"seen_seq,omitempty"`
+	StateSeq     uint64 `protobuf:"varint,38,opt,name=state_seq,json=stateSeq,proto3" json:"state_seq,omitempty"`
+	AttentionSeq uint64 `protobuf:"varint,39,opt,name=attention_seq,json=attentionSeq,proto3" json:"attention_seq,omitempty"`
+	SeenSeq      uint64 `protobuf:"varint,40,opt,name=seen_seq,json=seenSeq,proto3" json:"seen_seq,omitempty"`
+	// parent_node_id is the node of parent_session_id when that session is on
+	// another node; "" when the parent is on the same node (revision 48).
+	ParentNodeId  string `protobuf:"bytes,41,opt,name=parent_node_id,json=parentNodeId,proto3" json:"parent_node_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -770,6 +773,13 @@ func (x *SessionInfo) GetSeenSeq() uint64 {
 		return x.SeenSeq
 	}
 	return 0
+}
+
+func (x *SessionInfo) GetParentNodeId() string {
+	if x != nil {
+		return x.ParentNodeId
+	}
+	return ""
 }
 
 // AgentControls are the permission modes, models and efforts a session's
@@ -3461,7 +3471,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\tR\x05start\"\xae\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\"\xd4\n" +
 	"\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
@@ -3507,7 +3517,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x11parent_session_id\x18% \x01(\tR\x0fparentSessionId\x12\x1b\n" +
 	"\tstate_seq\x18& \x01(\x04R\bstateSeq\x12#\n" +
 	"\rattention_seq\x18' \x01(\x04R\fattentionSeq\x12\x19\n" +
-	"\bseen_seq\x18( \x01(\x04R\aseenSeqB\f\n" +
+	"\bseen_seq\x18( \x01(\x04R\aseenSeq\x12$\n" +
+	"\x0eparent_node_id\x18) \x01(\tR\fparentNodeIdB\f\n" +
 	"\n" +
 	"_exit_code\"W\n" +
 	"\rAgentControls\x12\x14\n" +

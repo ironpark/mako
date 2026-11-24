@@ -38,6 +38,7 @@ public  final class SessionInfo extends
     tasks_ = emptyProtobufList();
     gitStamp_ = "";
     parentSessionId_ = "";
+    parentNodeId_ = "";
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -2227,6 +2228,78 @@ public  final class SessionInfo extends
   private void clearSeenSeq() {
 
     seenSeq_ = 0L;
+  }
+
+  public static final int PARENT_NODE_ID_FIELD_NUMBER = 41;
+  private java.lang.String parentNodeId_;
+  /**
+   * <pre>
+   * parent_node_id is the node of parent_session_id when that session is on
+   * another node; "" when the parent is on the same node (revision 48).
+   * </pre>
+   *
+   * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+   * @return The parentNodeId.
+   */
+  @java.lang.Override
+  public java.lang.String getParentNodeId() {
+    return parentNodeId_;
+  }
+  /**
+   * <pre>
+   * parent_node_id is the node of parent_session_id when that session is on
+   * another node; "" when the parent is on the same node (revision 48).
+   * </pre>
+   *
+   * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+   * @return The bytes for parentNodeId.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getParentNodeIdBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(parentNodeId_);
+  }
+  /**
+   * <pre>
+   * parent_node_id is the node of parent_session_id when that session is on
+   * another node; "" when the parent is on the same node (revision 48).
+   * </pre>
+   *
+   * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+   * @param value The parentNodeId to set.
+   */
+  private void setParentNodeId(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    parentNodeId_ = value;
+  }
+  /**
+   * <pre>
+   * parent_node_id is the node of parent_session_id when that session is on
+   * another node; "" when the parent is on the same node (revision 48).
+   * </pre>
+   *
+   * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+   */
+  private void clearParentNodeId() {
+
+    parentNodeId_ = getDefaultInstance().getParentNodeId();
+  }
+  /**
+   * <pre>
+   * parent_node_id is the node of parent_session_id when that session is on
+   * another node; "" when the parent is on the same node (revision 48).
+   * </pre>
+   *
+   * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+   * @param value The bytes for parentNodeId to set.
+   */
+  private void setParentNodeIdBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    parentNodeId_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
@@ -4610,6 +4683,80 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * parent_node_id is the node of parent_session_id when that session is on
+     * another node; "" when the parent is on the same node (revision 48).
+     * </pre>
+     *
+     * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+     * @return The parentNodeId.
+     */
+    @java.lang.Override
+    public java.lang.String getParentNodeId() {
+      return instance.getParentNodeId();
+    }
+    /**
+     * <pre>
+     * parent_node_id is the node of parent_session_id when that session is on
+     * another node; "" when the parent is on the same node (revision 48).
+     * </pre>
+     *
+     * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+     * @return The bytes for parentNodeId.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getParentNodeIdBytes() {
+      return instance.getParentNodeIdBytes();
+    }
+    /**
+     * <pre>
+     * parent_node_id is the node of parent_session_id when that session is on
+     * another node; "" when the parent is on the same node (revision 48).
+     * </pre>
+     *
+     * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+     * @param value The parentNodeId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParentNodeId(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setParentNodeId(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * parent_node_id is the node of parent_session_id when that session is on
+     * another node; "" when the parent is on the same node (revision 48).
+     * </pre>
+     *
+     * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearParentNodeId() {
+      copyOnWrite();
+      instance.clearParentNodeId();
+      return this;
+    }
+    /**
+     * <pre>
+     * parent_node_id is the node of parent_session_id when that session is on
+     * another node; "" when the parent is on the same node (revision 48).
+     * </pre>
+     *
+     * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+     * @param value The bytes for parentNodeId to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParentNodeIdBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setParentNodeIdBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -4668,15 +4815,16 @@ public  final class SessionInfo extends
             "stateSeq_",
             "attentionSeq_",
             "seenSeq_",
+            "parentNodeId_",
           };
           java.lang.String info =
-              "\u0000(\u0000\u0001\u0001((\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0000)\u0000\u0001\u0001))\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
               "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208\u000b\u000b" +
               "\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011\u0208\u0012" +
               "\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004\u0017\u1009" +
               "\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208\u001d\u0007" +
               "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003#\u1009\b$\u1009\t%\u0208&\u0003" +
-              "\'\u0003(\u0003";
+              "\'\u0003(\u0003)\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

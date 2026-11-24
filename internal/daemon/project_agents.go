@@ -48,7 +48,7 @@ func (d *Daemon) readProjectAgents(req *protocol.ReadProjectAgents) (*protocol.P
 	}
 	// The project's agents on other nodes, whose inboxes are theirs.
 	for _, info := range d.remoteAgents(scope) {
-		out.Agents = append(out.Agents, &protocol.ProjectAgent{Session: withoutCommand(info), Messaging: info.GetAgentMessaging()})
+		out.Agents = append(out.Agents, &protocol.ProjectAgent{Session: withoutCommand(info), ParentSessionId: info.GetParentSessionId(), Messaging: info.GetAgentMessaging()})
 	}
 	limit := int(min(req.GetMessageLimit(), 100))
 	if limit == 0 {

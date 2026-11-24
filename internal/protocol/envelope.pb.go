@@ -163,6 +163,8 @@ type Envelope struct {
 	//	*Envelope_PluginConfigSyncState
 	//	*Envelope_SyncAgentConfig
 	//	*Envelope_AgentSyncState
+	//	*Envelope_RelaySpawnAgent
+	//	*Envelope_RelayStopAgent
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1308,6 +1310,24 @@ func (x *Envelope) GetAgentSyncState() *AgentSyncState {
 	return nil
 }
 
+func (x *Envelope) GetRelaySpawnAgent() *RelaySpawnAgent {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RelaySpawnAgent); ok {
+			return x.RelaySpawnAgent
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetRelayStopAgent() *RelayStopAgent {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RelayStopAgent); ok {
+			return x.RelayStopAgent
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1814,6 +1834,15 @@ type Envelope_AgentSyncState struct {
 	AgentSyncState *AgentSyncState `protobuf:"bytes,160,opt,name=agent_sync_state,json=agentSyncState,proto3,oneof"`
 }
 
+type Envelope_RelaySpawnAgent struct {
+	// Cross-node project agent spawning and stopping (revision 48).
+	RelaySpawnAgent *RelaySpawnAgent `protobuf:"bytes,161,opt,name=relay_spawn_agent,json=relaySpawnAgent,proto3,oneof"`
+}
+
+type Envelope_RelayStopAgent struct {
+	RelayStopAgent *RelayStopAgent `protobuf:"bytes,162,opt,name=relay_stop_agent,json=relayStopAgent,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -2056,6 +2085,10 @@ func (*Envelope_SyncAgentConfig) isEnvelope_Body() {}
 
 func (*Envelope_AgentSyncState) isEnvelope_Body() {}
 
+func (*Envelope_RelaySpawnAgent) isEnvelope_Body() {}
+
+func (*Envelope_RelayStopAgent) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -2125,7 +2158,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\xeb5\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\xfa6\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -2272,7 +2305,9 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\x12sync_plugin_config\x18\x9d\x01 \x01(\v2\x19.mako.v2.SyncPluginConfigH\x00R\x10syncPluginConfig\x12Z\n" +
 	"\x18plugin_config_sync_state\x18\x9e\x01 \x01(\v2\x1e.mako.v2.PluginConfigSyncStateH\x00R\x15pluginConfigSyncState\x12G\n" +
 	"\x11sync_agent_config\x18\x9f\x01 \x01(\v2\x18.mako.v2.SyncAgentConfigH\x00R\x0fsyncAgentConfig\x12D\n" +
-	"\x10agent_sync_state\x18\xa0\x01 \x01(\v2\x17.mako.v2.AgentSyncStateH\x00R\x0eagentSyncStateB\x06\n" +
+	"\x10agent_sync_state\x18\xa0\x01 \x01(\v2\x17.mako.v2.AgentSyncStateH\x00R\x0eagentSyncState\x12G\n" +
+	"\x11relay_spawn_agent\x18\xa1\x01 \x01(\v2\x18.mako.v2.RelaySpawnAgentH\x00R\x0frelaySpawnAgent\x12D\n" +
+	"\x10relay_stop_agent\x18\xa2\x01 \x01(\v2\x17.mako.v2.RelayStopAgentH\x00R\x0erelayStopAgentB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2415,6 +2450,8 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*PluginConfigSyncState)(nil), // 119: mako.v2.PluginConfigSyncState
 	(*SyncAgentConfig)(nil),       // 120: mako.v2.SyncAgentConfig
 	(*AgentSyncState)(nil),        // 121: mako.v2.AgentSyncState
+	(*RelaySpawnAgent)(nil),       // 122: mako.v2.RelaySpawnAgent
+	(*RelayStopAgent)(nil),        // 123: mako.v2.RelayStopAgent
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2538,11 +2575,13 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	119, // 118: mako.v2.Envelope.plugin_config_sync_state:type_name -> mako.v2.PluginConfigSyncState
 	120, // 119: mako.v2.Envelope.sync_agent_config:type_name -> mako.v2.SyncAgentConfig
 	121, // 120: mako.v2.Envelope.agent_sync_state:type_name -> mako.v2.AgentSyncState
-	121, // [121:121] is the sub-list for method output_type
-	121, // [121:121] is the sub-list for method input_type
-	121, // [121:121] is the sub-list for extension type_name
-	121, // [121:121] is the sub-list for extension extendee
-	0,   // [0:121] is the sub-list for field type_name
+	122, // 121: mako.v2.Envelope.relay_spawn_agent:type_name -> mako.v2.RelaySpawnAgent
+	123, // 122: mako.v2.Envelope.relay_stop_agent:type_name -> mako.v2.RelayStopAgent
+	123, // [123:123] is the sub-list for method output_type
+	123, // [123:123] is the sub-list for method input_type
+	123, // [123:123] is the sub-list for extension type_name
+	123, // [123:123] is the sub-list for extension extendee
+	0,   // [0:123] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2684,6 +2723,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_PluginConfigSyncState)(nil),
 		(*Envelope_SyncAgentConfig)(nil),
 		(*Envelope_AgentSyncState)(nil),
+		(*Envelope_RelaySpawnAgent)(nil),
+		(*Envelope_RelayStopAgent)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

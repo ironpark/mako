@@ -24,6 +24,7 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transport"
+	"google.golang.org/protobuf/proto"
 )
 
 const agentMCPName = "mako"
@@ -31,20 +32,110 @@ const agentMCPArg = "agent-mcp"
 const agentMCPTokenEnv = "MAKO_AGENT_MCP_TOKEN"
 
 type projectAgents struct {
-	syncMu       sync.Mutex // serializes live MCP tool and file sync across peers
-	mu           sync.Mutex
-	socket       string // the stdio bridge's, for an agent that cannot reach url
-	cliSocket    string // agent-cli.sock for mako-msg CLI & agy-sidecar
-	sidecarToken string // shared secret required for sidecar_subscribe on agent-cli.sock
-	url          string // where the agents reach the server over HTTP
-	peers        map[string]*agentPeer
-	messages     agentMessages
-	waits        map[string]int       // the agents watched with watch_agent / mako-msg wait, how many times each
-	watchSeq     uint64               // monotonic watch_agent ID counter
-	watches      map[string]int       // active watch_agent count per caller session
-	cliWaiters   map[string]int       // active `mako-msg wait` / mod long-poll waiters per session (suppress PTY fallback)
-	modPollUntil map[string]time.Time // grace window between mod long-poll cycles so PTY fallback never races
-	agySidecar   *agySidecarClient
+	syncMu         sync.Mutex // serializes live MCP tool and file sync across peers
+	mu             sync.Mutex
+	socket         string // the stdio bridge's, for an agent that cannot reach url
+	cliSocket      string // agent-cli.sock for mako-msg CLI & agy-sidecar
+	sidecarToken   string // shared secret required for sidecar_subscribe on agent-cli.sock
+	url            string // where the agents reach the server over HTTP
+	peers          map[string]*agentPeer
+	messages       agentMessages
+	waits          map[string]int       // the agents watched with watch_agent / mako-msg wait, how many times each
+	watchSeq       uint64               // monotonic watch_agent ID counter
+	watches        map[string]int       // active watch_agent count per caller session
+	cliWaiters     map[string]int       // active `mako-msg wait` / mod long-poll waiters per session (suppress PTY fallback)
+	modPollUntil   map[string]time.Time // grace window between mod long-poll cycles so PTY fallback never races
+	agySidecar     *agySidecarClient
+	remoteChildren map[string]*remoteChild // recently spawned remote children before peer NodeState catches up
+	stoppedRemote  map[string]time.Time    // remote children explicitly stopped by their parent
+}
+
+type remoteChild struct {
+	info      *protocol.SessionInfo
+	parentID  string
+	scope     string
+	spawnedAt time.Time
+}
+
+func (p *projectAgents) setParentNode(id, parentNode string) {
+	p.mu.Lock()
+	if peer := p.peers[id]; peer != nil {
+		peer.parentNode = parentNode
+	}
+	p.mu.Unlock()
+}
+
+func (p *projectAgents) recordRemoteChild(info *protocol.SessionInfo, parentID, scope string) {
+	if info == nil || info.GetId() == "" {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.remoteChildren == nil {
+		p.remoteChildren = map[string]*remoteChild{}
+	}
+	delete(p.stoppedRemote, info.GetId())
+	p.remoteChildren[info.GetId()] = &remoteChild{
+		info:      proto.CloneOf(info),
+		parentID:  parentID,
+		scope:     scope,
+		spawnedAt: time.Now(),
+	}
+}
+
+func (p *projectAgents) remoteChild(id string) (*remoteChild, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	rc, ok := p.remoteChildren[id]
+	if !ok {
+		return nil, false
+	}
+	return &remoteChild{
+		info:      proto.CloneOf(rc.info),
+		parentID:  rc.parentID,
+		scope:     rc.scope,
+		spawnedAt: rc.spawnedAt,
+	}, true
+}
+
+func (p *projectAgents) remoteChildrenForScope(scope string) []*protocol.SessionInfo {
+	now := time.Now()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []*protocol.SessionInfo
+	for id, rc := range p.remoteChildren {
+		if now.Sub(rc.spawnedAt) > stateFresh {
+			delete(p.remoteChildren, id)
+			continue
+		}
+		if rc.scope == scope {
+			out = append(out, proto.CloneOf(rc.info))
+		}
+	}
+	return out
+}
+
+func (p *projectAgents) markRemoteStopped(id string) {
+	now := time.Now()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.remoteChildren, id)
+	if p.stoppedRemote == nil {
+		p.stoppedRemote = map[string]time.Time{}
+	}
+	for sid, at := range p.stoppedRemote {
+		if now.Sub(at) > 2*stateFresh {
+			delete(p.stoppedRemote, sid)
+		}
+	}
+	p.stoppedRemote[id] = now
+}
+
+func (p *projectAgents) wasRemoteStopped(id string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	at, ok := p.stoppedRemote[id]
+	return ok && time.Since(at) <= 2*stateFresh
 }
 
 func (p *projectAgents) addCLIWaiter(id string) func() {
@@ -120,15 +211,15 @@ func (p *projectAgents) claimWatch(callerID string) (string, func(), bool) {
 }
 
 type agentPeer struct {
-	id, token, parent string
-	ctx               context.Context
-	cancel            context.CancelFunc
-	ready             chan struct{}
-	session           *session.Session                             // guarded by projectAgents.mu
-	http              http.Handler                                 // its sessions over HTTP, made at the first; guarded by projectAgents.mu
-	httpServer        *sdk.Server                                  // backing server for http; guarded by projectAgents.mu
-	servers           map[*sdk.Server]string                       // live SDK servers -> last synced signature or "disabled"; guarded by projectAgents.mu
-	refresh           func(context.Context, *protocol.SessionInfo) // rewrites per-session MCP files on config change; guarded by projectAgents.mu
+	id, token, parent, parentNode string
+	ctx                           context.Context
+	cancel                        context.CancelFunc
+	ready                         chan struct{}
+	session                       *session.Session                             // guarded by projectAgents.mu
+	http                          http.Handler                                 // its sessions over HTTP, made at the first; guarded by projectAgents.mu
+	httpServer                    *sdk.Server                                  // backing server for http; guarded by projectAgents.mu
+	servers                       map[*sdk.Server]string                       // live SDK servers -> last synced signature or "disabled"; guarded by projectAgents.mu
+	refresh                       func(context.Context, *protocol.SessionInfo) // rewrites per-session MCP files on config change; guarded by projectAgents.mu
 }
 
 func (p *projectAgents) server(ctx context.Context, binary, id, parent string) (agent.Server, func()) {

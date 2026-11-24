@@ -3,6 +3,7 @@ syntax = "proto3";
 package mako.v2;
 
 import "google/protobuf/timestamp.proto";
+import "mako/v2/project_agents.proto";
 import "mako/v2/session.proto";
 import "mako/v2/workspace.proto";
 
@@ -75,6 +76,10 @@ message Node {
   // changed, for a node that reads it without merging it, never a reason
   // to merge. Empty from an older daemon, and to a node it does not let in.
   bytes workspace_digest = 23;
+  // projects are the multi-folder project scopes this node holds, sent to
+  // peers this node lets in (revision 48), so agents on other nodes know
+  // which folders belong to a shared project even before any session runs.
+  repeated ProjectScope projects = 24;
 }
 
 // AgentInfo names an agent a node can launch and its profiles, and what
@@ -91,6 +96,7 @@ message AgentInfo {
   bool yolo = 7; // Revision 39
   optional bool allow_agent = 8; // Revision 39: allow AI models to spawn default (no-profile) agent via MCP
   optional bool allow_template = 9; // Revision 39: allow prompt templates to run default (no-profile) agent
+  bool spawnable = 10; // Revision 48: whether default (no-profile) agent can be spawned via MCP
 }
 
 // AgentProfileInfo describes a configured agent profile for callers choosing

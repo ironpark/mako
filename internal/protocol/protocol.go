@@ -137,6 +137,8 @@ const (
 	TypePluginConfigSyncState Type = "plugin_config_sync_state"
 	TypeSyncAgentConfig       Type = "sync_agent_config"
 	TypeAgentSyncState        Type = "agent_sync_state"
+	TypeRelaySpawnAgent       Type = "relay_spawn_agent"
+	TypeRelayStopAgent        Type = "relay_stop_agent"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

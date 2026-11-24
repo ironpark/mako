@@ -180,8 +180,12 @@ type Node struct {
 	// changed, for a node that reads it without merging it, never a reason
 	// to merge. Empty from an older daemon, and to a node it does not let in.
 	WorkspaceDigest []byte `protobuf:"bytes,23,opt,name=workspace_digest,json=workspaceDigest,proto3" json:"workspace_digest,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// projects are the multi-folder project scopes this node holds, sent to
+	// peers this node lets in (revision 48), so agents on other nodes know
+	// which folders belong to a shared project even before any session runs.
+	Projects      []*ProjectScope `protobuf:"bytes,24,rep,name=projects,proto3" json:"projects,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Node) Reset() {
@@ -375,6 +379,13 @@ func (x *Node) GetWorkspaceDigest() []byte {
 	return nil
 }
 
+func (x *Node) GetProjects() []*ProjectScope {
+	if x != nil {
+		return x.Projects
+	}
+	return nil
+}
+
 // AgentInfo names an agent a node can launch and its profiles, and what
 // the node's driver for it says of it, so a front-end that has no driver
 // for the agent still shows it: none of those for an agent the node knows
@@ -390,6 +401,7 @@ type AgentInfo struct {
 	Yolo           bool                   `protobuf:"varint,7,opt,name=yolo,proto3" json:"yolo,omitempty"`                                              // Revision 39
 	AllowAgent     *bool                  `protobuf:"varint,8,opt,name=allow_agent,json=allowAgent,proto3,oneof" json:"allow_agent,omitempty"`          // Revision 39: allow AI models to spawn default (no-profile) agent via MCP
 	AllowTemplate  *bool                  `protobuf:"varint,9,opt,name=allow_template,json=allowTemplate,proto3,oneof" json:"allow_template,omitempty"` // Revision 39: allow prompt templates to run default (no-profile) agent
+	Spawnable      bool                   `protobuf:"varint,10,opt,name=spawnable,proto3" json:"spawnable,omitempty"`                                   // Revision 48: whether default (no-profile) agent can be spawned via MCP
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -483,6 +495,13 @@ func (x *AgentInfo) GetAllowAgent() bool {
 func (x *AgentInfo) GetAllowTemplate() bool {
 	if x != nil && x.AllowTemplate != nil {
 		return *x.AllowTemplate
+	}
+	return false
+}
+
+func (x *AgentInfo) GetSpawnable() bool {
+	if x != nil {
+		return x.Spawnable
 	}
 	return false
 }
@@ -1697,13 +1716,13 @@ var File_mako_v2_mesh_proto protoreflect.FileDescriptor
 
 const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\n" +
-	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x15mako/v2/session.proto\x1a\x17mako/v2/workspace.proto\"~\n" +
+	"\x12mako/v2/mesh.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cmako/v2/project_agents.proto\x1a\x15mako/v2/session.proto\x1a\x17mako/v2/workspace.proto\"~\n" +
 	"\x05Hello\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x03 \x01(\tR\aversion\x12\x12\n" +
 	"\x04hops\x18\x06 \x01(\rR\x04hopsJ\x04\b\x01\x10\x02J\x04\b\x04\x10\x05J\x04\b\x05\x10\x06R\anode_idR\ais_peerR\bauth_tagR\x05token\",\n" +
 	"\aWelcome\x12!\n" +
-	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\x86\x05\n" +
+	"\x04node\x18\x01 \x01(\v2\r.mako.v2.NodeR\x04node\"\xb9\x05\n" +
 	"\x04Node\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -1731,7 +1750,8 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\n" +
 	"link_error\x18\x15 \x01(\tR\tlinkError\x127\n" +
 	"\trelink_at\x18\x16 \x01(\v2\x1a.google.protobuf.TimestampR\brelinkAt\x12)\n" +
-	"\x10workspace_digest\x18\x17 \x01(\fR\x0fworkspaceDigest\"\xc6\x02\n" +
+	"\x10workspace_digest\x18\x17 \x01(\fR\x0fworkspaceDigest\x121\n" +
+	"\bprojects\x18\x18 \x03(\v2\x15.mako.v2.ProjectScopeR\bprojects\"\xe4\x02\n" +
 	"\tAgentInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\x12\x12\n" +
@@ -1742,7 +1762,9 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"\x04yolo\x18\a \x01(\bR\x04yolo\x12$\n" +
 	"\vallow_agent\x18\b \x01(\bH\x00R\n" +
 	"allowAgent\x88\x01\x01\x12*\n" +
-	"\x0eallow_template\x18\t \x01(\bH\x01R\rallowTemplate\x88\x01\x01B\x0e\n" +
+	"\x0eallow_template\x18\t \x01(\bH\x01R\rallowTemplate\x88\x01\x01\x12\x1c\n" +
+	"\tspawnable\x18\n" +
+	" \x01(\bR\tspawnableB\x0e\n" +
 	"\f_allow_agentB\x11\n" +
 	"\x0f_allow_template\"\x9d\x02\n" +
 	"\x10AgentProfileInfo\x12\x12\n" +
@@ -1873,37 +1895,39 @@ var file_mako_v2_mesh_proto_goTypes = []any{
 	(*AccessKey)(nil),             // 17: mako.v2.AccessKey
 	(*AccessRequest)(nil),         // 18: mako.v2.AccessRequest
 	(*timestamppb.Timestamp)(nil), // 19: google.protobuf.Timestamp
-	(*SessionInfo)(nil),           // 20: mako.v2.SessionInfo
-	(*WorkspaceState)(nil),        // 21: mako.v2.WorkspaceState
+	(*ProjectScope)(nil),          // 20: mako.v2.ProjectScope
+	(*SessionInfo)(nil),           // 21: mako.v2.SessionInfo
+	(*WorkspaceState)(nil),        // 22: mako.v2.WorkspaceState
 }
 var file_mako_v2_mesh_proto_depIdxs = []int32{
 	2,  // 0: mako.v2.Welcome.node:type_name -> mako.v2.Node
 	19, // 1: mako.v2.Node.last_seen:type_name -> google.protobuf.Timestamp
 	3,  // 2: mako.v2.Node.agents:type_name -> mako.v2.AgentInfo
 	19, // 3: mako.v2.Node.relink_at:type_name -> google.protobuf.Timestamp
-	4,  // 4: mako.v2.AgentInfo.profile_details:type_name -> mako.v2.AgentProfileInfo
-	2,  // 5: mako.v2.Nodes.nodes:type_name -> mako.v2.Node
-	2,  // 6: mako.v2.NodeState.node:type_name -> mako.v2.Node
-	20, // 7: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
-	2,  // 8: mako.v2.NodeState.peers:type_name -> mako.v2.Node
-	8,  // 9: mako.v2.NodeState.workspace:type_name -> mako.v2.Workspace
-	21, // 10: mako.v2.Workspace.state:type_name -> mako.v2.WorkspaceState
-	9,  // 11: mako.v2.Workspace.stage:type_name -> mako.v2.LayoutStage
-	17, // 12: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
-	17, // 13: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
-	18, // 14: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
-	17, // 15: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
-	16, // 16: mako.v2.AccessInfo.pairing:type_name -> mako.v2.Pairing
-	19, // 17: mako.v2.Pairing.expires:type_name -> google.protobuf.Timestamp
-	2,  // 18: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
-	17, // 19: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
-	17, // 20: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
-	19, // 21: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	20, // 4: mako.v2.Node.projects:type_name -> mako.v2.ProjectScope
+	4,  // 5: mako.v2.AgentInfo.profile_details:type_name -> mako.v2.AgentProfileInfo
+	2,  // 6: mako.v2.Nodes.nodes:type_name -> mako.v2.Node
+	2,  // 7: mako.v2.NodeState.node:type_name -> mako.v2.Node
+	21, // 8: mako.v2.NodeState.sessions:type_name -> mako.v2.SessionInfo
+	2,  // 9: mako.v2.NodeState.peers:type_name -> mako.v2.Node
+	8,  // 10: mako.v2.NodeState.workspace:type_name -> mako.v2.Workspace
+	22, // 11: mako.v2.Workspace.state:type_name -> mako.v2.WorkspaceState
+	9,  // 12: mako.v2.Workspace.stage:type_name -> mako.v2.LayoutStage
+	17, // 13: mako.v2.AccessInfo.key:type_name -> mako.v2.AccessKey
+	17, // 14: mako.v2.AccessInfo.owner:type_name -> mako.v2.AccessKey
+	18, // 15: mako.v2.AccessInfo.requests:type_name -> mako.v2.AccessRequest
+	17, // 16: mako.v2.AccessInfo.keys:type_name -> mako.v2.AccessKey
+	16, // 17: mako.v2.AccessInfo.pairing:type_name -> mako.v2.Pairing
+	19, // 18: mako.v2.Pairing.expires:type_name -> google.protobuf.Timestamp
+	2,  // 19: mako.v2.AccessRequest.node:type_name -> mako.v2.Node
+	17, // 20: mako.v2.AccessRequest.key:type_name -> mako.v2.AccessKey
+	17, // 21: mako.v2.AccessRequest.owner:type_name -> mako.v2.AccessKey
+	19, // 22: mako.v2.AccessRequest.at:type_name -> google.protobuf.Timestamp
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_mesh_proto_init() }
@@ -1911,6 +1935,7 @@ func file_mako_v2_mesh_proto_init() {
 	if File_mako_v2_mesh_proto != nil {
 		return
 	}
+	file_mako_v2_project_agents_proto_init()
 	file_mako_v2_session_proto_init()
 	file_mako_v2_workspace_proto_init()
 	file_mako_v2_mesh_proto_msgTypes[3].OneofWrappers = []any{}

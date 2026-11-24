@@ -377,4 +377,36 @@ public interface NodeOrBuilder extends
    * @return The workspaceDigest.
    */
   com.google.protobuf.ByteString getWorkspaceDigest();
+
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.ProjectScope> 
+      getProjectsList();
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  dev.ironpark.mako.v2.ProjectScope getProjects(int index);
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  int getProjectsCount();
 }

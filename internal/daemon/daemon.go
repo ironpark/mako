@@ -193,6 +193,7 @@ func (d *Daemon) Self() *protocol.Node {
 		// What tells a node that reads the workspace here, without merging
 		// it, that it changed: a phone, which lets no one in.
 		WorkspaceDigest: d.workspace.currentDigest(),
+		Projects:        d.projects.get(),
 	}
 }
 
@@ -201,6 +202,7 @@ func (d *Daemon) Self() *protocol.Node {
 func (d *Daemon) publicSelf() *protocol.Node {
 	self := d.Self()
 	self.Agents = nil
+	self.Projects = nil
 	self.WorkspaceDigest = nil
 	return self
 }
@@ -375,6 +377,10 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleSetProjects(ctx, stream, env)
 	case protocol.TypeRelayAgentMessage:
 		return d.handleRelayAgentMessage(ctx, stream, env)
+	case protocol.TypeRelaySpawnAgent:
+		return d.handleRelaySpawnAgent(ctx, stream, env)
+	case protocol.TypeRelayStopAgent:
+		return d.handleRelayStopAgent(ctx, stream, env)
 
 	case protocol.TypeListSess:
 		return d.handleListSessions(ctx, stream, env, fromPeer)

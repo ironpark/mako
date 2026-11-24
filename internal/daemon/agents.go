@@ -400,6 +400,7 @@ func (d *Daemon) agentInfo() []*protocol.AgentInfo {
 				_, hasPrompter = drv.Driver.(agent.Prompter)
 			}
 		}
+		info.Spawnable = len(a.Command) > 0 && hasServers && hasPrompter && d.agentMCPEnabled(nil) && allowAgent
 		if len(a.Profiles) > 0 {
 			details := make([]*protocol.AgentProfileInfo, len(a.Profiles))
 			for j, p := range a.Profiles {

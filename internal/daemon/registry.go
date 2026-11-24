@@ -105,8 +105,14 @@ func (p *peerTable) upsert(node *protocol.Node) bool {
 		if node.GetOs() == "" {
 			node.Os, node.Arch, node.Version = prev.GetOs(), prev.GetArch(), prev.GetVersion()
 		}
+		if node.GetRevision() == 0 {
+			node.Revision = prev.GetRevision()
+		}
 		if node.GetAgents() == nil {
 			node.Agents = prev.GetAgents()
+			if node.GetProjects() == nil {
+				node.Projects = prev.GetProjects()
+			}
 		}
 		if node.GetWorkspaceDigest() == nil {
 			node.WorkspaceDigest = prev.GetWorkspaceDigest()
@@ -147,8 +153,12 @@ func (p *peerTable) merge(node *protocol.Node) {
 	}
 	if protocol.TimeOf(node.GetLastSeen()).After(protocol.TimeOf(prev.GetLastSeen())) {
 		prev.LastSeen = node.GetLastSeen()
+		if node.GetRevision() != 0 {
+			prev.Revision = node.GetRevision()
+		}
 		if node.GetAgents() != nil {
 			prev.Agents = node.GetAgents() // what it launches, as of that sighting
+			prev.Projects = node.GetProjects()
 		}
 		if node.GetPeerId() != "" {
 			prev.PeerId, prev.Multiaddrs = node.GetPeerId(), node.GetMultiaddrs()

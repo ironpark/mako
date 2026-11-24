@@ -1519,5 +1519,35 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.AgentSyncState getAgentSyncState();
 
+  /**
+   * <pre>
+   * Cross-node project agent spawning and stopping (revision 48).
+   * </pre>
+   *
+   * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+   * @return Whether the relaySpawnAgent field is set.
+   */
+  boolean hasRelaySpawnAgent();
+  /**
+   * <pre>
+   * Cross-node project agent spawning and stopping (revision 48).
+   * </pre>
+   *
+   * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+   * @return The relaySpawnAgent.
+   */
+  dev.ironpark.mako.v2.RelaySpawnAgent getRelaySpawnAgent();
+
+  /**
+   * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+   * @return Whether the relayStopAgent field is set.
+   */
+  boolean hasRelayStopAgent();
+  /**
+   * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+   * @return The relayStopAgent.
+   */
+  dev.ironpark.mako.v2.RelayStopAgent getRelayStopAgent();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

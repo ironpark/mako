@@ -87,6 +87,9 @@ type agentCLIRequest struct {
 	To   string `json:"to,omitempty"`
 	Text string `json:"text,omitempty"`
 
+	// profiles options:
+	Node string `json:"node,omitempty"`
+
 	// plugin_list / plugin_call options:
 	PluginID string          `json:"plugin_id,omitempty"`
 	ToolID   string          `json:"tool_id,omitempty"`
@@ -257,7 +260,7 @@ func (d *Daemon) serveAgentCLI(ctx context.Context, conn net.Conn) {
 		writeResp(agentCLIResponse{OK: true, Agents: &out})
 
 	case "profiles":
-		out, err := d.listAgentProfiles(peer)
+		out, err := d.listAgentProfiles(peer, listAgentProfilesArgs{Node: req.Node})
 		if err != nil {
 			writeResp(agentCLIResponse{Error: err.Error()})
 			return
@@ -345,13 +348,22 @@ func (d *Daemon) cliWait(ctx context.Context, peer *agentPeer, req agentCLIReque
 	if req.WatchChildren {
 		d.sessionMu.Lock()
 		for id, saved := range d.saved {
-			if saved.ParentID == peer.id && !slices.Contains(watchIDs, id) {
+			if saved.ParentID == peer.id && saved.ParentNodeID == "" && !slices.Contains(watchIDs, id) {
 				if s, ok := d.sessions.get(id); ok && s.Info().GetState() == protocol.StateRunning && d.inProject(scope, s.Info()) {
 					watchIDs = append(watchIDs, id)
 				}
 			}
 		}
 		d.sessionMu.Unlock()
+		selfNodeID := d.config().NodeID
+		for _, remote := range d.remoteAgents(scope) {
+			if remote.GetParentSessionId() == peer.id &&
+				(remote.GetParentNodeId() == "" || remote.GetParentNodeId() == selfNodeID) &&
+				remote.GetState() == protocol.StateRunning &&
+				!slices.Contains(watchIDs, remote.GetId()) {
+				watchIDs = append(watchIDs, remote.GetId())
+			}
+		}
 	}
 
 	type watchedTarget struct {

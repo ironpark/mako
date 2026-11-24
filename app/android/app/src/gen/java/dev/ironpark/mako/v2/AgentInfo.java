@@ -587,6 +587,44 @@ public  final class AgentInfo extends
     allowTemplate_ = false;
   }
 
+  public static final int SPAWNABLE_FIELD_NUMBER = 10;
+  private boolean spawnable_;
+  /**
+   * <pre>
+   * Revision 48: whether default (no-profile) agent can be spawned via MCP
+   * </pre>
+   *
+   * <code>bool spawnable = 10 [json_name = "spawnable"];</code>
+   * @return The spawnable.
+   */
+  @java.lang.Override
+  public boolean getSpawnable() {
+    return spawnable_;
+  }
+  /**
+   * <pre>
+   * Revision 48: whether default (no-profile) agent can be spawned via MCP
+   * </pre>
+   *
+   * <code>bool spawnable = 10 [json_name = "spawnable"];</code>
+   * @param value The spawnable to set.
+   */
+  private void setSpawnable(boolean value) {
+    
+    spawnable_ = value;
+  }
+  /**
+   * <pre>
+   * Revision 48: whether default (no-profile) agent can be spawned via MCP
+   * </pre>
+   *
+   * <code>bool spawnable = 10 [json_name = "spawnable"];</code>
+   */
+  private void clearSpawnable() {
+
+    spawnable_ = false;
+  }
+
   public static dev.ironpark.mako.v2.AgentInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1275,6 +1313,46 @@ public  final class AgentInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Revision 48: whether default (no-profile) agent can be spawned via MCP
+     * </pre>
+     *
+     * <code>bool spawnable = 10 [json_name = "spawnable"];</code>
+     * @return The spawnable.
+     */
+    @java.lang.Override
+    public boolean getSpawnable() {
+      return instance.getSpawnable();
+    }
+    /**
+     * <pre>
+     * Revision 48: whether default (no-profile) agent can be spawned via MCP
+     * </pre>
+     *
+     * <code>bool spawnable = 10 [json_name = "spawnable"];</code>
+     * @param value The spawnable to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSpawnable(boolean value) {
+      copyOnWrite();
+      instance.setSpawnable(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 48: whether default (no-profile) agent can be spawned via MCP
+     * </pre>
+     *
+     * <code>bool spawnable = 10 [json_name = "spawnable"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSpawnable() {
+      copyOnWrite();
+      instance.clearSpawnable();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AgentInfo)
   }
   @java.lang.Override
@@ -1302,10 +1380,12 @@ public  final class AgentInfo extends
             "yolo_",
             "allowAgent_",
             "allowTemplate_",
+            "spawnable_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0001\u0001\t\t\u0000\u0002\u0000\u0001\u0208\u0002\u021a\u0003\u0208" +
-              "\u0004\u000b\u0005\u000b\u0006\u001b\u0007\u0007\b\u1007\u0000\t\u1007\u0001";
+              "\u0000\n\u0000\u0001\u0001\n\n\u0000\u0002\u0000\u0001\u0208\u0002\u021a\u0003\u0208" +
+              "\u0004\u000b\u0005\u000b\u0006\u001b\u0007\u0007\b\u1007\u0000\t\u1007\u0001\n\u0007" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

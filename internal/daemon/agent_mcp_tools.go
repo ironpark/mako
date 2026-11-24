@@ -34,8 +34,32 @@ type agentSummary struct {
 	Folder string `json:"folder,omitempty"`
 	// Node names the node it is on when it is another's: an agent of the
 	// project there.
-	Node string `json:"node,omitempty"`
-	Hint string `json:"hint,omitempty"`
+	Node   string `json:"node,omitempty"`
+	NodeID string `json:"node_id,omitempty"`
+	Hint   string `json:"hint,omitempty"`
+}
+
+type projectNode struct {
+	ID        string           `json:"id"`
+	Name      string           `json:"name"`
+	Local     bool             `json:"local,omitempty"`
+	OS        string           `json:"os,omitempty"`
+	Arch      string           `json:"arch,omitempty"`
+	Reachable bool             `json:"reachable"`
+	Spawnable bool             `json:"spawnable"`
+	Folders   []string         `json:"folders,omitempty"`
+	Available []availableAgent `json:"available,omitempty"`
+}
+
+type remoteNodeInfo struct {
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	OS        string            `json:"os,omitempty"`
+	Arch      string            `json:"arch,omitempty"`
+	Reachable bool              `json:"reachable"`
+	Spawnable bool              `json:"spawnable"`
+	Folders   []string          `json:"folders,omitempty"`
+	Presets   []spawnablePreset `json:"presets,omitempty"`
 }
 
 type availableAgent struct {
@@ -57,24 +81,35 @@ type spawnablePreset struct {
 	Effort      string `json:"effort,omitempty" jsonschema:"Configured reasoning effort for this preset, if set."`
 	Yolo        bool   `json:"yolo,omitempty" jsonschema:"Whether YOLO (auto-approve permissions) mode is enabled for this preset."`
 }
+type listAgentProfilesArgs struct {
+	Node string `json:"node,omitempty" jsonschema:"Optional node ID or name from list_agents to inspect spawnable presets on another node of this project. Omit for this node (other project nodes are also summarized in nodes)."`
+}
 type listAgentProfilesResult struct {
+	Node    string            `json:"node,omitempty" jsonschema:"Node name these presets belong to when querying a specific node."`
+	NodeID  string            `json:"node_id,omitempty" jsonschema:"Node ID these presets belong to when querying a specific node."`
+	Folders []string          `json:"folders,omitempty" jsonschema:"Project folders available on the queried node."`
 	Presets []spawnablePreset `json:"presets" jsonschema:"Spawnable agent configurations and profile presets ready to pass to spawn_agent."`
 	Agents  []availableAgent  `json:"agents" jsonschema:"Spawnable agents grouped with their spawnable profiles."`
+	Nodes   []remoteNodeInfo  `json:"nodes,omitempty" jsonschema:"Other nodes in this project you can target with list_agent_profiles(node=...) or spawn_agent(node=...)."`
 }
 type listAgentsResult struct {
-	SelfID  string `json:"self_id"`
-	Project string `json:"project"`
+	SelfID   string `json:"self_id"`
+	SelfNode string `json:"self_node,omitempty"`
+	Project  string `json:"project"`
 	// ProjectName names the project of several folders the session is in,
 	// whose agents in every folder it lists.
 	ProjectName string           `json:"project_name,omitempty"`
 	Agents      []agentSummary   `json:"agents"`
+	Nodes       []projectNode    `json:"nodes,omitempty"`
 	Available   []availableAgent `json:"available"`
 }
 type spawnAgentArgs struct {
-	Agent   string `json:"agent,omitempty" jsonschema:"Agent to launch; defaults to this session's agent. Use list_agent_profiles for spawnable choices."`
+	Agent   string `json:"agent,omitempty" jsonschema:"Agent to launch; defaults to this session's agent. Use list_agent_profiles for spawnable choices on the target node."`
 	Profile string `json:"profile,omitempty" jsonschema:"Exact profile name from list_agent_profiles. Choose a spawnable profile whose description fits the task, and set agent to its owning agent name. Omit for the agent's default settings."`
 	Name    string `json:"name,omitempty"`
-	Prompt  string `json:"prompt" jsonschema:"The task for the new agent. It starts in this project's directory."`
+	Node    string `json:"node,omitempty" jsonschema:"Target node ID or name from list_agents/list_agent_profiles to spawn on another node of this project; omit to spawn on this node."`
+	Folder  string `json:"folder,omitempty" jsonschema:"Optional working directory on the target node from that node's folders in this project; omit to use your folder locally or the project's default folder on the target node."`
+	Prompt  string `json:"prompt" jsonschema:"The task for the new agent. It starts in this project's directory (or the chosen project folder on the target node)."`
 }
 type sendMessageArgs struct {
 	To   string `json:"to"`
@@ -126,9 +161,9 @@ func (d *Daemon) agentMCPSnapshot() agentMCPSnapshot {
 	}{available, presets, blocks})
 	sum := sha256.Sum256(sigPayload)
 	agentSummaryText := summarizeAvailableForSchema(available)
-	listAgentsDesc := "List active and saved agent sessions in this project, on this node and, for a project of several folders, on other nodes, with their IDs, status and messaging support, plus available agent types and profiles."
-	listAgentProfilesDesc := "List only the spawnable agent configurations and profile presets available on this node, with each preset's target, description, model, effort and YOLO setting. Call this before spawn_agent to pick the best configuration for a task."
-	spawnAgentDesc := "Start a new Mako agent session in the current project with a task. First inspect list_agent_profiles and choose a spawnable preset by its description and settings; supply its agent and profile names. The spawned agent runs asynchronously and reports results back via send_message, which Mako pushes into your session automatically. After spawning, continue other work or end your turn to receive its reply (or register a one-shot notification with watch_agent)."
+	listAgentsDesc := "List active and saved agent sessions in this project, on this node and on other nodes of the same project, with their IDs, status and messaging support, plus project nodes (with folders and available agents) and local agent types and profiles."
+	listAgentProfilesDesc := "List only the spawnable agent configurations and profile presets available on this node (or another node of this project via the node parameter), with each preset's target, description, model, effort and YOLO setting, plus other project nodes and their presets. Call this before spawn_agent to pick the best configuration and node for a task."
+	spawnAgentDesc := "Start a new Mako agent session in the current project with a task, on this node or on another node of the same project (pass node and optionally folder from list_agent_profiles or list_agents). First inspect list_agent_profiles and choose a spawnable preset by its description and settings; supply its agent and profile names. The spawned agent runs asynchronously and reports results back via send_message, which Mako pushes into your session automatically across nodes. After spawning, continue other work or end your turn to receive its reply (or register a one-shot notification with watch_agent)."
 	if agentSummaryText != "" {
 		listAgentsDesc += " Current agents: " + agentSummaryText
 		spawnAgentDesc += " Current choices: " + agentSummaryText
@@ -242,8 +277,12 @@ func (d *Daemon) agentInstructions(peer *agentPeer) string {
 	if ids := d.usablePluginIDs(peer); len(ids) > 0 {
 		pluginHint = fmt.Sprintf(" Available plugins via CLI (`mako-plugin list`, `mako-plugin help <plugin> [tool]`, `mako-plugin call <plugin> <tool> [--param val | --json ...]`): %s.", strings.Join(ids, ", "))
 	}
-	return fmt.Sprintf("You are Mako session %s (mode=%s, AGENT_MAKO_SESSION=%s, AGENT_MAKO_MODE=%s) in project %s. Parent session: %s. Before delegating, use list_agent_profiles to inspect spawnable agent configurations and profile presets (with descriptions, models, efforts and YOLO settings), or list_agents to inspect active project sessions. Choose a spawnable preset whose specialties match the task, then pass its agent and profile names to spawn_agent (omit profile for an agent default). Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. %s Report results to the parent with send_message. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note. stop_agent only stops agents you spawned. The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.%s",
-		peer.id, mode, peer.id, mode, info.GetProject(), peer.parent, waitGuidance, pluginHint)
+	parentLabel := peer.parent
+	if parentLabel != "" && peer.parentNode != "" {
+		parentLabel = fmt.Sprintf("%s (on %s)", peer.parent, d.nodeName(peer.parentNode))
+	}
+	return fmt.Sprintf("You are Mako session %s (mode=%s, AGENT_MAKO_SESSION=%s, AGENT_MAKO_MODE=%s) on node %s in project %s. Parent session: %s. Before delegating, use list_agent_profiles to inspect spawnable agent configurations and profile presets (on this node and other nodes of this project, with descriptions, models, efforts and YOLO settings), or list_agents to inspect active project sessions and project nodes. Choose a spawnable preset whose specialties match the task, then pass its agent and profile names to spawn_agent (omit profile for an agent default; pass node and optionally folder to spawn on another node of this project). Use send_message to communicate, with agents of this project on other nodes too, which list_agents lists with their node. %s Report results to the parent with send_message. Of an agent you spawned that waits on the user, or exits without reporting, you hear in a Mako note. stop_agent only stops agents you spawned (locally or on other nodes). The mako window's layout is a document you read with get_layout and list_blocks; set_layout, patch_layout and undo_layout change it once the user allows, and only what the user keeps stays. show_ui shows a block of UI of yours in the window, a form say, and the user's taps on it come back to you as messages from the window; update_ui and close_ui change and close it. A UI to keep is a plugin: list_blocks names the folder to write one into.%s",
+		peer.id, mode, peer.id, mode, d.nodeName(d.config().NodeID), info.GetProject(), parentLabel, waitGuidance, pluginHint)
 }
 
 func (d *Daemon) usablePluginIDs(peer *agentPeer) []string {
@@ -285,8 +324,8 @@ func (d *Daemon) addDynamicAgentTools(server *sdk.Server, peer *agentPeer, snap 
 		out, err := d.listProjectAgents(peer)
 		return nil, out, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "list_agent_profiles", Description: snap.listAgentProfilesDesc, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, _ struct{}) (*sdk.CallToolResult, listAgentProfilesResult, error) {
-		out, err := d.listAgentProfiles(peer)
+	sdk.AddTool(server, &sdk.Tool{Name: "list_agent_profiles", Description: snap.listAgentProfilesDesc, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in listAgentProfilesArgs) (*sdk.CallToolResult, listAgentProfilesResult, error) {
+		out, err := d.listAgentProfiles(peer, in)
 		return nil, out, err
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: "spawn_agent", Description: snap.spawnAgentDesc}, func(ctx context.Context, _ *sdk.CallToolRequest, in spawnAgentArgs) (*sdk.CallToolResult, agentSummary, error) {
@@ -329,20 +368,9 @@ func (d *Daemon) registerProjectAgentTools(server *sdk.Server, peer *agentPeer, 
 		out, err := d.watchProjectAgent(peer, in)
 		return nil, out, err
 	})
-	sdk.AddTool(server, &sdk.Tool{Name: "stop_agent", Description: "Terminate and remove an agent session spawned directly by you. Other project sessions cannot be stopped with this tool."}, func(ctx context.Context, _ *sdk.CallToolRequest, in stopAgentArgs) (*sdk.CallToolResult, stopAgentResult, error) {
-		if _, err := d.projectCaller(peer); err != nil {
-			return nil, stopAgentResult{}, err
-		}
-		d.sessionMu.Lock()
-		saved, exists := d.saved[in.SessionID]
-		d.sessionMu.Unlock()
-		// Scoping reads the folders, off the lock.
-		owned := exists && saved.ParentID == peer.id && d.projectScope(saved.Info) == d.projectScope(peer.session.Info())
-		if !owned {
-			return nil, stopAgentResult{}, errors.New("only agents you spawned can be stopped")
-		}
-		err := d.closeSession(in.SessionID)
-		return nil, stopAgentResult{Stopped: err == nil}, err
+	sdk.AddTool(server, &sdk.Tool{Name: "stop_agent", Description: "Terminate and remove an agent session spawned directly by you, on this node or another node of this project. Other project sessions cannot be stopped with this tool."}, func(ctx context.Context, _ *sdk.CallToolRequest, in stopAgentArgs) (*sdk.CallToolResult, stopAgentResult, error) {
+		out, err := d.stopProjectAgent(ctx, peer, in.SessionID)
+		return nil, out, err
 	})
 	d.addStaticLayoutTools(server, peer)
 	d.addUITools(server, peer)

@@ -194,6 +194,10 @@ message Envelope {
     PluginConfigSyncState plugin_config_sync_state = 158;
     SyncAgentConfig sync_agent_config = 159;
     AgentSyncState agent_sync_state = 160;
+
+    // Cross-node project agent spawning and stopping (revision 48).
+    RelaySpawnAgent relay_spawn_agent = 161;
+    RelayStopAgent relay_stop_agent = 162;
   }
 }
 

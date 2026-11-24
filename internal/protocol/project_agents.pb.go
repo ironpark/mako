@@ -563,6 +563,198 @@ func (x *RelayAgentMessage) GetScope() string {
 	return ""
 }
 
+// RelaySpawnAgent asks another node's daemon to spawn an agent session in a
+// shared project on behalf of a calling agent session (revision 48). The
+// target daemon verifies that the caller is an active messaging agent in
+// scope, validates the target folder and agent/profile, starts the session
+// with parent_session_id and parent_node_id, and answers with its SessionInfo.
+type RelaySpawnAgent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	NodeId          string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`                              // target node to spawn on
+	Scope           string                 `protobuf:"bytes,2,opt,name=scope,proto3" json:"scope,omitempty"`                                              // shared project scope ("project:<id>" or "repo:<remote>")
+	ParentSessionId string                 `protobuf:"bytes,3,opt,name=parent_session_id,json=parentSessionId,proto3" json:"parent_session_id,omitempty"` // calling session ID
+	ParentNodeId    string                 `protobuf:"bytes,4,opt,name=parent_node_id,json=parentNodeId,proto3" json:"parent_node_id,omitempty"`          // calling session's node ID
+	Agent           string                 `protobuf:"bytes,5,opt,name=agent,proto3" json:"agent,omitempty"`                                              // agent name on target node
+	Profile         string                 `protobuf:"bytes,6,opt,name=profile,proto3" json:"profile,omitempty"`                                          // optional profile name on target node
+	Name            string                 `protobuf:"bytes,7,opt,name=name,proto3" json:"name,omitempty"`                                                // optional display name
+	Prompt          string                 `protobuf:"bytes,8,opt,name=prompt,proto3" json:"prompt,omitempty"`                                            // initial task prompt
+	Folder          string                 `protobuf:"bytes,9,opt,name=folder,proto3" json:"folder,omitempty"`                                            // optional working directory on target node
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RelaySpawnAgent) Reset() {
+	*x = RelaySpawnAgent{}
+	mi := &file_mako_v2_project_agents_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RelaySpawnAgent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RelaySpawnAgent) ProtoMessage() {}
+
+func (x *RelaySpawnAgent) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_project_agents_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RelaySpawnAgent.ProtoReflect.Descriptor instead.
+func (*RelaySpawnAgent) Descriptor() ([]byte, []int) {
+	return file_mako_v2_project_agents_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *RelaySpawnAgent) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *RelaySpawnAgent) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
+func (x *RelaySpawnAgent) GetParentSessionId() string {
+	if x != nil {
+		return x.ParentSessionId
+	}
+	return ""
+}
+
+func (x *RelaySpawnAgent) GetParentNodeId() string {
+	if x != nil {
+		return x.ParentNodeId
+	}
+	return ""
+}
+
+func (x *RelaySpawnAgent) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *RelaySpawnAgent) GetProfile() string {
+	if x != nil {
+		return x.Profile
+	}
+	return ""
+}
+
+func (x *RelaySpawnAgent) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *RelaySpawnAgent) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
+	}
+	return ""
+}
+
+func (x *RelaySpawnAgent) GetFolder() string {
+	if x != nil {
+		return x.Folder
+	}
+	return ""
+}
+
+// RelayStopAgent asks another node's daemon to terminate and remove a child
+// session that the calling agent session spawned there (revision 48). It
+// answers with Exited.
+type RelayStopAgent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	NodeId          string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`                              // target node running the child session
+	SessionId       string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`                     // child session ID to stop
+	ParentSessionId string                 `protobuf:"bytes,3,opt,name=parent_session_id,json=parentSessionId,proto3" json:"parent_session_id,omitempty"` // calling session ID (must match saved parent)
+	ParentNodeId    string                 `protobuf:"bytes,4,opt,name=parent_node_id,json=parentNodeId,proto3" json:"parent_node_id,omitempty"`          // calling session's node ID (must match saved parent node)
+	Scope           string                 `protobuf:"bytes,5,opt,name=scope,proto3" json:"scope,omitempty"`                                              // shared project scope
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *RelayStopAgent) Reset() {
+	*x = RelayStopAgent{}
+	mi := &file_mako_v2_project_agents_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RelayStopAgent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RelayStopAgent) ProtoMessage() {}
+
+func (x *RelayStopAgent) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_project_agents_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RelayStopAgent.ProtoReflect.Descriptor instead.
+func (*RelayStopAgent) Descriptor() ([]byte, []int) {
+	return file_mako_v2_project_agents_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RelayStopAgent) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *RelayStopAgent) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *RelayStopAgent) GetParentSessionId() string {
+	if x != nil {
+		return x.ParentSessionId
+	}
+	return ""
+}
+
+func (x *RelayStopAgent) GetParentNodeId() string {
+	if x != nil {
+		return x.ParentNodeId
+	}
+	return ""
+}
+
+func (x *RelayStopAgent) GetScope() string {
+	if x != nil {
+		return x.Scope
+	}
+	return ""
+}
+
 var File_mako_v2_project_agents_proto protoreflect.FileDescriptor
 
 const file_mako_v2_project_agents_proto_rawDesc = "" +
@@ -605,6 +797,23 @@ const file_mako_v2_project_agents_proto_rawDesc = "" +
 	"\x0ffrom_session_id\x18\x02 \x01(\tR\rfromSessionId\x12\"\n" +
 	"\rto_session_id\x18\x03 \x01(\tR\vtoSessionId\x12\x12\n" +
 	"\x04text\x18\x04 \x01(\tR\x04text\x12\x14\n" +
+	"\x05scope\x18\x05 \x01(\tR\x05scope\"\x86\x02\n" +
+	"\x0fRelaySpawnAgent\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05scope\x18\x02 \x01(\tR\x05scope\x12*\n" +
+	"\x11parent_session_id\x18\x03 \x01(\tR\x0fparentSessionId\x12$\n" +
+	"\x0eparent_node_id\x18\x04 \x01(\tR\fparentNodeId\x12\x14\n" +
+	"\x05agent\x18\x05 \x01(\tR\x05agent\x12\x18\n" +
+	"\aprofile\x18\x06 \x01(\tR\aprofile\x12\x12\n" +
+	"\x04name\x18\a \x01(\tR\x04name\x12\x16\n" +
+	"\x06prompt\x18\b \x01(\tR\x06prompt\x12\x16\n" +
+	"\x06folder\x18\t \x01(\tR\x06folder\"\xb0\x01\n" +
+	"\x0eRelayStopAgent\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12*\n" +
+	"\x11parent_session_id\x18\x03 \x01(\tR\x0fparentSessionId\x12$\n" +
+	"\x0eparent_node_id\x18\x04 \x01(\tR\fparentNodeId\x12\x14\n" +
 	"\x05scope\x18\x05 \x01(\tR\x05scopeB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
@@ -619,7 +828,7 @@ func file_mako_v2_project_agents_proto_rawDescGZIP() []byte {
 	return file_mako_v2_project_agents_proto_rawDescData
 }
 
-var file_mako_v2_project_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_mako_v2_project_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_mako_v2_project_agents_proto_goTypes = []any{
 	(*ReadProjectAgents)(nil),     // 0: mako.v2.ReadProjectAgents
 	(*ProjectAgents)(nil),         // 1: mako.v2.ProjectAgents
@@ -629,21 +838,23 @@ var file_mako_v2_project_agents_proto_goTypes = []any{
 	(*ProjectScope)(nil),          // 5: mako.v2.ProjectScope
 	(*Projects)(nil),              // 6: mako.v2.Projects
 	(*RelayAgentMessage)(nil),     // 7: mako.v2.RelayAgentMessage
-	(*SessionInfo)(nil),           // 8: mako.v2.SessionInfo
-	(*timestamppb.Timestamp)(nil), // 9: google.protobuf.Timestamp
+	(*RelaySpawnAgent)(nil),       // 8: mako.v2.RelaySpawnAgent
+	(*RelayStopAgent)(nil),        // 9: mako.v2.RelayStopAgent
+	(*SessionInfo)(nil),           // 10: mako.v2.SessionInfo
+	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
 }
 var file_mako_v2_project_agents_proto_depIdxs = []int32{
-	2, // 0: mako.v2.ProjectAgents.agents:type_name -> mako.v2.ProjectAgent
-	3, // 1: mako.v2.ProjectAgents.messages:type_name -> mako.v2.AgentMessage
-	8, // 2: mako.v2.ProjectAgent.session:type_name -> mako.v2.SessionInfo
-	9, // 3: mako.v2.AgentMessage.created_at:type_name -> google.protobuf.Timestamp
-	5, // 4: mako.v2.SetProjects.projects:type_name -> mako.v2.ProjectScope
-	5, // 5: mako.v2.Projects.projects:type_name -> mako.v2.ProjectScope
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	2,  // 0: mako.v2.ProjectAgents.agents:type_name -> mako.v2.ProjectAgent
+	3,  // 1: mako.v2.ProjectAgents.messages:type_name -> mako.v2.AgentMessage
+	10, // 2: mako.v2.ProjectAgent.session:type_name -> mako.v2.SessionInfo
+	11, // 3: mako.v2.AgentMessage.created_at:type_name -> google.protobuf.Timestamp
+	5,  // 4: mako.v2.SetProjects.projects:type_name -> mako.v2.ProjectScope
+	5,  // 5: mako.v2.Projects.projects:type_name -> mako.v2.ProjectScope
+	6,  // [6:6] is the sub-list for method output_type
+	6,  // [6:6] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_project_agents_proto_init() }
@@ -658,7 +869,7 @@ func file_mako_v2_project_agents_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_project_agents_proto_rawDesc), len(file_mako_v2_project_agents_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

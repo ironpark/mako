@@ -80,3 +80,31 @@ message RelayAgentMessage {
   string text = 4;
   string scope = 5; // the project both are in, "project:" and its ID
 }
+
+// RelaySpawnAgent asks another node's daemon to spawn an agent session in a
+// shared project on behalf of a calling agent session (revision 48). The
+// target daemon verifies that the caller is an active messaging agent in
+// scope, validates the target folder and agent/profile, starts the session
+// with parent_session_id and parent_node_id, and answers with its SessionInfo.
+message RelaySpawnAgent {
+  string node_id = 1; // target node to spawn on
+  string scope = 2; // shared project scope ("project:<id>" or "repo:<remote>")
+  string parent_session_id = 3; // calling session ID
+  string parent_node_id = 4; // calling session's node ID
+  string agent = 5; // agent name on target node
+  string profile = 6; // optional profile name on target node
+  string name = 7; // optional display name
+  string prompt = 8; // initial task prompt
+  string folder = 9; // optional working directory on target node
+}
+
+// RelayStopAgent asks another node's daemon to terminate and remove a child
+// session that the calling agent session spawned there (revision 48). It
+// answers with Exited.
+message RelayStopAgent {
+  string node_id = 1; // target node running the child session
+  string session_id = 2; // child session ID to stop
+  string parent_session_id = 3; // calling session ID (must match saved parent)
+  string parent_node_id = 4; // calling session's node ID (must match saved parent node)
+  string scope = 5; // shared project scope
+}

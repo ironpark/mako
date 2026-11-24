@@ -18,6 +18,7 @@ func familySessions() []*protocol.SessionInfo {
 		{Id: "deep", NodeId: "n", ParentSessionId: "build"},
 		{Id: "other", NodeId: "n"},
 		{Id: "away", NodeId: "m", ParentSessionId: "lead"}, // another node's "lead" is not this one
+		{Id: "remote-kid", NodeId: "m", ParentSessionId: "lead", ParentNodeId: "n"},
 		{Id: "a", NodeId: "n", ParentSessionId: "b"},
 		{Id: "b", NodeId: "n", ParentSessionId: "a"}, // a cycle ends
 	}
@@ -25,8 +26,8 @@ func familySessions() []*protocol.SessionInfo {
 
 func TestTabHostsGoToTheFurthestAncestorInThePane(t *testing.T) {
 	sessions := familySessions()
-	got := indexSessions(sessions).tabHosts([]string{"lead", "build", "deep", "other", "away", "a", "b"})
-	want := map[string]string{"build": "lead", "deep": "lead"}
+	got := indexSessions(sessions).tabHosts([]string{"lead", "build", "deep", "other", "away", "remote-kid", "a", "b"})
+	want := map[string]string{"build": "lead", "deep": "lead", "remote-kid": "lead"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("hosts = %v, want %v", got, want)
 	}
@@ -42,7 +43,7 @@ func TestFamilyListsTheSpawningAgentFirst(t *testing.T) {
 	for _, s := range indexSessions(familySessions()).family("lead") {
 		ids = append(ids, s.GetId())
 	}
-	if want := []string{"lead", "build", "review", "deep"}; !reflect.DeepEqual(ids, want) {
+	if want := []string{"lead", "build", "review", "remote-kid", "deep"}; !reflect.DeepEqual(ids, want) {
 		t.Fatalf("family = %v, want %v", ids, want)
 	}
 	if f := indexSessions(familySessions()).family("other"); len(f) != 1 {

@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 47
+const Revision = 48
+
+// RevisionRemoteAgentSpawn adds cross-node project agent spawning and stopping
+// (RelaySpawnAgent, RelayStopAgent), SessionInfo.parent_node_id, Node.projects,
+// and AgentInfo.spawnable.
+const RevisionRemoteAgentSpawn = 48
 
 // RevisionConfigSync adds P2P CRDT replication of plugin registries, store
 // installs, non-secret settings, and disabled states (SyncPluginConfig), as well

@@ -148,6 +148,9 @@ message SessionInfo {
   uint64 state_seq = 38;
   uint64 attention_seq = 39;
   uint64 seen_seq = 40;
+  // parent_node_id is the node of parent_session_id when that session is on
+  // another node; "" when the parent is on the same node (revision 48).
+  string parent_node_id = 41;
 }
 
 // AgentControls are the permission modes, models and efforts a session's

@@ -160,4 +160,14 @@ public interface AgentInfoOrBuilder extends
    * @return The allowTemplate.
    */
   boolean getAllowTemplate();
+
+  /**
+   * <pre>
+   * Revision 48: whether default (no-profile) agent can be spawned via MCP
+   * </pre>
+   *
+   * <code>bool spawnable = 10 [json_name = "spawnable"];</code>
+   * @return The spawnable.
+   */
+  boolean getSpawnable();
 }

@@ -95,8 +95,17 @@ func runAgentMsg(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			req.Text = strings.Join(rest[1:], " ")
 		}
 
-	case "list", "profiles":
+	case "list":
 		// no extra args required
+
+	case "profiles":
+		fs := flag.NewFlagSet("mako-msg profiles", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		node := fs.String("node", "", "inspect spawnable profiles on another node of this project")
+		if err := fs.Parse(rest); err != nil {
+			return 2
+		}
+		req.Node = strings.TrimSpace(*node)
 
 	default:
 		fmt.Fprintf(stderr, "mako-msg: unknown subcommand %q (expected wait, read, send, list, profiles)\n", sub)

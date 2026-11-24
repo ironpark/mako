@@ -14,13 +14,13 @@ support do not receive these tools.
 
 | Tool | Arguments | Result |
 | --- | --- | --- |
-| `list_agents` | `{}` | Your `self_id`, project, project sessions with status and parent IDs, and available agent types and profiles with descriptions and `spawnable` flags. `messaging` says whether a session can receive messages now. |
-| `list_agent_profiles` | `{}` | Only the spawnable agent configurations and profile presets on this node (`presets` with `agent`, `profile`, `target`, `description`, `model`, `effort`, `yolo`, plus grouped `agents`). |
-| `spawn_agent` | `prompt`, optional `agent`, `profile`, `name` | Starts a new session in your working directory, with the same worktree metadata. Defaults to your agent type. Returns its session `id`. |
-| `send_message` | `to`, `text` | Sends a message: typed into the recipient's terminal as a prompt once it waits at its prompt, kept in its inbox until then. Returns its `id`, authenticated `from`, `to`, text and creation time. |
+| `list_agents` | `{}` | Your `self_id`, `self_node`, project, project sessions (on this node and other nodes of the same project) with status, node, and parent IDs, project `nodes` (with folders, reachability, and spawnable agents), and local available agent types and profiles. `messaging` says whether a session can receive messages now. |
+| `list_agent_profiles` | Optional `node` | Only the spawnable agent configurations and profile presets on this node (or on another node of this project when `node` is specified), plus other project `nodes` and their presets. |
+| `spawn_agent` | `prompt`, optional `agent`, `profile`, `name`, `node`, `folder` | Starts a new session in this project on this node or on another node of the same project (`node`, with optional project `folder`). Defaults to your agent type. Returns its session `id` (and `node`/`node_id` when remote). |
+| `send_message` | `to`, `text` | Sends a message: typed into the recipient's terminal as a prompt once it waits at its prompt, kept in its inbox until then. Works across nodes of the same project. Returns its `id`, authenticated `from`, `to`, text and creation time. |
 | `read_messages` | Optional `after_id`, `ack_through`, `limit` | Instant, non-blocking snapshot of pending messages in your inbox. Returns `messages` and `next_after_id`. |
 | `watch_agent` | `session_id`, optional `until` (`turn` or `output`), `text` | Registers a non-blocking one-shot notification for another agent in the project: Mako pushes a note into your session when its turn ends (`until=turn`, default), when its terminal prints `text` (`until=output`, this node only), or early if it waits on the user or exits. Returns immediately (`watch_id` or `already_matched: true`). |
-| `stop_agent` | `session_id` | Terminates and removes a session you spawned directly, including a child whose process has already exited. |
+| `stop_agent` | `session_id` | Terminates and removes a session you spawned directly (locally or on another node of this project), including a child whose process has already exited. |
 
 The MCP client may prefix tool names with the server name. The server's
 initialization instructions identify your session and parent. A spawned
@@ -319,11 +319,15 @@ repository with a remote, which no such project holds, that includes the
 project's agents on other nodes, which `list_agents` lists with their
 `node`: the sender's daemon passes the message to the recipient's
 (`relay_agent_message`), which keeps it in the recipient's inbox, and the
-delivered prompt names the sender's node. Each daemon tells its peers, in
-the state it sends them, which such project each of its agents is in and
-whether it takes messages, so the two nodes must let each other in, or
-reach each other through nodes that do. Spawning and stopping agents stay
-on the caller's node. A folder outside such a project is one node's only.
+delivered prompt names the sender's node. Agents can also discover other
+nodes of the same project (`nodes` in `list_agents` and `list_agent_profiles`),
+spawn agents directly on them (`spawn_agent` with `node` and optional `folder`,
+via `relay_spawn_agent`), watch and message those remote children bidirectionally,
+and stop them (`stop_agent`, via `relay_stop_agent`). Each daemon tells its
+peers, in the state it sends them, which such project each of its agents is in,
+which multi-folder projects it holds, and whether each agent takes messages or
+is spawnable, so the two nodes must let each other in, or reach each other
+through nodes that do. A folder outside such a project is one node's only.
 
 ## Session lifecycle
 

@@ -42,9 +42,15 @@ func indexSessions(sessions []*protocol.SessionInfo) sessionIndex {
 	return x
 }
 
-// parent is the session that spawned s, on its node; nil for none known.
+// parent is the session that spawned s, on its parent's node (or s's own
+// node when parent_node_id is unset); nil for none known.
 func (x sessionIndex) parent(s *protocol.SessionInfo) *protocol.SessionInfo {
-	if p := x.byID[s.GetParentSessionId()]; p != nil && p.GetNodeId() == s.GetNodeId() {
+	p := x.byID[s.GetParentSessionId()]
+	if p == nil {
+		return nil
+	}
+	wantNode := cmp.Or(s.GetParentNodeId(), s.GetNodeId())
+	if p.GetNodeId() == wantNode {
 		return p
 	}
 	return nil

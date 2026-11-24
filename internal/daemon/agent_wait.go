@@ -306,8 +306,26 @@ func (d *Daemon) noteExit(info *protocol.SessionInfo, parentID string, turnBegan
 	d.noteParent(info, parentID, text)
 }
 
+func (d *Daemon) noteRemoteExit(info *protocol.SessionInfo, parentID string, turnBegan time.Time) {
+	if d.ctx.Err() != nil {
+		return
+	}
+	if d.projectAgents.wasRemoteStopped(info.GetId()) || d.projectAgents.waitedOn(info.GetId()) || d.projectAgents.messages.sentSince(info.GetId(), parentID, turnBegan) {
+		return
+	}
+	text := "It exited without reporting."
+	if code := info.ExitCode; code != nil && *code != 0 {
+		text = fmt.Sprintf("It exited with code %d without reporting.", *code)
+	}
+	d.noteParent(info, parentID, text)
+}
+
 func (d *Daemon) noteParent(info *protocol.SessionInfo, parentID, text string) {
-	if _, err := d.projectAgents.messages.note(info.GetId(), parentID, text, info.GetProject()); err != nil {
+	project := info.GetProject()
+	if parent, ok := d.sessions.get(parentID); ok {
+		project = d.projectScope(parent.Info())
+	}
+	if _, err := d.projectAgents.messages.note(info.GetId(), parentID, text, project); err != nil {
 		d.log.Warn("agent note: not sent", "parent", parentID, "child", info.GetId(), "err", err)
 	}
 }

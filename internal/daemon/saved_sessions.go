@@ -36,6 +36,7 @@ type savedSession struct {
 	Request        *protocol.OpenSession
 	TranscriptPath string
 	ParentID       string
+	ParentNodeID   string
 }
 
 // savedJSON is a savedSession as sessions.json has it. The messages are in
@@ -46,6 +47,7 @@ type savedJSON struct {
 	Request        json.RawMessage `json:"request"`
 	TranscriptPath string          `json:"transcript_path,omitempty"`
 	ParentID       string          `json:"parent_session,omitempty"`
+	ParentNodeID   string          `json:"parent_node,omitempty"`
 }
 
 var (
@@ -62,7 +64,7 @@ func (e savedSession) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(savedJSON{Info: info, Request: req, TranscriptPath: e.TranscriptPath, ParentID: e.ParentID})
+	return json.Marshal(savedJSON{Info: info, Request: req, TranscriptPath: e.TranscriptPath, ParentID: e.ParentID, ParentNodeID: e.ParentNodeID})
 }
 
 func (e *savedSession) UnmarshalJSON(data []byte) error {
@@ -72,6 +74,7 @@ func (e *savedSession) UnmarshalJSON(data []byte) error {
 	}
 	e.Info, e.Request, e.TranscriptPath = &protocol.SessionInfo{}, &protocol.OpenSession{}, raw.TranscriptPath
 	e.ParentID = raw.ParentID
+	e.ParentNodeID = raw.ParentNodeID
 	if len(raw.Info) > 0 {
 		if err := savedUnmarshal.Unmarshal(raw.Info, e.Info); err != nil {
 			return fmt.Errorf("info: %w", err)
@@ -149,7 +152,9 @@ func (d *Daemon) listSessions() []*protocol.SessionInfo {
 	}
 	// Each says the session that spawned it, which only the daemon keeps.
 	for _, info := range out {
-		info.ParentSessionId = d.saved[info.GetId()].ParentID
+		saved := d.saved[info.GetId()]
+		info.ParentSessionId = saved.ParentID
+		info.ParentNodeId = saved.ParentNodeID
 	}
 	d.sessionMu.Unlock()
 	sortByStart(out)
@@ -302,7 +307,15 @@ func (d *Daemon) initialPromptReady(s *session.Session, now time.Time) bool {
 // projectTaskPrompt is prompt as an agent session parent spawned is
 // given it: headed by who its parent is, and how to report.
 func projectTaskPrompt(parent, prompt string) string {
-	return fmt.Sprintf("[Mako project task: parent session %s. Use the mako MCP tools to coordinate and send_message to report results to the parent.]\n\n%s", parent, prompt)
+	return projectTaskPromptFromNode(parent, "", prompt)
+}
+
+func projectTaskPromptFromNode(parent, parentNodeName, prompt string) string {
+	who := parent
+	if name := typable(parentNodeName); name != "" {
+		who = fmt.Sprintf("%s (on %s)", parent, name)
+	}
+	return fmt.Sprintf("[Mako project task: parent session %s. Use the mako MCP tools to coordinate and send_message to report results to the parent.]\n\n%s", who, prompt)
 }
 
 func (d *Daemon) attachSession(ctx context.Context, id string) (*session.Session, error) {
@@ -329,6 +342,10 @@ func (d *Daemon) startSession(ctx context.Context, id string, req *protocol.Open
 }
 
 func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.OpenSession, parent string) (_ *session.Session, err error) {
+	return d.startSessionWithParent(ctx, id, req, parent, "")
+}
+
+func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *protocol.OpenSession, parent, parentNode string) (_ *session.Session, err error) {
 	// The request may be a saved entry's, which this must not change.
 	req = proto.CloneOf(req)
 	env := req.GetEnv()
@@ -401,6 +418,7 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	previous, existed := d.saved[id]
 	if existed {
 		parent = previous.ParentID
+		parentNode = previous.ParentNodeID
 	}
 	var claimed map[string]bool // only an older saved session recovers one
 	if existed && previous.Info.GetConversationId() == "" {
@@ -425,6 +443,9 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	if parent != "" {
 		launch.SetEnv("AGENT_MAKO_PARENT", parent)
 	}
+	if parentNode != "" {
+		launch.SetEnv("AGENT_MAKO_PARENT_NODE", parentNode)
+	}
 
 	conversationID, transcriptPath, err := d.conversationFor(ctx, req, &launch, previous, existed, claimed)
 	if err != nil {
@@ -445,6 +466,9 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		launch.Shown = slices.Clone(launch.Command)
 	}
 	cleanup := d.withContextServers(ctx, &launch, id, parent)
+	if parentNode != "" {
+		d.projectAgents.setParentNode(id, parentNode)
+	}
 	if err := ctx.Err(); err != nil {
 		cleanup()
 		return nil, err
@@ -497,7 +521,7 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 	info := s.Info()
 	// Commands can embed ephemeral MCP config and secrets; only persist inputs.
 	info.Command = nil
-	d.saved[id] = savedSession{Info: info, Request: req, TranscriptPath: transcriptPath, ParentID: parent}
+	d.saved[id] = savedSession{Info: info, Request: req, TranscriptPath: transcriptPath, ParentID: parent, ParentNodeID: parentNode}
 	if err := d.saveSessionsLocked(); err != nil {
 		if existed {
 			d.saved[id] = previous
@@ -516,7 +540,7 @@ func (d *Daemon) startSessionAs(ctx context.Context, id string, req *protocol.Op
 		go d.deliverAgentMessages(peer)
 	}
 	d.trackConversation(s)
-	if parent != "" {
+	if parent != "" && parentNode == "" {
 		d.reportProjectAgent(s, parent)
 		go d.followProjectAgent(s, parent)
 	}

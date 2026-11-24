@@ -147,6 +147,8 @@ public  final class Envelope extends
     PLUGIN_CONFIG_SYNC_STATE(158),
     SYNC_AGENT_CONFIG(159),
     AGENT_SYNC_STATE(160),
+    RELAY_SPAWN_AGENT(161),
+    RELAY_STOP_AGENT(162),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -283,6 +285,8 @@ public  final class Envelope extends
         case 158: return PLUGIN_CONFIG_SYNC_STATE;
         case 159: return SYNC_AGENT_CONFIG;
         case 160: return AGENT_SYNC_STATE;
+        case 161: return RELAY_SPAWN_AGENT;
+        case 162: return RELAY_STOP_AGENT;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -6831,6 +6835,126 @@ public  final class Envelope extends
     }
   }
 
+  public static final int RELAY_SPAWN_AGENT_FIELD_NUMBER = 161;
+  /**
+   * <pre>
+   * Cross-node project agent spawning and stopping (revision 48).
+   * </pre>
+   *
+   * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRelaySpawnAgent() {
+    return bodyCase_ == 161;
+  }
+  /**
+   * <pre>
+   * Cross-node project agent spawning and stopping (revision 48).
+   * </pre>
+   *
+   * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.RelaySpawnAgent getRelaySpawnAgent() {
+    if (bodyCase_ == 161) {
+       return (dev.ironpark.mako.v2.RelaySpawnAgent) body_;
+    }
+    return dev.ironpark.mako.v2.RelaySpawnAgent.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Cross-node project agent spawning and stopping (revision 48).
+   * </pre>
+   *
+   * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+   */
+  private void setRelaySpawnAgent(dev.ironpark.mako.v2.RelaySpawnAgent value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 161;
+  }
+  /**
+   * <pre>
+   * Cross-node project agent spawning and stopping (revision 48).
+   * </pre>
+   *
+   * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+   */
+  private void mergeRelaySpawnAgent(dev.ironpark.mako.v2.RelaySpawnAgent value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 161 &&
+        body_ != dev.ironpark.mako.v2.RelaySpawnAgent.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.RelaySpawnAgent.newBuilder((dev.ironpark.mako.v2.RelaySpawnAgent) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 161;
+  }
+  /**
+   * <pre>
+   * Cross-node project agent spawning and stopping (revision 48).
+   * </pre>
+   *
+   * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+   */
+  private void clearRelaySpawnAgent() {
+    if (bodyCase_ == 161) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int RELAY_STOP_AGENT_FIELD_NUMBER = 162;
+  /**
+   * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRelayStopAgent() {
+    return bodyCase_ == 162;
+  }
+  /**
+   * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.RelayStopAgent getRelayStopAgent() {
+    if (bodyCase_ == 162) {
+       return (dev.ironpark.mako.v2.RelayStopAgent) body_;
+    }
+    return dev.ironpark.mako.v2.RelayStopAgent.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+   */
+  private void setRelayStopAgent(dev.ironpark.mako.v2.RelayStopAgent value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 162;
+  }
+  /**
+   * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+   */
+  private void mergeRelayStopAgent(dev.ironpark.mako.v2.RelayStopAgent value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 162 &&
+        body_ != dev.ironpark.mako.v2.RelayStopAgent.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.RelayStopAgent.newBuilder((dev.ironpark.mako.v2.RelayStopAgent) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 162;
+  }
+  /**
+   * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+   */
+  private void clearRelayStopAgent() {
+    if (bodyCase_ == 162) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -13306,6 +13430,126 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Cross-node project agent spawning and stopping (revision 48).
+     * </pre>
+     *
+     * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRelaySpawnAgent() {
+      return instance.hasRelaySpawnAgent();
+    }
+    /**
+     * <pre>
+     * Cross-node project agent spawning and stopping (revision 48).
+     * </pre>
+     *
+     * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.RelaySpawnAgent getRelaySpawnAgent() {
+      return instance.getRelaySpawnAgent();
+    }
+    /**
+     * <pre>
+     * Cross-node project agent spawning and stopping (revision 48).
+     * </pre>
+     *
+     * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+     */
+    public Builder setRelaySpawnAgent(dev.ironpark.mako.v2.RelaySpawnAgent value) {
+      copyOnWrite();
+      instance.setRelaySpawnAgent(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Cross-node project agent spawning and stopping (revision 48).
+     * </pre>
+     *
+     * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+     */
+    public Builder setRelaySpawnAgent(
+        dev.ironpark.mako.v2.RelaySpawnAgent.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRelaySpawnAgent(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Cross-node project agent spawning and stopping (revision 48).
+     * </pre>
+     *
+     * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+     */
+    public Builder mergeRelaySpawnAgent(dev.ironpark.mako.v2.RelaySpawnAgent value) {
+      copyOnWrite();
+      instance.mergeRelaySpawnAgent(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Cross-node project agent spawning and stopping (revision 48).
+     * </pre>
+     *
+     * <code>.mako.v2.RelaySpawnAgent relay_spawn_agent = 161 [json_name = "relaySpawnAgent"];</code>
+     */
+    public Builder clearRelaySpawnAgent() {
+      copyOnWrite();
+      instance.clearRelaySpawnAgent();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRelayStopAgent() {
+      return instance.hasRelayStopAgent();
+    }
+    /**
+     * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.RelayStopAgent getRelayStopAgent() {
+      return instance.getRelayStopAgent();
+    }
+    /**
+     * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+     */
+    public Builder setRelayStopAgent(dev.ironpark.mako.v2.RelayStopAgent value) {
+      copyOnWrite();
+      instance.setRelayStopAgent(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+     */
+    public Builder setRelayStopAgent(
+        dev.ironpark.mako.v2.RelayStopAgent.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRelayStopAgent(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+     */
+    public Builder mergeRelayStopAgent(dev.ironpark.mako.v2.RelayStopAgent value) {
+      copyOnWrite();
+      instance.mergeRelayStopAgent(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RelayStopAgent relay_stop_agent = 162 [json_name = "relayStopAgent"];</code>
+     */
+    public Builder clearRelayStopAgent() {
+      copyOnWrite();
+      instance.clearRelayStopAgent();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -13447,9 +13691,11 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.PluginConfigSyncState.class,
             dev.ironpark.mako.v2.SyncAgentConfig.class,
             dev.ironpark.mako.v2.AgentSyncState.class,
+            dev.ironpark.mako.v2.RelaySpawnAgent.class,
+            dev.ironpark.mako.v2.RelayStopAgent.class,
           };
           java.lang.String info =
-              "\u0000{\u0001\u0000\u0001\u00a0{\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
+              "\u0000}\u0001\u0000\u0001\u00a2}\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
               "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
               "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
               "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
@@ -13464,7 +13710,7 @@ public  final class Envelope extends
               "\u008b<\u0000\u008c<\u0000\u008d<\u0000\u008e<\u0000\u008f<\u0000\u0090<\u0000\u0091" +
               "<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000\u0097<\u0000" +
               "\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000\u009d<\u0000\u009e" +
-              "<\u0000\u009f<\u0000\u00a0<\u0000";
+              "<\u0000\u009f<\u0000\u00a0<\u0000\u00a1<\u0000\u00a2<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

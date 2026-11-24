@@ -36,6 +36,7 @@ public  final class Node extends
     link_ = "";
     linkError_ = "";
     workspaceDigest_ = com.google.protobuf.ByteString.EMPTY;
+    projects_ = emptyProtobufList();
   }
   private int bitField0_;
   public static final int ID_FIELD_NUMBER = 1;
@@ -1415,6 +1416,166 @@ public  final class Node extends
   private void clearWorkspaceDigest() {
 
     workspaceDigest_ = getDefaultInstance().getWorkspaceDigest();
+  }
+
+  public static final int PROJECTS_FIELD_NUMBER = 24;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.ProjectScope> projects_;
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.ProjectScope> getProjectsList() {
+    return projects_;
+  }
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.ProjectScopeOrBuilder> 
+      getProjectsOrBuilderList() {
+    return projects_;
+  }
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  @java.lang.Override
+  public int getProjectsCount() {
+    return projects_.size();
+  }
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ProjectScope getProjects(int index) {
+    return projects_.get(index);
+  }
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  public dev.ironpark.mako.v2.ProjectScopeOrBuilder getProjectsOrBuilder(
+      int index) {
+    return projects_.get(index);
+  }
+  private void ensureProjectsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.ProjectScope> tmp = projects_;
+    if (!tmp.isModifiable()) {
+      projects_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  private void setProjects(
+      int index, dev.ironpark.mako.v2.ProjectScope value) {
+    java.util.Objects.requireNonNull(value);
+    ensureProjectsIsMutable();
+    projects_.set(index, value);
+  }
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  private void addProjects(dev.ironpark.mako.v2.ProjectScope value) {
+    java.util.Objects.requireNonNull(value);
+    ensureProjectsIsMutable();
+    projects_.add(value);
+  }
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  private void addProjects(
+      int index, dev.ironpark.mako.v2.ProjectScope value) {
+    java.util.Objects.requireNonNull(value);
+    ensureProjectsIsMutable();
+    projects_.add(index, value);
+  }
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  private void addAllProjects(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.ProjectScope> values) {
+    ensureProjectsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, projects_);
+  }
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  private void clearProjects() {
+    projects_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * projects are the multi-folder project scopes this node holds, sent to
+   * peers this node lets in (revision 48), so agents on other nodes know
+   * which folders belong to a shared project even before any session runs.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+   */
+  private void removeProjects(int index) {
+    ensureProjectsIsMutable();
+    projects_.remove(index);
   }
 
   public static dev.ironpark.mako.v2.Node parseFrom(
@@ -2942,6 +3103,180 @@ public  final class Node extends
       return this;
     }
 
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.ProjectScope> getProjectsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getProjectsList());
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    @java.lang.Override
+    public int getProjectsCount() {
+      return instance.getProjectsCount();
+    }/**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ProjectScope getProjects(int index) {
+      return instance.getProjects(index);
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    public Builder setProjects(
+        int index, dev.ironpark.mako.v2.ProjectScope value) {
+      copyOnWrite();
+      instance.setProjects(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    public Builder setProjects(
+        int index, dev.ironpark.mako.v2.ProjectScope.Builder builderForValue) {
+      copyOnWrite();
+      instance.setProjects(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    public Builder addProjects(dev.ironpark.mako.v2.ProjectScope value) {
+      copyOnWrite();
+      instance.addProjects(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    public Builder addProjects(
+        int index, dev.ironpark.mako.v2.ProjectScope value) {
+      copyOnWrite();
+      instance.addProjects(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    public Builder addProjects(
+        dev.ironpark.mako.v2.ProjectScope.Builder builderForValue) {
+      copyOnWrite();
+      instance.addProjects(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    public Builder addProjects(
+        int index, dev.ironpark.mako.v2.ProjectScope.Builder builderForValue) {
+      copyOnWrite();
+      instance.addProjects(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    public Builder addAllProjects(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.ProjectScope> values) {
+      copyOnWrite();
+      instance.addAllProjects(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    public Builder clearProjects() {
+      copyOnWrite();
+      instance.clearProjects();
+      return this;
+    }
+    /**
+     * <pre>
+     * projects are the multi-folder project scopes this node holds, sent to
+     * peers this node lets in (revision 48), so agents on other nodes know
+     * which folders belong to a shared project even before any session runs.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.ProjectScope projects = 24 [json_name = "projects"];</code>
+     */
+    public Builder removeProjects(int index) {
+      copyOnWrite();
+      instance.removeProjects(index);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Node)
   }
   @java.lang.Override
@@ -2983,12 +3318,15 @@ public  final class Node extends
             "linkError_",
             "relinkAt_",
             "workspaceDigest_",
+            "projects_",
+            dev.ironpark.mako.v2.ProjectScope.class,
           };
           java.lang.String info =
-              "\u0000\u0017\u0000\u0001\u0001\u0017\u0017\u0000\u0003\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0018\u0000\u0001\u0001\u0018\u0018\u0000\u0004\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u1009\u0000\t\u021a" +
               "\n\u001b\u000b\u0002\f\u0208\r\u021a\u000e\u0007\u000f\u0007\u0010\u0208\u0011\u0208" +
-              "\u0012\u000b\u0013\u0208\u0014\u0208\u0015\u0208\u0016\u1009\u0001\u0017\n";
+              "\u0012\u000b\u0013\u0208\u0014\u0208\u0015\u0208\u0016\u1009\u0001\u0017\n\u0018" +
+              "\u001b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -597,4 +597,26 @@ public interface SessionInfoOrBuilder extends
    * @return The seenSeq.
    */
   long getSeenSeq();
+
+  /**
+   * <pre>
+   * parent_node_id is the node of parent_session_id when that session is on
+   * another node; "" when the parent is on the same node (revision 48).
+   * </pre>
+   *
+   * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+   * @return The parentNodeId.
+   */
+  java.lang.String getParentNodeId();
+  /**
+   * <pre>
+   * parent_node_id is the node of parent_session_id when that session is on
+   * another node; "" when the parent is on the same node (revision 48).
+   * </pre>
+   *
+   * <code>string parent_node_id = 41 [json_name = "parentNodeId"];</code>
+   * @return The bytes for parentNodeId.
+   */
+  com.google.protobuf.ByteString
+      getParentNodeIdBytes();
 }
