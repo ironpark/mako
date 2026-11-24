@@ -153,7 +153,7 @@ func placeIn(defs []project, node, dir, repo, remote string) placement {
 	claims := 0
 	for i, p := range defs {
 		for j, r := range p.Roots {
-			if r.Remote != remote {
+			if !strings.EqualFold(r.Remote, remote) {
 				continue
 			}
 			claims++

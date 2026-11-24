@@ -214,3 +214,93 @@ func TestImportProjectsDialogFlow(t *testing.T) {
 		t.Fatalf("expected %q imported with owner/remote, got %+v", newPath, ggui.Peek(m.Prefs).Projects)
 	}
 }
+
+func TestImportGitReposKeepsProjectsInOtherSpaces(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	self := &protocol.Node{Id: "studio", Name: "studio", Os: "darwin", Source: "self"}
+	m.Nodes.Set([]*protocol.Node{self, {Id: "box", Name: "box", Os: "linux", Source: "mesh"}})
+	m.Conn.Set(connState{OK: true, Self: self})
+
+	// Space 1 ("work", Default) holds:
+	// - owner rule "github.com/acme" (lowercase)
+	// - an existing default-placed repo on box: github.com/me/default-in-work
+	// - an explicit multi-folder project "p-suite" whose root had empty Remote (inferred from box's keptProject)
+	// - a legacy dirKey entry for /w/legacy-dir on studio
+	// Space 2 ("side", currently active) is where the user triggers import.
+	m.Spaces.Set(spaceList{
+		Default: "work",
+		Spaces: []space{
+			{ID: "work", Name: "Work", Owners: []string{"github.com/acme"}, Projects: []string{"p-suite", dirKey("studio", "/w/legacy-dir")}},
+			{ID: "side", Name: "Side"},
+		},
+		Projects: []project{
+			{
+				ID:   "p-suite",
+				Name: "Suite",
+				Roots: []projectRoot{
+					{Locations: []fileRoot{{Node: "box", Path: "/srv/suite-api"}}},
+				},
+			},
+		},
+	})
+	m.setSpace(2) // viewing "side"
+	m.Prefs.Update(func(p prefs) prefs {
+		p.Projects = []keptProject{
+			{fileRoot: fileRoot{Node: "box", Path: "/srv/default-in-work"}, Owner: "github.com/me", Remote: "github.com/me/default-in-work"},
+			{fileRoot: fileRoot{Node: "box", Path: "/srv/suite-api"}, Owner: "github.com/other", Remote: "github.com/other/suite-api"},
+		}
+		return p
+	})
+
+	discovered := []discoveredRepo{
+		// Case-insensitive owner match -> must go to "work", not "side".
+		{Path: "/w/acme-upper", Name: "acme-upper", Owner: "github.com/ACME", Remote: "github.com/acme/upper"},
+		// Already exists in "work" (Default space) via box -> must NOT be stolen into "side".
+		{Path: "/w/default-in-work", Name: "default-in-work", Owner: "github.com/me", Remote: "github.com/me/default-in-work"},
+		// Matches p-suite root via inferred remote -> must join p-suite in "work" and backfill Remote/Owner.
+		{Path: "/w/suite-api", Name: "suite-api", Owner: "github.com/other", Remote: "github.com/other/suite-api"},
+		// Legacy dirKey explicitly in "work" -> must stay in "work" and migrate key to repo:.
+		{Path: "/w/legacy-dir", Name: "legacy-dir", Owner: "github.com/legacy", Remote: "github.com/legacy/dir"},
+		// Brand-new unmatched repo -> goes into active "side" space.
+		{Path: "/w/brand-new", Name: "brand-new", Owner: "github.com/me", Remote: "github.com/me/brand-new"},
+	}
+
+	if added := m.importGitRepos("studio", discovered); added != len(discovered) {
+		t.Fatalf("importGitRepos added %d, want %d", added, len(discovered))
+	}
+
+	set := m.spacesNow()
+	if at, why := set.placeOf("repo:github.com/acme/upper", []string{"github.com/ACME"}); at != 1 || why != shownByOwner {
+		t.Fatalf("acme-upper placed at (%d, %v), want (1, shownByOwner)", at, why)
+	}
+	if at, why := set.placeOf("repo:github.com/me/default-in-work", []string{"github.com/me"}); at != 1 || why != byDefault {
+		t.Fatalf("default-in-work placed at (%d, %v), want (1, byDefault)", at, why)
+	}
+	if at, why := set.placeOf("repo:github.com/legacy/dir", []string{"github.com/legacy"}); at != 1 || why != byProject {
+		t.Fatalf("legacy-dir placed at (%d, %v), want (1, byProject)", at, why)
+	}
+	if at, why := set.placeOf("repo:github.com/me/brand-new", []string{"github.com/me"}); at != 2 || why != byProject {
+		t.Fatalf("brand-new placed at (%d, %v), want (2, byProject)", at, why)
+	}
+
+	// Verify suite-api joined p-suite in "work" and backfilled Remote/Owner.
+	pi := projectByID(set.Projects, "p-suite")
+	if pi < 0 || len(set.Projects[pi].Roots) != 1 {
+		t.Fatalf("p-suite missing: %+v", set.Projects)
+	}
+	root := set.Projects[pi].Roots[0]
+	if root.Remote != "github.com/other/suite-api" || root.Owner != "github.com/other" {
+		t.Fatalf("p-suite root remote/owner not backfilled: %+v", root)
+	}
+	wantLoc := fileRoot{Node: "studio", Path: "/w/suite-api"}
+	foundLoc := false
+	for _, l := range root.Locations {
+		if l == wantLoc {
+			foundLoc = true
+		}
+	}
+	if !foundLoc {
+		t.Fatalf("studio clone did not join p-suite: %+v", root.Locations)
+	}
+}

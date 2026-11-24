@@ -882,7 +882,7 @@ func spaceChip(m *model, set spaceSet, i int, sec spaceSection, why sectionReaso
 	case shownByOwner:
 		var by []string
 		for _, o := range sec.Owners {
-			if slices.Contains(sp.Owners, o) {
+			if hasOwner(sp.Owners, o) {
 				name, _ := ownerName(o)
 				by = append(by, name)
 			}

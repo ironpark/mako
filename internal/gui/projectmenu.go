@@ -141,6 +141,10 @@ func (p spaceSet) defaultSpace() int {
 	return max(slices.IndexFunc(p.Spaces, func(sp space) bool { return sp.ID == p.Default }), 0) + 1
 }
 
+func hasOwner(owners []string, want string) bool {
+	return slices.ContainsFunc(owners, func(o string) bool { return strings.EqualFold(o, want) })
+}
+
 // placeOf is the index of the space the section of ID key, whose
 // repositories owners hold, is in, and why.
 func (p spaceSet) placeOf(key string, owners []string) (int, sectionReason) {
@@ -151,7 +155,7 @@ func (p spaceSet) placeOf(key string, owners []string) (int, sectionReason) {
 	}
 	for i, sp := range p.Spaces {
 		// Hidden is what older windows left out of a space by its owners.
-		if !slices.Contains(sp.Hidden, key) && slices.ContainsFunc(owners, func(o string) bool { return slices.Contains(sp.Owners, o) }) {
+		if !slices.Contains(sp.Hidden, key) && slices.ContainsFunc(owners, func(o string) bool { return hasOwner(sp.Owners, o) }) {
 			return i + 1, shownByOwner
 		}
 	}

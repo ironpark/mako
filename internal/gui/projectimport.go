@@ -79,8 +79,9 @@ type importAsk struct {
 	Repos    *ggui.StateValue[[]discoveredRepo]
 	Selected *ggui.StateValue[map[string]bool]
 
-	scanGen uint64
-	cancel  context.CancelFunc
+	targetSpace string
+	scanGen     uint64
+	cancel      context.CancelFunc
 }
 
 func newImportAsk() *importAsk {
@@ -100,16 +101,25 @@ func newImportAsk() *importAsk {
 // addProjectMenu is the sidebar header's + button: adds a single folder or
 // imports git repositories discovered under a folder.
 func addProjectMenu(m *model) ggui.Widget {
+	return addProjectMenuFor(m, "")
+}
+
+func addProjectMenuFor(m *model, spaceID string) ggui.Widget {
 	return iconMenu(ui.MenuOf(icon("plus"),
 		ui.MenuItem(T("Add folder…"), m.addProjectFolder).Icon(icon("folder-plus").Size(14)),
-		ui.MenuItem(T("Import git projects…"), m.openImportProjects).Icon(icon("lang-git").Size(14)),
+		ui.MenuItem(T("Import git projects…"), func() { m.openImportProjectsIn(spaceID) }).Icon(icon("lang-git").Size(14)),
 	).Name(T("Add a project")), 6)
 }
 
 // openImportProjects opens the dialog to scan a folder for git repositories.
 func (m *model) openImportProjects() {
+	m.openImportProjectsIn("")
+}
+
+func (m *model) openImportProjectsIn(spaceID string) {
 	imp := m.Proj.Import
 	imp.stopScan()
+	imp.targetSpace = spaceID
 	node := ggui.Peek(m.Conn).Self.GetId()
 	if filtered := ggui.Peek(m.Prefs).ProjectMachine; filtered != "" {
 		if n, ok := nodeIn(ggui.Peek(m.Nodes), filtered); ok && reachable(n) {
@@ -250,6 +260,7 @@ func (m *model) markExistingRepos(node string, repos []discoveredRepo) []discove
 func (m *model) importSelectedRepos() {
 	imp := m.Proj.Import
 	node := ggui.Peek(imp.Node)
+	targetSpace := imp.targetSpace
 	sel := ggui.Peek(imp.Selected)
 	var chosen []discoveredRepo
 	for _, r := range ggui.Peek(imp.Repos) {
@@ -262,13 +273,149 @@ func (m *model) importSelectedRepos() {
 	}
 	imp.stopScan()
 	imp.Open.Set(false)
-	m.importGitRepos(node, chosen)
+	m.importGitReposIn(node, chosen, targetSpace)
+}
+
+type importPlacement struct {
+	MatchedDef     bool
+	Join           bool
+	JoinDef        string
+	JoinRoot       int
+	SpaceIdx       int // > 0 when claimed by an existing project, section, explicit space, or owner rule
+	MigrateFromKey string
+	Key            string
+}
+
+type importPlanContext struct {
+	set            spaceSet
+	targetSpace    space
+	targetSpaceIdx int
+	inTargetSpace  bool
+	defs           []project // enriched with known remotes from sessions/kept projects
+	existingGroups map[string]sessionGroup
+}
+
+func (m *model) newImportPlanContext(beforePrefs []keptProject, targetSpaceID string) importPlanContext {
+	set := m.spacesNow()
+	sessions := ggui.Peek(m.Sessions)
+	nodes := ggui.Peek(m.Nodes)
+
+	targetIdx := set.Space
+	if targetSpaceID != "" {
+		if idx, _, ok := spaceIndexInSet(set, targetSpaceID); ok {
+			targetIdx = idx
+		}
+	}
+	targetSp, inTarget := set.spaceOf(targetIdx)
+
+	// Infer remote/owner for any project root whose Remote was never recorded
+	// (e.g. added via "Add folder…") from existing sessions and kept projects.
+	locMeta := map[fileRoot][2]string{}
+	for _, kp := range beforePrefs {
+		if kp.Remote != "" {
+			locMeta[kp.fileRoot] = [2]string{kp.Remote, kp.Owner}
+		}
+	}
+	for _, s := range sessions {
+		if s.GetRemote() != "" {
+			locMeta[fileRoot{Node: s.GetNodeId(), Path: projectOf(s)}] = [2]string{s.GetRemote(), s.GetOwner()}
+		}
+	}
+	enriched := make([]project, len(set.Projects))
+	for i, p := range set.Projects {
+		cp := p.clone()
+		for j := range cp.Roots {
+			if cp.Roots[j].Remote != "" {
+				continue
+			}
+			for _, l := range cp.Roots[j].Locations {
+				if meta, ok := locMeta[l]; ok && meta[0] != "" {
+					cp.Roots[j].Remote = meta[0]
+					if cp.Roots[j].Owner == "" {
+						cp.Roots[j].Owner = meta[1]
+					}
+					break
+				}
+			}
+		}
+		enriched[i] = cp
+	}
+
+	groups := groupProjects(sessions, nodes, beforePrefs, set.Projects, set.Names)
+	existing := make(map[string]sessionGroup, len(groups))
+	for _, g := range groups {
+		existing[g.Key] = g
+	}
+
+	return importPlanContext{
+		set:            set,
+		targetSpace:    targetSp,
+		targetSpaceIdx: targetIdx,
+		inTargetSpace:  inTarget,
+		defs:           enriched,
+		existingGroups: existing,
+	}
+}
+
+func projectOwners(p project) []string {
+	var owners []string
+	for _, r := range p.Roots {
+		if r.Owner != "" && !slices.Contains(owners, r.Owner) {
+			owners = append(owners, r.Owner)
+		}
+	}
+	return owners
+}
+
+func (c importPlanContext) resolve(node string, kp keptProject) importPlacement {
+	if pl := placeKept(c.defs, kp); pl.At >= 0 {
+		p := c.defs[pl.At]
+		owners := projectOwners(p)
+		if kp.Owner != "" && !slices.Contains(owners, kp.Owner) {
+			owners = append(owners, kp.Owner)
+		}
+		at, _ := c.set.placeOf(p.ID, owners)
+		return importPlacement{
+			MatchedDef: true,
+			Join:       pl.Join,
+			JoinDef:    p.ID,
+			JoinRoot:   pl.Root,
+			SpaceIdx:   at,
+			Key:        p.ID,
+		}
+	}
+	key := sectionKey(c.set.Projects, implicitKey(node, kp.Path, kp.Remote))
+	var owners []string
+	if kp.Owner != "" {
+		owners = []string{kp.Owner}
+	}
+	if at, why := c.set.placeOf(key, owners); why != byDefault {
+		return importPlacement{SpaceIdx: at, Key: key}
+	}
+	if dk := dirKey(node, kp.Path); dk != key {
+		if dirAt, dirWhy := c.set.placeOf(dk, nil); dirWhy == byProject {
+			return importPlacement{SpaceIdx: dirAt, MigrateFromKey: dk, Key: key}
+		}
+	}
+	if g, exists := c.existingGroups[key]; exists {
+		gOwners := groupOwners(g)
+		if kp.Owner != "" && !slices.Contains(gOwners, kp.Owner) {
+			gOwners = append(gOwners, kp.Owner)
+		}
+		existingAt, _ := c.set.placeOf(g.Key, gOwners)
+		return importPlacement{SpaceIdx: existingAt, Key: key}
+	}
+	return importPlacement{Key: key}
 }
 
 // importGitRepos adds repos on node to the sidebar's kept folders (and joins
 // matching project definitions), assigning looks and space placement, with an
 // Undo notice.
 func (m *model) importGitRepos(node string, repos []discoveredRepo) int {
+	return m.importGitReposIn(node, repos, "")
+}
+
+func (m *model) importGitReposIn(node string, repos []discoveredRepo, targetSpaceID string) int {
 	if len(repos) == 0 {
 		return 0
 	}
@@ -300,47 +447,50 @@ func (m *model) importGitRepos(node string, repos []discoveredRepo) int {
 		return 0
 	}
 
-	set := m.spacesNow()
-	curSpace, inSpace := set.spaceOf(set.Space)
-	defs := set.Projects
+	plan := m.newImportPlanContext(beforePrefs, targetSpaceID)
+	set := plan.set
 
 	var moveKeys []string
 	var joinEdits []struct {
-		id   string
-		root int
-		at   fileRoot
+		id     string
+		root   int
+		at     fileRoot
+		remote string
+		owner  string
 	}
+	migrateKeys := map[string]string{}
 	newLooks := map[string]projectLook{}
 
 	for _, kp := range added {
-		if pl := placeKept(defs, kp); pl.At >= 0 {
-			if pl.Join {
+		res := plan.resolve(node, kp)
+		if res.MatchedDef {
+			if res.Join {
 				joinEdits = append(joinEdits, struct {
-					id   string
-					root int
-					at   fileRoot
-				}{defs[pl.At].ID, pl.Root, kp.fileRoot})
+					id     string
+					root   int
+					at     fileRoot
+					remote string
+					owner  string
+				}{res.JoinDef, res.JoinRoot, kp.fileRoot, kp.Remote, kp.Owner})
 			}
 			continue
 		}
-		key := sectionKey(defs, implicitKey(node, kp.Path, kp.Remote))
+		key := res.Key
 		if _, ok := set.Looks[key]; !ok {
 			if _, ok := newLooks[key]; !ok {
 				newLooks[key] = randomLook()
 			}
 		}
-		if inSpace {
-			var owners []string
-			if kp.Owner != "" {
-				owners = []string{kp.Owner}
-			}
-			if _, why := set.placeOf(key, owners); why == byDefault && !slices.Contains(moveKeys, key) {
-				moveKeys = append(moveKeys, key)
-			}
+		if res.MigrateFromKey != "" {
+			migrateKeys[res.MigrateFromKey] = key
+			continue
+		}
+		if res.SpaceIdx == 0 && plan.inTargetSpace && !slices.Contains(moveKeys, key) {
+			moveKeys = append(moveKeys, key)
 		}
 	}
 
-	if len(newLooks) > 0 || len(moveKeys) > 0 || len(joinEdits) > 0 {
+	if len(newLooks) > 0 || len(moveKeys) > 0 || len(joinEdits) > 0 || len(migrateKeys) > 0 {
 		m.Spaces.Update(func(l spaceList) spaceList {
 			if len(newLooks) > 0 {
 				l.Looks = maps.Clone(l.Looks)
@@ -361,12 +511,27 @@ func (m *model) importGitRepos(node string, repos []discoveredRepo) int {
 						if !slices.Contains(p.Roots[e.root].Locations, e.at) {
 							p.Roots[e.root].Locations = append(p.Roots[e.root].Locations, e.at)
 						}
+						if p.Roots[e.root].Remote == "" && e.remote != "" {
+							p.Roots[e.root].Remote = e.remote
+						}
+						if p.Roots[e.root].Owner == "" && e.owner != "" {
+							p.Roots[e.root].Owner = e.owner
+						}
 						l.Projects = setProject(l.Projects, p)
 					}
 				}
 			}
+			if len(migrateKeys) > 0 {
+				spaces := slices.Clone(l.Spaces)
+				for i := range spaces {
+					for from, to := range migrateKeys {
+						spaces[i].Projects = replaceID(spaces[i].Projects, from, to)
+					}
+				}
+				l.Spaces = spaces
+			}
 			if len(moveKeys) > 0 {
-				l.Spaces = placeSections(slices.Clone(l.Spaces), curSpace.ID, moveKeys...)
+				l.Spaces = placeSections(slices.Clone(l.Spaces), plan.targetSpace.ID, moveKeys...)
 			}
 			return l
 		})
@@ -539,6 +704,8 @@ func scanRemoteGitRepos(ctx context.Context, c *client.Client, remoteID, root st
 				if f, err := c.ReadFile(ctx, &protocol.ReadFile{NodeId: remoteID, Path: cfgPath, Max: maxGitConfigBytes}); err == nil {
 					owner, remote = gitstat.ConfigRemote(f.GetData())
 				}
+			} else {
+				owner, remote = readRemoteGitFileConfig(ctx, c, remoteID, dirPath)
 			}
 			mu.Lock()
 			if !seenRepo[dirPath] {
@@ -610,6 +777,39 @@ func scanRemoteGitRepos(ctx context.Context, c *client.Client, remoteID, root st
 	}
 	sortDiscoveredRepos(out)
 	return out, nil
+}
+
+func readRemoteGitFileConfig(ctx context.Context, c *client.Client, remoteID, dirPath string) (owner, remote string) {
+	f, err := c.ReadFile(ctx, &protocol.ReadFile{NodeId: remoteID, Path: joinPath(dirPath, ".git"), Max: 4096})
+	if err != nil {
+		return "", ""
+	}
+	gitDir, ok := strings.CutPrefix(strings.TrimSpace(string(f.GetData())), "gitdir: ")
+	if !ok || gitDir == "" {
+		return "", ""
+	}
+	if !isRemoteAbsPath(gitDir) {
+		gitDir = joinPath(dirPath, gitDir)
+	}
+	common := gitDir
+	if cf, err := c.ReadFile(ctx, &protocol.ReadFile{NodeId: remoteID, Path: joinPath(gitDir, "commondir"), Max: 4096}); err == nil {
+		if cd := strings.TrimSpace(string(cf.GetData())); cd != "" {
+			if isRemoteAbsPath(cd) {
+				common = cd
+			} else {
+				common = joinPath(gitDir, cd)
+			}
+		}
+	}
+	cfgFile, err := c.ReadFile(ctx, &protocol.ReadFile{NodeId: remoteID, Path: joinPath(common, "config"), Max: maxGitConfigBytes})
+	if err != nil {
+		return "", ""
+	}
+	return gitstat.ConfigRemote(cfgFile.GetData())
+}
+
+func isRemoteAbsPath(p string) bool {
+	return strings.HasPrefix(p, "/") || (len(p) >= 2 && p[1] == ':')
 }
 
 func relativeRepoPath(base, dir string) string {
@@ -784,6 +984,8 @@ func importProjectsForm(m *model) ggui.Widget {
 			hline(),
 		)
 
+		node := ggui.Peek(imp.Node)
+		plan := m.newImportPlanContext(ggui.Peek(m.Prefs).Projects, imp.targetSpace)
 		rows := make([]ggui.Widget, 0, len(visible))
 		for _, r := range visible {
 			repo := r
@@ -818,12 +1020,23 @@ func importProjectsForm(m *model) ggui.Widget {
 				rowCells = append(rowCells, widget.Box(
 					widget.Text(T("Already added")).Size(11).Color(skin.ExtraMuted).NoWrap(),
 				).Pad(2, 6).Radius(5).Fill(skin.Surface2))
-			case repo.Owner != "":
-				ownerLabel, host := ownerName(repo.Owner)
-				rowCells = append(rowCells, widget.Row(
-					icon(ownerGlyph(host)).Size(12).Color(skin.ExtraMuted),
-					widget.Text(ownerLabel).Size(11.5).Color(skin.Muted).NoWrap(),
-				).Gap(4).Align(widget.AlignCenter))
+			default:
+				if repo.Owner != "" {
+					ownerLabel, host := ownerName(repo.Owner)
+					rowCells = append(rowCells, widget.Row(
+						icon(ownerGlyph(host)).Size(12).Color(skin.ExtraMuted),
+						widget.Text(ownerLabel).Size(11.5).Color(skin.Muted).NoWrap(),
+					).Gap(4).Align(widget.AlignCenter))
+				}
+				kp := keptProject{fileRoot: fileRoot{Node: node, Path: repo.Path}, Owner: repo.Owner, Remote: repo.Remote}
+				if res := plan.resolve(node, kp); res.SpaceIdx > 0 && res.SpaceIdx != plan.targetSpaceIdx {
+					if sp, ok := plan.set.spaceOf(res.SpaceIdx); ok {
+						rowCells = append(rowCells, widget.Box(widget.Row(
+							spaceMark(sp),
+							widget.Text(plan.set.spaceName(res.SpaceIdx)).Size(11).Color(skin.Muted).NoWrap(),
+						).Gap(4).Align(widget.AlignCenter)).Pad(2, 6).Radius(5).Fill(skin.Surface2))
+					}
+				}
 			}
 			rows = append(rows, widget.Box(widget.Row(rowCells...).Gap(10).Align(widget.AlignCenter)).Pad(6, 10))
 		}

@@ -981,7 +981,7 @@ func spaceWindowSidebar(m *model, sw *spaceWindowState) ggui.Widget {
 			return widget.Box(widget.Row(
 				icon("messages-square").Size(17),
 				widget.Expanded(widget.Row(parts...).Gap(6).Align(widget.AlignCenter)),
-				addProjectMenu(m),
+				addProjectMenuFor(m, sw.spaceID),
 			).Gap(6).Align(widget.AlignCenter)).Pad(0, 8, 0, 12).Height(headerHeight)
 		})
 		grip := spaceWindowSidebarGrip(sw)
