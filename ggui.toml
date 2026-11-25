@@ -9,4 +9,5 @@ version = "0.6.0"
 package = "./cmd/mako-gui"
 
 [build]
+renderer = "zig"
 output = "bin"

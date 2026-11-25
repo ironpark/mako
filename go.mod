@@ -6,15 +6,15 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/creack/pty v1.1.24
-	github.com/ebitengine/purego v0.11.2
+	github.com/ebitengine/purego v0.11.3
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/ggfx v0.1.0
-	github.com/ironpark/ggui v0.7.2
+	github.com/ironpark/ggui v0.8.0
 	github.com/ironpark/ggui/pkg/fswatch v0.2.3
-	github.com/ironpark/ggwd v0.0.0-20261123061616-b9247f21d6b7
+	github.com/ironpark/ggwd v0.0.0-20261123092851-969c1988e18d
 	github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291
 	github.com/ironpark/qngg v0.0.0-20261030173357-5bb022c263f0
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202
@@ -31,10 +31,10 @@ require (
 	github.com/zkrebbekx/go-mermaid v0.1.6
 	go.yaml.in/yaml/v3 v3.0.5
 	golang.org/x/crypto v0.58.0
-	golang.org/x/image v0.46.0
-	golang.org/x/sys v0.49.0
+	golang.org/x/image v0.48.0
+	golang.org/x/sys v0.50.0
 	golang.org/x/term v0.47.0
-	golang.org/x/text v0.43.0
+	golang.org/x/text v0.44.0
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.62.0
 	rsc.io/qr v0.2.0
@@ -62,7 +62,7 @@ require (
 	github.com/flynn/noise v1.1.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.2 // indirect
-	github.com/gogpu/naga v0.21.10 // indirect
+	github.com/gogpu/naga v0.22.7 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -141,7 +141,7 @@ require (
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/telemetry v0.0.0-20261009151841-97e8ea77aa2a // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
