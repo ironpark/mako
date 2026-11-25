@@ -19,6 +19,7 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
 )
@@ -256,7 +257,7 @@ func (d *Daemon) prepareCodexAppServer(
 	cmd.Env = mergeEnvSlice(os.Environ(), serverEnv)
 	configureCodexServerCmd(cmd)
 
-	if err := cmd.Start(); err != nil {
+	if err := safeexec.Start(cmd); err != nil {
 		tr.cleanupFiles()
 		d.log.Warn("codex app-server: start failed; falling back to direct PTY", "session", sessionID, "err", err)
 		return nil, noop

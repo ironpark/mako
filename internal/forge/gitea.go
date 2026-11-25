@@ -20,6 +20,7 @@ import (
 
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // A Forgejo or Gitea is read and acted on through its API, at https on the
@@ -116,7 +117,7 @@ func token(ctx context.Context, host string) string {
 		cmd := exec.CommandContext(ctx, "git", "credential", "fill")
 		cmd.Stdin = strings.NewReader("protocol=https\nhost=" + host + "\n\n")
 		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never", "GIT_ASKPASS=", "SSH_ASKPASS=")
-		out, err := cmd.Output()
+		out, err := safeexec.Output(cmd)
 		if err != nil {
 			return ""
 		}

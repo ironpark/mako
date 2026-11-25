@@ -19,6 +19,7 @@ import (
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -278,7 +279,7 @@ func markIgnored(dir string, entries []*protocol.DirEntry) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "check-ignore", "-z", "--stdin")
 	cmd.Stdin = &in
-	out, _ := cmd.Output() // it exits 1 when none is ignored, 128 outside a repository
+	out, _ := safeexec.Output(cmd) // it exits 1 when none is ignored, 128 outside a repository
 	ignored := map[string]bool{}
 	for name := range strings.SplitSeq(string(out), "\x00") {
 		ignored[strings.TrimSuffix(name, "/")] = true

@@ -13,6 +13,7 @@ import (
 	"github.com/ironpark/ggui/ui"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // A file or folder on this machine opens in the code editors it has, at a
@@ -141,7 +142,7 @@ func findEditor(k editorKind, home string) string {
 // returns once the editor has the request.
 func (e editor) open(path string, line int) error {
 	cmd := exec.Command(e.path, e.At(path, line)...)
-	if err := cmd.Start(); err != nil {
+	if err := safeexec.Start(cmd); err != nil {
 		return err
 	}
 	go cmd.Wait() // the command hands the path on and exits; reap it

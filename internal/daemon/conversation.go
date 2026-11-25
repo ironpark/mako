@@ -12,6 +12,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
 	"google.golang.org/protobuf/proto"
@@ -46,7 +47,7 @@ func probed(ctx context.Context, program string, args []string, question string,
 	}
 	check, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	out, err := exec.CommandContext(check, program, args...).Output()
+	out, err := safeexec.Output(exec.CommandContext(check, program, args...))
 	value := err == nil && accept(string(out))
 	optionalFlags.Store(key, value)
 	return value

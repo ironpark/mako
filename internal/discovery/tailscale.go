@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
 	"sync"
 	"time"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/p2p"
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // Tailscale discovers daemons across a tailnet. Peers are enumerated from
@@ -40,6 +40,7 @@ type Tailscale struct {
 
 	mu    sync.Mutex
 	known map[string]string // host -> the peer ID a probe found there
+	gate  safeexec.StartGate
 }
 
 // skip reports whether host need not be probed: the peer last found there
@@ -126,11 +127,22 @@ func (t *Tailscale) tailnetHosts(ctx context.Context) ([]string, error) {
 	bin := t.Binary
 	if bin == "" {
 		bin = tailscaleCLI()
+		if bin == "" {
+			return nil, exec.ErrNotFound
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	body, err := exec.CommandContext(ctx, bin, "status", "--json").Output()
+	cmd := exec.CommandContext(ctx, bin, "status", "--json")
+	if cmd.Err != nil {
+		return nil, fmt.Errorf("tailscale status: %w", cmd.Err)
+	}
+	if !t.gate.Allow(cmd.Path) {
+		return nil, fmt.Errorf("tailscale status: %s unavailable", cmd.Path)
+	}
+	body, err := safeexec.Output(cmd)
+	t.gate.Record(cmd.Path, err)
 	if err != nil {
 		return nil, fmt.Errorf("tailscale status: %w", err)
 	}
@@ -160,13 +172,13 @@ const macTailscale = "/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 
 // tailscaleCLI finds the tailscale CLI: on the PATH, else in the macOS app.
 func tailscaleCLI() string {
-	if path, err := exec.LookPath("tailscale"); err == nil {
+	if path, err := exec.LookPath("tailscale"); err == nil && safeexec.CheckExecutable(path) == nil {
 		return path
 	}
-	if _, err := os.Stat(macTailscale); err == nil {
+	if safeexec.CheckExecutable(macTailscale) == nil {
 		return macTailscale
 	}
-	return "tailscale"
+	return ""
 }
 
 func (t *Tailscale) port() int {

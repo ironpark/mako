@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/ebitengine/purego"
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // procPIDRusage is libproc's proc_pid_rusage, nil when it cannot be found.
@@ -41,10 +42,18 @@ func footprint() uint64 {
 	return binary.LittleEndian.Uint64(buf[16+7*8:])
 }
 
+var footprintGate safeexec.StartGate
+
 // footprintReport writes footprint(1)'s account of the app's memory to
 // path: by kind, the GPU's (IOAccelerator) apart from the heap's.
 func footprintReport(path string) {
-	out, err := exec.Command("/usr/bin/footprint", "-p", strconv.Itoa(os.Getpid())).CombinedOutput()
+	const footprintBin = "/usr/bin/footprint"
+	if !footprintGate.Allow(footprintBin) {
+		return
+	}
+	cmd := exec.Command(footprintBin, "-p", strconv.Itoa(os.Getpid()))
+	out, err := safeexec.CombinedOutput(cmd)
+	footprintGate.Record(footprintBin, err)
 	if err != nil && len(out) == 0 {
 		return
 	}

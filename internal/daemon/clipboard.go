@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // A program of a session that copies with its node's clipboard tools, as
@@ -90,7 +91,7 @@ func runClip(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 func run(path string, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	cmd := exec.Command(path, args...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
-	err := cmd.Run()
+	err := safeexec.Run(cmd)
 	if exit := (*exec.ExitError)(nil); errors.As(err, &exit) {
 		return exit.ExitCode()
 	}

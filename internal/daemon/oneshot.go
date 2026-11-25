@@ -19,6 +19,7 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -189,7 +190,7 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
-	if err := cmd.Run(); err != nil {
+	if err := safeexec.Run(cmd); err != nil {
 		if runCtx.Err() != nil {
 			return nil, runCtx.Err()
 		}

@@ -10,7 +10,11 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/ironpark/mako/internal/safeexec"
 )
+
+var processToolsGate safeexec.StartGate
 
 // OpenLogs lists the logs each process tree has open for writing, keyed by
 // the pid at the tree's root. One listing covers every tree, so watching many
@@ -24,8 +28,12 @@ func OpenLogs(ctx context.Context, roots []int) (map[int][]string, error) {
 	for _, root := range roots {
 		tree[root] = root
 	}
-	if out, err := exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid=").Output(); err == nil {
-		tree = descendants(roots, string(out))
+	if psCmd := exec.CommandContext(ctx, "ps", "-axo", "pid=,ppid="); psCmd.Err == nil && processToolsGate.Allow(psCmd.Path) {
+		out, err := safeexec.Output(psCmd)
+		processToolsGate.Record(psCmd.Path, err)
+		if err == nil {
+			tree = descendants(roots, string(out))
+		}
 	}
 	logs := map[int][]string{}
 	if runtime.GOOS == "linux" {
@@ -38,7 +46,15 @@ func OpenLogs(ctx context.Context, roots []int) (map[int][]string, error) {
 	for pid := range tree {
 		ids = append(ids, strconv.Itoa(pid))
 	}
-	out, err := exec.CommandContext(ctx, "lsof", "-w", "-a", "-p", strings.Join(ids, ","), "-Fpfan").Output()
+	lsofCmd := exec.CommandContext(ctx, "lsof", "-w", "-a", "-p", strings.Join(ids, ","), "-Fpfan")
+	if lsofCmd.Err != nil {
+		return nil, lsofCmd.Err
+	}
+	if !processToolsGate.Allow(lsofCmd.Path) {
+		return nil, fmt.Errorf("lsof unavailable: %s", lsofCmd.Path)
+	}
+	out, err := safeexec.Output(lsofCmd)
+	processToolsGate.Record(lsofCmd.Path, err)
 	if err != nil && len(out) == 0 {
 		return nil, err
 	}

@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/ironpark/mako/internal/safeexec"
 	wasmtime "github.com/ironpark/wasmtime-pure-go"
 )
 
@@ -365,7 +366,7 @@ func (e *Extension) npm(args ...string) ([]byte, error) {
 	cmd.Dir = e.work
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	out, err := safeexec.Output(cmd)
 	if err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return nil, fmt.Errorf("npm %s: %v: %s", args[0], err, msg)
@@ -442,7 +443,7 @@ func (e *Extension) runCommand(args []Val) ([]Val, error) {
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	err := cmd.Run()
+	err := safeexec.Run(cmd)
 	status := None()
 	var exit *exec.ExitError
 	switch {

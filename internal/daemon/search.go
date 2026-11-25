@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -51,7 +52,7 @@ func (d *Daemon) handleSearch(ctx context.Context, stream *transport.Stream, env
 // listFiles lists a project's files, slash-separated from root.
 func listFiles(ctx context.Context, root string) (*protocol.SearchResult, error) {
 	out := &protocol.SearchResult{}
-	if git, err := exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-co", "--exclude-standard", "-z").Output(); err == nil {
+	if git, err := safeexec.Output(exec.CommandContext(ctx, "git", "-C", root, "ls-files", "-co", "--exclude-standard", "-z")); err == nil {
 		for p := range strings.SplitSeq(string(git), "\x00") {
 			if p == "" {
 				continue
@@ -120,7 +121,7 @@ func searchText(ctx context.Context, root, query string) (*protocol.SearchResult
 		cmd.Dir = root
 		return grepOutput(cmd)
 	}
-	if exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree").Run() == nil {
+	if safeexec.Run(exec.Command("git", "-C", root, "rev-parse", "--is-inside-work-tree")) == nil {
 		args := []string{"-C", root, "grep", "--null", "-n", "--column", "-I", "--untracked", "--fixed-strings", "-e", query}
 		if !smartCase(query) {
 			args = append(args[:3], append([]string{"-i"}, args[3:]...)...)
@@ -140,7 +141,7 @@ func grepOutput(cmd *exec.Cmd) (*protocol.SearchResult, error) {
 	if err != nil {
 		return out, err
 	}
-	if err := cmd.Start(); err != nil {
+	if err := safeexec.Start(cmd); err != nil {
 		return out, err
 	}
 	sc := bufio.NewScanner(pipe)

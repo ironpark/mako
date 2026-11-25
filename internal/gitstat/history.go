@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -39,14 +40,14 @@ func gitOut(ctx context.Context, root string, stdin []byte, args ...string) ([]b
 	cmd := gitCommand(ctx, root, stdin, args)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	out, err := cmd.Output()
+	out, err := safeexec.Output(cmd)
 	return out, gitErr(err, stderr.String()+"\n"+string(out))
 }
 
 // run runs git in root for what it does, returning all it printed, which
 // for a push or a pull is on stderr.
 func run(ctx context.Context, root string, stdin []byte, args ...string) (string, error) {
-	out, err := gitCommand(ctx, root, stdin, args).CombinedOutput()
+	out, err := safeexec.CombinedOutput(gitCommand(ctx, root, stdin, args))
 	text := strings.TrimSpace(string(out))
 	return text, gitErr(err, text)
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"github.com/ironpark/mako/internal/safeexec"
 	"golang.org/x/sys/unix"
 )
 
@@ -24,6 +25,9 @@ func startProc(argv []string, dir string, env []string, cols, rows uint16) (*pro
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir = dir
 	cmd.Env = env
+	if err := safeexec.Preflight(cmd); err != nil {
+		return nil, err
+	}
 	tty, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: cols, Rows: rows})
 	if err != nil {
 		return nil, err

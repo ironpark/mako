@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // Find is where program is: on the PATH, else in the folders installers put
@@ -17,8 +19,15 @@ import (
 // service, may leave out where the user's shell finds the agent.
 func Find(program string, dirs ...string) (string, error) {
 	path, err := exec.LookPath(program)
-	if err == nil || strings.ContainsAny(program, `/\`) {
-		return path, err
+	if err == nil {
+		if checkErr := safeexec.CheckExecutable(path); checkErr == nil {
+			return path, nil
+		} else if strings.ContainsAny(program, `/\`) {
+			return "", checkErr
+		}
+		err = exec.ErrNotFound
+	} else if strings.ContainsAny(program, `/\`) {
+		return "", err
 	}
 	home, _ := os.UserHomeDir()
 	for _, dir := range installDirs(runtime.GOOS, home, os.Getenv, dirs) {
@@ -130,11 +139,7 @@ const windowsExts = ".com;.exe;.bat;.cmd"
 
 // runnable reports whether path is a file this process may run.
 func runnable(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return false
-	}
-	return runtime.GOOS == "windows" || info.Mode()&0o111 != 0
+	return safeexec.CheckExecutable(path) == nil
 }
 
 // ProgramName is a program's name without its folder and, on Windows, the

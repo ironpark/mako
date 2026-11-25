@@ -24,6 +24,7 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // maxCounted is the size past which a file's lines are not counted or
@@ -184,8 +185,8 @@ const mostCounts = 4096
 // fallback, which knows no upstream, nor the objects; but not for a git
 // that ran out of time, as go-git would take longer still.
 func status(ctx context.Context, wt *git.Worktree, root string) (git.Status, tracking, map[string]string, error) {
-	out, err := exec.CommandContext(ctx, "git", "-C", root, "--no-optional-locks",
-		"status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all").Output()
+	out, err := safeexec.Output(exec.CommandContext(ctx, "git", "-C", root, "--no-optional-locks",
+		"status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"))
 	if err != nil && ctx.Err() != nil {
 		return nil, tracking{}, nil, ctx.Err()
 	}

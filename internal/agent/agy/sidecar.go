@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/pkg/fsutil"
 )
 
@@ -46,7 +47,7 @@ func (*Agent) DeliverMessage(ctx context.Context, conversationID, title, text st
 	if len(env) > 0 {
 		cmd.Env = mergeEnv(os.Environ(), env)
 	}
-	out, err := cmd.CombinedOutput()
+	out, err := safeexec.CombinedOutput(cmd)
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
 		if msg != "" {

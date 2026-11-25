@@ -16,6 +16,7 @@ import (
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -207,7 +208,7 @@ func runStatusLine(args []string, stdin io.Reader, out io.Writer) {
 	if command := userStatusLine(name, input); command != "" {
 		cmd := shellCommand(command)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(input), out, os.Stderr
-		_ = cmd.Run()
+		_ = safeexec.Run(cmd)
 	}
 	<-sent
 }

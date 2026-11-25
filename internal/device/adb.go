@@ -19,6 +19,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -35,6 +36,7 @@ type ADB struct {
 
 	mu      sync.Mutex
 	started time.Time // when this last tried to start the server; guarded by mu
+	gate    safeexec.StartGate
 }
 
 // adbDial is how long reaching the adb server takes at most, and
@@ -131,7 +133,13 @@ func (a *ADB) start(ctx context.Context) bool {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, adb, "start-server").Run() == nil
+	cmd := exec.CommandContext(ctx, adb, "start-server")
+	if cmd.Err != nil || !a.gate.Allow(cmd.Path) {
+		return false
+	}
+	err = safeexec.Run(cmd)
+	a.gate.Record(cmd.Path, err)
+	return err == nil
 }
 
 // findADB is where this node's adb is: in the SDK ANDROID_HOME or
@@ -222,7 +230,12 @@ func (a *ADB) Check(ctx context.Context, dev *protocol.Device) []string {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, adb, "version").Output()
+	cmd := exec.CommandContext(ctx, adb, "version")
+	if cmd.Err != nil || !a.gate.Allow(cmd.Path) {
+		return nil
+	}
+	out, err := safeexec.Output(cmd)
+	a.gate.Record(cmd.Path, err)
 	m := adbVersion.FindSubmatch(out)
 	if err != nil || m == nil {
 		return nil

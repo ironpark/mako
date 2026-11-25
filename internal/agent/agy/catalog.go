@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 const (
@@ -53,7 +54,7 @@ func (a *Agent) Catalog(ctx context.Context, env map[string]string, refresh bool
 	if len(env) > 0 {
 		cmd.Env = mergeEnv(os.Environ(), env)
 	}
-	out, err := cmd.Output()
+	out, err := safeexec.Output(cmd)
 	if err != nil {
 		return nil, err
 	}

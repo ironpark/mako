@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // Language is one of the window's languages: its code, how it names
@@ -92,7 +94,7 @@ var System = sync.OnceValue(func() string {
 		}
 	}
 	if goruntime.GOOS == "darwin" {
-		if out, err := exec.Command("defaults", "read", "-g", "AppleLanguages").Output(); err == nil {
+		if out, err := safeexec.Output(exec.Command("defaults", "read", "-g", "AppleLanguages")); err == nil {
 			// ( "ko-KR", "en-KR" ), the first the most preferred.
 			langs := strings.FieldsFunc(string(out), func(r rune) bool { return strings.ContainsRune("(), \"\n\t", r) })
 			prefs = append(langs, prefs...)

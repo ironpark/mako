@@ -21,6 +21,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // RPCError is a JSON-RPC 2.0 error returned by codex app-server.
@@ -651,7 +652,7 @@ func QueryModelsStdio(ctx context.Context, program string, env map[string]string
 		return nil, err
 	}
 	cmd.Stderr = io.Discard
-	if err := cmd.Start(); err != nil {
+	if err := safeexec.Start(cmd); err != nil {
 		return nil, err
 	}
 	defer func() {

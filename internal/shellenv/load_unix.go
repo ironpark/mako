@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 // timeout bounds the shell's start, for a profile that waits on something.
@@ -35,7 +37,7 @@ func Load() {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	// A child the profile leaves holding the output does not hold the wait.
 	cmd.WaitDelay = 500 * time.Millisecond
-	out, _ := cmd.Output()
+	out, _ := safeexec.Output(cmd)
 	for k, v := range parse(out) {
 		_ = os.Setenv(k, v)
 	}
