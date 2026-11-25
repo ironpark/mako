@@ -323,10 +323,12 @@ func (m *model) editLayout(fn func(root *layoutNode) int) {
 	for _, g := range root.groups() {
 		tabs = append(tabs, g.Tabs...)
 	}
+	active := root.group(focus).Active
 	m.Layout.Set(root)
 	m.FocusGroup.Set(focus)
 	m.Tabs.Set(tabs)
-	m.Selected.Set(root.group(focus).Active)
+	m.Selected.Set(active)
+	m.syncScopeToTab(active, false)
 	m.bumpWorkspaceRev()
 }
 
@@ -361,6 +363,7 @@ func (m *model) showTab(id string) {
 	if isSessionTab(id) {
 		m.lastSession = id
 	}
+	m.syncScopeToTab(id, true)
 	m.attach(id)
 }
 

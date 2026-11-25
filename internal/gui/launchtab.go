@@ -11,8 +11,28 @@ import (
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/gui/skin"
 )
+
+// isShellTarget reports whether target launches a plain shell rather than an
+// AI agent.
+func isShellTarget(target string) bool {
+	agent, _ := agentspec.SplitTarget(target)
+	return agent == "shell"
+}
+
+// sessionAgentTargets removes plain shell targets from the choices offered
+// when creating a new agent session.
+func sessionAgentTargets(targets []string) []string {
+	out := make([]string, 0, len(targets))
+	for _, t := range targets {
+		if !isShellTarget(t) {
+			out = append(out, t)
+		}
+	}
+	return out
+}
 
 // A new session starts in a tab of its own, as a conversation does in a
 // chat app: the tab asks what to work on, over a box like a session's
@@ -118,7 +138,7 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 	shell := ggui.Map(where, func(w launchWhere) bool { return w.Agent == "shell" })
 	field := ggui.View(shell, func(sh bool) ggui.Widget { return composerField(launchField(prompt, sh, start)) })
 	targets := ggui.Derived(func() []string {
-		return nodeTargets(m.Nodes.Get(), where.Get().NodeID, m.Agents.Get())
+		return sessionAgentTargets(nodeTargets(m.Nodes.Get(), where.Get().NodeID, m.Agents.Get()))
 	}).WithEqual(slices.Equal)
 	agents := borderless(ui.Select(agent).BindOptions(targets).Format(targetLabel).Name(T("Agent")))
 	gitToggle := ui.Tooltip(ui.ButtonOf(ggui.View(worktree, func(on bool) ggui.Widget {
@@ -186,6 +206,9 @@ func nodeMenu(m *model, l *launchState, where ggui.Readable[launchWhere]) ggui.W
 				l.Form.Update(func(f newSession) newSession {
 					if f.NodeID != id {
 						f.NodeID, f.Project = id, m.launchProject(id)
+						if isShellTarget(f.Agent) {
+							f.Agent = m.defaultSessionAgent(id)
+						}
 					}
 					return f
 				})

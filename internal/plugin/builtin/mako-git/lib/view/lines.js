@@ -83,7 +83,7 @@ export function renderForgeLine(s, ui, ctx) {
   }
 
   return ui.column([
-    ui.row(parts, { key: "forge-row", gap: 4 }),
+    ui.card([ui.row(parts, { key: "forge-row", gap: 4 })], { key: "forge-pad", variant: "ghost", gap: 0 }),
     ui.divider({ key: "forge-div" }),
   ], { key: "forge-line", gap: 0 });
 }
@@ -92,30 +92,34 @@ export function renderStatusLine(s, ui, ctx) {
   const t = ctx.t;
   if (s.busy) {
     return ui.column([
-      ui.row([
-        ui.progress(0, { key: "busy-spinner", variant: "spinner", text: s.busy }),
-      ], { key: "busy-row", gap: 6 }),
+      ui.card([
+        ui.row([
+          ui.progress(0, { key: "busy-spinner", variant: "spinner", text: s.busy }),
+        ], { key: "busy-row", gap: 6 }),
+      ], { key: "busy-pad", variant: "ghost", gap: 0 }),
       ui.divider({ key: "busy-div" }),
     ], { key: "status-line", gap: 0 });
   }
   if (!s.note || !s.note.text) return null;
   return ui.column([
-    ui.row([
-      ui.text(sanitizeText(s.note.text, true), {
-        key: "note-text",
-        size: "small",
-        tone: s.note.err ? "danger" : "muted",
-        grow: 1,
-      }),
-      ui.button("", {
-        key: "note-dismiss",
-        icon: "x",
-        variant: "ghost",
-        size: "small",
-        placeholder: t("Dismiss"),
-        onTap: ["dismissNote"],
-      }),
-    ], { key: "note-row", gap: 6 }),
+    ui.card([
+      ui.row([
+        ui.text(sanitizeText(s.note.text, true), {
+          key: "note-text",
+          size: "small",
+          tone: s.note.err ? "danger" : "muted",
+          grow: 1,
+        }),
+        ui.button("", {
+          key: "note-dismiss",
+          icon: "x",
+          variant: "ghost",
+          size: "small",
+          placeholder: t("Dismiss"),
+          onTap: ["dismissNote"],
+        }),
+      ], { key: "note-row", gap: 6 }),
+    ], { key: "note-pad", variant: "ghost", gap: 0 }),
     ui.divider({ key: "note-div" }),
   ], { key: "status-line", gap: 0 });
 }
@@ -148,28 +152,30 @@ export function renderOperationBanner(s, ui, ctx) {
 
   return ui.column([
     ui.card([
-      ui.row([
-        ui.icon("shield-alert", { key: "op-icon", tone: "warning" }),
-        ui.column(msgKids, { key: "op-msg-col", grow: 1, gap: 2 }),
-      ], { key: "op-head", gap: 8 }),
-      ui.row([
-        ui.text("", { key: "op-spacer", grow: 1 }),
-        ui.button(t("Abort"), {
-          key: "op-abort",
-          variant: "ghost",
-          size: "small",
-          disabled: busy,
-          onTap: ["askAbort"],
-        }),
-        ui.button(t("Continue"), {
-          key: "op-continue",
-          variant: "primary",
-          size: "small",
-          disabled: busy,
-          onTap: ["continueOp"],
-        }),
-      ], { key: "op-actions", gap: 6 }),
-    ], { key: "op-card", variant: "soft", tone: "warning", gap: 8 }),
+      ui.card([
+        ui.row([
+          ui.icon("shield-alert", { key: "op-icon", tone: "warning" }),
+          ui.column(msgKids, { key: "op-msg-col", grow: 1, gap: 2 }),
+        ], { key: "op-head", gap: 8 }),
+        ui.row([
+          ui.text("", { key: "op-spacer", grow: 1 }),
+          ui.button(t("Abort"), {
+            key: "op-abort",
+            variant: "ghost",
+            size: "small",
+            disabled: busy,
+            onTap: ["askAbort"],
+          }),
+          ui.button(t("Continue"), {
+            key: "op-continue",
+            variant: "primary",
+            size: "small",
+            disabled: busy,
+            onTap: ["continueOp"],
+          }),
+        ], { key: "op-actions", gap: 6 }),
+      ], { key: "op-card", variant: "soft", tone: "warning", gap: 8 }),
+    ], { key: "op-pad", variant: "ghost", gap: 0 }),
     ui.divider({ key: "op-div" }),
   ], { key: "op-banner", gap: 0 });
 }

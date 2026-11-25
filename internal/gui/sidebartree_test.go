@@ -415,3 +415,121 @@ func TestProjectsPanelMachineFilterUI(t *testing.T) {
 		t.Fatalf("expected machine filter dropdown hidden on single-machine setup:\n%s", p.Semantics().String())
 	}
 }
+
+func TestSidebarActiveProjectFollowsSelectedTab(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	sidebarPreview(m)
+
+	var makoSession, gguiSession, acpSession string
+	for _, s := range ggui.Peek(m.Sessions) {
+		switch s.GetProject() {
+		case "/w/mako":
+			if makoSession == "" {
+				makoSession = s.GetId()
+			}
+		case "/w/ggui":
+			if gguiSession == "" {
+				gguiSession = s.GetId()
+			}
+		case "/w/acp-go":
+			if acpSession == "" {
+				acpSession = s.GetId()
+			}
+		}
+	}
+	if makoSession == "" || gguiSession == "" || acpSession == "" {
+		t.Fatalf("missing preview sessions: mako=%q ggui=%q acp=%q", makoSession, gguiSession, acpSession)
+	}
+
+	var makoRoot, gguiRoot projectRoot
+	for _, p := range m.projectsNow() {
+		if p.ID == "xxgg" {
+			makoRoot, gguiRoot = p.Roots[0], p.Roots[1]
+		}
+	}
+	makoScope := scopeKey{Section: "xxgg", Root: rootKey(makoRoot)}
+	gguiScope := scopeKey{Section: "xxgg", Root: rootKey(gguiRoot)}
+	acpScope := sessionScope(m.projectsNow(), func() *protocol.SessionInfo { s, _ := m.session(acpSession); return s }())
+
+	// Initially no scope is picked.
+	if got := ggui.Peek(m.Scope).scopeKey; got != (scopeKey{}) {
+		t.Fatalf("initial scope = %+v, want zero", got)
+	}
+
+	// Selecting a session tab moves the sidebar active project to its sub-project.
+	m.selectSession(makoSession)
+	if got := ggui.Peek(m.Scope).scopeKey; got != makoScope {
+		t.Fatalf("after selectSession(mako): scope = %+v, want %+v", got, makoScope)
+	}
+
+	// Switching to another sub-project's tab moves the sidebar active project to it.
+	m.selectSession(gguiSession)
+	if got := ggui.Peek(m.Scope).scopeKey; got != gguiScope {
+		t.Fatalf("after selectSession(ggui): scope = %+v, want %+v", got, gguiScope)
+	}
+
+	// Opening/selecting a doc tab from another project moves the sidebar active project there.
+	acpDoc := docTabID("studio", "/w/acp-go/main.go")
+	m.Docs.Set(map[string]docInfo{
+		acpDoc: {Node: "studio", Path: "/w/acp-go/main.go", Root: fileRoot{Node: "studio", Path: "/w/acp-go"}},
+	})
+	m.showTab(acpDoc)
+	if got := ggui.Peek(m.Scope).scopeKey; got != acpScope {
+		t.Fatalf("after showTab(acpDoc): scope = %+v, want %+v", got, acpScope)
+	}
+
+	// Opening/selecting a diff tab moves the sidebar active project to its repo's sub-project.
+	makoDiff := diffPrefix + "mako-main"
+	m.Diffs.Set(map[string]diffTab{
+		makoDiff: {Root: fileRoot{Node: "studio", Path: "/w/mako"}, Repo: "/w/mako", File: &protocol.GitFile{Path: "main.go"}},
+	})
+	m.showTab(makoDiff)
+	if got := ggui.Peek(m.Scope).scopeKey; got != makoScope {
+		t.Fatalf("after showTab(makoDiff): scope = %+v, want %+v", got, makoScope)
+	}
+
+	// Focusing another split pane moves the sidebar active project to that pane's active tab.
+	m.splitTab(gguiSession, ggui.Peek(m.FocusGroup), dropRight)
+	if got := ggui.Peek(m.Scope).scopeKey; got != gguiScope {
+		t.Fatalf("after splitTab(ggui): scope = %+v, want %+v", got, gguiScope)
+	}
+	pane1 := ggui.Peek(m.Layout).groupOf(makoDiff).ID
+	m.focusGroup(pane1)
+	if got := ggui.Peek(m.Scope).scopeKey; got != makoScope {
+		t.Fatalf("after focusGroup(pane1): scope = %+v, want %+v", got, makoScope)
+	}
+
+	// Closing the active tab follows the newly active neighboring tab.
+	m.showTab(gguiSession)
+	m.closeTab(gguiSession)
+	if got := ggui.Peek(m.Scope).scopeKey; got != makoScope {
+		t.Fatalf("after closeTab(ggui): scope = %+v, want %+v", got, makoScope)
+	}
+
+	// Explicit parent-project click in the sidebar is preserved (no bounce-back to sub-project)
+	// and background syncScopeToTab(..., false) does not undo it.
+	parentScope := scopeKey{Section: "xxgg"}
+	m.setScope(parentScope)
+	if got := ggui.Peek(m.Scope).scopeKey; got != parentScope {
+		t.Fatalf("after setScope(parent): scope = %+v, want %+v", got, parentScope)
+	}
+	m.syncScopeToTab(ggui.Peek(m.Selected), false)
+	if got := ggui.Peek(m.Scope).scopeKey; got != parentScope {
+		t.Fatalf("background sync overrode explicit parent scope: got %+v, want %+v", got, parentScope)
+	}
+
+	// Explicit unscope via pickScope is preserved until the user selects a tab again.
+	m.pickScope(parentScope)
+	if got := ggui.Peek(m.Scope).scopeKey; got != (scopeKey{}) {
+		t.Fatalf("after unscope pickScope: scope = %+v, want zero", got)
+	}
+	m.syncScopeToTab(ggui.Peek(m.Selected), false)
+	if got := ggui.Peek(m.Scope).scopeKey; got != (scopeKey{}) {
+		t.Fatalf("background sync overrode explicit unscope: got %+v, want zero", got)
+	}
+	m.showTab(acpDoc)
+	if got := ggui.Peek(m.Scope).scopeKey; got != acpScope {
+		t.Fatalf("explicit tab select after unscope: scope = %+v, want %+v", got, acpScope)
+	}
+}

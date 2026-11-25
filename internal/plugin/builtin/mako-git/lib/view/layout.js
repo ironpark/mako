@@ -43,6 +43,7 @@ export function renderLayout(s, ui, ctx) {
     rootChildren.push(ui.scroll([renderChangesBody(s, ui, ctx)], {
       key: "non-repo-scroll",
       grow: 1,
+      gap: 0,
     }));
   } else {
     const sections = [

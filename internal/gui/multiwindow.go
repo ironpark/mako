@@ -386,10 +386,10 @@ func (m *model) openNewInKey(key string, groupID int, nodeID, project string) *l
 		m.focusGroup(groupID)
 		return m.openNew(nodeID, project)
 	}
-	f := newSession{Agent: cmp.Or(m.lastAgent, ggui.Peek(m.Prefs).DefaultAgent), NodeID: nodeID, Project: project}
-	if f.NodeID == "" {
-		f.NodeID = ggui.Peek(m.Conn).Self.GetId()
+	if nodeID == "" {
+		nodeID = ggui.Peek(m.Conn).Self.GetId()
 	}
+	f := newSession{Agent: m.defaultSessionAgent(nodeID), NodeID: nodeID, Project: project}
 	if f.Project == "" {
 		f.Project = m.launchProject(f.NodeID)
 	}
@@ -896,6 +896,20 @@ func (m *model) spaceWindowActivateScopedSession(sw *spaceWindowState, k scopeKe
 	}
 }
 
+func (m *model) syncSpaceWindowScope(sw *spaceWindowState, tabID string) {
+	if sw == nil || tabID == "" {
+		return
+	}
+	p := m.spacesNow()
+	idx := spaceIndex(p.Spaces, sw.spaceID)
+	if idx < 0 {
+		return
+	}
+	if k, ok := m.tabScope(tabID, idx+1); ok && ggui.Peek(sw.scope) != k {
+		sw.scope.Set(k)
+	}
+}
+
 func (m *model) spaceWindowSelectSession(sw *spaceWindowState, id string) {
 	if id == "" {
 		return
@@ -905,16 +919,11 @@ func (m *model) spaceWindowSelectSession(sw *spaceWindowState, id string) {
 		ctx := projectContext(sec)
 		sw.context.Set(ctx)
 		m.ws.contexts[sw.spaceID] = ctx
-		cur := ggui.Peek(sw.scope)
-		if cur.Section != "" {
-			if in := sessionScope(m.projectsNow(), s); !cur.holds(in) {
-				sw.scope.Set(scopeKey{Section: in.Section})
-			}
-		}
 	}
 	key := sw.peekLayoutKey()
 	focus := m.activateTabInKey(key, ggui.Peek(sw.focusGroup), id)
 	sw.focusGroup.Set(focus)
+	m.syncSpaceWindowScope(sw, id)
 }
 
 func (m *model) spaceWindowActiveTab(sw *spaceWindowState) string {
@@ -1334,6 +1343,11 @@ func keyedPaneView(m *model, key string, id int, focusGroup *ggui.StateValue[int
 		if focusGroup != nil {
 			focusGroup.Set(id)
 		}
+		if sw := m.spaceWindows[keySpace(key)]; sw != nil {
+			if g := m.peekLayoutForKey(key).group(id); g != nil && g.Active != "" {
+				m.syncSpaceWindowScope(sw, g.Active)
+			}
+		}
 	})
 }
 
@@ -1390,6 +1404,9 @@ func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup]
 				f := m.activateTabInKey(key, id, tid)
 				if focusGroup != nil {
 					focusGroup.Set(f)
+				}
+				if sw := m.spaceWindows[keySpace(key)]; sw != nil {
+					m.syncSpaceWindowScope(sw, tid)
 				}
 			}).Icon(glyph).MaxLabelWidth(168).Selected(selected).Current(focused).
 				OnClose(func() { m.closeTabInKey(key, tid) }).CloseName(Tf("Close %s", label))

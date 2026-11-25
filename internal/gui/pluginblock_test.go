@@ -9,6 +9,10 @@ import (
 	"time"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/inspect"
+	"github.com/ironpark/ggui/ui/icons"
+	uitheme "github.com/ironpark/ggui/ui/theme"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/i18n"
@@ -1053,5 +1057,277 @@ func TestListTappableRowAvoidsCloningAndKeepsChildInteractive(t *testing.T) {
 	_ = v.nodeWith(rowChild, false, true)
 	if !rowChild.Tap || rowChild.Drag != "drag-row1" || !rowChild.Drop {
 		t.Fatal("nodeWith(..., bare=true) mutated input node")
+	}
+}
+
+// Regression test: git plugin section headers (with and without count badges),
+// forge bar buttons, branch list rows, and commit-detail file rows must align
+// cleanly along shared left/right axes without badge-induced horizontal shifts
+// or unintended centering.
+func TestGitPluginLayoutAlignment(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	i18n.Set("en")
+
+	tree := &protocol.UiNode{
+		Id:   "/root",
+		Kind: "column",
+		Fill: true,
+		Children: []*protocol.UiNode{
+			// Forge bar wrapped in ghost card padding (matching mako-git lines.js).
+			{
+				Id:   "/root/forge-line",
+				Kind: "column",
+				Children: []*protocol.UiNode{
+					{
+						Id:      "/root/forge-line/forge-pad",
+						Kind:    "card",
+						Variant: "ghost",
+						Children: []*protocol.UiNode{
+							{
+								Id:   "/root/forge-line/forge-pad/forge-row",
+								Kind: "row",
+								Gap:  4,
+								Children: []*protocol.UiNode{
+									{
+										Id: "/root/forge-line/forge-pad/forge-row/forge-create-pr", Kind: "button",
+										Text: "Create pull request", Icon: "git-pull-request", Variant: "ghost", Size: "small", Grow: 1, Tap: true,
+									},
+									{
+										Id: "/root/forge-line/forge-pad/forge-row/forge-runs", Kind: "button",
+										Text: "Passed", Icon: "circle-check", Tone: "success", Variant: "ghost", Size: "small", Tap: true,
+									},
+								},
+							},
+						},
+					},
+					{Id: "/root/forge-line/forge-div", Kind: "divider"},
+				},
+			},
+			// Worktree sections wrapped in ghost card padding (matching mako-git layout.js).
+			{
+				Id:   "/root/worktree-scroll",
+				Kind: "scroll",
+				Grow: 1,
+				Children: []*protocol.UiNode{
+					{
+						Id:      "/root/worktree-scroll/worktree-inner",
+						Kind:    "card",
+						Variant: "ghost",
+						Gap:     4,
+						Children: []*protocol.UiNode{
+							// Changes section (count=3 -> has soft badge)
+							{
+								Id: "/root/worktree-scroll/worktree-inner/sec-changes-head", Kind: "row", Gap: 2,
+								Children: []*protocol.UiNode{
+									{
+										Id: "/root/worktree-scroll/worktree-inner/sec-changes-head/sec-changes-toggle", Kind: "button",
+										Text: "Changes", Icon: "chevron-down", Variant: "ghost", Size: "small", Weight: "semibold", Tone: "muted", Grow: 1, Tap: true,
+										Badges: []*protocol.UiBadge{{Text: "3", Tone: "faint", Variant: "soft"}},
+									},
+								},
+							},
+							// Stashes section (count=0 -> NO badge)
+							{
+								Id: "/root/worktree-scroll/worktree-inner/sec-stashes-head", Kind: "row", Gap: 2,
+								Children: []*protocol.UiNode{
+									{
+										Id: "/root/worktree-scroll/worktree-inner/sec-stashes-head/sec-stashes-toggle", Kind: "button",
+										Text: "Stashes", Icon: "chevron-right", Variant: "ghost", Size: "small", Weight: "semibold", Tone: "muted", Grow: 1, Tap: true,
+									},
+									{
+										Id: "/root/worktree-scroll/worktree-inner/sec-stashes-head/stashes-add", Kind: "button",
+										Icon: "plus", Variant: "ghost", Size: "small", Placeholder: "Stash changes…", Tap: true,
+									},
+								},
+							},
+							// Branches section (count=1 -> has soft badge + expanded rows)
+							{
+								Id: "/root/worktree-scroll/worktree-inner/branches-section", Kind: "column", Gap: 2,
+								Children: []*protocol.UiNode{
+									{
+										Id: "/root/worktree-scroll/worktree-inner/branches-section/sec-branches-head", Kind: "row", Gap: 2,
+										Children: []*protocol.UiNode{
+											{
+												Id: "/root/worktree-scroll/worktree-inner/branches-section/sec-branches-head/sec-branches-toggle", Kind: "button",
+												Text: "Branches", Icon: "chevron-down", Variant: "ghost", Size: "small", Weight: "semibold", Tone: "muted", Grow: 1, Tap: true,
+												Badges: []*protocol.UiBadge{{Text: "1", Tone: "faint", Variant: "soft"}},
+											},
+											{
+												Id: "/root/worktree-scroll/worktree-inner/branches-section/sec-branches-head/branches-add", Kind: "button",
+												Icon: "plus", Variant: "ghost", Size: "small", Placeholder: "New branch…", Tap: true,
+											},
+										},
+									},
+									{
+										Id: "/root/worktree-scroll/worktree-inner/branches-section/branches-list", Kind: "column", Gap: 1,
+										Children: []*protocol.UiNode{
+											{
+												Id: "/root/worktree-scroll/worktree-inner/branches-section/branches-list/bl-main", Kind: "button",
+												Text: "main", Icon: "check", Tone: "accent", Weight: "medium", Variant: "ghost", Size: "small", Tap: true,
+											},
+											{
+												Id: "/root/worktree-scroll/worktree-inner/branches-section/branches-list/cf-file", Kind: "button",
+												Text: "feature.go", Icon: "square-plus", Tone: "success", Variant: "ghost", Size: "small", Tap: true,
+												Badges: []*protocol.UiBadge{
+													{Text: "+5", Tone: "success", Variant: "mono"},
+													{Text: "-2", Tone: "danger", Variant: "mono"},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			// History folded footer header wrapped in matching ghost card padding.
+			{Id: "/root/hist-div", Kind: "divider"},
+			{
+				Id: "/root/hist-head-pad", Kind: "card", Variant: "ghost",
+				Children: []*protocol.UiNode{
+					{
+						Id: "/root/hist-head-pad/sec-history-head", Kind: "row", Gap: 2,
+						Children: []*protocol.UiNode{
+							{
+								Id: "/root/hist-head-pad/sec-history-head/sec-history-toggle", Kind: "button",
+								Text: "History", Icon: "chevron-right", Variant: "ghost", Size: "small", Weight: "semibold", Tone: "muted", Grow: 1, Tap: true,
+							},
+							{
+								Id: "/root/hist-head-pad/sec-history-head/hist-refresh", Kind: "button",
+								Icon: "refresh-cw", Variant: "ghost", Size: "small", Placeholder: "Refresh", Tap: true,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, width := range []float64{340, 560} {
+		form := newBlockForm()
+		var inspected []inspect.Node
+		p := ggui.ProbeBuilder(func() ggui.Widget {
+			form.redraw()
+			v := &treeView{block: gitPluginBlock, form: form}
+			return uitheme.With(skin.Theme(skin.Dark), widget.Box(v.node(tree, false)).Fill(skin.Surface0))
+		}, ggui.Sz(width, 500))
+		p.OnInspect(func(f *inspect.Frame) {
+			f.DescribeAll()
+			inspected = append([]inspect.Node(nil), f.Nodes...)
+		})
+		for range 3 {
+			p.Frame()
+		}
+
+		findPaintedText := func(label string) inspect.Rect {
+			t.Helper()
+			for _, nd := range inspected {
+				if nd.Name == "Text" && nd.Label == label {
+					return nd.Rect
+				}
+			}
+			t.Fatalf("width=%.0f: missing painted Text %q", width, label)
+			return inspect.Rect{}
+		}
+		findPaintedIconIn := func(container ggui.Rect) inspect.Rect {
+			t.Helper()
+			for _, nd := range inspected {
+				if _, ok := nd.Instance.(*icons.Widget); ok &&
+					nd.Rect.Origin.X >= container.Origin.X-0.5 &&
+					nd.Rect.Origin.Y >= container.Origin.Y-0.5 &&
+					nd.Rect.Origin.X+nd.Rect.Size.W <= container.Origin.X+container.Size.W+0.5 &&
+					nd.Rect.Origin.Y+nd.Rect.Size.H <= container.Origin.Y+container.Size.H+0.5 {
+					return nd.Rect
+				}
+			}
+			t.Fatalf("width=%.0f: missing painted icon inside %v", width, container)
+			return inspect.Rect{}
+		}
+		findBtn := func(label string) ggui.Rect {
+			t.Helper()
+			nd, ok := p.Semantics().Find(ggui.RoleButton, label)
+			if !ok {
+				t.Fatalf("width=%.0f: missing button %q:\n%s", width, label, p.Semantics().String())
+			}
+			return nd.Rect
+		}
+
+		// 1. All section headers (with and without badges, including History) share identical
+		// button X, button height, chevron icon X, and label text X.
+		changesBtn := findBtn("Changes")
+		stashesBtn := findBtn("Stashes")
+		branchesBtn := findBtn("Branches")
+		historyBtn := findBtn("History")
+		changesIcon := findPaintedIconIn(changesBtn)
+		changesLbl := findPaintedText("Changes")
+		for name, btn := range map[string]ggui.Rect{"Stashes": stashesBtn, "Branches": branchesBtn, "History": historyBtn} {
+			if diff := math.Abs(btn.Origin.X - changesBtn.Origin.X); diff > 0.1 {
+				t.Fatalf("width=%.0f: %s button X=%.2f != Changes button X=%.2f", width, name, btn.Origin.X, changesBtn.Origin.X)
+			}
+			if diff := math.Abs(btn.Size.H - changesBtn.Size.H); diff > 0.5 {
+				t.Fatalf("width=%.0f: %s button H=%.2f != Changes button H=%.2f", width, name, btn.Size.H, changesBtn.Size.H)
+			}
+			ic := findPaintedIconIn(btn)
+			if diff := math.Abs(ic.Origin.X - changesIcon.Origin.X); diff > 0.1 {
+				t.Fatalf("width=%.0f: %s chevron X=%.2f != Changes chevron X=%.2f", width, name, ic.Origin.X, changesIcon.Origin.X)
+			}
+			lbl := findPaintedText(name)
+			if diff := math.Abs(lbl.Origin.X - changesLbl.Origin.X); diff > 0.1 {
+				t.Fatalf("width=%.0f: %s text X=%.2f != Changes text X=%.2f", width, name, lbl.Origin.X, changesLbl.Origin.X)
+			}
+		}
+
+		// 2. Forge "Create pull request" is left-aligned (not centered) and "Passed" has right inset.
+		createPRBtn := findBtn("Create pull request")
+		createPRIcon := findPaintedIconIn(createPRBtn)
+		createPRLbl := findPaintedText("Create pull request")
+		if diff := math.Abs(createPRIcon.Origin.X - changesIcon.Origin.X); diff > 0.1 {
+			t.Fatalf("width=%.0f: Create pull request icon X=%.2f != Changes chevron X=%.2f (centered?)", width, createPRIcon.Origin.X, changesIcon.Origin.X)
+		}
+		if diff := math.Abs(createPRLbl.Origin.X - changesLbl.Origin.X); diff > 0.1 {
+			t.Fatalf("width=%.0f: Create pull request text X=%.2f != Changes text X=%.2f", width, createPRLbl.Origin.X, changesLbl.Origin.X)
+		}
+		passedBtn := findBtn("Passed")
+		if rightMargin := width - (passedBtn.Origin.X + passedBtn.Size.W); rightMargin < 8 {
+			t.Fatalf("width=%.0f: Passed button touches right edge (margin=%.1f, rect=%v)", width, rightMargin, passedBtn)
+		}
+
+		// 3. Branch list rows and commit-detail file rows are left-aligned, with mono diff badges right-aligned.
+		mainBtn := findBtn("main")
+		mainIcon := findPaintedIconIn(mainBtn)
+		mainLbl := findPaintedText("main")
+		if diff := math.Abs(mainIcon.Origin.X - changesIcon.Origin.X); diff > 0.1 {
+			t.Fatalf("width=%.0f: branch 'main' icon X=%.2f != Changes chevron X=%.2f (centered?)", width, mainIcon.Origin.X, changesIcon.Origin.X)
+		}
+		if diff := math.Abs(mainLbl.Origin.X - changesLbl.Origin.X); diff > 0.1 {
+			t.Fatalf("width=%.0f: branch 'main' text X=%.2f != Changes text X=%.2f", width, mainLbl.Origin.X, changesLbl.Origin.X)
+		}
+		fileBtn := findBtn("feature.go")
+		fileIcon := findPaintedIconIn(fileBtn)
+		fileLbl := findPaintedText("feature.go")
+		if diff := math.Abs(fileIcon.Origin.X - changesIcon.Origin.X); diff > 0.1 {
+			t.Fatalf("width=%.0f: commit file 'feature.go' icon X=%.2f != Changes chevron X=%.2f", width, fileIcon.Origin.X, changesIcon.Origin.X)
+		}
+		if diff := math.Abs(fileLbl.Origin.X - changesLbl.Origin.X); diff > 0.1 {
+			t.Fatalf("width=%.0f: commit file 'feature.go' text X=%.2f != Changes text X=%.2f", width, fileLbl.Origin.X, changesLbl.Origin.X)
+		}
+		minusLbl := findPaintedText("-2")
+		if minusLbl.Origin.X < width-50 {
+			t.Fatalf("width=%.0f: commit file mono diff badge '-2' not right-aligned (rect=%v)", width, minusLbl)
+		}
+
+		// 4. Right-side action buttons align along the same right edge.
+		stashAdd := findBtn("Stash changes…")
+		branchAdd := findBtn("New branch…")
+		histRef := findBtn("Refresh")
+		rightEdge := func(r ggui.Rect) float64 { return r.Origin.X + r.Size.W }
+		for name, r := range map[string]ggui.Rect{"New branch…": branchAdd, "Refresh": histRef, "Passed": passedBtn} {
+			if diff := math.Abs(rightEdge(r) - rightEdge(stashAdd)); diff > 0.5 {
+				t.Fatalf("width=%.0f: %s right edge=%.2f != Stash + right edge=%.2f", width, name, rightEdge(r), rightEdge(stashAdd))
+			}
+		}
+
+		p.Close()
 	}
 }

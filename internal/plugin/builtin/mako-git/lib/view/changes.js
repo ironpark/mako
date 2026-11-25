@@ -24,13 +24,14 @@ export function renderSectionHeader(ui, { key, title, count, open, toggleSection
     size: "small",
     weight: "semibold",
     tone: "muted",
+    grow: 1,
     placeholder: toggleName,
     onTap: ["toggleSection", toggleSection],
   });
   if (count > 0) {
     btn.badges([{ text: lineCount(count), tone: "faint", variant: "soft" }]);
   }
-  const kids = [btn, ui.text("", { key: `${key}-spacer`, grow: 1 })];
+  const kids = [btn];
   if (action) kids.push(action);
   return ui.row(kids, { key: `${key}-head`, gap: 2 });
 }
@@ -130,16 +131,24 @@ export function renderChangesBody(s, ui, ctx) {
   const files = (st && st.files) || [];
 
   if (st && st.notRepo) {
-    return ui.text(t("Not a git repository."), { key: "changes-not-repo", size: "small", tone: "muted" });
+    return ui.card([
+      ui.text(t("Not a git repository."), { key: "changes-not-repo", size: "small", tone: "muted" }),
+    ], { key: "changes-not-repo-pad", variant: "ghost", gap: 0 });
   }
   if (s.statusErr && files.length === 0) {
-    return ui.text(sanitizeText(s.statusErr), { key: "changes-err", size: "small", tone: "danger" });
+    return ui.card([
+      ui.text(sanitizeText(s.statusErr), { key: "changes-err", size: "small", tone: "danger" }),
+    ], { key: "changes-err-pad", variant: "ghost", gap: 0 });
   }
   if (!st) {
-    return ui.progress(0, { key: "changes-loading", variant: "spinner", text: t("Loading…") });
+    return ui.card([
+      ui.progress(0, { key: "changes-loading", variant: "spinner", text: t("Loading…") }),
+    ], { key: "changes-loading-pad", variant: "ghost", gap: 0 });
   }
   if (files.length === 0) {
-    return ui.text(t("No changes."), { key: "changes-empty", size: "small", tone: "muted" });
+    return ui.card([
+      ui.text(t("No changes."), { key: "changes-empty", size: "small", tone: "muted" }),
+    ], { key: "changes-empty-pad", variant: "ghost", gap: 0 });
   }
 
   const roots = buildGitTree(files);

@@ -280,12 +280,19 @@ func (v *treeView) send(id, kind, value string) {
 // node draws a node of the tree; inLine says it is a row's child, where
 // text keeps to a line.
 func (v *treeView) node(n *protocol.UiNode, inLine bool) ggui.Widget {
-	return v.nodeWith(n, inLine, false)
+	return v.nodeLayout(n, inLine, false, false)
 }
 
 // nodeWith draws n; bare suppresses outer Tap/Drag/Drop/ContextMenu on n itself
 // (for a tappable list row's inner content) while keeping descendants interactive.
 func (v *treeView) nodeWith(n *protocol.UiNode, inLine, bare bool) ggui.Widget {
+	return v.nodeLayout(n, inLine, bare, false)
+}
+
+// nodeLayout draws n with optional bare and fullWidth hints. fullWidth is true
+// when the parent stretches or expands n horizontally (such as a column child
+// or a row child with grow > 0), allowing ghost buttons to left-align cleanly.
+func (v *treeView) nodeLayout(n *protocol.UiNode, inLine, bare, fullWidth bool) ggui.Widget {
 	if n == nil {
 		return widget.Box()
 	}
@@ -353,7 +360,7 @@ func (v *treeView) nodeWith(n *protocol.UiNode, inLine, bare bool) ggui.Widget {
 		}
 		out = v.maybeDragDrop(w, n, bare)
 	case "button":
-		out = v.buttonNode(n, tap, bare)
+		out = v.buttonNode(n, tap, bare, fullWidth)
 	case "input":
 		id := n.GetId()
 		ph := cmpTone(n.GetPlaceholder(), n.GetText())
@@ -708,47 +715,156 @@ func shadeColor(c color.Color, factor float64) color.Color {
 	return color.NRGBA{R: scale(n.R), G: scale(n.G), B: scale(n.B), A: n.A}
 }
 
-// buttonNode renders a plugin button respecting variant, size, tone, icon,
-// badges, and icon-only layouts.
-func (v *treeView) buttonNode(n *protocol.UiNode, tap func(), bare bool) ggui.Widget {
+// leftFill aligns child to the left edge while filling all bounded width so
+// stretched or expanded ghost buttons do not center their labels.
+type leftFill struct {
+	child ggui.Widget
+	size  ggui.Size
+}
+
+func (l *leftFill) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	l.size = l.child.Layout(c.Loosen(), env)
+	w := l.size.W
+	if !math.IsInf(c.MaxW, 0) && c.MaxW > w {
+		w = c.MaxW
+	}
+	return c.Constrain(ggui.Sz(w, l.size.H))
+}
+
+func (l *leftFill) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	y := r.Origin.Y + (r.Size.H-l.size.H)/2
+	dst.Paint(l.child, ggui.Rct(ggui.Pt(r.Origin.X, y), l.size))
+}
+
+// buttonNode renders a plugin button respecting variant, size, tone, weight,
+// icon, badges, icon-only layouts, and left alignment when stretched/expanded.
+func (v *treeView) buttonNode(n *protocol.UiNode, tap func(), bare, fullWidth bool) ggui.Widget {
 	text := n.GetText()
 	iconName := n.GetIcon()
 	badges := n.GetBadges()
+	variant := n.GetVariant()
+	size := n.GetSize()
+	tone := n.GetTone()
+	weight := n.GetWeight()
 	var b *ui.ButtonWidget
 	iconOnly := text == "" && iconName != "" && len(badges) == 0
+
+	// Use one unified custom-content path for all non-icon-only ghost buttons
+	// (so buttons with and without badges share identical padding, icon sizing,
+	// text sizing, colors, and left alignment when stretched) as well as any
+	// button carrying badges or explicit font weight.
+	useCustom := !iconOnly && (variant == "ghost" || len(badges) > 0 || weight != "")
+
 	switch {
-	case len(badges) > 0:
+	case iconOnly:
+		if variant == "ghost" {
+			iconSz, pad, rad := 15.0, 6.0, 6.0
+			switch size {
+			case "small":
+				iconSz, pad = 14.0, 5.0
+			case "large":
+				iconSz, pad, rad = 16.0, 8.0, 8.0
+			}
+			iconCol := toneColor(cmpTone(tone, "muted"))
+			b = ui.ButtonOf(pluginIcon(iconName).Size(iconSz).Color(iconCol), tap).Pad(pad).Radius(rad)
+		} else {
+			b = ui.ButtonOf(widget.Box(), tap).Icon(pluginIcon(iconName))
+			switch size {
+			case "small":
+				b = b.Size(ui.ButtonIconSmall)
+			case "large":
+				b = b.Size(ui.ButtonIconLarge)
+			default:
+				b = b.Size(ui.ButtonIcon)
+			}
+		}
+	case useCustom:
+		iconSz := 14.0
+		gap := 6.0
+		switch size {
+		case "small":
+			iconSz = 13.0
+			gap = 5.0
+		case "large":
+			iconSz = 16.0
+			gap = 6.0
+		}
+		var iconCol, txtCol color.Color
+		switch {
+		case variant == "primary" || (variant == "" && tone == "accent"):
+			iconCol, txtCol = uitheme.PrimaryFg, uitheme.PrimaryFg
+		case variant == "danger" || (variant == "" && tone == "danger"):
+			_, fg := solidToneColors("danger")
+			iconCol, txtCol = fg, fg
+		default:
+			if iconName != "" {
+				iconCol = toneColor(cmpTone(tone, "muted"))
+				switch tone {
+				case "muted", "faint", "accent":
+					txtCol = toneColor(tone)
+				case "danger":
+					if len(badges) > 0 {
+						txtCol = skin.Fg
+					} else {
+						txtCol = skin.DiffRemoved
+					}
+				default:
+					txtCol = skin.Fg
+				}
+			} else {
+				txtCol = toneColor(tone)
+			}
+		}
+
+		leftAlign := fullWidth && variant == "ghost"
+		allMono := len(badges) > 0 && !slices.ContainsFunc(badges, func(bg *protocol.UiBadge) bool {
+			return bg.GetVariant() != "mono"
+		})
 		var parts []ggui.Widget
 		if iconName != "" {
-			parts = append(parts, pluginIcon(iconName).Size(14).Color(toneColor(cmpTone(n.GetTone(), ""))))
+			parts = append(parts, pluginIcon(iconName).Size(iconSz).Color(iconCol))
 		}
 		if text != "" {
-			parts = append(parts, widget.Text(text).Size(textSize(n.GetSize())).NoWrap().Ellipsis())
+			lbl := widget.Text(text).Size(textSize(size)).Weight(textWeight(weight)).Color(txtCol).NoWrap().Ellipsis()
+			switch {
+			case leftAlign && allMono:
+				parts = append(parts, widget.Expanded(lbl))
+			case leftAlign:
+				parts = append(parts, widget.Flexible(lbl))
+			default:
+				parts = append(parts, lbl)
+			}
 		}
-		parts = append(parts, renderBadges(badges)...)
-		b = ui.ButtonOf(widget.Row(parts...).Gap(4).Align(widget.AlignCenter), tap)
-		switch n.GetSize() {
+		if len(badges) > 0 {
+			parts = append(parts, renderBadges(badges)...)
+		}
+		var content ggui.Widget = widget.Row(parts...).Gap(gap).Align(widget.AlignCenter)
+		if leftAlign && !allMono {
+			content = &leftFill{child: content}
+		}
+		b = ui.ButtonOf(content, tap)
+		switch size {
 		case "small":
 			b = b.Size(ui.ButtonSmall)
 		case "large":
 			b = b.Size(ui.ButtonLarge)
 		}
-	case iconOnly:
-		b = ui.ButtonOf(widget.Box(), tap).Icon(pluginIcon(iconName))
-		switch n.GetSize() {
-		case "small":
-			b = b.Size(ui.ButtonIconSmall)
-		case "large":
-			b = b.Size(ui.ButtonIconLarge)
-		default:
-			b = b.Size(ui.ButtonIcon)
+		if variant == "ghost" {
+			switch size {
+			case "small":
+				b = b.Pad(4, 6).Radius(6)
+			case "large":
+				b = b.Pad(8, 12).Radius(8)
+			default:
+				b = b.Pad(6, 8).Radius(6)
+			}
 		}
 	default:
 		b = ui.Button(text, tap)
 		if iconName != "" {
 			b = b.Icon(pluginIcon(iconName))
 		}
-		switch n.GetSize() {
+		switch size {
 		case "small":
 			b = b.Size(ui.ButtonSmall)
 		case "large":
@@ -756,7 +872,7 @@ func (v *treeView) buttonNode(n *protocol.UiNode, tap func(), bare bool) ggui.Wi
 		}
 	}
 
-	switch n.GetVariant() {
+	switch variant {
 	case "primary":
 		// ui.Button defaults to ButtonPrimary.
 	case "secondary":
@@ -768,7 +884,7 @@ func (v *treeView) buttonNode(n *protocol.UiNode, tap func(), bare bool) ggui.Wi
 	case "danger":
 		b = b.Variant(pluginDangerButton)
 	default:
-		switch n.GetTone() {
+		switch tone {
 		case "accent":
 		case "danger":
 			b = b.Variant(pluginDangerButton)
@@ -982,7 +1098,7 @@ func (v *treeView) dialogNode(n *protocol.UiNode) ggui.Widget {
 		if c.GetKind() == "menu" && c.GetVariant() == "context" {
 			continue
 		}
-		w := v.node(c, false)
+		w := v.nodeLayout(c, false, false, true)
 		switch g := c.GetGrow(); {
 		case g == 1:
 			w = widget.Expanded(w)
@@ -1063,7 +1179,7 @@ func (v *treeView) collapsibleNode(n *protocol.UiNode, bare bool) ggui.Widget {
 			dialogs = append(dialogs, v.dialogNode(c))
 			continue
 		}
-		w := v.node(c, false)
+		w := v.nodeLayout(c, false, false, true)
 		switch g := c.GetGrow(); {
 		case g == 1:
 			w = widget.Expanded(w)
@@ -1331,7 +1447,7 @@ func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 			rowKids := make([]ggui.Widget, 0, cols)
 			for j := range cols {
 				if i+j < len(children) {
-					rowKids = append(rowKids, widget.Expanded(v.node(children[i+j], false)))
+					rowKids = append(rowKids, widget.Expanded(v.nodeLayout(children[i+j], false, false, true)))
 				} else {
 					rowKids = append(rowKids, widget.Expanded(widget.Box()))
 				}
@@ -1404,6 +1520,7 @@ func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 			}
 		}
 	}
+	stretchChildren := kind == "column" || kind == "card" || kind == "list" || (kind == "scroll" && n.GetDirection() != "horizontal")
 	kids := make([]ggui.Widget, 0, len(n.GetChildren()))
 	var dialogs []ggui.Widget
 	for _, c := range n.GetChildren() {
@@ -1417,12 +1534,13 @@ func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 		var w ggui.Widget
 		if kind == "list" && c.GetTap() {
 			id := c.GetId()
-			inner := appendBadges(v.nodeWith(c, false, true), c.GetBadges())
+			inner := appendBadges(v.nodeLayout(c, false, true, true), c.GetBadges())
 			w = listRow(inner, strings.Join(texts(c), " "), func() { v.send(id, protocol.UiTap, "") })
 			w = v.dragDrop(w, c)
 			w = v.withContextMenu(w, c, "", "")
 		} else {
-			w = v.node(c, row)
+			fullWidth := stretchChildren || (row && c.GetGrow() > 0)
+			w = v.nodeLayout(c, row, false, fullWidth)
 		}
 		switch g := c.GetGrow(); {
 		case g == 1:
@@ -1477,7 +1595,7 @@ func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 		var out ggui.Widget
 		switch n.GetVariant() {
 		case "ghost":
-			out = widget.Box(inner).Radius(8).Pad(8, 10)
+			out = widget.Box(inner).Radius(8).Pad(6, 10)
 		case "outline":
 			out = widget.Box(inner).Border(1, border).Radius(8).Pad(8, 10)
 		case "secondary":

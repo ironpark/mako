@@ -149,3 +149,56 @@ func TestNewSessionPrefersLocalWhenAvailable(t *testing.T) {
 		t.Fatalf("explicit remote openNew: got (%q, %q), want (\"box\", \"/srv/shared\")", got.NodeID, got.Project)
 	}
 }
+
+func TestNewSessionExcludesShellOption(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+
+	got := sessionAgentTargets([]string{"shell", "shell:login", "claude", "claude:opus", "codex"})
+	want := []string{"claude", "claude:opus", "codex"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("sessionAgentTargets = %v, want %v", got, want)
+	}
+
+	m := newModel(config.Default(), "")
+	self := &protocol.Node{
+		Id: "studio", Name: "MacStudio", Source: "self",
+		Agents: []*protocol.AgentInfo{
+			{Name: "shell"},
+			{Name: "claude", Profiles: []string{"opus"}},
+			{Name: "codex"},
+		},
+	}
+	m.Conn.Set(connState{OK: true, Self: self})
+	m.Nodes.Set([]*protocol.Node{self})
+	m.Agents.Set([]string{"shell", "claude", "claude:opus", "codex"})
+
+	// Even if prefs or lastAgent held "shell", openNew chooses a non-shell agent.
+	m.lastAgent = "shell"
+	m.Prefs.Update(func(p prefs) prefs { p.DefaultAgent = "shell"; return p })
+	l := m.openNew("studio", "/work/a")
+	if agent := ggui.Peek(l.Form).Agent; agent == "shell" || agent == "" {
+		t.Fatalf("openNew picked %q when shell was default/lastAgent", agent)
+	}
+
+	// The new-session tab's Agent selector omits shell while keeping AI agents.
+	tabID := ggui.Peek(m.Selected)
+	p := ggui.ProbeBuilder(func() ggui.Widget { return launchBox(m, tabID, l) }, ggui.Sz(720, 320))
+	defer p.Close()
+	p.Frame()
+	sel, ok := p.Semantics().Find(ggui.RoleSelect, T("Agent"))
+	if !ok {
+		t.Fatalf("missing Agent selector:\n%s", p.Semantics().String())
+	}
+	p.Click(sel.Rect.Origin.Add(ggui.Pt(sel.Rect.Size.W/2, sel.Rect.Size.H/2)))
+	p.Frame()
+	p.Frame()
+	if _, hasShell := p.Semantics().Find(ggui.RoleOption, "shell"); hasShell {
+		t.Fatalf("new-session Agent selector unexpectedly offered shell:\n%s", p.Semantics().String())
+	}
+	if _, hasClaude := p.Semantics().Find(ggui.RoleOption, "claude"); !hasClaude {
+		t.Fatalf("new-session Agent selector missing claude:\n%s", p.Semantics().String())
+	}
+	if _, hasCodex := p.Semantics().Find(ggui.RoleOption, "codex"); !hasCodex {
+		t.Fatalf("new-session Agent selector missing codex:\n%s", p.Semantics().String())
+	}
+}

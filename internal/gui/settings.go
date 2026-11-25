@@ -2,6 +2,7 @@ package gui
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/ironpark/ggui"
@@ -319,10 +320,11 @@ func generalSettings(m *model) ggui.Widget {
 				widget.Box(language).Width(200)),
 		),
 	)
+	defaultAgents := ggui.Map(m.Agents, sessionAgentTargets).WithEqual(slices.Equal)
 	sessionsSection := section(T("Sessions"),
 		card(
 			row(T("Default agent"), T("Chosen first in the new-session dialog."),
-				widget.Box(ui.Select(agent).BindOptions(m.Agents).Format(targetLabel).Name(T("Default agent"))).Width(200)),
+				widget.Box(ui.Select(agent).BindOptions(defaultAgents).Format(targetLabel).Name(T("Default agent"))).Width(200)),
 			row(T("Open agents in"), T("What a session's tab shows until you switch it. Chat is for agents whose conversation mako reads; the others open in their terminals."),
 				ui.ToggleGroup(prefField(m, func(p *prefs) *string { return &p.OpenView })).Options([]string{openTerminal, openChat}).
 					Format(func(s string) string { return T(openViewLabels[s]) }).Name(T("Open agents in"))),

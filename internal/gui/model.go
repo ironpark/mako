@@ -1,7 +1,6 @@
 package gui
 
 import (
-	"cmp"
 	"context"
 	"maps"
 	"os"
@@ -207,7 +206,10 @@ type model struct {
 	SidebarSplit *ggui.StateValue[float64] // the sidebar's projects' height, as SidebarWidth
 	// Scope is the project, or folder of one, picked in the sidebar for
 	// the agents it lists; see sidebartree.go.
-	Scope *ggui.StateValue[sidebarScope]
+	Scope         *ggui.StateValue[sidebarScope]
+	pickingScope  bool             // true inside setScope so syncing tabs to a sidebar pick doesn't bounce back
+	lastScopeSync scopeSync        // last (space, tab) synced to Scope
+	revealedScope map[int]scopeKey // last scope each space's project tree scrolled into view
 	// DetailTab is the block the right panel, the details stack, shows:
 	// one of filesTab, gitTab, agentsTab and forgeTab in the default
 	// layout.
@@ -374,6 +376,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		SidebarWidth:  ggui.State(float64(sidebarWidth)),
 		SidebarSplit:  ggui.State(p.SidebarSplit),
 		Scope:         ggui.State(sidebarScope{}),
+		revealedScope: map[int]scopeKey{},
 		DetailTab:     ggui.State(""),
 		WinDoc:        ggui.State(doc),
 		blocks:        blocks,
@@ -492,10 +495,9 @@ func (m *model) selectSession(id string) {
 		return
 	}
 	// The space shows the tabs of the session's project, and the
-	// sidebar's agents follow to it from another project.
+	// sidebar's active project follows the tab shown.
 	if s, ok := m.session(id); ok {
 		m.showContext(s)
-		m.followScope(s)
 	}
 	m.showTab(id)
 }
@@ -678,6 +680,22 @@ func (m *model) forgetTabs(gone func(id string) bool) {
 	}
 }
 
+// defaultSessionAgent chooses the initial non-shell agent for a new-session
+// tab on nodeID: the last agent launched, else the configured default agent,
+// else the first non-shell agent available on nodeID.
+func (m *model) defaultSessionAgent(nodeID string) string {
+	if m.lastAgent != "" && !isShellTarget(m.lastAgent) {
+		return m.lastAgent
+	}
+	if def := ggui.Peek(m.Prefs).DefaultAgent; def != "" && !isShellTarget(def) {
+		return def
+	}
+	if targets := sessionAgentTargets(nodeTargets(ggui.Peek(m.Nodes), nodeID, ggui.Peek(m.Agents))); len(targets) > 0 {
+		return targets[0]
+	}
+	return "claude"
+}
+
 // openNew opens another new session's tab, prefilled for a node and
 // project, and gives its state.
 func (m *model) openNew(nodeID, project string) *launchState {
@@ -686,10 +704,10 @@ func (m *model) openNew(nodeID, project string) *launchState {
 			nodeID, project = n, d
 		}
 	}
-	f := newSession{Agent: cmp.Or(m.lastAgent, ggui.Peek(m.Prefs).DefaultAgent), NodeID: nodeID, Project: project}
-	if f.NodeID == "" {
-		f.NodeID = ggui.Peek(m.Conn).Self.GetId()
+	if nodeID == "" {
+		nodeID = ggui.Peek(m.Conn).Self.GetId()
 	}
+	f := newSession{Agent: m.defaultSessionAgent(nodeID), NodeID: nodeID, Project: project}
 	if f.Project == "" {
 		f.Project = m.launchProject(f.NodeID)
 	}
@@ -769,7 +787,9 @@ func (m *model) startSession(tab string, f newSession) {
 			fail(err.Error())
 			return
 		}
-		m.lastAgent = f.Agent
+		if !isShellTarget(f.Agent) {
+			m.lastAgent = f.Agent
+		}
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
 		inMain := slices.Contains(ggui.Peek(m.Tabs), tab)

@@ -52,7 +52,9 @@ export function renderStashesSection(s, ui, ctx) {
   if (list.length === 0) {
     return ui.column([
       head,
-      ui.text(t("No stashes."), { key: "stashes-empty", size: "small", tone: "muted" }),
+      ui.card([
+        ui.text(t("No stashes."), { key: "stashes-empty", size: "small", tone: "muted" }),
+      ], { key: "stashes-empty-pad", variant: "ghost", gap: 0 }),
     ], { key: "stashes-section", gap: 2 });
   }
 
@@ -96,6 +98,6 @@ export function renderStashesSection(s, ui, ctx) {
 
   return ui.column([
     head,
-    ui.column(rows, { key: "stashes-list", gap: 2 }),
+    ui.card(rows, { key: "stashes-list", variant: "ghost", gap: 2 }),
   ], { key: "stashes-section", gap: 2 });
 }

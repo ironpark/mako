@@ -156,9 +156,15 @@ func setupWorkspace(m *model) {
 	moveOldSpaces(m)
 	m.migrateProjectKeys()
 	m.showLayout(m.shownKey())
-	// Another space shows its own.
+	// Another space shows its own, and the sidebar follows its active tab.
 	shown := ggui.Derived(func() string { p := m.spaces(); return p.spaceID(p.Space) })
-	ggui.Watch(shown, func(string) { m.showLayout(m.shownKey()) })
+	ggui.Watch(shown, func(string) {
+		m.showLayout(m.shownKey())
+		m.syncScopeToTab(ggui.Peek(m.Selected), false)
+	})
+	ggui.Watch(m.Sessions, func([]*protocol.SessionInfo) {
+		m.syncScopeToTab(ggui.Peek(m.Selected), false)
+	})
 	ggui.Watch(m.Spaces, func(spaceList) { m.workspaceChanged() })
 	// The daemons hear of the projects as they change, not at the next poll.
 	projects := ggui.Map(m.Spaces, func(l spaceList) []project { return l.Projects }).WithEqual(slicesEqual)

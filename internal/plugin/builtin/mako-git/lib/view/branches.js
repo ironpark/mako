@@ -91,7 +91,9 @@ export function renderBranchesSection(s, ui, ctx) {
   }
 
   if (remote.length > 0) {
-    rows.push(ui.text(t("Remote"), { key: "branches-remote-hdr", size: "small", tone: "faint" }));
+    rows.push(ui.card([
+      ui.text(t("Remote"), { key: "branches-remote-hdr", size: "small", tone: "faint" }),
+    ], { key: "branches-remote-pad", variant: "ghost", gap: 0 }));
     for (const name of remote) {
       const btn = ui.button(sanitizeText(name), {
         key: safeKey("br", name),

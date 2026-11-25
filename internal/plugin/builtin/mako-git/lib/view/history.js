@@ -96,53 +96,63 @@ export function renderHistoryHeader(s, ui, ctx, standalone) {
   });
 
   if (standalone) {
-    return ui.row([
-      ui.text(t("History"), { key: "hist-title", size: "small", weight: "semibold", tone: "muted", grow: 1 }),
-      refreshBtn,
-    ], { key: "hist-head", gap: 4 });
+    return ui.card([
+      ui.row([
+        ui.text(t("History"), { key: "hist-title", size: "small", weight: "semibold", tone: "muted", grow: 1 }),
+        refreshBtn,
+      ], { key: "hist-head", gap: 4 }),
+    ], { key: "hist-head-pad", variant: "ghost", gap: 0 });
   }
 
-  return renderSectionHeader(ui, {
-    key: "sec-history",
-    title: t("History"),
-    count: 0,
-    open: Boolean(s.open && s.open.history),
-    toggleSection: "history",
-    action: refreshBtn,
-    t,
-  });
+  return ui.card([
+    renderSectionHeader(ui, {
+      key: "sec-history",
+      title: t("History"),
+      count: 0,
+      open: Boolean(s.open && s.open.history),
+      toggleSection: "history",
+      action: refreshBtn,
+      t,
+    }),
+  ], { key: "hist-head-pad", variant: "ghost", gap: 0 });
 }
 
 function renderCommitDetail(s, ui, ctx) {
   const t = ctx.t;
   const cv = s.commit || { hash: "", info: null, loading: false, err: "" };
 
-  const head = ui.row([
-    ui.icon("git-commit-horizontal", { key: "cd-icon", size: "small", tone: "muted" }),
-    ui.text(shortHash(cv.hash), { key: "cd-hash", size: "small", weight: "medium", grow: 1 }),
-    ui.button("", {
-      key: "cd-copy",
-      icon: "copy",
-      variant: "ghost",
-      size: "small",
-      placeholder: t("Copy hash"),
-      onTap: ["copyCommitHash", cv.hash],
-    }),
-    ui.button("", {
-      key: "cd-close",
-      icon: "x",
-      variant: "ghost",
-      size: "small",
-      placeholder: t("Close commit"),
-      onTap: ["closeCommit"],
-    }),
-  ], { key: "cd-head", gap: 4 });
+  const head = ui.card([
+    ui.row([
+      ui.icon("git-commit-horizontal", { key: "cd-icon", size: "small", tone: "muted" }),
+      ui.text(shortHash(cv.hash), { key: "cd-hash", size: "small", weight: "medium", grow: 1 }),
+      ui.button("", {
+        key: "cd-copy",
+        icon: "copy",
+        variant: "ghost",
+        size: "small",
+        placeholder: t("Copy hash"),
+        onTap: ["copyCommitHash", cv.hash],
+      }),
+      ui.button("", {
+        key: "cd-close",
+        icon: "x",
+        variant: "ghost",
+        size: "small",
+        placeholder: t("Close commit"),
+        onTap: ["closeCommit"],
+      }),
+    ], { key: "cd-head", gap: 4 }),
+  ], { key: "cd-head-pad", variant: "ghost", gap: 0 });
 
   let body;
   if (cv.loading) {
-    body = ui.progress(0, { key: "cd-loading", variant: "spinner", text: t("Loading…") });
+    body = ui.card([
+      ui.progress(0, { key: "cd-loading", variant: "spinner", text: t("Loading…") }),
+    ], { key: "cd-loading-pad", variant: "ghost", gap: 0 });
   } else if (cv.err) {
-    body = ui.text(sanitizeText(cv.err), { key: "cd-err", size: "small", tone: "danger" });
+    body = ui.card([
+      ui.text(sanitizeText(cv.err), { key: "cd-err", size: "small", tone: "danger" }),
+    ], { key: "cd-err-pad", variant: "ghost", gap: 0 });
   } else if (cv.info) {
     const info = cv.info;
     const cm = info.commit || {};
@@ -179,10 +189,12 @@ function renderCommitDetail(s, ui, ctx) {
         });
 
     body = ui.scroll([
-      ui.column(metaKids, { key: "cd-meta-col", gap: 6 }),
-      ui.divider({ key: "cd-meta-div" }),
-      ui.column(fileNodes, { key: "cd-files", gap: 2 }),
-    ], { key: "cd-scroll", grow: 1, gap: 8 });
+      ui.card([
+        ui.column(metaKids, { key: "cd-meta-col", gap: 6 }),
+        ui.divider({ key: "cd-meta-div" }),
+        ui.column(fileNodes, { key: "cd-files", gap: 2 }),
+      ], { key: "cd-body-pad", variant: "ghost", gap: 8 }),
+    ], { key: "cd-scroll", grow: 1, gap: 0 });
   } else {
     body = ui.text("", { key: "cd-empty" });
   }
@@ -191,7 +203,7 @@ function renderCommitDetail(s, ui, ctx) {
     head,
     ui.divider({ key: "cd-div" }),
     body,
-  ], { key: "commit-detail", grow: 1, gap: 4 });
+  ], { key: "commit-detail", grow: 1, gap: 0 });
 }
 
 export function renderHistoryPane(s, ui, ctx, standalone) {
@@ -202,11 +214,17 @@ export function renderHistoryPane(s, ui, ctx, standalone) {
 
   let listContent;
   if (s.historyErr && commits.length === 0) {
-    listContent = ui.text(sanitizeText(s.historyErr), { key: "hist-err", size: "small", tone: "danger" });
+    listContent = ui.card([
+      ui.text(sanitizeText(s.historyErr), { key: "hist-err", size: "small", tone: "danger" }),
+    ], { key: "hist-err-pad", variant: "ghost", gap: 0 });
   } else if (!h) {
-    listContent = ui.progress(0, { key: "hist-loading", variant: "spinner", text: t("Loading…") });
+    listContent = ui.card([
+      ui.progress(0, { key: "hist-loading", variant: "spinner", text: t("Loading…") }),
+    ], { key: "hist-loading-pad", variant: "ghost", gap: 0 });
   } else if (commits.length === 0) {
-    listContent = ui.text(t("No commits yet."), { key: "hist-empty", size: "small", tone: "muted" });
+    listContent = ui.card([
+      ui.text(t("No commits yet."), { key: "hist-empty", size: "small", tone: "muted" }),
+    ], { key: "hist-empty-pad", variant: "ghost", gap: 0 });
   } else {
     const rows = toDagRows(commits, t);
     const selHash = (s.commit && s.commit.hash) || "";
@@ -222,18 +240,20 @@ export function renderHistoryPane(s, ui, ctx, standalone) {
     if (h.more) {
       listContent = ui.column([
         dag,
-        ui.text(t("Showing the newest {count} commits.", { count: commits.length }), {
-          key: "hist-more",
-          size: "small",
-          tone: "faint",
-        }),
-      ], { key: "hist-dag-wrap", grow: 1, gap: 4 });
+        ui.card([
+          ui.text(t("Showing the newest {count} commits.", { count: commits.length }), {
+            key: "hist-more",
+            size: "small",
+            tone: "faint",
+          }),
+        ], { key: "hist-more-pad", variant: "ghost", gap: 0 }),
+      ], { key: "hist-dag-wrap", grow: 1, gap: 0 });
     } else {
       listContent = dag;
     }
   }
 
-  const listPane = ui.column([head, listContent], { key: "history-list", grow: 1, gap: 2 });
+  const listPane = ui.column([head, listContent], { key: "history-list", grow: 1, gap: 0 });
 
   if (s.commit && s.commit.hash) {
     return ui.split(listPane, renderCommitDetail(s, ui, ctx), {

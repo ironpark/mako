@@ -13,6 +13,7 @@ import (
 	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -36,6 +37,15 @@ type sidebarScope struct {
 	Space string
 	scopeKey
 }
+
+// scopeSync records the last (space, tab) synced to the sidebar's active project.
+type scopeSync struct {
+	space string
+	tab   string
+}
+
+// projectTreeScrollKey identifies a space's project list scroll view across rebuilds.
+type projectTreeScrollKey struct{ space int }
 
 // rootKey names a project's folder: its repository, else where it first
 // is.
@@ -134,6 +144,12 @@ func (m *model) pickScope(k scopeKey) {
 // of its project. If a sub-project (or project) is picked and the currently
 // active tab is not in it, it activates an agent of that project if available.
 func (m *model) setScope(k scopeKey) {
+	m.pickingScope = true
+	defer func() {
+		m.pickingScope = false
+		p := m.spacesNow()
+		m.lastScopeSync = scopeSync{space: p.spaceID(p.Space), tab: ggui.Peek(m.Selected)}
+	}()
 	p := m.spacesNow()
 	m.Scope.Set(sidebarScope{Space: p.spaceID(p.Space), scopeKey: k})
 	if k.Section != "" {
@@ -171,18 +187,129 @@ func (m *model) activateScopedSession(k scopeKey) {
 	}
 }
 
-// followScope moves a scope picked in the space shown to the project of
-// session s, picked elsewhere, so the agents and the tabs shown are of one
-// project. Every agent of the space stays so.
-func (m *model) followScope(s *protocol.SessionInfo) {
-	cur := ggui.Peek(m.Scope)
+// locationScope finds the deepest project section (and sub-project root for a
+// multi-root project) in groups that holds from.
+func locationScope(from fileRoot, groups []sessionGroup) (scopeKey, bool) {
+	if from.Path == "" {
+		return scopeKey{}, false
+	}
+	section, root, depth := -1, -1, -1
+	holds := func(r fileRoot) bool {
+		return r.Node == from.Node && pathscope.Within(from.Path, r.Path) && len(r.Path) > depth
+	}
+	for i, g := range groups {
+		if g.multiRoot() {
+			for j, pr := range g.Def.Roots {
+				for _, l := range pr.Locations {
+					if holds(l) {
+						section, root, depth = i, j, len(l.Path)
+					}
+				}
+			}
+			continue
+		}
+		for _, r := range g.Roots {
+			if holds(r) {
+				section, root, depth = i, -1, len(r.Path)
+			}
+		}
+	}
+	if section < 0 {
+		return scopeKey{}, false
+	}
+	g := groups[section]
+	k := scopeKey{Section: g.Key}
+	if root >= 0 && g.Def != nil && root < len(g.Def.Roots) {
+		k.Root = rootKey(g.Def.Roots[root])
+	}
+	return k, true
+}
+
+// tabScopeInGroups resolves tab id (session, file, diff, or new-session tab) to
+// its project or sub-project scope among groups.
+func (m *model) tabScopeInGroups(id string, defs []project, groups []sessionGroup) (scopeKey, bool) {
+	if id == "" || len(groups) == 0 {
+		return scopeKey{}, false
+	}
+	switch {
+	case isLaunchTab(id):
+		l := m.launches[id]
+		if l == nil {
+			return scopeKey{}, false
+		}
+		f := ggui.Peek(l.Form)
+		return locationScope(fileRoot{Node: f.NodeID, Path: f.Project}, groups)
+	case isDocTab(id), isDiffTab(id):
+		docs, diffs := ggui.Peek(m.Docs), ggui.Peek(m.Diffs)
+		if sec, root := tabPlace(id, groups, docs, diffs); sec >= 0 {
+			g := groups[sec]
+			k := scopeKey{Section: g.Key}
+			if root >= 0 && g.Def != nil && root < len(g.Def.Roots) {
+				k.Root = rootKey(g.Def.Roots[root])
+			}
+			return k, true
+		}
+		if isDocTab(id) {
+			if d, ok := docs[id]; ok {
+				return locationScope(d.Root, groups)
+			}
+		}
+		return scopeKey{}, false
+	default:
+		s, ok := m.session(id)
+		if !ok {
+			return scopeKey{}, false
+		}
+		k := sessionScope(defs, s)
+		if !slices.ContainsFunc(groups, func(g sessionGroup) bool { return g.Key == k.Section }) {
+			return scopeKey{}, false
+		}
+		return k, true
+	}
+}
+
+// tabScope resolves tab id to its project or sub-project scope in spaceIdx.
+func (m *model) tabScope(id string, spaceIdx int) (scopeKey, bool) {
+	if id == "" {
+		return scopeKey{}, false
+	}
 	p := m.spacesNow()
-	if cur.Section == "" || cur.Space != p.spaceID(p.Space) {
+	groups := p.spaceGroups(spaceIdx, groupProjects(ggui.Peek(m.Sessions), ggui.Peek(m.Nodes), ggui.Peek(m.Prefs).Projects, p.Projects, p.Names))
+	return m.tabScopeInGroups(id, p.Projects, groups)
+}
+
+// syncScopeToTab moves the left sidebar's active project (or sub-project) to
+// match tab id in the space shown. When force is false, it skips work if
+// (space, id) was already synced so background polls do not undo an explicit
+// unscope or parent-project click in the sidebar.
+func (m *model) syncScopeToTab(id string, force bool) {
+	if m.pickingScope || id == "" {
 		return
 	}
-	if in := sessionScope(p.Projects, s); !cur.holds(in) {
-		m.Scope.Set(sidebarScope{Space: cur.Space, Section: in.Section})
+	p := m.spacesNow()
+	spaceID := p.spaceID(p.Space)
+	syncKey := scopeSync{space: spaceID, tab: id}
+	if !force && m.lastScopeSync == syncKey {
+		return
 	}
+	k, ok := m.tabScope(id, p.Space)
+	if !ok {
+		return
+	}
+	m.lastScopeSync = syncKey
+	want := sidebarScope{Space: spaceID, scopeKey: k}
+	if ggui.Peek(m.Scope) != want {
+		m.Scope.Set(want)
+	}
+}
+
+// followScope moves the sidebar's active project in the space shown to the
+// project (or sub-project) of session s.
+func (m *model) followScope(s *protocol.SessionInfo) {
+	if s == nil {
+		return
+	}
+	m.syncScopeToTab(s.GetId(), true)
 }
 
 // pinnedScope reports whether the sidebar lists a project or folder first.
@@ -315,7 +442,7 @@ func projectsPanel(m *model, st sidebarState, i int) ggui.Widget {
 	head := ggui.Reactive(func() ggui.Widget {
 		return projectMachineBar(m, m.spaceSections(st, i), m.Nodes.Get(), st.projectMachine.Get())
 	})
-	tree := widget.Scroll(widget.Padding(projectTree(m, st, i), 6, 8, 10, 8)).Bar(skin.Surface3)
+	tree := widget.Scroll(widget.Padding(projectTree(m, st, i), 6, 8, 10, 8)).Bar(skin.Surface3).Key(projectTreeScrollKey{i})
 	return widget.Column(head, widget.Expanded(tree)).Stretch()
 }
 
@@ -412,7 +539,7 @@ func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 		if sp, ok := m.spaces().spaceOf(i); ok {
 			spColor = sp.color()
 		}
-		tree := treeRows{m: m, scope: scope, pins: pins, looks: looks, labels: labels, spaceColor: spColor, machine: machine}
+		tree := treeRows{m: m, space: i, scope: scope, pins: pins, looks: looks, labels: labels, spaceColor: spColor, machine: machine}
 		var rows []ggui.Widget
 		if pinned := tree.pinnedRows(groups); len(pinned) > 0 {
 			rows = append(rows, widget.Column(append([]ggui.Widget{treeHeading(icon("pin").Size(13), T("Pinned"), nil)}, pinned...)...).Gap(1).Stretch(),
@@ -441,6 +568,7 @@ func projectTree(m *model, st sidebarState, i int) ggui.Widget {
 // treeRows draws the rows of the sidebar's projects.
 type treeRows struct {
 	m          *model
+	space      int
 	scope      scopeKey
 	pins       []scopeKey
 	looks      map[string]projectLook
@@ -638,21 +766,34 @@ func (t treeRows) pinnedRows(groups []sessionGroup) []ggui.Widget {
 	return rows
 }
 
-// selectedRow marks a row of the tree as the scope picked.
+// selectedRow marks a row of the tree as the scope picked and scrolls it into
+// view once whenever the active scope changes.
 func (t treeRows) selectedRow(row ggui.Widget, selected bool) ggui.Widget {
-	if selected {
-		var spNRGBA color.NRGBA
-		if t.spaceColor != nil {
-			spNRGBA = color.NRGBAModel.Convert(t.spaceColor).(color.NRGBA)
-		}
-		if spNRGBA.A > 0 {
-			fill := color.NRGBA{R: spNRGBA.R, G: spNRGBA.G, B: spNRGBA.B, A: 0x3c}
-			border := color.NRGBA{R: spNRGBA.R, G: spNRGBA.G, B: spNRGBA.B, A: 0x70}
-			return widget.Box(row).Fill(fill).Border(1, border).Radius(7)
-		}
-		return widget.Box(row).Fill(skin.SidebarSel).Border(1, color.Transparent).Radius(7)
+	if !selected {
+		return widget.Box(row).Border(1, color.Transparent).Radius(7)
 	}
-	return widget.Box(row).Border(1, color.Transparent).Radius(7)
+	var box ggui.Widget
+	var spNRGBA color.NRGBA
+	if t.spaceColor != nil {
+		spNRGBA = color.NRGBAModel.Convert(t.spaceColor).(color.NRGBA)
+	}
+	if spNRGBA.A > 0 {
+		fill := color.NRGBA{R: spNRGBA.R, G: spNRGBA.G, B: spNRGBA.B, A: 0x3c}
+		border := color.NRGBA{R: spNRGBA.R, G: spNRGBA.G, B: spNRGBA.B, A: 0x70}
+		box = widget.Box(row).Fill(fill).Border(1, border).Radius(7)
+	} else {
+		box = widget.Box(row).Fill(skin.SidebarSel).Border(1, color.Transparent).Radius(7)
+	}
+	scope := t.scope
+	return &paintHook{child: box, fn: func(dst *ggui.Canvas, r ggui.Rect) {
+		if t.m.revealedScope == nil {
+			t.m.revealedScope = map[int]scopeKey{}
+		}
+		if t.m.revealedScope[t.space] != scope {
+			dst.RequestReveal(r)
+			t.m.revealedScope[t.space] = scope
+		}
+	}}
 }
 
 // projectRowMenu is a project row's menu: starting a session in it,
