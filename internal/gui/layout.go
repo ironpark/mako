@@ -343,6 +343,7 @@ func (m *model) focusGroup(id int) {
 // in the current pane when it is in none; an agent another spawned, in
 // the pane of the tab it shows in, after the last of that tab's agents.
 func (m *model) showTab(id string) {
+	m.clearSidebarPage()
 	m.editLayout(func(root *layoutNode) int {
 		g := root.groupOf(id)
 		if g == nil {

@@ -663,16 +663,20 @@ func treeBlockView(m *model, name string, origin blockOrigin, title, blockScope 
 		})
 	}
 
-	hasTools := ggui.Derived(func() bool {
-		if hasStaticAccessory {
-			return true
-		}
+	hasToolbar := ggui.Derived(func() bool {
 		u := currentUpdate()
 		if !pluginUpdateShowsTree(u) {
 			return false
 		}
 		tb, _ := liftToolbar(u.GetTree())
 		return tb != nil
+	})
+
+	hasTools := ggui.Derived(func() bool {
+		if hasStaticAccessory {
+			return true
+		}
+		return hasToolbar.Get()
 	})
 
 	titleInToolsOf := ggui.Derived(func() bool {
@@ -706,6 +710,7 @@ func treeBlockView(m *model, name string, origin blockOrigin, title, blockScope 
 		Accessory:      accessory,
 		Menu:           menu,
 		hasTools:       hasTools,
+		hasToolbar:     hasToolbar,
 		titleInToolsOf: titleInToolsOf,
 	}
 }

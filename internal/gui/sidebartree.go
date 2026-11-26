@@ -144,6 +144,7 @@ func (m *model) pickScope(k scopeKey) {
 // of its project. If a sub-project (or project) is picked and the currently
 // active tab is not in it, it activates an agent of that project if available.
 func (m *model) setScope(k scopeKey) {
+	m.clearSidebarPage()
 	m.pickingScope = true
 	defer func() {
 		m.pickingScope = false

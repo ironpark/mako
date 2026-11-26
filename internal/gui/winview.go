@@ -31,7 +31,7 @@ func (v *layoutDraw) node(n *layoutdoc.Node, root bool) ggui.Widget {
 	case layoutdoc.KindStack:
 		return v.stack(n)
 	case layoutdoc.KindPanes:
-		return layoutView(v.m)
+		return workspaceCenterView(v.m)
 	}
 	return v.renderBlockNode(nil, n, blockPlace{Solo: true}, nil)
 }

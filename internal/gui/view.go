@@ -197,34 +197,13 @@ func sidebarIn(m *model, tint ggui.Readable[color.NRGBA]) ggui.Widget {
 		swipe.slide(body(-1), body(0), body(1)),
 		widget.Padding(widget.Align(spaceDots(m)).Bottom(), 0, 0, 6, 0),
 	).Expand()
-	activeSidebarPage := ggui.Derived(func() string {
-		cur := m.SidebarPage.Get()
-		if cur == "" {
-			return ""
-		}
-		if _, ok := findSidebarPage(sidebarPluginBlocks(m.plugins.List.Get()), cur); !ok {
-			return ""
-		}
-		return cur
-	})
-	pageContent := ggui.Key(activeSidebarPage, func(blockName string) ggui.Widget {
-		if blockName == "" {
-			return defaultBody
-		}
-		pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
-		if !ok {
-			return defaultBody
-		}
-		return sidebarPluginPageView(m, pg)
-	})
 	column := widget.Column(
 		header,
 		hline(),
-		sidebarPageBar(m, m.SidebarPage),
+		sidebarPluginMenu(m, m.SidebarPage),
 		// The spaces' dots stay put over the foot of the agents as a
-		// swipe moves the sidebar under them; when a plugin sidebar page is
-		// selected, it takes this space instead.
-		widget.Expanded(pageContent),
+		// swipe moves the sidebar under them.
+		widget.Expanded(defaultBody),
 		hline(),
 		sidebarFooter(m),
 	).Stretch()
@@ -370,6 +349,9 @@ func sidebarFooter(m *model) ggui.Widget {
 
 func workspaceHeader(m *model) ggui.Widget {
 	title := ggui.Reactive(func() ggui.Widget {
+		if pg, ok := activeSidebarPageDef(m, m.SidebarPage); ok {
+			return pluginMainPageHeaderBar(m, pg, m.clearSidebarPage)
+		}
 		switch id := m.Selected.Get(); {
 		case isDocTab(id):
 			return docHeader(m, id, m.Docs.Get()[id])

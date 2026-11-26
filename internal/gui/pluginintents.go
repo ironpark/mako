@@ -153,6 +153,17 @@ func (m *model) dispatchPluginOpen(o *protocol.PluginOpen) {
 			return
 		}
 		m.closePluginTabByKey(o.GetBlock(), o.GetKey())
+
+	case "session":
+		sid := o.GetKey()
+		if sid == "" {
+			return
+		}
+		m.clearSidebarPage()
+		if m.Page != nil && ggui.Peek(m.Page) != "workspace" {
+			m.Page.Set("workspace")
+		}
+		m.selectSession(sid)
 	}
 }
 

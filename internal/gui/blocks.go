@@ -75,6 +75,7 @@ type blockView struct {
 	// Optional reactive overrides for blocks whose toolbar or chrome arrives
 	// asynchronously (plugin blocks) or depends on active state (files/forge).
 	hasTools       ggui.Readable[bool]
+	hasToolbar     ggui.Readable[bool]
 	titleInToolsOf ggui.Readable[bool]
 }
 

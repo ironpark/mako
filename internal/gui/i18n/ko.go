@@ -1866,10 +1866,13 @@ var catalogKo = map[string]string{
 	"Copy code":          "코드 복사",
 	"Copied":             "복사됨",
 	"Slider":             "슬라이더",
-	"Show %s in sidebar": "사이드바에서 %s 보기",
+	"Open %s view":       "%s 뷰 열기",
 	"Open %s tab":        "%s 탭 열기",
 	"Reload plugin":      "플러그인 다시 불러오기",
 	"Tab actions":        "탭 작업",
+	"Back to workspace":  "워크스페이스로 돌아가기",
+	"Close view":         "뷰 닫기",
+	"View actions":       "뷰 작업",
 
 	// Revision 50: Global Account Usage, agy sign-in diagnostic & Chat Rewind
 	"Account usage & quotas":                             "계정 사용량 및 한도",

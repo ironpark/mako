@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -123,7 +124,7 @@ func (h *host) StorageListKeys(_ context.Context, req *hostapi.ListKeysRequest) 
 
 // session is a session as a plugin sees it.
 func session(s *protocol.SessionInfo) *hostapi.Session {
-	return &hostapi.Session{Id: s.GetId(), Name: s.GetName(), Agent: s.GetAgent(), Project: s.GetProject(),
+	return &hostapi.Session{Id: s.GetId(), Name: cmp.Or(s.GetName(), protocol.BareTitle(s.GetTitle())), Agent: s.GetAgent(), Project: s.GetProject(),
 		State: s.GetState(), Status: s.GetStatus(), NodeId: s.GetNodeId()}
 }
 
@@ -159,6 +160,7 @@ const (
 	cmdCreatePullRequest = "mako.createPullRequest"
 	cmdOpenTab           = "mako.openTab"
 	cmdCloseTab          = "mako.closeTab"
+	cmdOpenSession       = "mako.openSession"
 
 	maxCopyText      = 64 << 10
 	maxPluginIntents = 8
@@ -463,6 +465,53 @@ func (h *host) CommandsRunCommand(_ context.Context, req *hostapi.RunCommandRequ
 			Kind:  "close_tab",
 			Block: blockName(h.p.id, decl.ID),
 			Key:   key,
+		})
+		return &hostapi.RunCommandResponse{}, nil
+	case cmdOpenSession:
+		if !h.p.gesture {
+			return nil, fmt.Errorf("%s runs only in answer to the user's tap or command", cmdOpenSession)
+		}
+		if len(h.p.intents) >= maxPluginIntents {
+			return nil, fmt.Errorf("at most %d window intents may be queued per gesture", maxPluginIntents)
+		}
+		if !(pluginGrants{p: h.p}).Has(hostapi.PermSessionsRead) {
+			return nil, fmt.Errorf("%s requires %s permission", cmdOpenSession, hostapi.PermSessionsRead)
+		}
+		var a struct {
+			SessionID string `json:"sessionId"`
+			ID        string `json:"id"`
+			Node      string `json:"node"`
+		}
+		raw := strings.TrimSpace(req.GetArg())
+		if strings.HasPrefix(raw, "{") {
+			if err := json.Unmarshal([]byte(raw), &a); err != nil {
+				return nil, fmt.Errorf("%s: invalid JSON argument: %w", cmdOpenSession, err)
+			}
+		} else {
+			a.SessionID = raw
+		}
+		sid := strings.TrimSpace(cmp.Or(a.SessionID, a.ID))
+		if sid == "" || len(sid) > 128 || !utf8.ValidString(sid) {
+			return nil, fmt.Errorf("%s: sessionId is required", cmdOpenSession)
+		}
+		found := false
+		node := a.Node
+		for _, s := range h.p.m.cfg.Sessions() {
+			if s.GetId() == sid {
+				found = true
+				if node == "" {
+					node = s.GetNodeId()
+				}
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("%s: unknown session %q", cmdOpenSession, sid)
+		}
+		h.p.intents = append(h.p.intents, &protocol.PluginOpen{
+			Kind: "session",
+			Key:  sid,
+			Node: intentNode(node),
 		})
 		return &hostapi.RunCommandResponse{}, nil
 	}

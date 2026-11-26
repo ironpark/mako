@@ -379,6 +379,10 @@ function makeContext(ctxJson) {
       if (r.key === undefined && tab) r.key = tab.key;
       return host.commands.runCommand({ id: "mako.closeTab", arg: JSON.stringify(r) });
     },
+    openSession: (o) => {
+      const r = typeof o === "string" ? { sessionId: o } : { ...(o || {}) };
+      return host.commands.runCommand({ id: "mako.openSession", arg: JSON.stringify(r) });
+    },
     copy: (text) => host.commands.runCommand({ id: "mako.copyText", arg: String(text ?? "") }),
     openForge: (o) => host.commands.runCommand({ id: "mako.openForge", arg: JSON.stringify(withFolder(o)) }),
     createPullRequest: (o) => host.commands.runCommand({ id: "mako.createPullRequest", arg: JSON.stringify(withFolder(o)) }),

@@ -13,12 +13,14 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// Left sidebar plugin pages (revision 49).
+// Left sidebar navigation menu for plugin main views (revision 49).
 //
-// Any plugin block whose manifest includes "sidebar" in its slots appears as a
-// page in the left sidebar alongside the default Projects/Agents view. When no
-// plugin contributes a sidebar page, the switcher bar renders nothing and the
-// sidebar is unchanged.
+// Any active plugin block whose manifest includes "sidebar" in its slots adds a
+// navigation menu item to the left sidebar above Projects. Activating an item
+// fills the central workspace content area with that plugin's view while the
+// left sidebar (and its Projects/Agents lists) stays visible for instant
+// navigation back. Clicking the active item again, selecting any project or
+// session, or opening a tab returns the central area to the workspace panes.
 
 type sidebarPageDef struct {
 	Block    string
@@ -65,95 +67,180 @@ func findSidebarPage(pages []sidebarPageDef, blockName string) (sidebarPageDef, 
 	return sidebarPageDef{}, false
 }
 
-// openSidebarPage reveals the left sidebar and switches it to blockName
-// ("" returns to the default Projects/Agents view).
-func (m *model) openSidebarPage(blockName string) {
-	m.SidebarOpen.Set(true)
-	m.SidebarPage.Set(blockName)
+// activeSidebarPageDef resolves the currently active sidebar plugin page for
+// active, returning false when none is selected or its plugin is no longer
+// active. Reactive: reads active and m.plugins.List.
+func activeSidebarPageDef(m *model, active *ggui.StateValue[string]) (sidebarPageDef, bool) {
+	if active == nil {
+		return sidebarPageDef{}, false
+	}
+	cur := active.Get()
+	if cur == "" {
+		return sidebarPageDef{}, false
+	}
+	return findSidebarPage(sidebarPluginBlocks(m.plugins.List.Get()), cur)
 }
 
-// sidebarPageBar renders the compact icon switcher strip right below the
-// sidebar header when at least one plugin contributes a sidebar page.
-func sidebarPageBar(m *model, active *ggui.StateValue[string]) ggui.Widget {
+// activeSidebarPageDerived derives the validated active block name ("", or
+// "plugin:<id>/<block>") so callers can key on page transitions cleanly.
+func activeSidebarPageDerived(m *model, active *ggui.StateValue[string]) *ggui.DerivedValue[string] {
+	return ggui.Derived(func() string {
+		if pg, ok := activeSidebarPageDef(m, active); ok {
+			return pg.Block
+		}
+		return ""
+	})
+}
+
+// openSidebarPage activates blockName in the central content area ("" returns
+// to the workspace panes) and exits Settings if open.
+func (m *model) openSidebarPage(blockName string) {
+	if m.Page != nil && ggui.Peek(m.Page) != "workspace" {
+		m.Page.Set("workspace")
+	}
+	if m.SidebarPage != nil {
+		m.SidebarPage.Set(blockName)
+	}
+}
+
+// clearSidebarPage returns the central content area to the workspace panes.
+func (m *model) clearSidebarPage() {
+	if m.SidebarPage != nil && ggui.Peek(m.SidebarPage) != "" {
+		m.SidebarPage.Set("")
+	}
+}
+
+// sidebarPluginMenu renders the left-sidebar navigation menu items contributed
+// by active "sidebar"-slotted plugin blocks. Renders nothing when no plugin
+// contributes one so the default sidebar stays untouched.
+func sidebarPluginMenu(m *model, active *ggui.StateValue[string]) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		pages := sidebarPluginBlocks(m.plugins.List.Get())
 		if len(pages) == 0 {
 			return widget.Box()
 		}
-		cur := active.Get()
+		cur := ""
+		if active != nil {
+			cur = active.Get()
+		}
 		if cur != "" {
 			if _, ok := findSidebarPage(pages, cur); !ok {
 				cur = ""
 			}
 		}
-		btn := func(glyphName, title, target string, selected bool) ggui.Widget {
-			fg := pick[color.Color](selected, skin.AccentBright, skin.Muted)
-			b := ui.ButtonOf(pluginIcon(glyphName).Size(14).Color(fg), func() {
-				active.Set(target)
-			}).Ghost().Pad(5, 8).Radius(6).Name(title)
-			var w ggui.Widget = b
-			if selected {
-				w = widget.Box(b).Fill(skin.Surface2).Radius(6)
-			}
-			return ui.Tooltip(w, title)
-		}
-		items := make([]ggui.Widget, 0, 1+len(pages))
-		items = append(items, btn("folder-kanban", T("Projects"), "", cur == ""))
+		rows := make([]ggui.Widget, 0, len(pages))
 		for _, pg := range pages {
 			p := pg
-			items = append(items, btn(p.Icon, p.Title, p.Block, cur == p.Block))
+			selected := cur == p.Block
+			iconCol := pick[color.Color](selected, skin.AccentBright, skin.Muted)
+			textCol := pick[color.Color](selected, skin.Fg, skin.Muted)
+			weight := pick(selected, ggui.WeightSemibold, ggui.WeightMedium)
+			item := ui.ButtonOf(widget.Row(
+				pluginIcon(p.Icon).Size(14).Color(iconCol),
+				widget.Expanded(widget.Text(p.Title).Size(13).Weight(weight).Color(textCol).NoWrap().Ellipsis()),
+			).Gap(9).Align(widget.AlignCenter), func() {
+				if active == nil {
+					return
+				}
+				if ggui.Peek(active) == p.Block {
+					active.Set("")
+				} else {
+					if m.Page != nil && ggui.Peek(m.Page) != "workspace" {
+						m.Page.Set("workspace")
+					}
+					active.Set(p.Block)
+				}
+			}).Ghost().Pad(6, 10).Radius(7).Name(p.Title)
+			var row ggui.Widget = item
+			if selected {
+				row = widget.Box(item).Fill(skin.SidebarSel).Radius(7)
+			}
+			rows = append(rows, row)
 		}
-		strip := looseHeight{
-			widget.Scroll(widget.Row(items...).Gap(2).Align(widget.AlignCenter)).
-				Horizontal().Shrink().Bar(color.Transparent),
+		list := ggui.Widget(widget.Column(rows...).Gap(2).Stretch())
+		if len(pages) > 5 {
+			list = widget.Box(widget.Scroll(list).Bar(skin.Surface3)).MaxHeight(180)
 		}
-		return widget.Column(
-			widget.Box(strip).Pad(4, 8),
+		return looseHeight{widget.Column(
+			widget.Box(list).Pad(6, 8),
 			hline(),
-		).Stretch()
+		).Stretch()}
 	})
 }
 
-// sidebarPluginPageView renders one plugin block as a full-height left sidebar
-// page, lifting any leading toolbar row into a slim sub-header and preserving
-// third-party provenance badges.
-func sidebarPluginPageView(m *model, pg sidebarPageDef) ggui.Widget {
+// workspaceCenterView renders either the active sidebar plugin page filling
+// the central workspace area or the normal workspace panes when none is active.
+func workspaceCenterView(m *model) ggui.Widget {
+	active := activeSidebarPageDerived(m, m.SidebarPage)
+	return ggui.Key(active, func(blockName string) ggui.Widget {
+		if blockName == "" {
+			return layoutView(m)
+		}
+		pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
+		if !ok {
+			return layoutView(m)
+		}
+		return mainPluginPageView(m, pg)
+	})
+}
+
+// pluginMainPageHeaderBar renders the central workspace header bar when a
+// sidebar plugin view is active.
+func pluginMainPageHeaderBar(m *model, pg sidebarPageDef, onClose func()) ggui.Widget {
+	var items []ggui.Widget
+	if pg.PluginID != "" {
+		pid := pg.PluginID
+		if p := m.pluginOf(pid); p != nil && !p.GetInstalled() && !p.GetBundled() {
+			items = append(items, ui.MenuItem(T("Reload plugin"), func() {
+				m.actOnPlugin(&protocol.PluginAction{PluginId: pid, Op: protocol.PluginReload})
+			}))
+		}
+	}
+	if len(items) > 0 {
+		items = append(items, ui.MenuDivider())
+	}
+	items = append(items, ui.MenuItem(T("Close view"), onClose))
+
+	row := []ggui.Widget{
+		iconButton("arrow-left", T("Back to workspace"), onClose),
+		pluginIcon(pg.Icon).Size(14).Color(skin.AccentBright),
+		widget.Text(pg.Title).Size(13.5).Weight(ggui.WeightSemibold).NoWrap().Ellipsis(),
+		widget.Spacer(),
+	}
+	if badge := provenanceBadge(m, blockOrigin{plugin: pg.PluginID}); badge != nil {
+		row = append(row, badge)
+	}
+	row = append(row, iconMenu(ui.MenuOf(icon("ellipsis"), items...).Name(T("View actions")), 6))
+	return widget.Row(row...).Gap(8).Align(widget.AlignCenter)
+}
+
+// mainPluginPageView renders one sidebar-activated plugin block filling the
+// full central workspace area, lifting any leading toolbar row into a sleek
+// top action strip over the full-size body.
+func mainPluginPageView(m *model, pg sidebarPageDef) ggui.Widget {
 	bv := treeBlockView(m, pg.Block, blockOrigin{plugin: pg.PluginID}, pg.Title, pg.Scope, nil, blockPlace{Solo: true})
-	header := ggui.Reactive(func() ggui.Widget {
-		hasTools := bv.hasTools != nil && bv.hasTools.Get()
-		titleInTools := bv.titleInToolsOf != nil && bv.titleInToolsOf.Get()
-		var row []ggui.Widget
-		if !titleInTools {
-			row = append(row,
-				pluginIcon(pg.Icon).Size(13).Color(skin.Muted),
-				widget.Expanded(widget.Text(pg.Title).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()),
-			)
-		}
-		if bv.Tools != nil && hasTools {
-			if titleInTools {
-				row = append(row, widget.Expanded(bv.Tools))
-			} else {
-				row = append(row, bv.Tools)
-			}
-		}
-		if bv.Accessory != nil {
-			row = append(row, bv.Accessory)
-		}
-		if bv.Menu != nil {
-			if items := bv.Menu(); len(items) > 0 {
-				row = append(row, iconMenu(ui.MenuOf(icon("ellipsis"), items...).Name(Tf("%s actions", pg.Title)), 4))
-			}
-		}
-		if len(row) == 0 {
+	showScope := isScoped(pg.Scope)
+	toolbar := ggui.Reactive(func() ggui.Widget {
+		hasBar := bv.hasToolbar != nil && bv.hasToolbar.Get()
+		if !hasBar && !showScope {
 			return widget.Box()
 		}
+		var row []ggui.Widget
+		if hasBar && bv.Tools != nil {
+			row = append(row, widget.Expanded(bv.Tools))
+		} else {
+			row = append(row, widget.Spacer())
+		}
+		if showScope && bv.Accessory != nil {
+			row = append(row, bv.Accessory)
+		}
 		return widget.Column(
-			widget.Box(widget.Row(row...).Gap(6).Align(widget.AlignCenter)).Pad(5, 8),
+			widget.Box(widget.Row(row...).Gap(8).Align(widget.AlignCenter)).Pad(6, 12).Fill(skin.Surface1),
 			hline(),
 		).Stretch()
 	})
-	return widget.Column(
-		header,
+	return widget.Box(widget.Column(
+		toolbar,
 		widget.Expanded(bv.Body),
-	).Stretch()
+	).Stretch()).Fill(skin.Surface0)
 }

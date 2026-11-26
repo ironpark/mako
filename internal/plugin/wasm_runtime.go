@@ -168,6 +168,13 @@ func startWasmCoreRuntime(ctx context.Context, engine *wasmtime.Engine, v *versi
 	resume()
 	stopAfter := armWasmBudget(ctx, engine, w.store)
 	inst, err := w.linker.Instantiate(w.store, mod)
+	if err == nil {
+		// WASI reactor modules (e.g. Go -buildmode=c-shared, Rust/Zig cdylibs)
+		// export `_initialize` to set up guest runtime state before exports run.
+		if initFn := inst.GetFunc(w.store, "_initialize"); initFn != nil {
+			_, err = initFn.Call(w.store)
+		}
+	}
 	stopAfter()
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", v.man.Entry, classifyWasmErr(ctx, err))

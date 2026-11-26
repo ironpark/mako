@@ -1,0 +1,17 @@
+id = "agent-map"
+version = "0.1.0"
+publisher = "mako-examples"
+api = 1
+entry = "main.js"
+permissions = ["sessions:read"]
+
+[[contributes.block]]
+id = "map"
+title = "Agent Map"
+icon = "network"
+slots = ["sidebar"]
+chrome = "toolbar"
+
+[[contributes.command]]
+id = "refresh-map"
+title = "Refresh Agent Map"

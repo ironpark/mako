@@ -1,0 +1,23 @@
+id = "wasm-inspector"
+version = "0.1.0"
+publisher = "ironpark"
+api = 1
+entry = "plugin.wasm"
+permissions = ["storage"]
+
+[[contributes.block]]
+id = "panel"
+title = "Wasm Lab"
+icon = "code-xml"
+slots = ["sidebar", "right"]
+chrome = "toolbar"
+
+[[contributes.block]]
+id = "detail"
+title = "Wasm Report"
+icon = "radar"
+slots = ["tab"]
+
+[[contributes.command]]
+id = "run-bench"
+title = "Run WebAssembly prime & hash benchmark"

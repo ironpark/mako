@@ -1,0 +1,31 @@
+id = "ui-workbench"
+version = "0.1.0"
+publisher = "ironpark"
+api = 1
+entry = "main.js"
+permissions = ["storage"]
+
+[[contributes.block]]
+id = "explorer"
+title = "Workbench"
+icon = "flask-conical"
+slots = ["sidebar", "left", "right"]
+chrome = "toolbar"
+
+[[contributes.block]]
+id = "viewer"
+title = "Workbench Tab"
+icon = "file-diff"
+slots = ["tab"]
+
+[[contributes.command]]
+id = "open-diff"
+title = "Open Workbench Diff Review tab"
+
+[[contributes.command]]
+id = "open-studio"
+title = "Open Workbench Component Studio tab"
+
+[contributes.settings]
+default_diff_mode = { type = "select", label = "Default diff mode", description = "Initial diff layout when opening a Diff Review tab.", options = ["unified", "split"], default = "unified" }
+default_table_style = { type = "select", label = "Default table style", description = "Row style for the Component Studio table.", options = ["striped", "compact"], default = "striped" }

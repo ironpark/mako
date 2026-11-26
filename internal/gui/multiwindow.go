@@ -47,6 +47,7 @@ type spaceWindowState struct {
 	scope        *ggui.StateValue[scopeKey]
 	focusGroup   *ggui.StateValue[int]
 	sidebarOpen  *ggui.StateValue[bool]
+	sidebarPage  *ggui.StateValue[string]
 	sidebarWidth *ggui.StateValue[float64]
 	sidebarSplit *ggui.StateValue[float64]
 	win          *ggui.Window
@@ -763,6 +764,7 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 		scope:        ggui.State(initScope),
 		focusGroup:   ggui.State(initFocus),
 		sidebarOpen:  ggui.State(true),
+		sidebarPage:  ggui.State(""),
 		sidebarWidth: ggui.State(float64(sidebarWidth)),
 		sidebarSplit: ggui.State(ggui.Peek(m.Prefs).SidebarSplit),
 	}
@@ -851,6 +853,9 @@ func (m *model) closeSpaceWindow(spaceID string) {
 // Space window actions (scoped strictly to sw, never mutating main window) ---
 
 func (m *model) spaceWindowPickScope(sw *spaceWindowState, k scopeKey) {
+	if sw.sidebarPage != nil && ggui.Peek(sw.sidebarPage) != "" {
+		sw.sidebarPage.Set("")
+	}
 	if ggui.Peek(sw.scope) == k {
 		k = scopeKey{}
 	}
@@ -914,6 +919,9 @@ func (m *model) spaceWindowSelectSession(sw *spaceWindowState, id string) {
 	if id == "" {
 		return
 	}
+	if sw.sidebarPage != nil && ggui.Peek(sw.sidebarPage) != "" {
+		sw.sidebarPage.Set("")
+	}
 	if s, ok := m.session(id); ok {
 		sec := sectionID(m.projectsNow(), s)
 		ctx := projectContext(sec)
@@ -955,10 +963,21 @@ func spaceWindowView(m *model, sw *spaceWindowState) ggui.Widget {
 			spaceWindowSidebarEdge(sw),
 		).Stretch()
 	})
+	activePage := activeSidebarPageDerived(m, sw.sidebarPage)
+	center := ggui.Key(activePage, func(blockName string) ggui.Widget {
+		if blockName == "" {
+			return keyedLayoutView(m, sw.layoutKey, sw.focusGroup)
+		}
+		pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
+		if !ok {
+			return keyedLayoutView(m, sw.layoutKey, sw.focusGroup)
+		}
+		return mainPluginPageView(m, pg)
+	})
 	right := widget.Column(
 		spaceWindowHeader(m, sw),
 		hline(),
-		widget.Expanded(keyedLayoutView(m, sw.layoutKey, sw.focusGroup)),
+		widget.Expanded(center),
 	).Stretch()
 	return widget.Row(left, widget.Expanded(right)).Stretch()
 }
@@ -1000,32 +1019,11 @@ func spaceWindowSidebar(m *model, sw *spaceWindowState) ggui.Widget {
 			bottom: spaceWindowAgentsPanel(m, st, sw),
 			split:  sw.sidebarSplit,
 		}
-		page := ggui.State("")
-		activePage := ggui.Derived(func() string {
-			cur := page.Get()
-			if cur == "" {
-				return ""
-			}
-			if _, ok := findSidebarPage(sidebarPluginBlocks(m.plugins.List.Get()), cur); !ok {
-				return ""
-			}
-			return cur
-		})
-		pageBody := ggui.Key(activePage, func(blockName string) ggui.Widget {
-			if blockName == "" {
-				return body
-			}
-			pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
-			if !ok {
-				return body
-			}
-			return sidebarPluginPageView(m, pg)
-		})
 		column := widget.Column(
 			header,
 			hline(),
-			sidebarPageBar(m, page),
-			widget.Expanded(pageBody),
+			sidebarPluginMenu(m, sw.sidebarPage),
+			widget.Expanded(body),
 		).Stretch()
 		washed := ggui.Reactive(func() ggui.Widget {
 			set := m.spaces()
@@ -1268,6 +1266,13 @@ func spaceWindowAgentsPanel(m *model, st sidebarState, sw *spaceWindowState) ggu
 
 func spaceWindowHeader(m *model, sw *spaceWindowState) ggui.Widget {
 	title := ggui.Reactive(func() ggui.Widget {
+		if pg, ok := activeSidebarPageDef(m, sw.sidebarPage); ok {
+			return pluginMainPageHeaderBar(m, pg, func() {
+				if sw.sidebarPage != nil {
+					sw.sidebarPage.Set("")
+				}
+			})
+		}
 		id := m.spaceWindowActiveTab(sw)
 		if isDocTab(id) {
 			if d, ok := m.Docs.Get()[id]; ok {

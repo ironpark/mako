@@ -328,15 +328,21 @@ Tool arguments can never override or specify another scope:
 - A `global` tool always receives `scopeKey == ""` regardless of the caller's
   session or project.
 
-### Sidebar pages & custom workspace tabs (revision 49)
+### Sidebar menu views & custom workspace tabs (revision 49)
 
-- **Left sidebar pages (`slots = ["sidebar"]`)**: Declaring `"sidebar"` in a
-  block's `slots` adds it to a compact icon switcher bar right below the left
-  sidebar header (alongside the default Projects/Sessions view). The switcher
-  bar is hidden when no active plugin contributes a `"sidebar"` block. Each
-  sidebar plugin page renders inside the 272 px sidebar with its plugin
-  provenance badge and can also be switched to from the Command Palette
-  (*Show \<Block\> in sidebar*).
+- **Left sidebar menu views (`slots = ["sidebar"]`)**: Declaring `"sidebar"` in
+  a block's `slots` adds a navigation menu entry (`icon` + `title`) to the top
+  of the left sidebar above Projects. When no active plugin contributes a
+  `"sidebar"` block, nothing extra renders in the sidebar. Clicking a menu item
+  activates that plugin block in the **central workspace content area** (full
+  central width/height, with a back button, provenance badge, and optional
+  lifted toolbar) while keeping the left sidebar's Projects and Agents lists
+  visible. Clicking the active menu item again, selecting any project or
+  session, or opening a tab returns the central area to the workspace panes.
+  Sidebar menu views are also exposed in the Command Palette (*Open \<Block\>
+  view*), and plugins with `sessions:read` can jump directly back into a live
+  session tab in response to a user gesture via `ctx.ui.openSession(sessionId)`
+  (`mako.openSession`).
 - **Custom workspace tabs (`slots = ["tab"]`)**: Declaring `"tab"` allows a
   plugin block to open as a first-class workspace tab alongside sessions,
   editor files, and diff views. Multiple independent instances of the same tab

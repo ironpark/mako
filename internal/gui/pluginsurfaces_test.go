@@ -34,59 +34,108 @@ func sidebarAndTabPlugin(state string) *protocol.PluginInfo {
 	}
 }
 
-// Left sidebar page switcher stays invisible when no active plugin contributes
-// a "sidebar" block, appears once one does, switches cleanly to the plugin
-// page, and falls back to Projects when the plugin is disabled or removed.
+// Left sidebar plugin menu stays invisible when no active plugin contributes
+// a "sidebar" block, appears as navigation menu items once one does, fills the
+// central workspace area when activated (keeping Projects/Agents in the
+// sidebar), returns to the workspace on close/showTab/setScope, and falls back
+// when the plugin is disabled or removed.
 func TestSidebarPluginPagesLifecycle(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	active := m.SidebarPage
 
-	// 0 sidebar plugins -> switcher renders empty.
+	// 0 sidebar plugins -> menu renders empty.
 	p := ggui.ProbeBuilder(func() ggui.Widget {
-		return sidebarPageBar(m, active)
-	}, ggui.Sz(272, 60))
+		return sidebarPluginMenu(m, active)
+	}, ggui.Sz(272, 120))
 	defer p.Close()
 	p.Frame()
-	if strings.Contains(p.Semantics().String(), "Projects") {
-		t.Fatalf("switcher bar rendered with zero sidebar plugins:\n%s", p.Semantics().String())
+	if strings.Contains(p.Semantics().String(), "Explorer") {
+		t.Fatalf("sidebar menu rendered with zero sidebar plugins:\n%s", p.Semantics().String())
 	}
 
-	// Enable plugin with a "sidebar" block -> switcher shows Projects + Explorer.
+	// Enable plugin with a "sidebar" block -> sidebar menu lists Explorer.
 	m.setPlugins([]*protocol.PluginInfo{sidebarAndTabPlugin(protocol.PluginRunning)})
 	for range 3 {
 		p.Frame()
 	}
 	sem := p.Semantics().String()
-	if !strings.Contains(sem, "Projects") || !strings.Contains(sem, "Explorer") {
-		t.Fatalf("switcher bar missing Projects or Explorer:\n%s", sem)
+	if !strings.Contains(sem, "Explorer") {
+		t.Fatalf("sidebar menu missing Explorer:\n%s", sem)
 	}
 
-	// Opening the sidebar page sets SidebarOpen and SidebarPage.
-	m.SidebarOpen.Set(false)
+	// Clicking Explorer in the sidebar menu activates it in the central area;
+	// clicking it again toggles back to the workspace panes.
+	if btn, ok := p.Semantics().Find(ggui.RoleButton, "Explorer"); ok {
+		p.Click(ggui.Pt(btn.Rect.Origin.X+btn.Rect.Size.W/2, btn.Rect.Origin.Y+btn.Rect.Size.H/2))
+		p.Frame()
+		if got := ggui.Peek(m.SidebarPage); got != "plugin:acme-tools/explorer" {
+			t.Fatalf("clicking Explorer set SidebarPage = %q, want plugin:acme-tools/explorer", got)
+		}
+		p.Click(ggui.Pt(btn.Rect.Origin.X+btn.Rect.Size.W/2, btn.Rect.Origin.Y+btn.Rect.Size.H/2))
+		p.Frame()
+		if got := ggui.Peek(m.SidebarPage); got != "" {
+			t.Fatalf("toggling Explorer off left SidebarPage = %q, want empty", got)
+		}
+	} else {
+		t.Fatalf("Explorer button not found in sidebar menu:\n%s", sem)
+	}
+
+	// Opening the sidebar view from Settings exits Settings and sets SidebarPage.
+	m.Page.Set("settings")
 	m.openSidebarPage("plugin:acme-tools/explorer")
-	if !ggui.Peek(m.SidebarOpen) || ggui.Peek(m.SidebarPage) != "plugin:acme-tools/explorer" {
-		t.Fatalf("openSidebarPage state: open=%v page=%q", ggui.Peek(m.SidebarOpen), ggui.Peek(m.SidebarPage))
+	if ggui.Peek(m.Page) != "workspace" || ggui.Peek(m.SidebarPage) != "plugin:acme-tools/explorer" {
+		t.Fatalf("openSidebarPage state: page=%q sidebarPage=%q", ggui.Peek(m.Page), ggui.Peek(m.SidebarPage))
 	}
 
-	// Render the sidebar plugin page itself and verify provenance badge.
+	// Render the central header bar + mainPluginPageView and verify provenance & back button.
 	pages := sidebarPluginBlocks(ggui.Peek(m.plugins.List))
 	if len(pages) != 1 || pages[0].Icon != "compass" {
 		t.Fatalf("sidebarPluginBlocks = %+v", pages)
 	}
-	pPage := ggui.ProbeBuilder(func() ggui.Widget {
-		return sidebarPluginPageView(m, pages[0])
-	}, ggui.Sz(272, 500))
-	defer pPage.Close()
+	pHeader := ggui.ProbeBuilder(func() ggui.Widget {
+		return pluginMainPageHeaderBar(m, pages[0], m.clearSidebarPage)
+	}, ggui.Sz(800, 44))
+	defer pHeader.Close()
 	for range 3 {
-		pPage.Frame()
+		pHeader.Frame()
 	}
-	pageSem := pPage.Semantics().String()
-	if !strings.Contains(pageSem, "Explorer") || !strings.Contains(pageSem, "acme-tools") {
-		t.Fatalf("sidebar page missing title or provenance:\n%s", pageSem)
+	hdrSem := pHeader.Semantics().String()
+	if !strings.Contains(hdrSem, "Explorer") || !strings.Contains(hdrSem, "acme-tools") || !strings.Contains(hdrSem, "Back to workspace") {
+		t.Fatalf("central header missing title, provenance, or back button:\n%s", hdrSem)
 	}
 
-	// Disabling the plugin removes it from sidebarPluginBlocks and hides the bar.
+	pCenter := ggui.ProbeBuilder(func() ggui.Widget {
+		return workspaceCenterView(m)
+	}, ggui.Sz(900, 600))
+	defer pCenter.Close()
+	for range 3 {
+		pCenter.Frame()
+	}
+
+	// Navigating to a tab or project scope automatically returns central area to workspace.
+	m.showTab("s1")
+	if got := ggui.Peek(m.SidebarPage); got != "" {
+		t.Fatalf("showTab did not clear SidebarPage: %q", got)
+	}
+	m.openSidebarPage("plugin:acme-tools/explorer")
+	m.setScope(scopeKey{Section: "proj-a"})
+	if got := ggui.Peek(m.SidebarPage); got != "" {
+		t.Fatalf("setScope did not clear SidebarPage: %q", got)
+	}
+
+	// Session open intent from a plugin clears SidebarPage and activates the session.
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s-live", Agent: "claude", Project: "/repo/app", State: protocol.StateRunning}})
+	m.openSidebarPage("plugin:acme-tools/explorer")
+	m.dispatchPluginOpen(&protocol.PluginOpen{Kind: "session", Key: "s-live"})
+	if got := ggui.Peek(m.SidebarPage); got != "" {
+		t.Fatalf("session intent did not clear SidebarPage: %q", got)
+	}
+	if got := ggui.Peek(m.Selected); got != "s-live" {
+		t.Fatalf("session intent selected = %q, want s-live", got)
+	}
+
+	// Disabling the plugin removes it from sidebarPluginBlocks and hides the menu.
 	m.setPlugins([]*protocol.PluginInfo{sidebarAndTabPlugin(protocol.PluginDisabled)})
 	if got := sidebarPluginBlocks(ggui.Peek(m.plugins.List)); len(got) != 0 {
 		t.Fatalf("disabled plugin still listed in sidebarPluginBlocks: %+v", got)
@@ -95,12 +144,60 @@ func TestSidebarPluginPagesLifecycle(t *testing.T) {
 		p.Frame()
 	}
 	if strings.Contains(p.Semantics().String(), "Explorer") {
-		t.Fatalf("switcher kept disabled plugin:\n%s", p.Semantics().String())
+		t.Fatalf("sidebar menu kept disabled plugin:\n%s", p.Semantics().String())
 	}
 }
 
-// Command palette exposes sidebar and custom tab actions for blocks declaring
-// "sidebar" and "tab" slots.
+// Multiple sidebar plugin menu items stack compactly inside the full sidebar
+// without the first item expanding to fill the column height.
+func TestSidebarPluginMenuMultipleItemsCompactLayout(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.setPlugins([]*protocol.PluginInfo{
+		{
+			Id: "agent-map", Version: "0.1.0", Publisher: "mako-examples", State: protocol.PluginRunning,
+			Blocks: []*protocol.PluginBlock{{Name: "plugin:agent-map/map", Title: "Agent Map", Icon: "network", Slots: []string{"sidebar"}}},
+		},
+		{
+			Id: "ui-workbench", Version: "0.1.0", Publisher: "ironpark", State: protocol.PluginReady,
+			Blocks: []*protocol.PluginBlock{{Name: "plugin:ui-workbench/explorer", Title: "Workbench", Icon: "flask-conical", Slots: []string{"sidebar", "left", "right"}}},
+		},
+		{
+			Id: "wasm-inspector", Version: "0.1.0", Publisher: "ironpark", State: protocol.PluginReady,
+			Blocks: []*protocol.PluginBlock{{Name: "plugin:wasm-inspector/panel", Title: "Wasm Lab", Icon: "code-xml", Slots: []string{"sidebar", "right"}}},
+		},
+	})
+
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return sidebar(m)
+	}, ggui.Sz(272, 720))
+	defer p.Close()
+	for range 3 {
+		p.Frame()
+	}
+
+	sem := p.Semantics()
+	var prevY float64
+	for i, label := range []string{"Agent Map", "Workbench", "Wasm Lab"} {
+		btn, ok := sem.Find(ggui.RoleButton, label)
+		if !ok {
+			t.Fatalf("sidebar missing menu item %q:\n%s", label, sem.String())
+		}
+		if btn.Rect.Size.H <= 14 || btn.Rect.Size.H > 48 {
+			t.Fatalf("menu item %q height = %.1f, want compact row (14..48); rect=%+v", label, btn.Rect.Size.H, btn.Rect)
+		}
+		if i > 0 && btn.Rect.Origin.Y <= prevY {
+			t.Fatalf("menu item %q Y=%.1f did not stack below previous Y=%.1f", label, btn.Rect.Origin.Y, prevY)
+		}
+		if btn.Rect.Origin.Y+btn.Rect.Size.H > 220 {
+			t.Fatalf("menu item %q overflowed top nav band: rect=%+v", label, btn.Rect)
+		}
+		prevY = btn.Rect.Origin.Y
+	}
+}
+
+// Command palette exposes sidebar view and custom tab actions for blocks
+// declaring "sidebar" and "tab" slots.
 func TestPluginPaletteIncludesSidebarAndTabBlocks(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
@@ -111,7 +208,7 @@ func TestPluginPaletteIncludesSidebarAndTabBlocks(t *testing.T) {
 		if c.Category != "acme-tools" || c.Disabled {
 			continue
 		}
-		if strings.Contains(c.ID, "Explorer") && strings.Contains(c.ID, "sidebar") {
+		if strings.Contains(c.ID, "Explorer") && strings.Contains(c.ID, "view") {
 			hasSidebar = true
 		}
 		if strings.Contains(c.ID, "Inspector") && strings.Contains(c.ID, "tab") {

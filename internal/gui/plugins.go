@@ -268,8 +268,8 @@ func (m *model) pluginCommands() []command {
 			})
 			if hasSidebar {
 				out = append(out, command{
-					ID: Tf("Show %s in sidebar", title), Category: pid,
-					Keys: []string{"plugin", "sidebar", "page", pid, title, blockName},
+					ID: Tf("Open %s view", title), Category: pid,
+					Keys: []string{"plugin", "sidebar", "page", "view", pid, title, blockName},
 					Run:  func() { m.openSidebarPage(blockName) },
 				})
 			}
