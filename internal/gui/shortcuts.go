@@ -225,7 +225,7 @@ func bindShortcuts(host ggui.Host, m *model) {
 		st.escapeHandle.Remove()
 	}
 	st.escapeHandle = host.Shortcut("escape", func() {
-		m.handleSettingsEscape(host)
+		m.handleEscape(host)
 	})
 	m.syncShortcuts()
 }
@@ -329,13 +329,10 @@ func (m *model) shortcutAction(id string) func() {
 	}
 }
 
-// handleSettingsEscape returns from Settings to the workspace when Escape is
-// pressed and no dialog, text input, dropdown/menu, or shortcut recorder owns
-// Escape.
-func (m *model) handleSettingsEscape(host ggui.Host) {
-	if ggui.Peek(m.Page) != "settings" {
-		return
-	}
+// handleEscape returns from Settings or an active sidebar plugin page to the
+// workspace when Escape is pressed and no dialog, text input, dropdown/menu, or
+// shortcut recorder owns Escape.
+func (m *model) handleEscape(host ggui.Host) {
 	if m.isRecordingShortcut() {
 		return
 	}
@@ -344,7 +341,20 @@ func (m *model) handleSettingsEscape(host ggui.Host) {
 			return
 		}
 	}
-	m.Page.Set("workspace")
+	if ggui.Peek(m.Page) == "settings" {
+		m.Page.Set("workspace")
+		return
+	}
+	if ggui.Peek(m.Page) == "workspace" && m.SidebarPage != nil && ggui.Peek(m.SidebarPage) != "" {
+		m.clearSidebarPage()
+	}
+}
+
+func (m *model) handleSettingsEscape(host ggui.Host) {
+	if ggui.Peek(m.Page) != "settings" {
+		return
+	}
+	m.handleEscape(host)
 }
 
 // escapeCapturedInSemantics reports whether the last painted accessibility tree

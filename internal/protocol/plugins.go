@@ -69,10 +69,11 @@ const (
 
 // The kinds of BlockEvent.
 const (
-	UiTap    = "tap"
-	UiChange = "change"
-	UiSubmit = "submit"
-	UiDrop   = "drop"
+	UiTap       = "tap"
+	UiChange    = "change"
+	UiSubmit    = "submit"
+	UiDrop      = "drop"
+	UiDoubleTap = "double_tap"
 )
 
 // The codes of the errors the plugin store and plugins' actions return

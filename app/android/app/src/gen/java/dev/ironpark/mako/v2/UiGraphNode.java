@@ -24,6 +24,12 @@ public  final class UiGraphNode extends
     group_ = "";
     tone_ = "";
     subtitle_ = "";
+    shape_ = "";
+    icon_ = "";
+    status_ = "";
+    badges_ = emptyProtobufList();
+    contextMenu_ = "";
+    contextArg_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -284,6 +290,439 @@ public  final class UiGraphNode extends
   private void clearWeight() {
 
     weight_ = 0D;
+  }
+
+  public static final int SHAPE_FIELD_NUMBER = 7;
+  private java.lang.String shape_;
+  /**
+   * <code>string shape = 7 [json_name = "shape"];</code>
+   * @return The shape.
+   */
+  @java.lang.Override
+  public java.lang.String getShape() {
+    return shape_;
+  }
+  /**
+   * <code>string shape = 7 [json_name = "shape"];</code>
+   * @return The bytes for shape.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getShapeBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(shape_);
+  }
+  /**
+   * <code>string shape = 7 [json_name = "shape"];</code>
+   * @param value The shape to set.
+   */
+  private void setShape(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    shape_ = value;
+  }
+  /**
+   * <code>string shape = 7 [json_name = "shape"];</code>
+   */
+  private void clearShape() {
+
+    shape_ = getDefaultInstance().getShape();
+  }
+  /**
+   * <code>string shape = 7 [json_name = "shape"];</code>
+   * @param value The bytes for shape to set.
+   */
+  private void setShapeBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    shape_ = value.toStringUtf8();
+
+  }
+
+  public static final int ICON_FIELD_NUMBER = 8;
+  private java.lang.String icon_;
+  /**
+   * <code>string icon = 8 [json_name = "icon"];</code>
+   * @return The icon.
+   */
+  @java.lang.Override
+  public java.lang.String getIcon() {
+    return icon_;
+  }
+  /**
+   * <code>string icon = 8 [json_name = "icon"];</code>
+   * @return The bytes for icon.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getIconBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(icon_);
+  }
+  /**
+   * <code>string icon = 8 [json_name = "icon"];</code>
+   * @param value The icon to set.
+   */
+  private void setIcon(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    icon_ = value;
+  }
+  /**
+   * <code>string icon = 8 [json_name = "icon"];</code>
+   */
+  private void clearIcon() {
+
+    icon_ = getDefaultInstance().getIcon();
+  }
+  /**
+   * <code>string icon = 8 [json_name = "icon"];</code>
+   * @param value The bytes for icon to set.
+   */
+  private void setIconBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    icon_ = value.toStringUtf8();
+
+  }
+
+  public static final int STATUS_FIELD_NUMBER = 9;
+  private java.lang.String status_;
+  /**
+   * <code>string status = 9 [json_name = "status"];</code>
+   * @return The status.
+   */
+  @java.lang.Override
+  public java.lang.String getStatus() {
+    return status_;
+  }
+  /**
+   * <code>string status = 9 [json_name = "status"];</code>
+   * @return The bytes for status.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getStatusBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(status_);
+  }
+  /**
+   * <code>string status = 9 [json_name = "status"];</code>
+   * @param value The status to set.
+   */
+  private void setStatus(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    status_ = value;
+  }
+  /**
+   * <code>string status = 9 [json_name = "status"];</code>
+   */
+  private void clearStatus() {
+
+    status_ = getDefaultInstance().getStatus();
+  }
+  /**
+   * <code>string status = 9 [json_name = "status"];</code>
+   * @param value The bytes for status to set.
+   */
+  private void setStatusBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    status_ = value.toStringUtf8();
+
+  }
+
+  public static final int BADGES_FIELD_NUMBER = 10;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiBadge> badges_;
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.UiBadge> getBadgesList() {
+    return badges_;
+  }
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.UiBadgeOrBuilder> 
+      getBadgesOrBuilderList() {
+    return badges_;
+  }
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  @java.lang.Override
+  public int getBadgesCount() {
+    return badges_.size();
+  }
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.UiBadge getBadges(int index) {
+    return badges_.get(index);
+  }
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  public dev.ironpark.mako.v2.UiBadgeOrBuilder getBadgesOrBuilder(
+      int index) {
+    return badges_.get(index);
+  }
+  private void ensureBadgesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiBadge> tmp = badges_;
+    if (!tmp.isModifiable()) {
+      badges_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  private void setBadges(
+      int index, dev.ironpark.mako.v2.UiBadge value) {
+    java.util.Objects.requireNonNull(value);
+    ensureBadgesIsMutable();
+    badges_.set(index, value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  private void addBadges(dev.ironpark.mako.v2.UiBadge value) {
+    java.util.Objects.requireNonNull(value);
+    ensureBadgesIsMutable();
+    badges_.add(value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  private void addBadges(
+      int index, dev.ironpark.mako.v2.UiBadge value) {
+    java.util.Objects.requireNonNull(value);
+    ensureBadgesIsMutable();
+    badges_.add(index, value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  private void addAllBadges(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.UiBadge> values) {
+    ensureBadgesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, badges_);
+  }
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  private void clearBadges() {
+    badges_ = emptyProtobufList();
+  }
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  private void removeBadges(int index) {
+    ensureBadgesIsMutable();
+    badges_.remove(index);
+  }
+
+  public static final int X_FIELD_NUMBER = 11;
+  private double x_;
+  /**
+   * <code>double x = 11 [json_name = "x"];</code>
+   * @return The x.
+   */
+  @java.lang.Override
+  public double getX() {
+    return x_;
+  }
+  /**
+   * <code>double x = 11 [json_name = "x"];</code>
+   * @param value The x to set.
+   */
+  private void setX(double value) {
+    
+    x_ = value;
+  }
+  /**
+   * <code>double x = 11 [json_name = "x"];</code>
+   */
+  private void clearX() {
+
+    x_ = 0D;
+  }
+
+  public static final int Y_FIELD_NUMBER = 12;
+  private double y_;
+  /**
+   * <code>double y = 12 [json_name = "y"];</code>
+   * @return The y.
+   */
+  @java.lang.Override
+  public double getY() {
+    return y_;
+  }
+  /**
+   * <code>double y = 12 [json_name = "y"];</code>
+   * @param value The y to set.
+   */
+  private void setY(double value) {
+    
+    y_ = value;
+  }
+  /**
+   * <code>double y = 12 [json_name = "y"];</code>
+   */
+  private void clearY() {
+
+    y_ = 0D;
+  }
+
+  public static final int HAS_POS_FIELD_NUMBER = 13;
+  private boolean hasPos_;
+  /**
+   * <code>bool has_pos = 13 [json_name = "hasPos"];</code>
+   * @return The hasPos.
+   */
+  @java.lang.Override
+  public boolean getHasPos() {
+    return hasPos_;
+  }
+  /**
+   * <code>bool has_pos = 13 [json_name = "hasPos"];</code>
+   * @param value The hasPos to set.
+   */
+  private void setHasPos(boolean value) {
+    
+    hasPos_ = value;
+  }
+  /**
+   * <code>bool has_pos = 13 [json_name = "hasPos"];</code>
+   */
+  private void clearHasPos() {
+
+    hasPos_ = false;
+  }
+
+  public static final int PINNED_FIELD_NUMBER = 14;
+  private boolean pinned_;
+  /**
+   * <code>bool pinned = 14 [json_name = "pinned"];</code>
+   * @return The pinned.
+   */
+  @java.lang.Override
+  public boolean getPinned() {
+    return pinned_;
+  }
+  /**
+   * <code>bool pinned = 14 [json_name = "pinned"];</code>
+   * @param value The pinned to set.
+   */
+  private void setPinned(boolean value) {
+    
+    pinned_ = value;
+  }
+  /**
+   * <code>bool pinned = 14 [json_name = "pinned"];</code>
+   */
+  private void clearPinned() {
+
+    pinned_ = false;
+  }
+
+  public static final int CONTEXT_MENU_FIELD_NUMBER = 15;
+  private java.lang.String contextMenu_;
+  /**
+   * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+   * @return The contextMenu.
+   */
+  @java.lang.Override
+  public java.lang.String getContextMenu() {
+    return contextMenu_;
+  }
+  /**
+   * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+   * @return The bytes for contextMenu.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getContextMenuBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(contextMenu_);
+  }
+  /**
+   * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+   * @param value The contextMenu to set.
+   */
+  private void setContextMenu(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    contextMenu_ = value;
+  }
+  /**
+   * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+   */
+  private void clearContextMenu() {
+
+    contextMenu_ = getDefaultInstance().getContextMenu();
+  }
+  /**
+   * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+   * @param value The bytes for contextMenu to set.
+   */
+  private void setContextMenuBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    contextMenu_ = value.toStringUtf8();
+
+  }
+
+  public static final int CONTEXT_ARG_FIELD_NUMBER = 16;
+  private java.lang.String contextArg_;
+  /**
+   * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+   * @return The contextArg.
+   */
+  @java.lang.Override
+  public java.lang.String getContextArg() {
+    return contextArg_;
+  }
+  /**
+   * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+   * @return The bytes for contextArg.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getContextArgBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(contextArg_);
+  }
+  /**
+   * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+   * @param value The contextArg to set.
+   */
+  private void setContextArg(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    contextArg_ = value;
+  }
+  /**
+   * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+   */
+  private void clearContextArg() {
+
+    contextArg_ = getDefaultInstance().getContextArg();
+  }
+  /**
+   * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+   * @param value The bytes for contextArg to set.
+   */
+  private void setContextArgBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    contextArg_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.UiGraphNode parseFrom(
@@ -660,6 +1099,465 @@ public  final class UiGraphNode extends
       return this;
     }
 
+    /**
+     * <code>string shape = 7 [json_name = "shape"];</code>
+     * @return The shape.
+     */
+    @java.lang.Override
+    public java.lang.String getShape() {
+      return instance.getShape();
+    }
+    /**
+     * <code>string shape = 7 [json_name = "shape"];</code>
+     * @return The bytes for shape.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getShapeBytes() {
+      return instance.getShapeBytes();
+    }
+    /**
+     * <code>string shape = 7 [json_name = "shape"];</code>
+     * @param value The shape to set.
+     * @return This builder for chaining.
+     */
+    public Builder setShape(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setShape(value);
+      return this;
+    }
+    /**
+     * <code>string shape = 7 [json_name = "shape"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearShape() {
+      copyOnWrite();
+      instance.clearShape();
+      return this;
+    }
+    /**
+     * <code>string shape = 7 [json_name = "shape"];</code>
+     * @param value The bytes for shape to set.
+     * @return This builder for chaining.
+     */
+    public Builder setShapeBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setShapeBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string icon = 8 [json_name = "icon"];</code>
+     * @return The icon.
+     */
+    @java.lang.Override
+    public java.lang.String getIcon() {
+      return instance.getIcon();
+    }
+    /**
+     * <code>string icon = 8 [json_name = "icon"];</code>
+     * @return The bytes for icon.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getIconBytes() {
+      return instance.getIconBytes();
+    }
+    /**
+     * <code>string icon = 8 [json_name = "icon"];</code>
+     * @param value The icon to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIcon(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setIcon(value);
+      return this;
+    }
+    /**
+     * <code>string icon = 8 [json_name = "icon"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearIcon() {
+      copyOnWrite();
+      instance.clearIcon();
+      return this;
+    }
+    /**
+     * <code>string icon = 8 [json_name = "icon"];</code>
+     * @param value The bytes for icon to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIconBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setIconBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string status = 9 [json_name = "status"];</code>
+     * @return The status.
+     */
+    @java.lang.Override
+    public java.lang.String getStatus() {
+      return instance.getStatus();
+    }
+    /**
+     * <code>string status = 9 [json_name = "status"];</code>
+     * @return The bytes for status.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getStatusBytes() {
+      return instance.getStatusBytes();
+    }
+    /**
+     * <code>string status = 9 [json_name = "status"];</code>
+     * @param value The status to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStatus(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setStatus(value);
+      return this;
+    }
+    /**
+     * <code>string status = 9 [json_name = "status"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStatus() {
+      copyOnWrite();
+      instance.clearStatus();
+      return this;
+    }
+    /**
+     * <code>string status = 9 [json_name = "status"];</code>
+     * @param value The bytes for status to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStatusBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setStatusBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.UiBadge> getBadgesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getBadgesList());
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    @java.lang.Override
+    public int getBadgesCount() {
+      return instance.getBadgesCount();
+    }/**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.UiBadge getBadges(int index) {
+      return instance.getBadges(index);
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    public Builder setBadges(
+        int index, dev.ironpark.mako.v2.UiBadge value) {
+      copyOnWrite();
+      instance.setBadges(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    public Builder setBadges(
+        int index, dev.ironpark.mako.v2.UiBadge.Builder builderForValue) {
+      copyOnWrite();
+      instance.setBadges(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    public Builder addBadges(dev.ironpark.mako.v2.UiBadge value) {
+      copyOnWrite();
+      instance.addBadges(value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    public Builder addBadges(
+        int index, dev.ironpark.mako.v2.UiBadge value) {
+      copyOnWrite();
+      instance.addBadges(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    public Builder addBadges(
+        dev.ironpark.mako.v2.UiBadge.Builder builderForValue) {
+      copyOnWrite();
+      instance.addBadges(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    public Builder addBadges(
+        int index, dev.ironpark.mako.v2.UiBadge.Builder builderForValue) {
+      copyOnWrite();
+      instance.addBadges(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    public Builder addAllBadges(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.UiBadge> values) {
+      copyOnWrite();
+      instance.addAllBadges(values);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    public Builder clearBadges() {
+      copyOnWrite();
+      instance.clearBadges();
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+     */
+    public Builder removeBadges(int index) {
+      copyOnWrite();
+      instance.removeBadges(index);
+      return this;
+    }
+
+    /**
+     * <code>double x = 11 [json_name = "x"];</code>
+     * @return The x.
+     */
+    @java.lang.Override
+    public double getX() {
+      return instance.getX();
+    }
+    /**
+     * <code>double x = 11 [json_name = "x"];</code>
+     * @param value The x to set.
+     * @return This builder for chaining.
+     */
+    public Builder setX(double value) {
+      copyOnWrite();
+      instance.setX(value);
+      return this;
+    }
+    /**
+     * <code>double x = 11 [json_name = "x"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearX() {
+      copyOnWrite();
+      instance.clearX();
+      return this;
+    }
+
+    /**
+     * <code>double y = 12 [json_name = "y"];</code>
+     * @return The y.
+     */
+    @java.lang.Override
+    public double getY() {
+      return instance.getY();
+    }
+    /**
+     * <code>double y = 12 [json_name = "y"];</code>
+     * @param value The y to set.
+     * @return This builder for chaining.
+     */
+    public Builder setY(double value) {
+      copyOnWrite();
+      instance.setY(value);
+      return this;
+    }
+    /**
+     * <code>double y = 12 [json_name = "y"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearY() {
+      copyOnWrite();
+      instance.clearY();
+      return this;
+    }
+
+    /**
+     * <code>bool has_pos = 13 [json_name = "hasPos"];</code>
+     * @return The hasPos.
+     */
+    @java.lang.Override
+    public boolean getHasPos() {
+      return instance.getHasPos();
+    }
+    /**
+     * <code>bool has_pos = 13 [json_name = "hasPos"];</code>
+     * @param value The hasPos to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHasPos(boolean value) {
+      copyOnWrite();
+      instance.setHasPos(value);
+      return this;
+    }
+    /**
+     * <code>bool has_pos = 13 [json_name = "hasPos"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHasPos() {
+      copyOnWrite();
+      instance.clearHasPos();
+      return this;
+    }
+
+    /**
+     * <code>bool pinned = 14 [json_name = "pinned"];</code>
+     * @return The pinned.
+     */
+    @java.lang.Override
+    public boolean getPinned() {
+      return instance.getPinned();
+    }
+    /**
+     * <code>bool pinned = 14 [json_name = "pinned"];</code>
+     * @param value The pinned to set.
+     * @return This builder for chaining.
+     */
+    public Builder setPinned(boolean value) {
+      copyOnWrite();
+      instance.setPinned(value);
+      return this;
+    }
+    /**
+     * <code>bool pinned = 14 [json_name = "pinned"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearPinned() {
+      copyOnWrite();
+      instance.clearPinned();
+      return this;
+    }
+
+    /**
+     * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+     * @return The contextMenu.
+     */
+    @java.lang.Override
+    public java.lang.String getContextMenu() {
+      return instance.getContextMenu();
+    }
+    /**
+     * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+     * @return The bytes for contextMenu.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getContextMenuBytes() {
+      return instance.getContextMenuBytes();
+    }
+    /**
+     * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+     * @param value The contextMenu to set.
+     * @return This builder for chaining.
+     */
+    public Builder setContextMenu(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setContextMenu(value);
+      return this;
+    }
+    /**
+     * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearContextMenu() {
+      copyOnWrite();
+      instance.clearContextMenu();
+      return this;
+    }
+    /**
+     * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+     * @param value The bytes for contextMenu to set.
+     * @return This builder for chaining.
+     */
+    public Builder setContextMenuBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setContextMenuBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+     * @return The contextArg.
+     */
+    @java.lang.Override
+    public java.lang.String getContextArg() {
+      return instance.getContextArg();
+    }
+    /**
+     * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+     * @return The bytes for contextArg.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getContextArgBytes() {
+      return instance.getContextArgBytes();
+    }
+    /**
+     * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+     * @param value The contextArg to set.
+     * @return This builder for chaining.
+     */
+    public Builder setContextArg(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setContextArg(value);
+      return this;
+    }
+    /**
+     * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearContextArg() {
+      copyOnWrite();
+      instance.clearContextArg();
+      return this;
+    }
+    /**
+     * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+     * @param value The bytes for contextArg to set.
+     * @return This builder for chaining.
+     */
+    public Builder setContextArgBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setContextArgBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.UiGraphNode)
   }
   @java.lang.Override
@@ -682,10 +1580,22 @@ public  final class UiGraphNode extends
             "tone_",
             "subtitle_",
             "weight_",
+            "shape_",
+            "icon_",
+            "status_",
+            "badges_",
+            dev.ironpark.mako.v2.UiBadge.class,
+            "x_",
+            "y_",
+            "hasPos_",
+            "pinned_",
+            "contextMenu_",
+            "contextArg_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0000";
+              "\u0000\u0010\u0000\u0000\u0001\u0010\u0010\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0000\u0007\u0208\b\u0208\t\u0208\n\u001b" +
+              "\u000b\u0000\f\u0000\r\u0007\u000e\u0007\u000f\u0208\u0010\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -216,6 +216,9 @@ func shallowCopyUiNode(n *protocol.UiNode, children []*protocol.UiNode) *protoco
 		DiffLines:   n.GetDiffLines(),
 		DiffFrom:    n.GetDiffFrom(),
 		DiffTo:      n.GetDiffTo(),
+		GraphLayout: n.GetGraphLayout(),
+		Minimap:     n.GetMinimap(),
+		DoubleTap:   n.GetDoubleTap(),
 	}
 }
 
@@ -332,7 +335,8 @@ func (v *treeView) nodeLayout(n *protocol.UiNode, inLine, bare, fullWidth bool) 
 		// keep their own menus.
 		return v.treeItemNode(n, 0, bare)
 	case "graph":
-		out = v.graphNode(n)
+		// graphNode handles per-node plugin and native context menus directly on canvas.
+		return v.graphNode(n)
 	case "dag":
 		// dagNode attaches context_menu per row with arg = row.id.
 		return v.dagNode(n, bare)
@@ -973,6 +977,63 @@ func (v *treeView) menuItemWidget(c *protocol.UiNode, contextArg string) ggui.Wi
 	return it
 }
 
+// buildNativeMenuItems converts a menu's children into native ggui.MenuItems
+// for Window.ShowContextMenu, forwarding contextArg on item taps.
+func (v *treeView) buildNativeMenuItems(children []*protocol.UiNode, contextArg string, depth int) []ggui.MenuItem {
+	out := make([]ggui.MenuItem, 0, len(children))
+	for _, c := range children {
+		if c == nil {
+			continue
+		}
+		switch c.GetKind() {
+		case "divider":
+			out = append(out, ggui.MenuSeparator())
+		case "menu":
+			if depth >= 2 {
+				continue
+			}
+			sub := ggui.Menu(c.GetText(), v.buildNativeMenuItems(c.GetChildren(), contextArg, depth+1)...).
+				BindEnabled(ggui.Const(!c.GetDisabled()))
+			out = append(out, sub)
+		case "menu_item":
+			id := c.GetId()
+			onTap := func() {}
+			if c.GetTap() && !c.GetDisabled() {
+				onTap = func() { v.send(id, protocol.UiTap, contextArg) }
+			}
+			it := ggui.MenuAction(c.GetText(), "", onTap).
+				BindChecked(ggui.Const(c.GetChecked())).
+				BindEnabled(ggui.Const(!c.GetDisabled()))
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// graphNodePluginMenu resolves per-node (or graph-level fallback) plugin context
+// menu entries for nd, returning both native ggui.MenuItems and PopupWidget items.
+func (v *treeView) graphNodePluginMenu(n *protocol.UiNode, nd *protocol.UiGraphNode) ([]ggui.MenuItem, []ggui.Widget) {
+	if nd == nil || v.menus == nil {
+		return nil, nil
+	}
+	key := nd.GetContextMenu()
+	if key == "" && n != nil {
+		key = n.GetContextMenu()
+	}
+	if key == "" {
+		return nil, nil
+	}
+	menuNode := v.menus[key]
+	if menuNode == nil {
+		return nil, nil
+	}
+	arg := nd.GetContextArg()
+	if arg == "" {
+		arg = nd.GetId()
+	}
+	return v.buildNativeMenuItems(menuNode.GetChildren(), arg, 0), v.buildMenuItems(menuNode.GetChildren(), arg, 0)
+}
+
 // withContextMenu attaches the referenced context menu (if any) to w, passing
 // argOverride (or n.ContextArg when empty) as the value on menu_item tap.
 func (v *treeView) withContextMenu(w ggui.Widget, n *protocol.UiNode, argOverride, labelOverride string) ggui.Widget {
@@ -1522,6 +1583,8 @@ func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 			w = widget.Expanded(w)
 		case g > 0:
 			w = widget.Flex(w, g)
+		case c.GetKind() == "graph" && c.GetFill() && (kind == "column" || kind == "card"):
+			w = widget.Expanded(w)
 		case c.GetKind() == "spacer" && c.GetGap() == 0:
 			w = widget.Expanded(w)
 		case row && !hasGrow && (c.GetKind() == "pill" || c.GetKind() == "chip"):
@@ -1979,6 +2042,9 @@ func (f *blockForm) redraw() { f.drawn = map[string]bool{} }
 
 // reset clears all field and local UI state, used when a scoped block switches scope.
 func (f *blockForm) reset() {
+	for _, st := range f.graphs {
+		st.close()
+	}
 	f.fields = map[string]*ggui.StateValue[string]{}
 	f.given = map[string]string{}
 	f.drawn = map[string]bool{}

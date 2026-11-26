@@ -75,4 +75,102 @@ public interface UiGraphNodeOrBuilder extends
    * @return The weight.
    */
   double getWeight();
+
+  /**
+   * <code>string shape = 7 [json_name = "shape"];</code>
+   * @return The shape.
+   */
+  java.lang.String getShape();
+  /**
+   * <code>string shape = 7 [json_name = "shape"];</code>
+   * @return The bytes for shape.
+   */
+  com.google.protobuf.ByteString
+      getShapeBytes();
+
+  /**
+   * <code>string icon = 8 [json_name = "icon"];</code>
+   * @return The icon.
+   */
+  java.lang.String getIcon();
+  /**
+   * <code>string icon = 8 [json_name = "icon"];</code>
+   * @return The bytes for icon.
+   */
+  com.google.protobuf.ByteString
+      getIconBytes();
+
+  /**
+   * <code>string status = 9 [json_name = "status"];</code>
+   * @return The status.
+   */
+  java.lang.String getStatus();
+  /**
+   * <code>string status = 9 [json_name = "status"];</code>
+   * @return The bytes for status.
+   */
+  com.google.protobuf.ByteString
+      getStatusBytes();
+
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.UiBadge> 
+      getBadgesList();
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  dev.ironpark.mako.v2.UiBadge getBadges(int index);
+  /**
+   * <code>repeated .mako.v2.UiBadge badges = 10 [json_name = "badges"];</code>
+   */
+  int getBadgesCount();
+
+  /**
+   * <code>double x = 11 [json_name = "x"];</code>
+   * @return The x.
+   */
+  double getX();
+
+  /**
+   * <code>double y = 12 [json_name = "y"];</code>
+   * @return The y.
+   */
+  double getY();
+
+  /**
+   * <code>bool has_pos = 13 [json_name = "hasPos"];</code>
+   * @return The hasPos.
+   */
+  boolean getHasPos();
+
+  /**
+   * <code>bool pinned = 14 [json_name = "pinned"];</code>
+   * @return The pinned.
+   */
+  boolean getPinned();
+
+  /**
+   * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+   * @return The contextMenu.
+   */
+  java.lang.String getContextMenu();
+  /**
+   * <code>string context_menu = 15 [json_name = "contextMenu"];</code>
+   * @return The bytes for contextMenu.
+   */
+  com.google.protobuf.ByteString
+      getContextMenuBytes();
+
+  /**
+   * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+   * @return The contextArg.
+   */
+  java.lang.String getContextArg();
+  /**
+   * <code>string context_arg = 16 [json_name = "contextArg"];</code>
+   * @return The bytes for contextArg.
+   */
+  com.google.protobuf.ByteString
+      getContextArgBytes();
 }

@@ -63,4 +63,22 @@ public interface UiGraphEdgeOrBuilder extends
    * @return The dashed.
    */
   boolean getDashed();
+
+  /**
+   * <code>bool active = 6 [json_name = "active"];</code>
+   * @return The active.
+   */
+  boolean getActive();
+
+  /**
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @return The kind.
+   */
+  java.lang.String getKind();
+  /**
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @return The bytes for kind.
+   */
+  com.google.protobuf.ByteString
+      getKindBytes();
 }

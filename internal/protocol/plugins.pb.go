@@ -1805,9 +1805,14 @@ type UiNode struct {
 	Step float64 `protobuf:"fixed64,43,opt,name=step,proto3" json:"step,omitempty"`
 	// diff_lines, diff_from, and diff_to define a diff node's hunks and header
 	// labels (revision 49).
-	DiffLines     []*UiDiffLine `protobuf:"bytes,44,rep,name=diff_lines,json=diffLines,proto3" json:"diff_lines,omitempty"`
-	DiffFrom      string        `protobuf:"bytes,45,opt,name=diff_from,json=diffFrom,proto3" json:"diff_from,omitempty"`
-	DiffTo        string        `protobuf:"bytes,46,opt,name=diff_to,json=diffTo,proto3" json:"diff_to,omitempty"`
+	DiffLines []*UiDiffLine `protobuf:"bytes,44,rep,name=diff_lines,json=diffLines,proto3" json:"diff_lines,omitempty"`
+	DiffFrom  string        `protobuf:"bytes,45,opt,name=diff_from,json=diffFrom,proto3" json:"diff_from,omitempty"`
+	DiffTo    string        `protobuf:"bytes,46,opt,name=diff_to,json=diffTo,proto3" json:"diff_to,omitempty"`
+	// graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+	// configure an interactive graph canvas node (revision 50).
+	GraphLayout   string `protobuf:"bytes,47,opt,name=graph_layout,json=graphLayout,proto3" json:"graph_layout,omitempty"`
+	Minimap       bool   `protobuf:"varint,48,opt,name=minimap,proto3" json:"minimap,omitempty"`
+	DoubleTap     bool   `protobuf:"varint,49,opt,name=double_tap,json=doubleTap,proto3" json:"double_tap,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2164,6 +2169,27 @@ func (x *UiNode) GetDiffTo() string {
 	return ""
 }
 
+func (x *UiNode) GetGraphLayout() string {
+	if x != nil {
+		return x.GraphLayout
+	}
+	return ""
+}
+
+func (x *UiNode) GetMinimap() bool {
+	if x != nil {
+		return x.Minimap
+	}
+	return false
+}
+
+func (x *UiNode) GetDoubleTap() bool {
+	if x != nil {
+		return x.DoubleTap
+	}
+	return false
+}
+
 // UiDiffLine is one line of a diff node (revision 49): op is "+", "-", " " or
 // "@" for a hunk header; old_line and new_line are 1-based line numbers (0
 // when absent).
@@ -2306,6 +2332,16 @@ type UiGraphNode struct {
 	Tone          string                 `protobuf:"bytes,4,opt,name=tone,proto3" json:"tone,omitempty"`
 	Subtitle      string                 `protobuf:"bytes,5,opt,name=subtitle,proto3" json:"subtitle,omitempty"`
 	Weight        float64                `protobuf:"fixed64,6,opt,name=weight,proto3" json:"weight,omitempty"`
+	Shape         string                 `protobuf:"bytes,7,opt,name=shape,proto3" json:"shape,omitempty"`
+	Icon          string                 `protobuf:"bytes,8,opt,name=icon,proto3" json:"icon,omitempty"`
+	Status        string                 `protobuf:"bytes,9,opt,name=status,proto3" json:"status,omitempty"`
+	Badges        []*UiBadge             `protobuf:"bytes,10,rep,name=badges,proto3" json:"badges,omitempty"`
+	X             float64                `protobuf:"fixed64,11,opt,name=x,proto3" json:"x,omitempty"`
+	Y             float64                `protobuf:"fixed64,12,opt,name=y,proto3" json:"y,omitempty"`
+	HasPos        bool                   `protobuf:"varint,13,opt,name=has_pos,json=hasPos,proto3" json:"has_pos,omitempty"`
+	Pinned        bool                   `protobuf:"varint,14,opt,name=pinned,proto3" json:"pinned,omitempty"`
+	ContextMenu   string                 `protobuf:"bytes,15,opt,name=context_menu,json=contextMenu,proto3" json:"context_menu,omitempty"`
+	ContextArg    string                 `protobuf:"bytes,16,opt,name=context_arg,json=contextArg,proto3" json:"context_arg,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2382,6 +2418,76 @@ func (x *UiGraphNode) GetWeight() float64 {
 	return 0
 }
 
+func (x *UiGraphNode) GetShape() string {
+	if x != nil {
+		return x.Shape
+	}
+	return ""
+}
+
+func (x *UiGraphNode) GetIcon() string {
+	if x != nil {
+		return x.Icon
+	}
+	return ""
+}
+
+func (x *UiGraphNode) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *UiGraphNode) GetBadges() []*UiBadge {
+	if x != nil {
+		return x.Badges
+	}
+	return nil
+}
+
+func (x *UiGraphNode) GetX() float64 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *UiGraphNode) GetY() float64 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+func (x *UiGraphNode) GetHasPos() bool {
+	if x != nil {
+		return x.HasPos
+	}
+	return false
+}
+
+func (x *UiGraphNode) GetPinned() bool {
+	if x != nil {
+		return x.Pinned
+	}
+	return false
+}
+
+func (x *UiGraphNode) GetContextMenu() string {
+	if x != nil {
+		return x.ContextMenu
+	}
+	return ""
+}
+
+func (x *UiGraphNode) GetContextArg() string {
+	if x != nil {
+		return x.ContextArg
+	}
+	return ""
+}
+
 // UiGraphEdge is an edge connecting two UiGraphNodes in a graph canvas
 // (revision 44).
 type UiGraphEdge struct {
@@ -2391,6 +2497,8 @@ type UiGraphEdge struct {
 	Label         string                 `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`
 	Tone          string                 `protobuf:"bytes,4,opt,name=tone,proto3" json:"tone,omitempty"`
 	Dashed        bool                   `protobuf:"varint,5,opt,name=dashed,proto3" json:"dashed,omitempty"`
+	Active        bool                   `protobuf:"varint,6,opt,name=active,proto3" json:"active,omitempty"`
+	Kind          string                 `protobuf:"bytes,7,opt,name=kind,proto3" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2458,6 +2566,20 @@ func (x *UiGraphEdge) GetDashed() bool {
 		return x.Dashed
 	}
 	return false
+}
+
+func (x *UiGraphEdge) GetActive() bool {
+	if x != nil {
+		return x.Active
+	}
+	return false
+}
+
+func (x *UiGraphEdge) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
 }
 
 // UiBadge is a small trailing tag on a node or dag row (revision 46).
@@ -3495,7 +3617,8 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\binstance\x18\t \x01(\tR\binstance\x1a9\n" +
 	"\vValuesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfd\t\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd9\n" +
+	"\n" +
 	"\x06UiNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
@@ -3550,7 +3673,11 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\n" +
 	"diff_lines\x18, \x03(\v2\x13.mako.v2.UiDiffLineR\tdiffLines\x12\x1b\n" +
 	"\tdiff_from\x18- \x01(\tR\bdiffFrom\x12\x17\n" +
-	"\adiff_to\x18. \x01(\tR\x06diffTo\"f\n" +
+	"\adiff_to\x18. \x01(\tR\x06diffTo\x12!\n" +
+	"\fgraph_layout\x18/ \x01(\tR\vgraphLayout\x12\x18\n" +
+	"\aminimap\x180 \x01(\bR\aminimap\x12\x1d\n" +
+	"\n" +
+	"double_tap\x181 \x01(\bR\tdoubleTap\"f\n" +
 	"\n" +
 	"UiDiffLine\x12\x0e\n" +
 	"\x02op\x18\x01 \x01(\tR\x02op\x12\x12\n" +
@@ -3560,20 +3687,34 @@ const file_mako_v2_plugins_proto_rawDesc = "" +
 	"\bUiSeries\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04tone\x18\x02 \x01(\tR\x04tone\x12\x16\n" +
-	"\x06values\x18\x03 \x03(\x01R\x06values\"\x91\x01\n" +
+	"\x06values\x18\x03 \x03(\x01R\x06values\"\x8e\x03\n" +
 	"\vUiGraphNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x14\n" +
 	"\x05group\x18\x03 \x01(\tR\x05group\x12\x12\n" +
 	"\x04tone\x18\x04 \x01(\tR\x04tone\x12\x1a\n" +
 	"\bsubtitle\x18\x05 \x01(\tR\bsubtitle\x12\x16\n" +
-	"\x06weight\x18\x06 \x01(\x01R\x06weight\"s\n" +
+	"\x06weight\x18\x06 \x01(\x01R\x06weight\x12\x14\n" +
+	"\x05shape\x18\a \x01(\tR\x05shape\x12\x12\n" +
+	"\x04icon\x18\b \x01(\tR\x04icon\x12\x16\n" +
+	"\x06status\x18\t \x01(\tR\x06status\x12(\n" +
+	"\x06badges\x18\n" +
+	" \x03(\v2\x10.mako.v2.UiBadgeR\x06badges\x12\f\n" +
+	"\x01x\x18\v \x01(\x01R\x01x\x12\f\n" +
+	"\x01y\x18\f \x01(\x01R\x01y\x12\x17\n" +
+	"\ahas_pos\x18\r \x01(\bR\x06hasPos\x12\x16\n" +
+	"\x06pinned\x18\x0e \x01(\bR\x06pinned\x12!\n" +
+	"\fcontext_menu\x18\x0f \x01(\tR\vcontextMenu\x12\x1f\n" +
+	"\vcontext_arg\x18\x10 \x01(\tR\n" +
+	"contextArg\"\x9f\x01\n" +
 	"\vUiGraphEdge\x12\x12\n" +
 	"\x04from\x18\x01 \x01(\tR\x04from\x12\x0e\n" +
 	"\x02to\x18\x02 \x01(\tR\x02to\x12\x14\n" +
 	"\x05label\x18\x03 \x01(\tR\x05label\x12\x12\n" +
 	"\x04tone\x18\x04 \x01(\tR\x04tone\x12\x16\n" +
-	"\x06dashed\x18\x05 \x01(\bR\x06dashed\"_\n" +
+	"\x06dashed\x18\x05 \x01(\bR\x06dashed\x12\x16\n" +
+	"\x06active\x18\x06 \x01(\bR\x06active\x12\x12\n" +
+	"\x04kind\x18\a \x01(\tR\x04kind\"_\n" +
 	"\aUiBadge\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\x12\x12\n" +
 	"\x04tone\x18\x02 \x01(\tR\x04tone\x12\x18\n" +
@@ -3707,19 +3848,20 @@ var file_mako_v2_plugins_proto_depIdxs = []int32{
 	20, // 16: mako.v2.UiNode.badges:type_name -> mako.v2.UiBadge
 	21, // 17: mako.v2.UiNode.rows:type_name -> mako.v2.UiRow
 	16, // 18: mako.v2.UiNode.diff_lines:type_name -> mako.v2.UiDiffLine
-	20, // 19: mako.v2.UiRow.badges:type_name -> mako.v2.UiBadge
-	15, // 20: mako.v2.UiOp.node:type_name -> mako.v2.UiNode
-	25, // 21: mako.v2.AgentBlocks.blocks:type_name -> mako.v2.AgentBlock
-	28, // 22: mako.v2.Panels.panels:type_name -> mako.v2.Panel
-	35, // 23: mako.v2.PluginSyncRow.clock:type_name -> mako.v2.HLC
-	29, // 24: mako.v2.PluginSyncBucket.rows:type_name -> mako.v2.PluginSyncRow
-	30, // 25: mako.v2.PluginSyncBundle.buckets:type_name -> mako.v2.PluginSyncBucket
-	31, // 26: mako.v2.SyncPluginDB.bundle:type_name -> mako.v2.PluginSyncBundle
-	27, // [27:27] is the sub-list for method output_type
-	27, // [27:27] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	20, // 19: mako.v2.UiGraphNode.badges:type_name -> mako.v2.UiBadge
+	20, // 20: mako.v2.UiRow.badges:type_name -> mako.v2.UiBadge
+	15, // 21: mako.v2.UiOp.node:type_name -> mako.v2.UiNode
+	25, // 22: mako.v2.AgentBlocks.blocks:type_name -> mako.v2.AgentBlock
+	28, // 23: mako.v2.Panels.panels:type_name -> mako.v2.Panel
+	35, // 24: mako.v2.PluginSyncRow.clock:type_name -> mako.v2.HLC
+	29, // 25: mako.v2.PluginSyncBucket.rows:type_name -> mako.v2.PluginSyncRow
+	30, // 26: mako.v2.PluginSyncBundle.buckets:type_name -> mako.v2.PluginSyncBucket
+	31, // 27: mako.v2.SyncPluginDB.bundle:type_name -> mako.v2.PluginSyncBundle
+	28, // [28:28] is the sub-list for method output_type
+	28, // [28:28] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_plugins_proto_init() }

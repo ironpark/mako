@@ -54,6 +54,7 @@ public  final class UiNode extends
     diffLines_ = emptyProtobufList();
     diffFrom_ = "";
     diffTo_ = "";
+    graphLayout_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -3153,6 +3154,130 @@ public  final class UiNode extends
     checkByteStringIsUtf8(value);
     diffTo_ = value.toStringUtf8();
 
+  }
+
+  public static final int GRAPH_LAYOUT_FIELD_NUMBER = 47;
+  private java.lang.String graphLayout_;
+  /**
+   * <pre>
+   * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+   * configure an interactive graph canvas node (revision 50).
+   * </pre>
+   *
+   * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+   * @return The graphLayout.
+   */
+  @java.lang.Override
+  public java.lang.String getGraphLayout() {
+    return graphLayout_;
+  }
+  /**
+   * <pre>
+   * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+   * configure an interactive graph canvas node (revision 50).
+   * </pre>
+   *
+   * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+   * @return The bytes for graphLayout.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getGraphLayoutBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(graphLayout_);
+  }
+  /**
+   * <pre>
+   * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+   * configure an interactive graph canvas node (revision 50).
+   * </pre>
+   *
+   * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+   * @param value The graphLayout to set.
+   */
+  private void setGraphLayout(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    graphLayout_ = value;
+  }
+  /**
+   * <pre>
+   * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+   * configure an interactive graph canvas node (revision 50).
+   * </pre>
+   *
+   * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+   */
+  private void clearGraphLayout() {
+
+    graphLayout_ = getDefaultInstance().getGraphLayout();
+  }
+  /**
+   * <pre>
+   * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+   * configure an interactive graph canvas node (revision 50).
+   * </pre>
+   *
+   * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+   * @param value The bytes for graphLayout to set.
+   */
+  private void setGraphLayoutBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    graphLayout_ = value.toStringUtf8();
+
+  }
+
+  public static final int MINIMAP_FIELD_NUMBER = 48;
+  private boolean minimap_;
+  /**
+   * <code>bool minimap = 48 [json_name = "minimap"];</code>
+   * @return The minimap.
+   */
+  @java.lang.Override
+  public boolean getMinimap() {
+    return minimap_;
+  }
+  /**
+   * <code>bool minimap = 48 [json_name = "minimap"];</code>
+   * @param value The minimap to set.
+   */
+  private void setMinimap(boolean value) {
+    
+    minimap_ = value;
+  }
+  /**
+   * <code>bool minimap = 48 [json_name = "minimap"];</code>
+   */
+  private void clearMinimap() {
+
+    minimap_ = false;
+  }
+
+  public static final int DOUBLE_TAP_FIELD_NUMBER = 49;
+  private boolean doubleTap_;
+  /**
+   * <code>bool double_tap = 49 [json_name = "doubleTap"];</code>
+   * @return The doubleTap.
+   */
+  @java.lang.Override
+  public boolean getDoubleTap() {
+    return doubleTap_;
+  }
+  /**
+   * <code>bool double_tap = 49 [json_name = "doubleTap"];</code>
+   * @param value The doubleTap to set.
+   */
+  private void setDoubleTap(boolean value) {
+    
+    doubleTap_ = value;
+  }
+  /**
+   * <code>bool double_tap = 49 [json_name = "doubleTap"];</code>
+   */
+  private void clearDoubleTap() {
+
+    doubleTap_ = false;
   }
 
   public static dev.ironpark.mako.v2.UiNode parseFrom(
@@ -6505,6 +6630,136 @@ public  final class UiNode extends
       return this;
     }
 
+    /**
+     * <pre>
+     * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+     * configure an interactive graph canvas node (revision 50).
+     * </pre>
+     *
+     * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+     * @return The graphLayout.
+     */
+    @java.lang.Override
+    public java.lang.String getGraphLayout() {
+      return instance.getGraphLayout();
+    }
+    /**
+     * <pre>
+     * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+     * configure an interactive graph canvas node (revision 50).
+     * </pre>
+     *
+     * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+     * @return The bytes for graphLayout.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getGraphLayoutBytes() {
+      return instance.getGraphLayoutBytes();
+    }
+    /**
+     * <pre>
+     * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+     * configure an interactive graph canvas node (revision 50).
+     * </pre>
+     *
+     * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+     * @param value The graphLayout to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGraphLayout(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setGraphLayout(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+     * configure an interactive graph canvas node (revision 50).
+     * </pre>
+     *
+     * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGraphLayout() {
+      copyOnWrite();
+      instance.clearGraphLayout();
+      return this;
+    }
+    /**
+     * <pre>
+     * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+     * configure an interactive graph canvas node (revision 50).
+     * </pre>
+     *
+     * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+     * @param value The bytes for graphLayout to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGraphLayoutBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setGraphLayoutBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>bool minimap = 48 [json_name = "minimap"];</code>
+     * @return The minimap.
+     */
+    @java.lang.Override
+    public boolean getMinimap() {
+      return instance.getMinimap();
+    }
+    /**
+     * <code>bool minimap = 48 [json_name = "minimap"];</code>
+     * @param value The minimap to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMinimap(boolean value) {
+      copyOnWrite();
+      instance.setMinimap(value);
+      return this;
+    }
+    /**
+     * <code>bool minimap = 48 [json_name = "minimap"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMinimap() {
+      copyOnWrite();
+      instance.clearMinimap();
+      return this;
+    }
+
+    /**
+     * <code>bool double_tap = 49 [json_name = "doubleTap"];</code>
+     * @return The doubleTap.
+     */
+    @java.lang.Override
+    public boolean getDoubleTap() {
+      return instance.getDoubleTap();
+    }
+    /**
+     * <code>bool double_tap = 49 [json_name = "doubleTap"];</code>
+     * @param value The doubleTap to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDoubleTap(boolean value) {
+      copyOnWrite();
+      instance.setDoubleTap(value);
+      return this;
+    }
+    /**
+     * <code>bool double_tap = 49 [json_name = "doubleTap"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDoubleTap() {
+      copyOnWrite();
+      instance.clearDoubleTap();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.UiNode)
   }
   @java.lang.Override
@@ -6574,15 +6829,18 @@ public  final class UiNode extends
             dev.ironpark.mako.v2.UiDiffLine.class,
             "diffFrom_",
             "diffTo_",
+            "graphLayout_",
+            "minimap_",
+            "doubleTap_",
           };
           java.lang.String info =
-              "\u0000.\u0000\u0000\u0001..\u0000\n\u0000\u0001\u0208\u0002\u0208\u0003\u0208\u0004" +
+              "\u00001\u0000\u0000\u000111\u0000\n\u0000\u0001\u0208\u0002\u0208\u0003\u0208\u0004" +
               "\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a\u000b\u0000\f" +
               "\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012\u001b\u0013" +
               "\u0208\u0014\u001b\u0015\u021a\u0016\u0208\u0017\u0007\u0018\u0208\u0019\u021a\u001a" +
               "\u0208\u001b\u0000\u001c\u0208\u001d\u0004\u001e\u0000\u001f\u0007 \u001b!\u001b" +
               "\"\u001b#\u0208$\u0007%\u0208&\u0208\'\u001b(\u0208)\u0000*\u0000+\u0000,\u001b-" +
-              "\u0208.\u0208";
+              "\u0208.\u0208/\u02080\u00071\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -172,7 +172,7 @@ func sidebarPluginMenu(m *model, active *ggui.StateValue[string]) ggui.Widget {
 // the central workspace area or the normal workspace panes when none is active.
 func workspaceCenterView(m *model) ggui.Widget {
 	active := activeSidebarPageDerived(m, m.SidebarPage)
-	return ggui.Key(active, func(blockName string) ggui.Widget {
+	return crossfade(active, func(blockName string) ggui.Widget {
 		if blockName == "" {
 			return layoutView(m)
 		}

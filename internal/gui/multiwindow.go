@@ -806,6 +806,15 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 		w := ggui.UseWindow()
 		sw.win = w
 		m.registerSecondaryWindow(w)
+		hEsc := w.Shortcut("escape", func() {
+			if ggui.Peek(sw.sidebarPage) == "" {
+				return
+			}
+			if sem := w.Semantics(); sem != nil && escapeCapturedInSemantics(sem) {
+				return
+			}
+			sw.sidebarPage.Set("")
+		})
 		title := ggui.Derived(func() string { return m.spaceTitleByIDReactive(spaceID) + " — mako" })
 		ggui.Watch(title, func(t string) { w.SetTitle(t) })
 		exists := ggui.Derived(func() bool {
@@ -817,7 +826,12 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 				w.Close()
 			}
 		})
-		ggui.OnCleanup(closed)
+		ggui.OnCleanup(func() {
+			if hEsc != nil {
+				hEsc.Remove()
+			}
+			closed()
+		})
 		return spaceWindowRoot(m, sw)
 	})
 	if err != nil {
@@ -964,7 +978,7 @@ func spaceWindowView(m *model, sw *spaceWindowState) ggui.Widget {
 		).Stretch()
 	})
 	activePage := activeSidebarPageDerived(m, sw.sidebarPage)
-	center := ggui.Key(activePage, func(blockName string) ggui.Widget {
+	center := crossfade(activePage, func(blockName string) ggui.Widget {
 		if blockName == "" {
 			return keyedLayoutView(m, sw.layoutKey, sw.focusGroup)
 		}

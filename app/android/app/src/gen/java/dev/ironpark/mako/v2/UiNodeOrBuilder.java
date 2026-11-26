@@ -808,4 +808,38 @@ public interface UiNodeOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDiffToBytes();
+
+  /**
+   * <pre>
+   * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+   * configure an interactive graph canvas node (revision 50).
+   * </pre>
+   *
+   * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+   * @return The graphLayout.
+   */
+  java.lang.String getGraphLayout();
+  /**
+   * <pre>
+   * graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+   * configure an interactive graph canvas node (revision 50).
+   * </pre>
+   *
+   * <code>string graph_layout = 47 [json_name = "graphLayout"];</code>
+   * @return The bytes for graphLayout.
+   */
+  com.google.protobuf.ByteString
+      getGraphLayoutBytes();
+
+  /**
+   * <code>bool minimap = 48 [json_name = "minimap"];</code>
+   * @return The minimap.
+   */
+  boolean getMinimap();
+
+  /**
+   * <code>bool double_tap = 49 [json_name = "doubleTap"];</code>
+   * @return The doubleTap.
+   */
+  boolean getDoubleTap();
 }

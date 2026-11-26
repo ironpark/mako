@@ -11,6 +11,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func newShortcutsTestModel(t *testing.T) *model {
@@ -347,6 +348,51 @@ func TestSettingsEscapeReturnsToWorkspace(t *testing.T) {
 		p.Key("escape")
 		if got := ggui.Peek(m.Page); got != "workspace" {
 			t.Fatalf("second Escape did not return to workspace: page = %q", got)
+		}
+	})
+}
+
+func TestSidebarPageEscapeReturnsToWorkspace(t *testing.T) {
+	t.Run("escape clears active sidebar plugin page on workspace", func(t *testing.T) {
+		m := newShortcutsTestModel(t)
+		m.setPlugins([]*protocol.PluginInfo{sidebarAndTabPlugin(protocol.PluginRunning)})
+		m.Page.Set("workspace")
+		m.openSidebarPage("plugin:acme-tools/explorer")
+		p := newShortcutsProbe(t, m)
+
+		p.Key("escape")
+		if got := ggui.Peek(m.SidebarPage); got != "" {
+			t.Fatalf("SidebarPage = %q, want empty after Escape", got)
+		}
+		if got := ggui.Peek(m.Page); got != "workspace" {
+			t.Fatalf("Page = %q, want workspace", got)
+		}
+	})
+
+	t.Run("modal dialog captures Escape before clearing sidebar plugin page", func(t *testing.T) {
+		m := newShortcutsTestModel(t)
+		m.setPlugins([]*protocol.PluginInfo{sidebarAndTabPlugin(protocol.PluginRunning)})
+		m.Page.Set("workspace")
+		m.openSidebarPage("plugin:acme-tools/explorer")
+		p := newShortcutsProbe(t, m)
+
+		m.openPalette()
+		p.Frame()
+		if !ggui.Peek(m.pickers.PaletteOpen) {
+			t.Fatal("palette did not open")
+		}
+
+		p.Key("escape")
+		if ggui.Peek(m.pickers.PaletteOpen) {
+			t.Fatal("first Escape did not close palette")
+		}
+		if got := ggui.Peek(m.SidebarPage); got != "plugin:acme-tools/explorer" {
+			t.Fatalf("first Escape cleared SidebarPage while dialog was open: %q", got)
+		}
+
+		p.Key("escape")
+		if got := ggui.Peek(m.SidebarPage); got != "" {
+			t.Fatalf("second Escape did not clear SidebarPage: %q", got)
 		}
 	})
 }

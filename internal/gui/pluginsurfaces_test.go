@@ -3,6 +3,7 @@ package gui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ironpark/ggui"
 
@@ -433,4 +434,46 @@ func TestPluginTreeDrawsRev49Components(t *testing.T) {
 	} else {
 		t.Errorf("sortable table header button 'Sort by Service' not found in semantics")
 	}
+}
+
+func TestWorkspaceCenterViewAndSpaceWindowCrossfade(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.setPlugins([]*protocol.PluginInfo{sidebarAndTabPlugin(protocol.PluginRunning)})
+
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return workspaceCenterView(m)
+	}, ggui.Sz(900, 600))
+	defer p.Close()
+	for range 2 {
+		p.Frame()
+	}
+
+	m.openSidebarPage("plugin:acme-tools/explorer")
+	p.Frame()
+	// Mid-crossfade both views may still be mounted briefly, then after switchDuration Explorer settles.
+	p.Advance(switchDuration / 2)
+	p.Advance(switchDuration)
+	if got := ggui.Peek(m.SidebarPage); got != "plugin:acme-tools/explorer" {
+		t.Fatalf("SidebarPage = %q, want plugin:acme-tools/explorer", got)
+	}
+	m.clearSidebarPage()
+	p.Advance(switchDuration + 10*time.Millisecond)
+	if got := ggui.Peek(m.SidebarPage); got != "" {
+		t.Fatalf("SidebarPage after clear = %q, want empty", got)
+	}
+
+	sw := m.openSpaceWindow(allSpaceID)
+	if sw == nil {
+		t.Fatal("openSpaceWindow returned nil")
+	}
+	pSpace := ggui.ProbeBuilder(func() ggui.Widget {
+		return spaceWindowView(m, sw)
+	}, ggui.Sz(900, 600))
+	defer pSpace.Close()
+	pSpace.Frame()
+	sw.sidebarPage.Set("plugin:acme-tools/explorer")
+	pSpace.Advance(switchDuration + 10*time.Millisecond)
+	sw.sidebarPage.Set("")
+	pSpace.Advance(switchDuration + 10*time.Millisecond)
 }

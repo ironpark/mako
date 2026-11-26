@@ -13,6 +13,7 @@ package uiblock
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -89,6 +90,15 @@ var Tones = []string{"", "muted", "faint", "accent", "success", "warning", "dang
 // Checks are the tri-state check tokens a checkbox or tree_item may take.
 var Checks = []string{"", "on", "off", "mixed"}
 
+// GraphLayouts are the layout modes a graph node accepts.
+var GraphLayouts = []string{"", "force", "hierarchy", "radial"}
+
+// GraphNodeShapes are the visual shapes a graph node accepts.
+var GraphNodeShapes = []string{"", "card", "circle"}
+
+// GraphStatuses are the live status tokens a graph node accepts.
+var GraphStatuses = []string{"", "working", "waiting", "idle", "error", "done", "compacting", "stopped"}
+
 // BadgeVariants are the style variant tokens a UiBadge may take.
 var BadgeVariants = []string{"", "soft", "solid", "outline", "mono"}
 
@@ -107,6 +117,7 @@ var variantsOf = map[string][]string{
 	KindProgress: {"spinner", "ring"},
 	KindScroll:   {"follow"},
 	KindTreeItem: {"badge"},
+	KindGraph:    {"cards"},
 	KindMenu:     {"ghost", "outline", "context"},
 	KindDialog:   {"danger"},
 	KindDiff:     {"unified", "split"},
@@ -116,7 +127,7 @@ var variantsOf = map[string][]string{
 
 // Variants are every style variant token, for docs; VariantsOf says which a kind takes.
 var Variants = []string{"", "primary", "secondary", "outline", "ghost", "danger", "soft", "solid", "spinner", "ring",
-	"follow", "badge", "toolbar", "context", "mono", "caption", "heading", "search", "password", "pills", "underline",
+	"follow", "badge", "cards", "toolbar", "context", "mono", "caption", "heading", "search", "password", "pills", "underline",
 	"compact", "striped", "unified", "split", "text", "rect", "circle"}
 
 // VariantsOf returns the non-empty variant tokens accepted by kind.
@@ -163,6 +174,9 @@ const (
 	maxGraphGroup    = 64
 	maxGraphSubtitle = 160
 	maxGraphWeight   = 1e6
+	maxGraphCoord    = 1e6
+	maxGraphBadges   = 6
+	maxGraphEdgeKind = 32
 	minGraphHeight   = 120
 	maxGraphHeight   = 1200
 	// Badges, menus, context menus, and dag bounds (revision 46).
@@ -186,10 +200,11 @@ const (
 )
 
 var (
-	iconName      = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
-	messageName   = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
-	languageTag   = regexp.MustCompile(`^[a-z0-9+#-]{0,24}$`)
-	dragGroupName = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+	iconName          = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+	messageName       = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+	languageTag       = regexp.MustCompile(`^[a-z0-9+#-]{0,24}$`)
+	dragGroupName     = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+	graphEdgeKindName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,31}$`)
 )
 
 // jsNode is a node as the prelude writes it.
@@ -215,6 +230,7 @@ type jsNode struct {
 	Ratio       *float64        `json:"ratio"`
 	Fill        bool            `json:"fill"`
 	OnTap       json.RawMessage `json:"onTap"`
+	OnDoubleTap json.RawMessage `json:"onDoubleTap"`
 	OnChange    json.RawMessage `json:"onChange"`
 	OnSubmit    json.RawMessage `json:"onSubmit"`
 	OnLink      json.RawMessage `json:"onLink"`
@@ -224,6 +240,8 @@ type jsNode struct {
 	DropAccept  []string        `json:"dropAccept"`
 	Direction   string          `json:"direction"`
 	MaxHeight   float64         `json:"maxHeight"`
+	Layout      string          `json:"layout"`
+	Minimap     bool            `json:"minimap"`
 	Children    []*jsNode       `json:"children"`
 	Chart       string          `json:"chart"`
 	Series      []*jsSeries     `json:"series"`
@@ -261,12 +279,22 @@ type jsSeries struct {
 
 // jsGraphNode is a node of a graph canvas as the prelude writes it.
 type jsGraphNode struct {
-	ID       string   `json:"id"`
-	Label    string   `json:"label"`
-	Group    string   `json:"group"`
-	Tone     string   `json:"tone"`
-	Subtitle string   `json:"subtitle"`
-	Weight   *float64 `json:"weight"`
+	ID          string     `json:"id"`
+	Label       string     `json:"label"`
+	Group       string     `json:"group"`
+	Tone        string     `json:"tone"`
+	Subtitle    string     `json:"subtitle"`
+	Weight      *float64   `json:"weight"`
+	Shape       string     `json:"shape"`
+	Icon        string     `json:"icon"`
+	Status      string     `json:"status"`
+	Badges      []*jsBadge `json:"badges"`
+	X           *float64   `json:"x"`
+	Y           *float64   `json:"y"`
+	HasPos      *bool      `json:"hasPos"`
+	Pinned      bool       `json:"pinned"`
+	ContextMenu string     `json:"contextMenu"`
+	ContextArg  string     `json:"contextArg"`
 }
 
 // jsGraphEdge is an edge of a graph canvas as the prelude writes it.
@@ -276,6 +304,8 @@ type jsGraphEdge struct {
 	Label  string `json:"label"`
 	Tone   string `json:"tone"`
 	Dashed bool   `json:"dashed"`
+	Active bool   `json:"active"`
+	Kind   string `json:"kind"`
 }
 
 // jsBadge is a small trailing tag on a node or dag row.
@@ -301,7 +331,7 @@ type jsRow struct {
 
 // actions are what a node's events send: each a message, the JSON array
 // of its name and arguments.
-type actions struct{ tap, change, submit, drop, check json.RawMessage }
+type actions struct{ tap, doubleTap, change, submit, drop, check json.RawMessage }
 
 // Tree is a tree, read: the protocol's tree and its nodes' messages by
 // node id.
@@ -473,8 +503,8 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 			ratio = *j.Ratio
 		}
 	}
-	if j.Fill && (depth != 1 || (j.Kind != KindColumn && j.Kind != KindRow && j.Kind != KindSplit)) {
-		return nil, fmt.Errorf("%s: fill is only allowed on a root column, row, or split", where(id))
+	if j.Fill && j.Kind != KindGraph && (depth != 1 || (j.Kind != KindColumn && j.Kind != KindRow && j.Kind != KindSplit)) {
+		return nil, fmt.Errorf("%s: fill is only allowed on a root column, row, or split, or a graph", where(id))
 	}
 	if !languageTag.MatchString(j.Language) {
 		return nil, fmt.Errorf("%s: language %q is not a language's name", where(id), j.Language)
@@ -571,6 +601,15 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 			return nil, fmt.Errorf("%s: only a scroll, graph, dag, code, diff or skeleton node takes maxHeight", where(id))
 		}
 	}
+	if j.Layout != "" && j.Kind != KindGraph {
+		return nil, fmt.Errorf("%s: only a graph node takes layout", where(id))
+	}
+	if j.Kind == KindGraph && !slices.Contains(GraphLayouts, j.Layout) {
+		return nil, fmt.Errorf("%s: graph layout %q is not force, hierarchy or radial", where(id), j.Layout)
+	}
+	if j.Minimap && j.Kind != KindGraph {
+		return nil, fmt.Errorf("%s: only a graph node takes minimap", where(id))
+	}
 	if j.ContextMenu != "" {
 		if len(j.ContextMenu) > maxKey || strings.ContainsAny(j.ContextMenu, "/#") || strings.ContainsFunc(j.ContextMenu, Spoofing) {
 			return nil, fmt.Errorf("%s: invalid contextMenu %q", where(id), j.ContextMenu)
@@ -596,6 +635,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 		Disabled: j.Disabled, Grow: j.Grow, Gap: j.Gap, Columns: j.Columns, Ratio: ratio, Fill: j.Fill,
 		Drag: j.Drag, DragGroup: j.DragGroup, DropAccept: j.DropAccept, Direction: j.Direction, MaxHeight: j.MaxHeight,
 		Check: checkVal, ContextMenu: j.ContextMenu, ContextArg: j.ContextArg,
+		GraphLayout: j.Layout, Minimap: j.Minimap,
 	}
 	if (j.Kind == KindInput || j.Kind == KindTextarea) && n.Text == "" {
 		n.Text = j.Placeholder
@@ -649,14 +689,24 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 			args = map[string]bool{}
 			r.t.contextArgs[j.ContextMenu] = args
 		}
-		if j.Kind == KindDag {
+		switch j.Kind {
+		case KindDag:
 			for _, row := range n.Rows {
 				args[row.GetId()] = true
 			}
 			if j.ContextArg != "" {
 				args[j.ContextArg] = true
 			}
-		} else {
+		case KindGraph:
+			for _, gn := range n.GraphNodes {
+				if gn.GetContextMenu() == "" {
+					args[cmp.Or(gn.GetContextArg(), gn.GetId())] = true
+				}
+			}
+			if j.ContextArg != "" {
+				args[j.ContextArg] = true
+			}
+		default:
 			args[j.ContextArg] = true
 		}
 	}
@@ -665,6 +715,12 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 	var err error
 	if a.tap, err = message(j.OnTap); err != nil {
 		return nil, fmt.Errorf("%s: onTap: %w", where(id), err)
+	}
+	if a.doubleTap, err = message(j.OnDoubleTap); err != nil {
+		return nil, fmt.Errorf("%s: onDoubleTap: %w", where(id), err)
+	}
+	if a.doubleTap != nil && j.Kind != KindGraph {
+		return nil, fmt.Errorf("%s: only a graph node takes onDoubleTap", where(id))
 	}
 	if a.change, err = message(j.OnChange); err != nil {
 		return nil, fmt.Errorf("%s: onChange: %w", where(id), err)
@@ -693,12 +749,19 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 		}
 	}
 	switch j.Kind {
-	case KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindBreadcrumb, KindGraph, KindCheckbox, KindDialog, KindDag, KindRadio, KindSlider, KindDiff, KindAlert:
+	case KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindBreadcrumb, KindCheckbox, KindDialog, KindDag, KindRadio, KindSlider, KindDiff, KindAlert:
 		if a.tap != nil {
 			return nil, fmt.Errorf("%s: a %s takes onChange, not onTap", where(id), j.Kind)
 		}
 		if j.Drag != "" || a.drop != nil {
 			return nil, fmt.Errorf("%s: a %s does not take drag or onDrop", where(id), j.Kind)
+		}
+	case KindGraph:
+		if a.tap != nil {
+			return nil, fmt.Errorf("%s: a %s takes onChange, not onTap", where(id), j.Kind)
+		}
+		if j.Drag != "" {
+			return nil, fmt.Errorf("%s: a %s does not take drag", where(id), j.Kind)
 		}
 	case KindTable:
 		if a.submit != nil {
@@ -762,8 +825,8 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 	if len(j.DropAccept) > 0 && a.drop == nil {
 		return nil, fmt.Errorf("%s: dropAccept requires onDrop", where(id))
 	}
-	n.Tap, n.Change, n.Drop, n.Checks = a.tap != nil, a.change != nil || a.submit != nil, a.drop != nil, a.check != nil
-	if n.Tap || n.Change || n.Drop || n.Checks {
+	n.Tap, n.Change, n.Drop, n.Checks, n.DoubleTap = a.tap != nil, a.change != nil || a.submit != nil, a.drop != nil, a.check != nil, a.doubleTap != nil
+	if n.Tap || n.Change || n.Drop || n.Checks || n.DoubleTap {
 		r.t.actions[id] = a
 	}
 	container := j.Kind == KindColumn || j.Kind == KindRow || j.Kind == KindStack || j.Kind == KindCard ||
@@ -959,9 +1022,78 @@ func (r *treeReader) graph(j *jsNode, n *protocol.UiNode, id string) error {
 			}
 			w = *gn.Weight
 		}
-		r.text += len(gn.ID) + len(gn.Label) + len(gn.Group) + len(gn.Subtitle)
+		if !slices.Contains(GraphNodeShapes, gn.Shape) {
+			return fmt.Errorf("%s: graph node %q: shape %q is not card or circle", where(id), gn.ID, gn.Shape)
+		}
+		if gn.Icon != "" && (len(gn.Icon) > 48 || !iconName.MatchString(gn.Icon)) {
+			return fmt.Errorf("%s: graph node %q: icon %q is not an icon's name", where(id), gn.ID, gn.Icon)
+		}
+		if !slices.Contains(GraphStatuses, gn.Status) {
+			return fmt.Errorf("%s: graph node %q: invalid status %q", where(id), gn.ID, gn.Status)
+		}
+		var nodeBadges []*protocol.UiBadge
+		if len(gn.Badges) > 0 {
+			var err error
+			nodeBadges, err = r.badges(gn.Badges, maxGraphBadges, fmt.Sprintf("%s graph node %q", where(id), gn.ID))
+			if err != nil {
+				return err
+			}
+		}
+		var x, y float64
+		hasPos := false
+		if gn.X != nil {
+			if !finite(*gn.X, -maxGraphCoord, maxGraphCoord) {
+				return fmt.Errorf("%s: graph node %q: invalid x", where(id), gn.ID)
+			}
+			x = *gn.X
+			hasPos = true
+		}
+		if gn.Y != nil {
+			if !finite(*gn.Y, -maxGraphCoord, maxGraphCoord) {
+				return fmt.Errorf("%s: graph node %q: invalid y", where(id), gn.ID)
+			}
+			y = *gn.Y
+			hasPos = true
+		}
+		if gn.HasPos != nil {
+			if *gn.HasPos && gn.X == nil && gn.Y == nil {
+				return fmt.Errorf("%s: graph node %q: hasPos requires x or y", where(id), gn.ID)
+			}
+			hasPos = *gn.HasPos
+		}
+		if gn.ContextMenu != "" {
+			if len(gn.ContextMenu) > maxKey || strings.ContainsAny(gn.ContextMenu, "/#") || strings.ContainsFunc(gn.ContextMenu, Spoofing) {
+				return fmt.Errorf("%s: graph node %q: invalid contextMenu %q", where(id), gn.ID, gn.ContextMenu)
+			}
+			r.text += len(gn.ContextMenu)
+			r.contextRefs = append(r.contextRefs, contextRef{where: fmt.Sprintf("%s graph node %q", where(id), gn.ID), menu: gn.ContextMenu})
+		}
+		if gn.ContextArg != "" {
+			if gn.ContextMenu == "" && j.ContextMenu == "" {
+				return fmt.Errorf("%s: graph node %q: contextArg requires contextMenu", where(id), gn.ID)
+			}
+			if utf8.RuneCountInString(gn.ContextArg) > maxContextArg || strings.ContainsFunc(gn.ContextArg, Spoofing) {
+				return fmt.Errorf("%s: graph node %q: contextArg is over %d characters or holds control or reordering characters", where(id), gn.ID, maxContextArg)
+			}
+			r.text += len(gn.ContextArg)
+		}
+		if gn.ContextMenu != "" {
+			args := r.t.contextArgs[gn.ContextMenu]
+			if args == nil {
+				args = map[string]bool{}
+				r.t.contextArgs[gn.ContextMenu] = args
+			}
+			args[cmp.Or(gn.ContextArg, gn.ID)] = true
+		}
+		r.text += len(gn.ID) + len(gn.Label) + len(gn.Group) + len(gn.Subtitle) + len(gn.Shape) + len(gn.Icon) + len(gn.Status)
+		if r.text > maxTreeText {
+			return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+		}
 		n.GraphNodes = append(n.GraphNodes, &protocol.UiGraphNode{
 			Id: gn.ID, Label: gn.Label, Group: gn.Group, Tone: gn.Tone, Subtitle: gn.Subtitle, Weight: w,
+			Shape: gn.Shape, Icon: gn.Icon, Status: gn.Status, Badges: nodeBadges,
+			X: x, Y: y, HasPos: hasPos, Pinned: gn.Pinned,
+			ContextMenu: gn.ContextMenu, ContextArg: gn.ContextArg,
 		})
 	}
 	for i, ge := range j.GraphEdges {
@@ -980,9 +1112,13 @@ func (r *treeReader) graph(j *jsNode, n *protocol.UiNode, id string) error {
 		if !slices.Contains(Tones, ge.Tone) {
 			return fmt.Errorf("%s: graph edge %d: tone %q is not a colour token", where(id), i, ge.Tone)
 		}
-		r.text += len(ge.From) + len(ge.To) + len(ge.Label)
+		if ge.Kind != "" && (len(ge.Kind) > maxGraphEdgeKind || !graphEdgeKindName.MatchString(ge.Kind)) {
+			return fmt.Errorf("%s: graph edge %d has invalid kind %q", where(id), i, ge.Kind)
+		}
+		r.text += len(ge.From) + len(ge.To) + len(ge.Label) + len(ge.Kind)
 		n.GraphEdges = append(n.GraphEdges, &protocol.UiGraphEdge{
 			From: ge.From, To: ge.To, Label: ge.Label, Tone: ge.Tone, Dashed: ge.Dashed,
+			Active: ge.Active, Kind: ge.Kind,
 		})
 	}
 	if j.Value != "" && !nodeIDs[j.Value] {

@@ -434,6 +434,11 @@ message UiNode {
   repeated UiDiffLine diff_lines = 44;
   string diff_from = 45;
   string diff_to = 46;
+  // graph_layout ("force", "hierarchy", "radial"), minimap, and double_tap
+  // configure an interactive graph canvas node (revision 50).
+  string graph_layout = 47;
+  bool minimap = 48;
+  bool double_tap = 49;
 }
 
 // UiDiffLine is one line of a diff node (revision 49): op is "+", "-", " " or
@@ -462,6 +467,16 @@ message UiGraphNode {
   string tone = 4;
   string subtitle = 5;
   double weight = 6;
+  string shape = 7;
+  string icon = 8;
+  string status = 9;
+  repeated UiBadge badges = 10;
+  double x = 11;
+  double y = 12;
+  bool has_pos = 13;
+  bool pinned = 14;
+  string context_menu = 15;
+  string context_arg = 16;
 }
 
 // UiGraphEdge is an edge connecting two UiGraphNodes in a graph canvas
@@ -472,6 +487,8 @@ message UiGraphEdge {
   string label = 3;
   string tone = 4;
   bool dashed = 5;
+  bool active = 6;
+  string kind = 7;
 }
 
 // UiBadge is a small trailing tag on a node or dag row (revision 46).

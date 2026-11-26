@@ -1888,4 +1888,14 @@ var catalogKo = map[string]string{
 	"Opens a new forked session from right before this message without modifying the current session. This message will be placed in the new session's composer so you can edit and resend it.": "현재 세션은 그대로 두고, 이 메시지 직전 시점에서 분기된 새 세션을 엽니다. 이 메시지는 새 세션의 입력창에 채워져 수정 후 다시 보낼 수 있습니다.",
 	"Rewind":                        "되감기",
 	"Could not rewind conversation": "대화를 되감지 못했습니다",
+
+	// Interactive graph canvas & node actions
+	"Force layout":     "포스 레이아웃",
+	"Hierarchy layout": "계층 레이아웃",
+	"Radial layout":    "방사형 레이아웃",
+	"Fit view":         "화면에 맞추기",
+	"Toggle minimap":   "미니맵 전환",
+	"Open session":     "세션 열기",
+	"Run subagent":     "서브에이전트 실행",
+	"Detail: %s":       "상세: %s",
 }

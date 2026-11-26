@@ -25,9 +25,10 @@ import (
 
 // newSession is the new-session dialog's form.
 type newSession struct {
-	Agent   string // a target: agent, or agent:profile
-	NodeID  string
-	Project string
+	Agent           string // a target: agent, or agent:profile
+	NodeID          string
+	Project         string
+	ParentSessionID string
 	// Worktree starts the session in a new git worktree, on Branch.
 	Worktree bool
 	Branch   string
@@ -729,6 +730,31 @@ func (m *model) openNew(nodeID, project string) *launchState {
 	return l
 }
 
+// openSubagent opens a new-session tab prefilled as a subagent of parentID.
+func (m *model) openSubagent(parentID string) *launchState {
+	s, ok := m.session(parentID)
+	if !ok {
+		return nil
+	}
+	nodeID, project := s.GetNodeId(), s.GetProject()
+	if nodeID == "" {
+		nodeID = ggui.Peek(m.Conn).Self.GetId()
+	}
+	f := newSession{
+		Agent:           m.defaultSessionAgent(nodeID),
+		NodeID:          nodeID,
+		Project:         project,
+		ParentSessionID: parentID,
+	}
+	if f.Project != "" {
+		if pl := placeIn(m.projectsNow(), f.NodeID, f.Project, "", ""); pl.At >= 0 {
+			m.showProjectTabs(m.projectsNow()[pl.At].ID)
+		}
+	}
+	_, l := m.newLaunch(f)
+	return l
+}
+
 // launching reports whether a new session's tab is open.
 func (m *model) launching() bool { return slices.ContainsFunc(ggui.Peek(m.Tabs), isLaunchTab) }
 
@@ -768,7 +794,7 @@ func (m *model) startSession(tab string, f newSession) {
 	nodeID := m.remoteID(f.NodeID)
 	agent, profile := agentspec.SplitTarget(f.Agent)
 	prompt := strings.TrimSpace(f.Prompt)
-	req := &protocol.OpenSession{NodeId: nodeID, Agent: agent, Profile: profile, Project: f.Project, Prompt: prompt, Cols: 120, Rows: 36}
+	req := &protocol.OpenSession{NodeId: nodeID, Agent: agent, Profile: profile, Project: f.Project, ParentSessionId: f.ParentSessionID, Prompt: prompt, Cols: 120, Rows: 36}
 	var team agentTeam // the one the agent leads
 	if agent != "shell" {
 		if t, ok := m.teamNamed(f.Team); ok && len(t.Members) > 0 {

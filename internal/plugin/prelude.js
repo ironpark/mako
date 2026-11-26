@@ -613,8 +613,20 @@ class UiNode {
     this.n.onTap = [name, ...args];
     return this;
   }
+  onDoubleTap(name, ...args) {
+    this.n.onDoubleTap = [name, ...args];
+    return this;
+  }
   onChange(name, ...args) {
     this.n.onChange = [name, ...args];
+    return this;
+  }
+  layout(mode) {
+    this.n.layout = String(mode ?? "");
+    return this;
+  }
+  minimap(on = true) {
+    this.n.minimap = !!on;
     return this;
   }
   onSubmit(name, ...args) {
@@ -670,8 +682,8 @@ class UiNode {
 
 const options = [
   "key", "text", "tone", "variant", "weight", "size", "grow", "gap", "columns", "ratio", "fill",
-  "icon", "checked", "value", "disabled", "onTap", "onChange", "onSubmit", "onLink",
-  "drag", "dragGroup", "onDrop", "dropAccept", "direction", "maxHeight", "placeholder", "labels",
+  "icon", "checked", "value", "disabled", "onTap", "onDoubleTap", "onChange", "onSubmit", "onLink",
+  "drag", "dragGroup", "onDrop", "dropAccept", "direction", "maxHeight", "layout", "minimap", "placeholder", "labels",
   "badges", "check", "onCheck", "contextMenu", "contextArg", "rows",
   "min", "max", "step", "diffLines", "diffFrom", "diffTo", "language",
 ];
@@ -681,7 +693,7 @@ function node(kind, fields, opts) {
   for (const [k, v] of Object.entries(opts || {})) {
     if (!options.includes(k)) throw new Error(`${k} is not an option of a node`);
     if (v === undefined) continue;
-    if (k === "key" || k === "text" || k === "drag" || k === "dragGroup" || k === "direction" || k === "variant" || k === "value" || k === "contextMenu" || k === "contextArg" || k === "placeholder" || k === "diffFrom" || k === "diffTo" || k === "language") {
+    if (k === "key" || k === "text" || k === "drag" || k === "dragGroup" || k === "direction" || k === "variant" || k === "value" || k === "layout" || k === "contextMenu" || k === "contextArg" || k === "placeholder" || k === "diffFrom" || k === "diffTo" || k === "language") {
       n.n[k] = String(v ?? "");
     } else if (k === "check") {
       n.n.check = normalizeCheck(v);
@@ -695,7 +707,7 @@ function node(kind, fields, opts) {
       n.n[k] = children(v).map(String);
     } else if (k === "maxHeight" || k === "columns" || k === "ratio" || k === "min" || k === "max" || k === "step") {
       n.n[k] = Number(v);
-    } else if (k === "fill" || k === "checked" || k === "disabled") {
+    } else if (k === "fill" || k === "checked" || k === "disabled" || k === "minimap") {
       n.n[k] = Boolean(v);
     } else {
       n.n[k] = v;
@@ -792,7 +804,9 @@ const ui = Object.freeze({
     }, rest);
   },
   // A declarative interactive graph canvas of nodes [{ id, label, group, tone,
-  // subtitle, weight }] and edges [{ from, to, label, tone, dashed }].
+  // subtitle, weight, shape, icon, status, badges, x, y, hasPos, pinned,
+  // contextMenu, contextArg }] and edges [{ from, to, label, tone, dashed,
+  // active, kind }].
   graph: (nodes, edges, o) => {
     const { caption, ...rest } = o || {};
     return node("graph", {
@@ -806,15 +820,32 @@ const ui = Object.freeze({
           subtitle: String(gn.subtitle ?? ""),
         };
         if (gn.weight !== undefined) out.weight = Number(gn.weight);
+        if (gn.shape !== undefined && gn.shape !== "") out.shape = String(gn.shape);
+        if (gn.icon !== undefined && gn.icon !== "") out.icon = String(gn.icon);
+        if (gn.status !== undefined && gn.status !== "") out.status = String(gn.status);
+        if (Array.isArray(gn.badges) && gn.badges.length > 0) out.badges = normalizeBadges(gn.badges);
+        if (gn.x !== undefined) out.x = Number(gn.x);
+        if (gn.y !== undefined) out.y = Number(gn.y);
+        if (gn.hasPos !== undefined) out.hasPos = Boolean(gn.hasPos);
+        if (gn.pinned !== undefined) out.pinned = Boolean(gn.pinned);
+        if (gn.contextMenu !== undefined && gn.contextMenu !== "") out.contextMenu = String(gn.contextMenu);
+        if (gn.contextArg !== undefined && gn.contextArg !== "") out.contextArg = String(gn.contextArg);
         return out;
       }),
-      graphEdges: children(edges).map((ge) => ({
-        from: String(ge.from ?? ""),
-        to: String(ge.to ?? ""),
-        label: String(ge.label ?? ""),
-        tone: ge.tone ?? "",
-        dashed: Boolean(ge.dashed),
-      })),
+      graphEdges: children(edges).map((ge) => {
+        const out = {
+          from: String(ge.from ?? ""),
+          to: String(ge.to ?? ""),
+          label: String(ge.label ?? ""),
+          tone: ge.tone ?? "",
+          dashed: Boolean(ge.dashed),
+        };
+        if (ge.active !== undefined || ge.animated !== undefined) {
+          out.active = Boolean(ge.active ?? ge.animated);
+        }
+        if (ge.kind !== undefined && ge.kind !== "") out.kind = String(ge.kind);
+        return out;
+      }),
     }, rest);
   },
 });

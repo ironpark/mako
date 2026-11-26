@@ -24,6 +24,7 @@ public  final class UiGraphEdge extends
     to_ = "";
     label_ = "";
     tone_ = "";
+    kind_ = "";
   }
   public static final int FROM_FIELD_NUMBER = 1;
   private java.lang.String from_;
@@ -237,6 +238,79 @@ public  final class UiGraphEdge extends
   private void clearDashed() {
 
     dashed_ = false;
+  }
+
+  public static final int ACTIVE_FIELD_NUMBER = 6;
+  private boolean active_;
+  /**
+   * <code>bool active = 6 [json_name = "active"];</code>
+   * @return The active.
+   */
+  @java.lang.Override
+  public boolean getActive() {
+    return active_;
+  }
+  /**
+   * <code>bool active = 6 [json_name = "active"];</code>
+   * @param value The active to set.
+   */
+  private void setActive(boolean value) {
+    
+    active_ = value;
+  }
+  /**
+   * <code>bool active = 6 [json_name = "active"];</code>
+   */
+  private void clearActive() {
+
+    active_ = false;
+  }
+
+  public static final int KIND_FIELD_NUMBER = 7;
+  private java.lang.String kind_;
+  /**
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @return The kind.
+   */
+  @java.lang.Override
+  public java.lang.String getKind() {
+    return kind_;
+  }
+  /**
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @return The bytes for kind.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getKindBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(kind_);
+  }
+  /**
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @param value The kind to set.
+   */
+  private void setKind(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    kind_ = value;
+  }
+  /**
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   */
+  private void clearKind() {
+
+    kind_ = getDefaultInstance().getKind();
+  }
+  /**
+   * <code>string kind = 7 [json_name = "kind"];</code>
+   * @param value The bytes for kind to set.
+   */
+  private void setKindBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    kind_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.UiGraphEdge parseFrom(
@@ -565,6 +639,83 @@ public  final class UiGraphEdge extends
       return this;
     }
 
+    /**
+     * <code>bool active = 6 [json_name = "active"];</code>
+     * @return The active.
+     */
+    @java.lang.Override
+    public boolean getActive() {
+      return instance.getActive();
+    }
+    /**
+     * <code>bool active = 6 [json_name = "active"];</code>
+     * @param value The active to set.
+     * @return This builder for chaining.
+     */
+    public Builder setActive(boolean value) {
+      copyOnWrite();
+      instance.setActive(value);
+      return this;
+    }
+    /**
+     * <code>bool active = 6 [json_name = "active"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearActive() {
+      copyOnWrite();
+      instance.clearActive();
+      return this;
+    }
+
+    /**
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @return The kind.
+     */
+    @java.lang.Override
+    public java.lang.String getKind() {
+      return instance.getKind();
+    }
+    /**
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @return The bytes for kind.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getKindBytes() {
+      return instance.getKindBytes();
+    }
+    /**
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @param value The kind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKind(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setKind(value);
+      return this;
+    }
+    /**
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKind() {
+      copyOnWrite();
+      instance.clearKind();
+      return this;
+    }
+    /**
+     * <code>string kind = 7 [json_name = "kind"];</code>
+     * @param value The bytes for kind to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKindBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setKindBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.UiGraphEdge)
   }
   @java.lang.Override
@@ -586,10 +737,12 @@ public  final class UiGraphEdge extends
             "label_",
             "tone_",
             "dashed_",
+            "active_",
+            "kind_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0007";
+              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u0007\u0007\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -53,6 +53,8 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 	switch ev.GetKind() {
 	case protocol.UiTap:
 		raw = a.tap
+	case protocol.UiDoubleTap:
+		raw = a.doubleTap
 	case protocol.UiChange:
 		raw = a.change
 	case protocol.UiSubmit:
@@ -61,7 +63,11 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 			raw = a.change
 		}
 	case protocol.UiDrop:
-		if ev.GetValue() == "" || len(ev.GetValue()) > maxDrag || strings.ContainsFunc(ev.GetValue(), Spoofing) {
+		limit := maxDrag
+		if kind == KindGraph {
+			limit = maxGraphID*6 + 128
+		}
+		if ev.GetValue() == "" || len(ev.GetValue()) > limit || strings.ContainsFunc(ev.GetValue(), Spoofing) {
 			return Message{}, fmt.Errorf("invalid drop payload for %q of %s", ev.GetNode(), ev.GetBlock())
 		}
 		raw = a.drop
@@ -92,6 +98,30 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 			b, _ := json.Marshal(ev.GetValue())
 			m.Args = append(m.Args, b)
 		}
+	case protocol.UiDoubleTap:
+		if kind != KindGraph || !graphHasNode(node, ev.GetValue()) {
+			return Message{}, fmt.Errorf("graph %q of %s has no node %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
+		}
+		b, _ := json.Marshal(ev.GetValue())
+		m.Args = append(m.Args, b)
+	case protocol.UiDrop:
+		if kind == KindGraph {
+			var pos struct {
+				ID string  `json:"id"`
+				X  float64 `json:"x"`
+				Y  float64 `json:"y"`
+			}
+			dec := json.NewDecoder(strings.NewReader(ev.GetValue()))
+			dec.DisallowUnknownFields()
+			if err := dec.Decode(&pos); err != nil || dec.More() || !graphHasNode(node, pos.ID) || !finite(pos.X, -maxGraphCoord, maxGraphCoord) || !finite(pos.Y, -maxGraphCoord, maxGraphCoord) {
+				return Message{}, fmt.Errorf("invalid graph drop payload for %q of %s", ev.GetNode(), ev.GetBlock())
+			}
+			b, _ := json.Marshal(pos)
+			m.Args = append(m.Args, b)
+		} else {
+			b, _ := json.Marshal(ev.GetValue())
+			m.Args = append(m.Args, b)
+		}
 	case protocol.UiChange:
 		var value any = ev.GetValue()
 		switch kind {
@@ -108,6 +138,10 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 		case KindDag:
 			if !dagHasRow(node, ev.GetValue()) {
 				return Message{}, fmt.Errorf("dag %q of %s has no row %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
+			}
+		case KindGraph:
+			if !graphHasNode(node, ev.GetValue()) {
+				return Message{}, fmt.Errorf("graph %q of %s has no node %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
 			}
 		case KindRadio:
 			if !slices.Contains(node.GetOptions(), ev.GetValue()) {
@@ -148,6 +182,18 @@ func dagHasRow(n *protocol.UiNode, id string) bool {
 	}
 	for _, r := range n.GetRows() {
 		if r.GetId() == id {
+			return true
+		}
+	}
+	return false
+}
+
+func graphHasNode(n *protocol.UiNode, id string) bool {
+	if n == nil || id == "" {
+		return false
+	}
+	for _, gn := range n.GetGraphNodes() {
+		if gn.GetId() == id {
 			return true
 		}
 	}

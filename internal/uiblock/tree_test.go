@@ -1006,3 +1006,216 @@ func TestRev49ComponentsAndValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestGraphM1ValidationAndEvents(t *testing.T) {
+	raw := `{
+		"kind": "column",
+		"children": [
+			{
+				"kind": "graph",
+				"key": "map",
+				"variant": "cards",
+				"layout": "hierarchy",
+				"minimap": true,
+				"fill": true,
+				"value": "a",
+				"onChange": ["selectNode"],
+				"onDoubleTap": ["jumpNode"],
+				"onDrop": ["savePos"],
+				"contextMenu": "graph-ctx",
+				"graphNodes": [
+					{
+						"id": "a",
+						"label": "Coordinator",
+						"group": "core",
+						"tone": "accent",
+						"subtitle": "claude · main",
+						"weight": 2.5,
+						"shape": "card",
+						"icon": "bot",
+						"status": "working",
+						"badges": [{"text": "main", "tone": "accent", "variant": "soft"}],
+						"x": 12.5,
+						"y": -8.25,
+						"hasPos": true,
+						"pinned": true,
+						"contextMenu": "node-ctx",
+						"contextArg": "sess:a"
+					},
+					{
+						"id": "b",
+						"label": "Worker",
+						"group": "core",
+						"shape": "circle",
+						"status": "waiting"
+					}
+				],
+				"graphEdges": [
+					{"from": "a", "to": "b", "label": "msg", "tone": "accent", "dashed": true, "active": true, "kind": "agentMessage"}
+				]
+			},
+			{
+				"kind": "menu",
+				"key": "graph-ctx",
+				"variant": "context",
+				"children": [
+					{"kind": "menu_item", "key": "inspect", "text": "Inspect", "onTap": ["inspectNode"]}
+				]
+			},
+			{
+				"kind": "menu",
+				"key": "node-ctx",
+				"variant": "context",
+				"children": [
+					{"kind": "menu_item", "key": "kill", "text": "Kill", "tone": "danger", "onTap": ["killNode"]}
+				]
+			}
+		]
+	}`
+	tr, err := Read([]byte(raw))
+	if err != nil {
+		t.Fatalf("Read M1 graph tree failed: %v", err)
+	}
+	g := nodeOf(tr.Root, "/map")
+	if g == nil || g.GetVariant() != "cards" || g.GetGraphLayout() != "hierarchy" || !g.GetMinimap() || !g.GetFill() || !g.GetDoubleTap() || !g.GetDrop() {
+		t.Fatalf("parsed graph node = %+v", g)
+	}
+	if len(g.GetGraphNodes()) != 2 || g.GetGraphNodes()[0].GetShape() != "card" || g.GetGraphNodes()[0].GetStatus() != "working" || !g.GetGraphNodes()[0].GetHasPos() || !g.GetGraphNodes()[0].GetPinned() || g.GetGraphNodes()[0].GetContextMenu() != "node-ctx" {
+		t.Fatalf("parsed graphNodes = %+v", g.GetGraphNodes())
+	}
+	if len(g.GetGraphEdges()) != 1 || !g.GetGraphEdges()[0].GetActive() || g.GetGraphEdges()[0].GetKind() != "agentMessage" {
+		t.Fatalf("parsed graphEdges = %+v", g.GetGraphEdges())
+	}
+
+	// Verify UiOp diff/apply preserves new fields.
+	next := proto.CloneOf(tr.Root)
+	ng := nodeOf(next, "/map")
+	ng.GraphLayout = "radial"
+	ng.Minimap = false
+	ng.GraphNodes[1].Status = "done"
+	ng.GraphEdges[0].Active = false
+	ops := protocol.DiffUi(tr.Root, next)
+	applied, err := protocol.ApplyUi(tr.Root, ops)
+	if err != nil || !proto.Equal(applied, next) {
+		t.Fatalf("ApplyUi mismatch: err=%v equal=%v", err, proto.Equal(applied, next))
+	}
+
+	// UiChange validation.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/map", Kind: protocol.UiChange, Value: "b"}); err != nil || m.Name != "selectNode" || string(m.Args[0]) != `"b"` {
+		t.Fatalf("graph change = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/map", Kind: protocol.UiChange, Value: "unknown"}); err == nil {
+		t.Fatal("accepted UiChange for unknown node id")
+	}
+
+	// UiDoubleTap validation.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/map", Kind: protocol.UiDoubleTap, Value: "a"}); err != nil || m.Name != "jumpNode" || string(m.Args[0]) != `"a"` {
+		t.Fatalf("graph doubleTap = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/map", Kind: protocol.UiDoubleTap, Value: "missing"}); err == nil {
+		t.Fatal("accepted UiDoubleTap for unknown node id")
+	}
+
+	// UiDrop JSON object payload validation.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/map", Kind: protocol.UiDrop, Value: `{"id":"a","x":42.5,"y":-10}`}); err != nil || m.Name != "savePos" || len(m.Args) != 1 || string(m.Args[0]) != `{"id":"a","x":42.5,"y":-10}` {
+		t.Fatalf("graph drop = %+v, %v", m, err)
+	}
+	for _, badDrop := range []string{
+		`not-json`,
+		`{"id":"missing","x":1,"y":2}`,
+		`{"id":"a","x":1e9,"y":2}`,
+		`{"id":"a","x":1,"y":2,"extra":true}`,
+	} {
+		if _, err := tr.Message(&protocol.BlockEvent{Node: "/map", Kind: protocol.UiDrop, Value: badDrop}); err == nil {
+			t.Errorf("accepted invalid graph drop payload %q", badDrop)
+		}
+	}
+
+	// Node-level & graph-level contextMenu args validation.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/node-ctx/kill", Kind: protocol.UiTap, Value: "sess:a"}); err != nil || m.Name != "killNode" || string(m.Args[0]) != `"sess:a"` {
+		t.Fatalf("node contextMenu tap = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/node-ctx/kill", Kind: protocol.UiTap, Value: "forged"}); err == nil {
+		t.Fatal("accepted forged contextArg on node contextMenu")
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/graph-ctx/inspect", Kind: protocol.UiTap, Value: "b"}); err != nil || m.Name != "inspectNode" || string(m.Args[0]) != `"b"` {
+		t.Fatalf("graph contextMenu tap = %+v, %v", m, err)
+	}
+
+	// Rejection cases.
+	bad := map[string]string{
+		"bad-layout":       `{"kind":"graph","layout":"grid","graphNodes":[]}`,
+		"layout-non-graph": `{"kind":"text","text":"x","layout":"force"}`,
+		"minimap-non-gr":   `{"kind":"text","text":"x","minimap":true}`,
+		"dbltap-non-graph": `{"kind":"button","text":"x","onDoubleTap":["x"]}`,
+		"bad-variant":      `{"kind":"graph","variant":"neon","graphNodes":[]}`,
+		"bad-shape":        `{"kind":"graph","graphNodes":[{"id":"a","label":"A","shape":"hex"}]}`,
+		"bad-status":       `{"kind":"graph","graphNodes":[{"id":"a","label":"A","status":"flying"}]}`,
+		"bad-icon":         `{"kind":"graph","graphNodes":[{"id":"a","label":"A","icon":"Bad!"}]}`,
+		"haspos-no-xy":     `{"kind":"graph","graphNodes":[{"id":"a","label":"A","hasPos":true}]}`,
+		"bad-coord":        `{"kind":"graph","graphNodes":[{"id":"a","label":"A","x":1e9,"y":0}]}`,
+		"ctxarg-no-menu":   `{"kind":"graph","graphNodes":[{"id":"a","label":"A","contextArg":"x"}]}`,
+		"unknown-ctxmenu":  `{"kind":"graph","graphNodes":[{"id":"a","label":"A","contextMenu":"nope"}]}`,
+		"bad-edge-kind":    `{"kind":"graph","graphNodes":[{"id":"a","label":"A"}],"graphEdges":[{"from":"a","to":"a","kind":"bad kind!"}]}`,
+	}
+	for name, tc := range bad {
+		if _, err := Read([]byte(tc)); err == nil {
+			t.Errorf("%s: expected rejection error, got nil", name)
+		}
+	}
+}
+
+func TestGraphM1DropQuotedMaxID(t *testing.T) {
+	id := strings.Repeat("\"", maxGraphID)
+	treeObj := map[string]any{
+		"kind": "column",
+		"children": []map[string]any{
+			{
+				"kind":   "graph",
+				"key":    "map",
+				"onDrop": []string{"savePos"},
+				"graphNodes": []map[string]any{
+					{"id": id, "label": "Quoted Max ID"},
+				},
+			},
+		},
+	}
+	raw, err := json.Marshal(treeObj)
+	if err != nil {
+		t.Fatalf("marshal tree: %v", err)
+	}
+	tr, err := Read(raw)
+	if err != nil {
+		t.Fatalf("Read failed for 128-byte quoted node id: %v", err)
+	}
+	payload, err := json.Marshal(struct {
+		ID string  `json:"id"`
+		X  float64 `json:"x"`
+		Y  float64 `json:"y"`
+	}{ID: id, X: 12.34, Y: 56.78})
+	if err != nil {
+		t.Fatalf("marshal drop payload: %v", err)
+	}
+	m, err := tr.Message(&protocol.BlockEvent{
+		Node:  "/map",
+		Kind:  protocol.UiDrop,
+		Value: string(payload),
+	})
+	if err != nil {
+		t.Fatalf("UiDrop failed for valid 128-byte quoted node id (%d bytes): %v", len(payload), err)
+	}
+	if m.Name != "savePos" || len(m.Args) != 1 {
+		t.Fatalf("unexpected drop message: %+v", m)
+	}
+	var got struct {
+		ID string  `json:"id"`
+		X  float64 `json:"x"`
+		Y  float64 `json:"y"`
+	}
+	if err := json.Unmarshal(m.Args[0], &got); err != nil {
+		t.Fatalf("unmarshal drop arg: %v", err)
+	}
+	if got.ID != id || got.X != 12.34 || got.Y != 56.78 {
+		t.Fatalf("drop arg = %+v, want id=%d-quotes x=12.34 y=56.78", got, len(id))
+	}
+}
