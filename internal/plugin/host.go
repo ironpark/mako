@@ -157,6 +157,8 @@ const (
 	cmdOpenFile          = "mako.openFile"
 	cmdOpenForge         = "mako.openForge"
 	cmdCreatePullRequest = "mako.createPullRequest"
+	cmdOpenTab           = "mako.openTab"
+	cmdCloseTab          = "mako.closeTab"
 
 	maxCopyText      = 64 << 10
 	maxPluginIntents = 8
@@ -357,8 +359,127 @@ func (h *host) CommandsRunCommand(_ context.Context, req *hostapi.RunCommandRequ
 			Folder: a.Folder,
 		})
 		return &hostapi.RunCommandResponse{}, nil
+	case cmdOpenTab:
+		if !h.p.gesture {
+			return nil, fmt.Errorf("%s runs only in answer to the user's tap or command", cmdOpenTab)
+		}
+		if len(h.p.intents) >= maxPluginIntents {
+			return nil, fmt.Errorf("at most %d window intents may be queued per gesture", maxPluginIntents)
+		}
+		var a struct {
+			Block   string          `json:"block"`
+			Key     string          `json:"key"`
+			Title   string          `json:"title"`
+			Icon    string          `json:"icon"`
+			Params  json.RawMessage `json:"params"`
+			Scope   string          `json:"scope"`
+			Preview bool            `json:"preview"`
+		}
+		if err := json.Unmarshal([]byte(req.GetArg()), &a); err != nil {
+			return nil, fmt.Errorf("%s: invalid JSON argument: %w", cmdOpenTab, err)
+		}
+		decl, ok := h.tabBlockDecl(a.Block)
+		if !ok {
+			return nil, fmt.Errorf("%s: block %q is not a tab-slotted block of plugin %s", cmdOpenTab, a.Block, h.p.id)
+		}
+		key := strings.TrimSpace(a.Key)
+		if key == "" {
+			key = "default"
+		}
+		if err := validateInstanceID(key); err != nil {
+			return nil, fmt.Errorf("%s: %w", cmdOpenTab, err)
+		}
+		if a.Title != "" {
+			if err := checkText("tab title", a.Title, maxTitle, true); err != nil {
+				return nil, fmt.Errorf("%s: %w", cmdOpenTab, err)
+			}
+		}
+		icon := strings.TrimSpace(a.Icon)
+		if icon != "" && (len(icon) > 48 || !iconNameRe.MatchString(icon)) {
+			return nil, fmt.Errorf("%s: icon %q is not an icon's name", cmdOpenTab, icon)
+		}
+		if icon == "" {
+			icon = decl.Icon
+		}
+		if a.Scope != "" {
+			if _, _, err := parseScopeKey(a.Scope); err != nil {
+				return nil, fmt.Errorf("%s: %w", cmdOpenTab, err)
+			}
+		}
+		var rawParams string
+		if len(a.Params) > 0 && string(a.Params) != "null" {
+			var str string
+			if err := json.Unmarshal(a.Params, &str); err == nil {
+				rawParams = str
+			} else {
+				rawParams = string(a.Params)
+			}
+		}
+		paramsStr, err := validateTabParams(rawParams)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", cmdOpenTab, err)
+		}
+		title := a.Title
+		if title == "" {
+			title = decl.Title
+		}
+		h.p.intents = append(h.p.intents, &protocol.PluginOpen{
+			Kind:    "tab",
+			Block:   blockName(h.p.id, decl.ID),
+			Key:     key,
+			Title:   title,
+			Icon:    icon,
+			Params:  paramsStr,
+			Scope:   a.Scope,
+			Preview: a.Preview,
+		})
+		return &hostapi.RunCommandResponse{}, nil
+	case cmdCloseTab:
+		if !h.p.gesture {
+			return nil, fmt.Errorf("%s runs only in answer to the user's tap or command", cmdCloseTab)
+		}
+		if len(h.p.intents) >= maxPluginIntents {
+			return nil, fmt.Errorf("at most %d window intents may be queued per gesture", maxPluginIntents)
+		}
+		var a struct {
+			Block string `json:"block"`
+			Key   string `json:"key"`
+		}
+		if err := json.Unmarshal([]byte(req.GetArg()), &a); err != nil {
+			return nil, fmt.Errorf("%s: invalid JSON argument: %w", cmdCloseTab, err)
+		}
+		decl, ok := h.tabBlockDecl(a.Block)
+		if !ok {
+			return nil, fmt.Errorf("%s: block %q is not a tab-slotted block of plugin %s", cmdCloseTab, a.Block, h.p.id)
+		}
+		key := strings.TrimSpace(a.Key)
+		if key == "" {
+			key = "default"
+		}
+		if err := validateInstanceID(key); err != nil {
+			return nil, fmt.Errorf("%s: %w", cmdCloseTab, err)
+		}
+		h.p.intents = append(h.p.intents, &protocol.PluginOpen{
+			Kind:  "close_tab",
+			Block: blockName(h.p.id, decl.ID),
+			Key:   key,
+		})
+		return &hostapi.RunCommandResponse{}, nil
 	}
 	return nil, fmt.Errorf("command %q is not one a plugin may run", req.GetId())
+}
+
+func (h *host) tabBlockDecl(blockID string) (BlockDecl, bool) {
+	v := h.p.current()
+	if v == nil {
+		return BlockDecl{}, false
+	}
+	for _, b := range v.man.Blocks {
+		if b.ID == blockID && slices.Contains(b.Slots, "tab") {
+			return b, true
+		}
+	}
+	return BlockDecl{}, false
 }
 
 func (h *host) activeFolder() (node, folder string, ok bool) {

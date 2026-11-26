@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -99,7 +100,7 @@ func (m *model) setPluginList(pl *protocol.Plugins) {
 				Title:  title,
 				Scope:  scope,
 				Chrome: chromePanel,
-				Icon:   "package",
+				Icon:   cmp.Or(b.GetIcon(), "package"),
 				Build: func(m *model, props map[string]any, at blockPlace) blockView {
 					return pluginBlockView(m, name, id, title, scope, props, at)
 				},
@@ -167,10 +168,16 @@ func (m *model) actOnPlugin(req *protocol.PluginAction) {
 // blockEvent tells a block's plugin or agent of the user acting on a node
 // of it, with the block's fields as they stand.
 func (m *model) blockEvent(block, scope, node, kind, value string, values map[string]string) {
+	m.blockEventInstance(block, scope, "", node, kind, value, values)
+}
+
+// blockEventInstance tells a block instance (such as a custom plugin tab) of
+// the user acting on a node of it.
+func (m *model) blockEventInstance(block, scope, instance, node, kind, value string, values map[string]string) {
 	if m.post == nil {
 		return
 	}
-	req := &protocol.BlockEvent{Block: block, Scope: scope, Node: node, Kind: kind, Value: value, Values: values, Locale: m.currentLocale()}
+	req := &protocol.BlockEvent{Block: block, Scope: scope, Instance: instance, Node: node, Kind: kind, Value: value, Values: values, Locale: m.currentLocale()}
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.PluginDone, error) {
 		return c.BlockEvent(ctx, req)
 	}, func(done *protocol.PluginDone, err error) {
@@ -252,7 +259,43 @@ func (m *model) pluginCommands() []command {
 				Run: func() { m.actOnPlugin(&protocol.PluginAction{PluginId: id, Op: protocol.PluginRun, Command: cmd}) }})
 		}
 		for _, b := range p.GetBlocks() {
-			blockName, title, pid := b.GetName(), b.GetTitle(), p.GetId()
+			blockName, title, pid, bIcon, bScope := b.GetName(), b.GetTitle(), p.GetId(), b.GetIcon(), b.GetScope()
+			bSlots := b.GetSlots()
+			hasSidebar := slices.Contains(bSlots, "sidebar")
+			hasTab := slices.Contains(bSlots, "tab")
+			hasPanelSlot := len(bSlots) == 0 || slices.ContainsFunc(bSlots, func(s string) bool {
+				return s == "left" || s == "right" || s == "top" || s == "bottom"
+			})
+			if hasSidebar {
+				out = append(out, command{
+					ID: Tf("Show %s in sidebar", title), Category: pid,
+					Keys: []string{"plugin", "sidebar", "page", pid, title, blockName},
+					Run:  func() { m.openSidebarPage(blockName) },
+				})
+			}
+			if hasTab {
+				out = append(out, command{
+					ID: Tf("Open %s tab", title), Category: pid,
+					Keys: []string{"plugin", "tab", "open", pid, title, blockName},
+					Run: func() {
+						scopeKey := ""
+						if isScoped(bScope) {
+							scopeKey = ggui.Untrack(func() string { return m.resolveActiveScope(bScope) })
+						}
+						m.openPluginTab(pluginTab{
+							Block:    blockName,
+							PluginID: pid,
+							Key:      "default",
+							Title:    title,
+							Icon:     bIcon,
+							Scope:    scopeKey,
+						})
+					},
+				})
+			}
+			if !hasPanelSlot {
+				continue
+			}
 			placed := doc != nil && doc.BlockPath(blockName) != nil
 			if placed {
 				out = append(out,
@@ -263,7 +306,7 @@ func (m *model) pluginCommands() []command {
 				)
 			} else {
 				defaultPlace := "right-stack"
-				if slices.Contains(b.GetSlots(), "bottom") {
+				if slices.Contains(bSlots, "bottom") {
 					defaultPlace = "bottom"
 				}
 				out = append(out,

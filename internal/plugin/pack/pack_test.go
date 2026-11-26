@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -194,7 +195,7 @@ func TestHostilePackagesAreRefused(t *testing.T) {
 		{"folder", signed(t, priv, "hello", "0.1.0", files, entry{name: "lib2/", mode: os.ModeDir | 0o755}), "plain relative path"},
 		{"twice", signed(t, priv, "hello", "0.1.0", files, entry{name: "main.js", data: []byte("evil()")}), "twice"},
 		{"twice by case", signed(t, priv, "hello", "0.1.0", files, entry{name: "MAIN.js", data: []byte("evil()")}), "twice"},
-		{"huge file", signed(t, priv, "hello", "0.1.0", with("big.js", big)), "over 2 MiB"},
+		{"huge file", signed(t, priv, "hello", "0.1.0", with("big.js", big)), fmt.Sprintf("over %d MiB", MaxFileBytes>>20)},
 		{"too many", signed(t, priv, "hello", "0.1.0", many), "more than 256"},
 		{"unsigned", rawZip(t, entry{name: "plugin.toml", data: files["plugin.toml"]}, entry{name: "main.js", data: files["main.js"]}), "not signed"},
 		{"not a zip", []byte("PK\x03\x04 not really"), "not a zip"},
@@ -223,7 +224,7 @@ func TestZipBombsAreRefused(t *testing.T) {
 	if len(data) > 64<<10 {
 		t.Fatalf("the bomb is %d bytes; it should compress", len(data))
 	}
-	if _, err := Open(data); err == nil || !strings.Contains(err.Error(), "over 2 MiB") {
+	if _, err := Open(data); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("over %d MiB", MaxFileBytes>>20)) {
 		t.Fatalf("a bomb opened: %v", err)
 	}
 	// The central directory says the bomb is small.
@@ -243,8 +244,44 @@ func TestZipBombsAreRefused(t *testing.T) {
 	if _, err := Open(signed(t, priv, "hello", "0.1.0", files, entries...)); err == nil || !strings.Contains(err.Error(), "in all") {
 		t.Fatalf("files over the bound in all opened: %v", err)
 	}
-	if _, err := Open(make([]byte, MaxPackageBytes+1)); err == nil || !strings.Contains(err.Error(), "over 8 MiB") {
+	if _, err := Open(make([]byte, MaxPackageBytes+1)); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("over %d MiB", MaxPackageBytes>>20)) {
 		t.Fatalf("an oversized package opened: %v", err)
+	}
+}
+
+func TestWasmPluginBuildsAndOpens(t *testing.T) {
+	priv := newKey(t)
+	wasmMan := `
+id = "wasm-pkg"
+version = "0.1.0"
+publisher = "tester"
+api = 1
+entry = "plugin.wasm"
+permissions = []
+
+[[contributes.block]]
+id = "main"
+title = "Wasm"
+icon = "cpu"
+slots = ["sidebar", "tab"]
+`
+	files := map[string][]byte{
+		"plugin.toml": []byte(wasmMan),
+		"plugin.wasm": []byte("\x00asm\x01\x00\x00\x00"),
+	}
+	raw, pkg, err := Build(files, priv)
+	if err != nil {
+		t.Fatalf("Build wasm plugin: %v", err)
+	}
+	if pkg.Manifest.Entry != "plugin.wasm" || len(raw) == 0 {
+		t.Fatalf("unexpected built package: %+v", pkg.Manifest)
+	}
+	reopened, err := Open(raw)
+	if err != nil {
+		t.Fatalf("Open wasm plugin: %v", err)
+	}
+	if reopened.Manifest.ID != "wasm-pkg" || !bytes.Equal(reopened.Files["plugin.wasm"], files["plugin.wasm"]) {
+		t.Fatalf("reopened wasm plugin mismatch")
 	}
 }
 

@@ -23,6 +23,7 @@ public  final class PluginBlock extends
     title_ = "";
     slots_ = emptyProtobufList();
     scope_ = "";
+    icon_ = "";
   }
   public static final int NAME_FIELD_NUMBER = 1;
   private java.lang.String name_;
@@ -143,7 +144,7 @@ public  final class PluginBlock extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -156,7 +157,7 @@ public  final class PluginBlock extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -169,7 +170,7 @@ public  final class PluginBlock extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -183,7 +184,7 @@ public  final class PluginBlock extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -206,7 +207,7 @@ public  final class PluginBlock extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -222,7 +223,7 @@ public  final class PluginBlock extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -237,7 +238,7 @@ public  final class PluginBlock extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -252,7 +253,7 @@ public  final class PluginBlock extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -263,7 +264,7 @@ public  final class PluginBlock extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -345,6 +346,78 @@ public  final class PluginBlock extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     scope_ = value.toStringUtf8();
+
+  }
+
+  public static final int ICON_FIELD_NUMBER = 5;
+  private java.lang.String icon_;
+  /**
+   * <pre>
+   * icon is an optional bundled icon name for sidebar switcher, custom tab,
+   * and block picker (revision 49).
+   * </pre>
+   *
+   * <code>string icon = 5 [json_name = "icon"];</code>
+   * @return The icon.
+   */
+  @java.lang.Override
+  public java.lang.String getIcon() {
+    return icon_;
+  }
+  /**
+   * <pre>
+   * icon is an optional bundled icon name for sidebar switcher, custom tab,
+   * and block picker (revision 49).
+   * </pre>
+   *
+   * <code>string icon = 5 [json_name = "icon"];</code>
+   * @return The bytes for icon.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getIconBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(icon_);
+  }
+  /**
+   * <pre>
+   * icon is an optional bundled icon name for sidebar switcher, custom tab,
+   * and block picker (revision 49).
+   * </pre>
+   *
+   * <code>string icon = 5 [json_name = "icon"];</code>
+   * @param value The icon to set.
+   */
+  private void setIcon(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    icon_ = value;
+  }
+  /**
+   * <pre>
+   * icon is an optional bundled icon name for sidebar switcher, custom tab,
+   * and block picker (revision 49).
+   * </pre>
+   *
+   * <code>string icon = 5 [json_name = "icon"];</code>
+   */
+  private void clearIcon() {
+
+    icon_ = getDefaultInstance().getIcon();
+  }
+  /**
+   * <pre>
+   * icon is an optional bundled icon name for sidebar switcher, custom tab,
+   * and block picker (revision 49).
+   * </pre>
+   *
+   * <code>string icon = 5 [json_name = "icon"];</code>
+   * @param value The bytes for icon to set.
+   */
+  private void setIconBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    icon_ = value.toStringUtf8();
 
   }
 
@@ -570,7 +643,7 @@ public  final class PluginBlock extends
     /**
      * <pre>
      * slots are where the manifest suggests placing it: "left", "right",
-     * "top", "bottom".
+     * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
      * </pre>
      *
      * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -585,7 +658,7 @@ public  final class PluginBlock extends
     /**
      * <pre>
      * slots are where the manifest suggests placing it: "left", "right",
-     * "top", "bottom".
+     * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
      * </pre>
      *
      * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -598,7 +671,7 @@ public  final class PluginBlock extends
     /**
      * <pre>
      * slots are where the manifest suggests placing it: "left", "right",
-     * "top", "bottom".
+     * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
      * </pre>
      *
      * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -612,7 +685,7 @@ public  final class PluginBlock extends
     /**
      * <pre>
      * slots are where the manifest suggests placing it: "left", "right",
-     * "top", "bottom".
+     * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
      * </pre>
      *
      * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -627,7 +700,7 @@ public  final class PluginBlock extends
     /**
      * <pre>
      * slots are where the manifest suggests placing it: "left", "right",
-     * "top", "bottom".
+     * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
      * </pre>
      *
      * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -644,7 +717,7 @@ public  final class PluginBlock extends
     /**
      * <pre>
      * slots are where the manifest suggests placing it: "left", "right",
-     * "top", "bottom".
+     * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
      * </pre>
      *
      * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -660,7 +733,7 @@ public  final class PluginBlock extends
     /**
      * <pre>
      * slots are where the manifest suggests placing it: "left", "right",
-     * "top", "bottom".
+     * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
      * </pre>
      *
      * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -676,7 +749,7 @@ public  final class PluginBlock extends
     /**
      * <pre>
      * slots are where the manifest suggests placing it: "left", "right",
-     * "top", "bottom".
+     * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
      * </pre>
      *
      * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -690,7 +763,7 @@ public  final class PluginBlock extends
     /**
      * <pre>
      * slots are where the manifest suggests placing it: "left", "right",
-     * "top", "bottom".
+     * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
      * </pre>
      *
      * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -778,6 +851,80 @@ public  final class PluginBlock extends
       return this;
     }
 
+    /**
+     * <pre>
+     * icon is an optional bundled icon name for sidebar switcher, custom tab,
+     * and block picker (revision 49).
+     * </pre>
+     *
+     * <code>string icon = 5 [json_name = "icon"];</code>
+     * @return The icon.
+     */
+    @java.lang.Override
+    public java.lang.String getIcon() {
+      return instance.getIcon();
+    }
+    /**
+     * <pre>
+     * icon is an optional bundled icon name for sidebar switcher, custom tab,
+     * and block picker (revision 49).
+     * </pre>
+     *
+     * <code>string icon = 5 [json_name = "icon"];</code>
+     * @return The bytes for icon.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getIconBytes() {
+      return instance.getIconBytes();
+    }
+    /**
+     * <pre>
+     * icon is an optional bundled icon name for sidebar switcher, custom tab,
+     * and block picker (revision 49).
+     * </pre>
+     *
+     * <code>string icon = 5 [json_name = "icon"];</code>
+     * @param value The icon to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIcon(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setIcon(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * icon is an optional bundled icon name for sidebar switcher, custom tab,
+     * and block picker (revision 49).
+     * </pre>
+     *
+     * <code>string icon = 5 [json_name = "icon"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearIcon() {
+      copyOnWrite();
+      instance.clearIcon();
+      return this;
+    }
+    /**
+     * <pre>
+     * icon is an optional bundled icon name for sidebar switcher, custom tab,
+     * and block picker (revision 49).
+     * </pre>
+     *
+     * <code>string icon = 5 [json_name = "icon"];</code>
+     * @param value The bytes for icon to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIconBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setIconBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginBlock)
   }
   @java.lang.Override
@@ -798,10 +945,11 @@ public  final class PluginBlock extends
             "title_",
             "slots_",
             "scope_",
+            "icon_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u021a\u0004\u0208";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0001\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u021a\u0004\u0208\u0005\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

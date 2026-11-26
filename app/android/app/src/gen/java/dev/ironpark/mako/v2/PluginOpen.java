@@ -8,7 +8,7 @@ package dev.ironpark.mako.v2;
 /**
  * <pre>
  * PluginOpen is a window intent a plugin asked for in answer to a user
- * gesture (revision 46).
+ * gesture (revision 46; extended with custom plugin tabs in revision 49).
  * </pre>
  *
  * Protobuf type {@code mako.v2.PluginOpen}
@@ -29,12 +29,19 @@ public  final class PluginOpen extends
     status_ = "";
     commit_ = "";
     base_ = "";
+    block_ = "";
+    key_ = "";
+    title_ = "";
+    icon_ = "";
+    params_ = "";
+    scope_ = "";
   }
   public static final int KIND_FIELD_NUMBER = 1;
   private java.lang.String kind_;
   /**
    * <pre>
-   * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+   * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+   * "tab", or "close_tab".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -46,7 +53,8 @@ public  final class PluginOpen extends
   }
   /**
    * <pre>
-   * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+   * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+   * "tab", or "close_tab".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -59,7 +67,8 @@ public  final class PluginOpen extends
   }
   /**
    * <pre>
-   * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+   * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+   * "tab", or "close_tab".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -73,7 +82,8 @@ public  final class PluginOpen extends
   }
   /**
    * <pre>
-   * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+   * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+   * "tab", or "close_tab".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -84,7 +94,8 @@ public  final class PluginOpen extends
   }
   /**
    * <pre>
-   * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+   * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+   * "tab", or "close_tab".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -629,6 +640,308 @@ public  final class PluginOpen extends
     line_ = 0;
   }
 
+  public static final int BLOCK_FIELD_NUMBER = 16;
+  private java.lang.String block_;
+  /**
+   * <pre>
+   * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+   * </pre>
+   *
+   * <code>string block = 16 [json_name = "block"];</code>
+   * @return The block.
+   */
+  @java.lang.Override
+  public java.lang.String getBlock() {
+    return block_;
+  }
+  /**
+   * <pre>
+   * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+   * </pre>
+   *
+   * <code>string block = 16 [json_name = "block"];</code>
+   * @return The bytes for block.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getBlockBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(block_);
+  }
+  /**
+   * <pre>
+   * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+   * </pre>
+   *
+   * <code>string block = 16 [json_name = "block"];</code>
+   * @param value The block to set.
+   */
+  private void setBlock(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    block_ = value;
+  }
+  /**
+   * <pre>
+   * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+   * </pre>
+   *
+   * <code>string block = 16 [json_name = "block"];</code>
+   */
+  private void clearBlock() {
+
+    block_ = getDefaultInstance().getBlock();
+  }
+  /**
+   * <pre>
+   * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+   * </pre>
+   *
+   * <code>string block = 16 [json_name = "block"];</code>
+   * @param value The bytes for block to set.
+   */
+  private void setBlockBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    block_ = value.toStringUtf8();
+
+  }
+
+  public static final int KEY_FIELD_NUMBER = 17;
+  private java.lang.String key_;
+  /**
+   * <code>string key = 17 [json_name = "key"];</code>
+   * @return The key.
+   */
+  @java.lang.Override
+  public java.lang.String getKey() {
+    return key_;
+  }
+  /**
+   * <code>string key = 17 [json_name = "key"];</code>
+   * @return The bytes for key.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getKeyBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(key_);
+  }
+  /**
+   * <code>string key = 17 [json_name = "key"];</code>
+   * @param value The key to set.
+   */
+  private void setKey(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    key_ = value;
+  }
+  /**
+   * <code>string key = 17 [json_name = "key"];</code>
+   */
+  private void clearKey() {
+
+    key_ = getDefaultInstance().getKey();
+  }
+  /**
+   * <code>string key = 17 [json_name = "key"];</code>
+   * @param value The bytes for key to set.
+   */
+  private void setKeyBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    key_ = value.toStringUtf8();
+
+  }
+
+  public static final int TITLE_FIELD_NUMBER = 18;
+  private java.lang.String title_;
+  /**
+   * <code>string title = 18 [json_name = "title"];</code>
+   * @return The title.
+   */
+  @java.lang.Override
+  public java.lang.String getTitle() {
+    return title_;
+  }
+  /**
+   * <code>string title = 18 [json_name = "title"];</code>
+   * @return The bytes for title.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getTitleBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(title_);
+  }
+  /**
+   * <code>string title = 18 [json_name = "title"];</code>
+   * @param value The title to set.
+   */
+  private void setTitle(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    title_ = value;
+  }
+  /**
+   * <code>string title = 18 [json_name = "title"];</code>
+   */
+  private void clearTitle() {
+
+    title_ = getDefaultInstance().getTitle();
+  }
+  /**
+   * <code>string title = 18 [json_name = "title"];</code>
+   * @param value The bytes for title to set.
+   */
+  private void setTitleBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    title_ = value.toStringUtf8();
+
+  }
+
+  public static final int ICON_FIELD_NUMBER = 19;
+  private java.lang.String icon_;
+  /**
+   * <code>string icon = 19 [json_name = "icon"];</code>
+   * @return The icon.
+   */
+  @java.lang.Override
+  public java.lang.String getIcon() {
+    return icon_;
+  }
+  /**
+   * <code>string icon = 19 [json_name = "icon"];</code>
+   * @return The bytes for icon.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getIconBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(icon_);
+  }
+  /**
+   * <code>string icon = 19 [json_name = "icon"];</code>
+   * @param value The icon to set.
+   */
+  private void setIcon(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    icon_ = value;
+  }
+  /**
+   * <code>string icon = 19 [json_name = "icon"];</code>
+   */
+  private void clearIcon() {
+
+    icon_ = getDefaultInstance().getIcon();
+  }
+  /**
+   * <code>string icon = 19 [json_name = "icon"];</code>
+   * @param value The bytes for icon to set.
+   */
+  private void setIconBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    icon_ = value.toStringUtf8();
+
+  }
+
+  public static final int PARAMS_FIELD_NUMBER = 20;
+  private java.lang.String params_;
+  /**
+   * <code>string params = 20 [json_name = "params"];</code>
+   * @return The params.
+   */
+  @java.lang.Override
+  public java.lang.String getParams() {
+    return params_;
+  }
+  /**
+   * <code>string params = 20 [json_name = "params"];</code>
+   * @return The bytes for params.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getParamsBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(params_);
+  }
+  /**
+   * <code>string params = 20 [json_name = "params"];</code>
+   * @param value The params to set.
+   */
+  private void setParams(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    params_ = value;
+  }
+  /**
+   * <code>string params = 20 [json_name = "params"];</code>
+   */
+  private void clearParams() {
+
+    params_ = getDefaultInstance().getParams();
+  }
+  /**
+   * <code>string params = 20 [json_name = "params"];</code>
+   * @param value The bytes for params to set.
+   */
+  private void setParamsBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    params_ = value.toStringUtf8();
+
+  }
+
+  public static final int SCOPE_FIELD_NUMBER = 21;
+  private java.lang.String scope_;
+  /**
+   * <code>string scope = 21 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  @java.lang.Override
+  public java.lang.String getScope() {
+    return scope_;
+  }
+  /**
+   * <code>string scope = 21 [json_name = "scope"];</code>
+   * @return The bytes for scope.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getScopeBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(scope_);
+  }
+  /**
+   * <code>string scope = 21 [json_name = "scope"];</code>
+   * @param value The scope to set.
+   */
+  private void setScope(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    scope_ = value;
+  }
+  /**
+   * <code>string scope = 21 [json_name = "scope"];</code>
+   */
+  private void clearScope() {
+
+    scope_ = getDefaultInstance().getScope();
+  }
+  /**
+   * <code>string scope = 21 [json_name = "scope"];</code>
+   * @param value The bytes for scope to set.
+   */
+  private void setScopeBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    scope_ = value.toStringUtf8();
+
+  }
+
   public static dev.ironpark.mako.v2.PluginOpen parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -715,7 +1028,7 @@ public  final class PluginOpen extends
   /**
    * <pre>
    * PluginOpen is a window intent a plugin asked for in answer to a user
-   * gesture (revision 46).
+   * gesture (revision 46; extended with custom plugin tabs in revision 49).
    * </pre>
    *
    * Protobuf type {@code mako.v2.PluginOpen}
@@ -733,7 +1046,8 @@ public  final class PluginOpen extends
 
     /**
      * <pre>
-     * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+     * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+     * "tab", or "close_tab".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -745,7 +1059,8 @@ public  final class PluginOpen extends
     }
     /**
      * <pre>
-     * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+     * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+     * "tab", or "close_tab".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -758,7 +1073,8 @@ public  final class PluginOpen extends
     }
     /**
      * <pre>
-     * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+     * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+     * "tab", or "close_tab".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -773,7 +1089,8 @@ public  final class PluginOpen extends
     }
     /**
      * <pre>
-     * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+     * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+     * "tab", or "close_tab".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -786,7 +1103,8 @@ public  final class PluginOpen extends
     }
     /**
      * <pre>
-     * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+     * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+     * "tab", or "close_tab".
      * </pre>
      *
      * <code>string kind = 1 [json_name = "kind"];</code>
@@ -1360,6 +1678,320 @@ public  final class PluginOpen extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+     * </pre>
+     *
+     * <code>string block = 16 [json_name = "block"];</code>
+     * @return The block.
+     */
+    @java.lang.Override
+    public java.lang.String getBlock() {
+      return instance.getBlock();
+    }
+    /**
+     * <pre>
+     * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+     * </pre>
+     *
+     * <code>string block = 16 [json_name = "block"];</code>
+     * @return The bytes for block.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getBlockBytes() {
+      return instance.getBlockBytes();
+    }
+    /**
+     * <pre>
+     * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+     * </pre>
+     *
+     * <code>string block = 16 [json_name = "block"];</code>
+     * @param value The block to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBlock(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setBlock(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+     * </pre>
+     *
+     * <code>string block = 16 [json_name = "block"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBlock() {
+      copyOnWrite();
+      instance.clearBlock();
+      return this;
+    }
+    /**
+     * <pre>
+     * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+     * </pre>
+     *
+     * <code>string block = 16 [json_name = "block"];</code>
+     * @param value The bytes for block to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBlockBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setBlockBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string key = 17 [json_name = "key"];</code>
+     * @return The key.
+     */
+    @java.lang.Override
+    public java.lang.String getKey() {
+      return instance.getKey();
+    }
+    /**
+     * <code>string key = 17 [json_name = "key"];</code>
+     * @return The bytes for key.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getKeyBytes() {
+      return instance.getKeyBytes();
+    }
+    /**
+     * <code>string key = 17 [json_name = "key"];</code>
+     * @param value The key to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKey(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setKey(value);
+      return this;
+    }
+    /**
+     * <code>string key = 17 [json_name = "key"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearKey() {
+      copyOnWrite();
+      instance.clearKey();
+      return this;
+    }
+    /**
+     * <code>string key = 17 [json_name = "key"];</code>
+     * @param value The bytes for key to set.
+     * @return This builder for chaining.
+     */
+    public Builder setKeyBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setKeyBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string title = 18 [json_name = "title"];</code>
+     * @return The title.
+     */
+    @java.lang.Override
+    public java.lang.String getTitle() {
+      return instance.getTitle();
+    }
+    /**
+     * <code>string title = 18 [json_name = "title"];</code>
+     * @return The bytes for title.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getTitleBytes() {
+      return instance.getTitleBytes();
+    }
+    /**
+     * <code>string title = 18 [json_name = "title"];</code>
+     * @param value The title to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTitle(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setTitle(value);
+      return this;
+    }
+    /**
+     * <code>string title = 18 [json_name = "title"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearTitle() {
+      copyOnWrite();
+      instance.clearTitle();
+      return this;
+    }
+    /**
+     * <code>string title = 18 [json_name = "title"];</code>
+     * @param value The bytes for title to set.
+     * @return This builder for chaining.
+     */
+    public Builder setTitleBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setTitleBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string icon = 19 [json_name = "icon"];</code>
+     * @return The icon.
+     */
+    @java.lang.Override
+    public java.lang.String getIcon() {
+      return instance.getIcon();
+    }
+    /**
+     * <code>string icon = 19 [json_name = "icon"];</code>
+     * @return The bytes for icon.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getIconBytes() {
+      return instance.getIconBytes();
+    }
+    /**
+     * <code>string icon = 19 [json_name = "icon"];</code>
+     * @param value The icon to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIcon(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setIcon(value);
+      return this;
+    }
+    /**
+     * <code>string icon = 19 [json_name = "icon"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearIcon() {
+      copyOnWrite();
+      instance.clearIcon();
+      return this;
+    }
+    /**
+     * <code>string icon = 19 [json_name = "icon"];</code>
+     * @param value The bytes for icon to set.
+     * @return This builder for chaining.
+     */
+    public Builder setIconBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setIconBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string params = 20 [json_name = "params"];</code>
+     * @return The params.
+     */
+    @java.lang.Override
+    public java.lang.String getParams() {
+      return instance.getParams();
+    }
+    /**
+     * <code>string params = 20 [json_name = "params"];</code>
+     * @return The bytes for params.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getParamsBytes() {
+      return instance.getParamsBytes();
+    }
+    /**
+     * <code>string params = 20 [json_name = "params"];</code>
+     * @param value The params to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParams(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setParams(value);
+      return this;
+    }
+    /**
+     * <code>string params = 20 [json_name = "params"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearParams() {
+      copyOnWrite();
+      instance.clearParams();
+      return this;
+    }
+    /**
+     * <code>string params = 20 [json_name = "params"];</code>
+     * @param value The bytes for params to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParamsBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setParamsBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string scope = 21 [json_name = "scope"];</code>
+     * @return The scope.
+     */
+    @java.lang.Override
+    public java.lang.String getScope() {
+      return instance.getScope();
+    }
+    /**
+     * <code>string scope = 21 [json_name = "scope"];</code>
+     * @return The bytes for scope.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getScopeBytes() {
+      return instance.getScopeBytes();
+    }
+    /**
+     * <code>string scope = 21 [json_name = "scope"];</code>
+     * @param value The scope to set.
+     * @return This builder for chaining.
+     */
+    public Builder setScope(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setScope(value);
+      return this;
+    }
+    /**
+     * <code>string scope = 21 [json_name = "scope"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearScope() {
+      copyOnWrite();
+      instance.clearScope();
+      return this;
+    }
+    /**
+     * <code>string scope = 21 [json_name = "scope"];</code>
+     * @param value The bytes for scope to set.
+     * @return This builder for chaining.
+     */
+    public Builder setScopeBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setScopeBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.PluginOpen)
   }
   @java.lang.Override
@@ -1391,11 +2023,18 @@ public  final class PluginOpen extends
             "number_",
             "preview_",
             "line_",
+            "block_",
+            "key_",
+            "title_",
+            "icon_",
+            "params_",
+            "scope_",
           };
           java.lang.String info =
-              "\u0000\u000f\u0000\u0000\u0001\u000f\u000f\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0000\u0015\u0000\u0000\u0001\u0015\u0015\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0002\t\u0002\n\u0007" +
-              "\u000b\u0208\f\u0208\r\u0002\u000e\u0007\u000f\u0004";
+              "\u000b\u0208\f\u0208\r\u0002\u000e\u0007\u000f\u0004\u0010\u0208\u0011\u0208\u0012" +
+              "\u0208\u0013\u0208\u0014\u0208\u0015\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

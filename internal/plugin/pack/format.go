@@ -40,10 +40,10 @@ import (
 
 // The bounds of a package.
 const (
-	MaxPackageBytes = 8 << 20
+	MaxPackageBytes = 16 << 20
 	MaxFiles        = 256
-	MaxFileBytes    = 2 << 20
-	MaxTotalBytes   = 8 << 20
+	MaxFileBytes    = 8 << 20
+	MaxTotalBytes   = 16 << 20
 	maxPathBytes    = 255
 	maxPathParts    = 8
 	maxSignature    = 4 << 10

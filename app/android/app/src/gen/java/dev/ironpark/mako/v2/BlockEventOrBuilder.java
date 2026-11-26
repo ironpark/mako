@@ -193,4 +193,24 @@ java.lang.String defaultValue);
    */
   com.google.protobuf.ByteString
       getLocaleBytes();
+
+  /**
+   * <pre>
+   * instance is the instance key of the target block instance (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 9 [json_name = "instance"];</code>
+   * @return The instance.
+   */
+  java.lang.String getInstance();
+  /**
+   * <pre>
+   * instance is the instance key of the target block instance (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 9 [json_name = "instance"];</code>
+   * @return The bytes for instance.
+   */
+  com.google.protobuf.ByteString
+      getInstanceBytes();
 }

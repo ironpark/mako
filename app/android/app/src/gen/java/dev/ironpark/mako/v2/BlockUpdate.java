@@ -29,6 +29,7 @@ public  final class BlockUpdate extends
     agent_ = "";
     scope_ = "";
     chrome_ = "";
+    instance_ = "";
   }
   private int bitField0_;
   public static final int BLOCK_FIELD_NUMBER = 1;
@@ -891,6 +892,73 @@ public  final class BlockUpdate extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     chrome_ = value.toStringUtf8();
+
+  }
+
+  public static final int INSTANCE_FIELD_NUMBER = 15;
+  private java.lang.String instance_;
+  /**
+   * <pre>
+   * instance is the instance key of this block stream (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 15 [json_name = "instance"];</code>
+   * @return The instance.
+   */
+  @java.lang.Override
+  public java.lang.String getInstance() {
+    return instance_;
+  }
+  /**
+   * <pre>
+   * instance is the instance key of this block stream (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 15 [json_name = "instance"];</code>
+   * @return The bytes for instance.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getInstanceBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(instance_);
+  }
+  /**
+   * <pre>
+   * instance is the instance key of this block stream (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 15 [json_name = "instance"];</code>
+   * @param value The instance to set.
+   */
+  private void setInstance(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    instance_ = value;
+  }
+  /**
+   * <pre>
+   * instance is the instance key of this block stream (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 15 [json_name = "instance"];</code>
+   */
+  private void clearInstance() {
+
+    instance_ = getDefaultInstance().getInstance();
+  }
+  /**
+   * <pre>
+   * instance is the instance key of this block stream (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 15 [json_name = "instance"];</code>
+   * @param value The bytes for instance to set.
+   */
+  private void setInstanceBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    instance_ = value.toStringUtf8();
 
   }
 
@@ -1899,6 +1967,75 @@ public  final class BlockUpdate extends
       return this;
     }
 
+    /**
+     * <pre>
+     * instance is the instance key of this block stream (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 15 [json_name = "instance"];</code>
+     * @return The instance.
+     */
+    @java.lang.Override
+    public java.lang.String getInstance() {
+      return instance.getInstance();
+    }
+    /**
+     * <pre>
+     * instance is the instance key of this block stream (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 15 [json_name = "instance"];</code>
+     * @return The bytes for instance.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getInstanceBytes() {
+      return instance.getInstanceBytes();
+    }
+    /**
+     * <pre>
+     * instance is the instance key of this block stream (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 15 [json_name = "instance"];</code>
+     * @param value The instance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInstance(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setInstance(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * instance is the instance key of this block stream (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 15 [json_name = "instance"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInstance() {
+      copyOnWrite();
+      instance.clearInstance();
+      return this;
+    }
+    /**
+     * <pre>
+     * instance is the instance key of this block stream (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 15 [json_name = "instance"];</code>
+     * @param value The bytes for instance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInstanceBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setInstanceBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.BlockUpdate)
   }
   @java.lang.Override
@@ -1931,11 +2068,12 @@ public  final class BlockUpdate extends
             "gone_",
             "scope_",
             "chrome_",
+            "instance_",
           };
           java.lang.String info =
-              "\u0000\u000e\u0000\u0001\u0001\u000e\u000e\u0000\u0001\u0000\u0001\u0208\u0002\u0003" +
+              "\u0000\u000f\u0000\u0001\u0001\u000f\u000f\u0000\u0001\u0000\u0001\u0208\u0002\u0003" +
               "\u0003\u1009\u0000\u0004\u001b\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007" +
-              "\n\u0208\u000b\u0208\f\u0007\r\u0208\u000e\u0208";
+              "\n\u0208\u000b\u0208\f\u0007\r\u0208\u000e\u0208\u000f\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

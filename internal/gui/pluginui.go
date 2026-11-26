@@ -92,13 +92,14 @@ const autoSplitBreakpoint = 640.0
 // treeView is a block's tree as it is drawn: the block, and what the user
 // set in its fields.
 type treeView struct {
-	m       *model
-	block   string
-	scope   string
-	plugin  string // optional plugin ID override for dialog provenance
-	form    *blockForm
-	menus   map[string]*protocol.UiNode // indexed variant=="context" menu nodes
-	onEvent func(block, node, kind, value string, values map[string]string)
+	m        *model
+	block    string
+	scope    string
+	instance string // custom plugin tab instance key ("" for normal blocks)
+	plugin   string // optional plugin ID override for dialog provenance
+	form     *blockForm
+	menus    map[string]*protocol.UiNode // indexed variant=="context" menu nodes
+	onEvent  func(block, node, kind, value string, values map[string]string)
 }
 
 // newTreeView constructs a treeView with all context menus indexed from root
@@ -122,11 +123,16 @@ func (v *treeView) renderToolbar(toolbar *protocol.UiNode) ggui.Widget {
 // layout chrome) using a treeView initialized from the full tree root. It does
 // not reset form.drawn, so calling it alongside blockBody preserves form values.
 func renderTreeNode(m *model, block, scope, pluginID string, form *blockForm, root, node *protocol.UiNode) ggui.Widget {
+	return renderTreeNodeInstance(m, block, scope, "", pluginID, form, root, node)
+}
+
+func renderTreeNodeInstance(m *model, block, scope, instance, pluginID string, form *blockForm, root, node *protocol.UiNode) ggui.Widget {
 	if node == nil {
 		return nil
 	}
 	v := newTreeView(m, block, scope, form, root)
 	v.plugin = pluginID
+	v.instance = instance
 	if node.GetKind() == "row" && node.GetVariant() == "toolbar" {
 		return v.renderToolbar(node)
 	}
@@ -204,6 +210,12 @@ func shallowCopyUiNode(n *protocol.UiNode, children []*protocol.UiNode) *protoco
 		ContextArg:  n.GetContextArg(),
 		Rows:        n.GetRows(),
 		Placeholder: n.GetPlaceholder(),
+		Min:         n.GetMin(),
+		Max:         n.GetMax(),
+		Step:        n.GetStep(),
+		DiffLines:   n.GetDiffLines(),
+		DiffFrom:    n.GetDiffFrom(),
+		DiffTo:      n.GetDiffTo(),
 	}
 }
 
@@ -274,7 +286,7 @@ func (v *treeView) send(id, kind, value string) {
 		v.onEvent(v.block, id, kind, value, v.form.values())
 		return
 	}
-	v.m.blockEvent(v.block, v.scope, id, kind, value, v.form.values())
+	v.m.blockEventInstance(v.block, v.scope, v.instance, id, kind, value, v.form.values())
 }
 
 // node draws a node of the tree; inLine says it is a row's child, where
@@ -335,12 +347,26 @@ func (v *treeView) nodeLayout(n *protocol.UiNode, inLine, bare, fullWidth bool) 
 		out = v.checkboxNode(n, bare)
 	case "dialog":
 		return v.dialogNode(n)
+	case "diff":
+		out = v.diffNode(n)
+	case "alert":
+		out = v.alertNode(n, bare)
+	case "empty":
+		out = v.emptyNode(n, bare)
+	case "stat":
+		out = v.statNode(n, tap, isTap, bare)
+	case "radio":
+		out = v.radioNode(n)
+	case "slider":
+		out = v.sliderNode(n)
+	case "kbd":
+		out = v.kbdNode(n)
+	case "skeleton":
+		out = v.skeletonNode(n)
+	case "spacer":
+		return v.spacerNode(n)
 	case "text":
-		t := widget.Text(n.GetText()).Size(textSize(n.GetSize())).Weight(textWeight(n.GetWeight())).Color(toneColor(n.GetTone()))
-		if inLine {
-			t = t.NoWrap().Ellipsis()
-		}
-		out = v.maybeDragDrop(tappableWhen(appendBadges(t, n.GetBadges()), n, isTap, tap), n, bare)
+		out = v.maybeDragDrop(tappableWhen(appendBadges(v.textNode(n, inLine), n.GetBadges()), n, isTap, tap), n, bare)
 	case "icon":
 		w := tappableWhen(pluginIcon(n.GetIcon()).Size(textSize(n.GetSize())+2).Color(toneColor(cmpTone(n.GetTone(), "muted"))), n, isTap, tap)
 		if ph := n.GetPlaceholder(); ph != "" && !bare {
@@ -362,30 +388,9 @@ func (v *treeView) nodeLayout(n *protocol.UiNode, inLine, bare, fullWidth bool) 
 	case "button":
 		out = v.buttonNode(n, tap, bare, fullWidth)
 	case "input":
-		id := n.GetId()
-		ph := cmpTone(n.GetPlaceholder(), n.GetText())
-		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + "\x00" + v.scope + id).Placeholder(ph).Name(cmpTone(ph, T("Input")))
-		if n.GetChange() {
-			f = f.OnSubmit(func(s string) { v.send(id, protocol.UiSubmit, s) }).
-				OnCommit(func(s string) { v.send(id, protocol.UiChange, s) })
-		}
-		out = f.Disabled(n.GetDisabled())
+		out = v.inputNode(n)
 	case "textarea":
-		id := n.GetId()
-		lines := 4
-		switch n.GetSize() {
-		case "large":
-			lines = 14
-		case "small":
-			lines = 3
-		}
-		ph := cmpTone(n.GetPlaceholder(), n.GetText())
-		f := ui.TextField(v.form.input(id, n.GetValue())).Key(v.block + "\x00" + v.scope + id).Lines(lines).Placeholder(ph).Name(cmpTone(ph, T("Input")))
-		if n.GetChange() {
-			f = f.OnSubmit(func(s string) { v.send(id, protocol.UiSubmit, s) }).
-				OnCommit(func(s string) { v.send(id, protocol.UiChange, s) })
-		}
-		out = f.Disabled(n.GetDisabled())
+		out = v.textareaNode(n)
 	case "toggle":
 		id := n.GetId()
 		field := v.form.field(id, strconv.FormatBool(n.GetChecked()))
@@ -399,38 +404,19 @@ func (v *treeView) nodeLayout(n *protocol.UiNode, inLine, bare, fullWidth bool) 
 	case "select":
 		id := n.GetId()
 		field := v.form.field(id, n.GetValue())
-		out = widget.Box(ui.Select(ggui.Bind(field.Get, func(x string) {
+		sel := ui.Select(ggui.Bind(field.Get, func(x string) {
 			field.Set(x)
 			if n.GetChange() {
 				v.send(id, protocol.UiChange, x)
 			}
-		})).Options(n.GetOptions()).Name(T("Choose")).Disabled(n.GetDisabled())).MaxWidth(200)
+		})).Options(n.GetOptions()).Name(T("Choose")).Disabled(n.GetDisabled())
+		if fullWidth {
+			out = sel
+		} else {
+			out = widget.Box(sel).MaxWidth(240)
+		}
 	case "tabs":
-		id := n.GetId()
-		field := v.form.field(id, n.GetValue())
-		opts := n.GetOptions()
-		out = ggui.View(field, func(active string) ggui.Widget {
-			btns := make([]ggui.Widget, 0, len(opts))
-			for _, opt := range opts {
-				o := opt
-				b := ui.Button(o, func() {
-					if n.GetDisabled() {
-						return
-					}
-					field.Set(o)
-					if n.GetChange() {
-						v.send(id, protocol.UiChange, o)
-					}
-				}).Disabled(n.GetDisabled()).Name(o)
-				if o == active {
-					b = b.Secondary()
-				} else {
-					b = b.Ghost()
-				}
-				btns = append(btns, b)
-			}
-			return widget.Box(looseHeight{widget.Scroll(widget.Row(btns...).Gap(4).Align(widget.AlignCenter)).Horizontal().Shrink().Bar(color.Transparent)}).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(3)
-		})
+		out = v.tabsNode(n)
 	case "markdown":
 		host := pluginPage{pageHost: pageHost{m: v.m}}
 		if n.GetChange() && !n.GetDisabled() {
@@ -441,20 +427,9 @@ func (v *treeView) nodeLayout(n *protocol.UiNode, inLine, bare, fullWidth bool) 
 		}
 		out = mdview.Column(host, n.GetText())
 	case "code":
-		out = toolBlock(n.GetText(), false)
+		out = v.codeNode(n)
 	case "progress":
-		if n.GetVariant() == "spinner" {
-			if n.GetText() == "" {
-				out = ui.Spinner().Size(13)
-			} else {
-				out = widget.Row(
-					ui.Spinner().Size(13),
-					widget.Text(n.GetText()).Size(12).Color(toneColor(cmpTone(n.GetTone(), "muted"))).NoWrap().Ellipsis(),
-				).Gap(6).Align(widget.AlignCenter)
-			}
-		} else {
-			out = ui.Progress(ggui.Const(n.GetProgress()))
-		}
+		out = v.progressNode(n)
 	case "divider":
 		return hline()
 	case "chart":
@@ -1547,6 +1522,8 @@ func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 			w = widget.Expanded(w)
 		case g > 0:
 			w = widget.Flex(w, g)
+		case c.GetKind() == "spacer" && c.GetGap() == 0:
+			w = widget.Expanded(w)
 		case row && !hasGrow && (c.GetKind() == "pill" || c.GetKind() == "chip"):
 			w = widget.Flexible(w)
 		}
@@ -1582,6 +1559,26 @@ func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 	case "card":
 		if gap == 0 {
 			gap = 6
+		}
+		if n.GetText() != "" || n.GetIcon() != "" || len(n.GetBadges()) > 0 {
+			var hparts []ggui.Widget
+			if n.GetIcon() != "" {
+				hparts = append(hparts, pluginIcon(n.GetIcon()).Size(14).Color(toneColor(cmpTone(n.GetTone(), "muted"))))
+			}
+			if n.GetText() != "" {
+				hparts = append(hparts, widget.Expanded(widget.Text(n.GetText()).Size(13).Weight(ggui.WeightSemibold).Color(toneColor(n.GetTone())).NoWrap().Ellipsis()))
+			} else {
+				hparts = append(hparts, widget.Spacer())
+			}
+			if len(n.GetBadges()) > 0 {
+				hparts = append(hparts, renderBadges(n.GetBadges())...)
+			}
+			head := widget.Row(hparts...).Gap(6).Align(widget.AlignCenter)
+			if len(kids) > 0 {
+				kids = append([]ggui.Widget{head, hline()}, kids...)
+			} else {
+				kids = []ggui.Widget{head}
+			}
 		}
 		inner := v.tappableBoxWhen(widget.Column(kids...).Gap(gap).Stretch(), n, !bare)
 		// If dragDrop will draw the card frame/highlight, avoid double framing.
@@ -1654,6 +1651,8 @@ func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 
 // tableNode renders a table whose header and every body row share the exact
 // same column flex weights, gap, horizontal padding, and left-aligned slots.
+// Supports sortable headers (onChange + value "<col>:asc|desc") and
+// "compact"/"striped" variants (revision 49).
 func (v *treeView) tableNode(n *protocol.UiNode, bare bool) ggui.Widget {
 	hdrs := n.GetLabels()
 	children := n.GetChildren()
@@ -1665,6 +1664,25 @@ func (v *treeView) tableNode(n *protocol.UiNode, bare bool) ggui.Widget {
 	}
 	weights := tableColumnWeights(numCols, children)
 
+	variant := n.GetVariant()
+	compact := variant == "compact"
+	striped := variant == "striped"
+	rowPadV, rowPadH := 6.0, 10.0
+	if compact {
+		rowPadV, rowPadH = 3.5, 8.0
+	}
+
+	sortCol, sortDir := "", ""
+	if val := n.GetValue(); val != "" {
+		if c, d, ok := strings.Cut(val, ":"); ok {
+			sortCol, sortDir = c, d
+		} else {
+			sortCol = val
+		}
+	}
+	sortable := !bare && n.GetChange() && !n.GetDisabled()
+	tableID := n.GetId()
+
 	const colGap = 8.0
 	var trows []ggui.Widget
 	if len(hdrs) > 0 {
@@ -1674,10 +1692,28 @@ func (v *treeView) tableNode(n *protocol.UiNode, bare bool) ggui.Widget {
 			if i < len(hdrs) {
 				label = hdrs[i]
 			}
-			hdr := widget.Text(label).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.Muted).NoWrap().Ellipsis()
+			activeSort := label != "" && label == sortCol
+			hdrColor := color.Color(skin.Muted)
+			if activeSort {
+				hdrColor = skin.Fg
+			}
+			hdrTxt := widget.Text(label).Size(11.5).Weight(ggui.WeightSemibold).Color(hdrColor).NoWrap().Ellipsis()
+			var hdr ggui.Widget = hdrTxt
+			if activeSort {
+				chev := "chevron-up"
+				if sortDir == "desc" {
+					chev = "chevron-down"
+				}
+				hdr = widget.Row(hdrTxt, icon(chev).Size(12).Color(skin.AccentBright)).Gap(3).Align(widget.AlignCenter)
+			}
+			if sortable && label != "" {
+				colName := label
+				hdr = ui.ButtonOf(hdr, func() { v.send(tableID, protocol.UiChange, colName) }).
+					Ghost().Pad(2, 4).Radius(4).Name(Tf("Sort by %s", colName))
+			}
 			cols[i] = widget.Flex(widget.Align(hdr).At(0, 0.5), weights[i])
 		}
-		trows = append(trows, widget.Box(widget.Row(cols...).Gap(colGap).Align(widget.AlignCenter)).Pad(6, 10).Fill(skin.Surface1), hline())
+		trows = append(trows, widget.Box(widget.Row(cols...).Gap(colGap).Align(widget.AlignCenter)).Pad(rowPadV, rowPadH).Fill(skin.Surface1), hline())
 	}
 	for i, c := range children {
 		if i > 0 {
@@ -1697,14 +1733,27 @@ func (v *treeView) tableNode(n *protocol.UiNode, bare bool) ggui.Widget {
 			var wrapped ggui.Widget
 			if c.GetTap() {
 				id := c.GetId()
-				wrapped = ui.ButtonOf(rowW, func() { v.send(id, protocol.UiTap, "") }).Ghost().Pad(6, 10).Radius(0).Name(strings.Join(texts(c), " "))
+				btn := ui.ButtonOf(rowW, func() { v.send(id, protocol.UiTap, "") }).Ghost().Pad(rowPadV, rowPadH).Radius(0).Name(strings.Join(texts(c), " "))
+				if striped && i%2 == 1 {
+					wrapped = widget.Box(btn).Fill(skin.Surface1)
+				} else {
+					wrapped = btn
+				}
 			} else {
-				wrapped = widget.Box(rowW).Pad(6, 10)
+				box := widget.Box(rowW).Pad(rowPadV, rowPadH)
+				if striped && i%2 == 1 {
+					box = box.Fill(skin.Surface1)
+				}
+				wrapped = box
 			}
 			trows = append(trows, v.withContextMenu(v.dragDrop(wrapped, c), c, "", ""))
 			continue
 		}
-		trows = append(trows, widget.Box(v.node(c, false)).Pad(6, 10))
+		box := widget.Box(v.node(c, false)).Pad(rowPadV, rowPadH)
+		if striped && i%2 == 1 {
+			box = box.Fill(skin.Surface1)
+		}
+		trows = append(trows, box)
 	}
 	return v.maybeDragDrop(widget.Box(widget.Column(trows...).Stretch()).Border(1, skin.Border).Radius(8), n, bare)
 }

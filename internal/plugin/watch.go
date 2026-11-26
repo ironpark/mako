@@ -75,7 +75,7 @@ func (p *plugin) blockChrome(block string) string {
 
 func (p *plugin) subscribe(block, scopeKey, locale string, view View) (string, []string) {
 	p.mu.Lock()
-	in, evicted := p.getOrCreateInstanceLocked(block, scopeKey)
+	in, evicted := p.getOrCreateInstanceLocked(block, scopeKey, view.Instance, view.Params)
 	in.subs++
 	if view.Standalone {
 		in.solo++
@@ -169,6 +169,14 @@ func (m *Manager) WatchScopedView(ctx context.Context, name, scope, locale strin
 	if _, _, err := parseScopeKey(scope); err != nil {
 		return err
 	}
+	if err := validateInstanceID(view.Instance); err != nil {
+		return err
+	}
+	params, err := validateTabParams(view.Params)
+	if err != nil {
+		return err
+	}
+	view.Params = params
 	p, ok := m.plugin(id)
 	if !ok {
 		return noPlugin(id)
@@ -184,6 +192,9 @@ func (m *Manager) WatchScopedView(ctx context.Context, name, scope, locale strin
 	wrappedSend := func(u *protocol.BlockUpdate) error {
 		if scope != "" {
 			u.Scope = scope
+		}
+		if view.Instance != "" {
+			u.Instance = view.Instance
 		}
 		if ch := p.blockChrome(block); ch != "" {
 			u.Chrome = ch
@@ -206,6 +217,10 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	if _, _, err := parseScopeKey(scopeKey); err != nil {
 		return nil, err
 	}
+	instID := ev.GetInstance()
+	if err := validateInstanceID(instID); err != nil {
+		return nil, err
+	}
 	p, ok := m.plugin(id)
 	if !ok {
 		return nil, noPlugin(id)
@@ -213,11 +228,12 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	if !p.evRate.take() {
 		return nil, errors.New("events come faster than the plugin takes them; this one was dropped")
 	}
-	key := instanceKey(block, scopeKey)
+	key := instanceKeyOf(block, scopeKey, instID)
 	p.mu.Lock()
 	var tree *uiblock.Tree
 	var locale string
 	var standalone bool
+	var params string
 	if in, ok := p.inst[key]; ok {
 		in.lastUsed = time.Now()
 		tree = in.tree
@@ -226,6 +242,7 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 		}
 		locale = in.locale
 		standalone = in.standaloneLocked()
+		params = in.params
 	}
 	p.mu.Unlock()
 	if ev.GetLocale() != "" {
@@ -267,7 +284,9 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 	sc := m.resolveScope(scopeKey)
 	sc.Locale = normalizeLocale(locale)
 	sc.View = View{Standalone: standalone}
+	sc.Tab = tabContextFor(instID, params)
 	ctxJSON := marshalScopeContext(sc)
+	stateKey := runtimeStateKey(scopeKey, instID)
 	var done *protocol.PluginDone
 	err = p.do(ctx, func() error {
 		if err := p.ensure(); err != nil {
@@ -276,7 +295,7 @@ func (m *Manager) Event(ctx context.Context, ev *protocol.BlockEvent) (*protocol
 		prevInst := p.activeInstance
 		p.activeInstance = key
 		defer func() { p.activeInstance = prevInst }()
-		_, err := p.invoke("event", true, block, scopeKey, ctxJSON, name, args, string(valsJSON))
+		_, err := p.invoke("event", true, block, stateKey, ctxJSON, name, args, string(valsJSON))
 		done = p.drainEffects()
 		p.setErr(key, err)
 		p.afterCall(scopeKey, key)

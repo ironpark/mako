@@ -18,12 +18,14 @@ import (
 )
 
 // activeBlockTrees tracks the last full UiNode tree rendered for each live
-// (model, block, scope) stream so GUI tests can inspect rendered plugin trees
-// without modifying model.go. Entries are cleared when the block's Effect ends.
+// (model, block, scope, instance) stream so GUI tests can inspect rendered
+// plugin trees without modifying model.go. Entries are cleared when the
+// block's Effect ends.
 type blockTreeKey struct {
-	model *model
-	block string
-	scope string
+	model    *model
+	block    string
+	scope    string
+	instance string
 }
 
 type blockTreeEntry struct {
@@ -37,15 +39,21 @@ var (
 	blockTreeGen       atomic.Uint64
 	// watchBlockFunc overrides Client.WatchBlockView in unit tests when non-nil.
 	watchBlockFunc func(ctx context.Context, block, scope, locale string, standalone bool, fn func(*protocol.BlockUpdate)) error
+	// watchBlockRequestFunc overrides Client.WatchBlockRequest in unit tests when non-nil.
+	watchBlockRequestFunc func(ctx context.Context, req *protocol.WatchBlock, fn func(*protocol.BlockUpdate)) error
 )
 
 func recordBlockTree(m *model, block, scope string, tree *protocol.UiNode, gen uint64) {
+	recordBlockTreeInstance(m, block, scope, "", tree, gen)
+}
+
+func recordBlockTreeInstance(m *model, block, scope, instance string, tree *protocol.UiNode, gen uint64) {
 	if m == nil || block == "" {
 		return
 	}
 	activeBlockTreesMu.Lock()
 	defer activeBlockTreesMu.Unlock()
-	k := blockTreeKey{model: m, block: block, scope: scope}
+	k := blockTreeKey{model: m, block: block, scope: scope, instance: instance}
 	if tree == nil {
 		if cur, ok := activeBlockTrees[k]; ok && (gen == 0 || cur.gen == gen) {
 			delete(activeBlockTrees, k)
@@ -59,11 +67,15 @@ func recordBlockTree(m *model, block, scope string, tree *protocol.UiNode, gen u
 }
 
 func clearBlockTree(m *model, block, scope string, gen uint64) {
+	clearBlockTreeInstance(m, block, scope, "", gen)
+}
+
+func clearBlockTreeInstance(m *model, block, scope, instance string, gen uint64) {
 	if m == nil || block == "" {
 		return
 	}
 	activeBlockTreesMu.Lock()
-	k := blockTreeKey{model: m, block: block, scope: scope}
+	k := blockTreeKey{model: m, block: block, scope: scope, instance: instance}
 	if cur, ok := activeBlockTrees[k]; ok && (gen == 0 || cur.gen == gen) {
 		delete(activeBlockTrees, k)
 	}
@@ -80,7 +92,15 @@ func (m *model) blockTreeFor(name string, scope ...string) *protocol.UiNode {
 	activeBlockTreesMu.RLock()
 	defer activeBlockTreesMu.RUnlock()
 	if len(scope) > 0 && scope[0] != "" {
-		return activeBlockTrees[blockTreeKey{model: m, block: name, scope: scope[0]}].tree
+		if e, ok := activeBlockTrees[blockTreeKey{model: m, block: name, scope: scope[0]}]; ok && e.tree != nil {
+			return e.tree
+		}
+		for k, e := range activeBlockTrees {
+			if k.model == m && k.block == name && k.scope == scope[0] && e.tree != nil {
+				return e.tree
+			}
+		}
+		return nil
 	}
 	if e, ok := activeBlockTrees[blockTreeKey{model: m, block: name, scope: ""}]; ok && e.tree != nil {
 		return e.tree
@@ -94,8 +114,9 @@ func (m *model) blockTreeFor(name string, scope ...string) *protocol.UiNode {
 }
 
 type blockCacheKey struct {
-	block string
-	scope string
+	block    string
+	scope    string
+	instance string
 }
 
 type cachedBlockState struct {
@@ -104,30 +125,42 @@ type cachedBlockState struct {
 }
 
 func (m *model) cachedBlock(name, scope string) *cachedBlockState {
+	return m.cachedBlockInstance(name, scope, "")
+}
+
+func (m *model) cachedBlockInstance(name, scope, instance string) *cachedBlockState {
 	if m == nil || m.plugins == nil || name == "" {
 		return nil
 	}
-	return m.plugins.blockCache[blockCacheKey{block: name, scope: scope}]
+	return m.plugins.blockCache[blockCacheKey{block: name, scope: scope, instance: instance}]
 }
 
 func (m *model) saveCachedBlock(name, scope string, feed blockFeed, form *blockForm) {
+	m.saveCachedBlockInstance(name, scope, "", feed, form)
+}
+
+func (m *model) saveCachedBlockInstance(name, scope, instance string, feed blockFeed, form *blockForm) {
 	if m == nil || m.plugins == nil || name == "" {
 		return
 	}
 	if m.plugins.blockCache == nil {
 		m.plugins.blockCache = map[blockCacheKey]*cachedBlockState{}
 	}
-	m.plugins.blockCache[blockCacheKey{block: name, scope: scope}] = &cachedBlockState{
+	m.plugins.blockCache[blockCacheKey{block: name, scope: scope, instance: instance}] = &cachedBlockState{
 		feed: feed,
 		form: form,
 	}
 }
 
 func (m *model) deleteCachedBlock(name, scope string) {
+	m.deleteCachedBlockInstance(name, scope, "")
+}
+
+func (m *model) deleteCachedBlockInstance(name, scope, instance string) {
 	if m == nil || m.plugins == nil || name == "" {
 		return
 	}
-	delete(m.plugins.blockCache, blockCacheKey{block: name, scope: scope})
+	delete(m.plugins.blockCache, blockCacheKey{block: name, scope: scope, instance: instance})
 }
 
 func (m *model) evictCachedBlock(name string) {
@@ -245,6 +278,16 @@ func (m *model) resolveActiveScope(blockScope string) string {
 		if d, ok := diffs[tabID]; ok && d.Root.Path != "" {
 			if pl := placeIn(p.Projects, d.Root.Node, d.Root.Path, "", ""); pl.At >= 0 {
 				return protocol.ScopeProject + ":" + p.Projects[pl.At].ID
+			}
+		}
+		if pt, ok := m.PluginTabs.Get()[tabID]; ok {
+			if pt.Root.Path != "" {
+				if pl := placeIn(p.Projects, pt.Root.Node, pt.Root.Path, "", ""); pl.At >= 0 {
+					return protocol.ScopeProject + ":" + p.Projects[pl.At].ID
+				}
+			}
+			if rest, ok := strings.CutPrefix(pt.Scope, protocol.ScopeProject+":"); ok && rest != "" {
+				return pt.Scope
 			}
 		}
 		if cur, ok := sessionIn(sessions, tabID); ok {
@@ -735,7 +778,24 @@ func treeBlock(m *model, name string, origin blockOrigin, title, blockScope stri
 // standalone view flag, applying each update to the tree it holds and handing
 // on the whole, until ctx ends.
 func (m *model) followBlockScoped(ctx context.Context, name, scope, locale string, standalone bool, fn func(*protocol.BlockUpdate)) {
+	m.followBlockInstance(ctx, name, scope, locale, standalone, "", "", fn)
+}
+
+// followBlockInstance watches a block instance (such as a custom plugin tab
+// with an instance key and params JSON) on the daemon.
+func (m *model) followBlockInstance(ctx context.Context, name, scope, locale string, standalone bool, instance, params string, fn func(*protocol.BlockUpdate)) {
+	req := &protocol.WatchBlock{
+		Block:      name,
+		Scope:      scope,
+		Locale:     locale,
+		Standalone: standalone,
+		Instance:   instance,
+		Params:     params,
+	}
 	followStream(ctx, func(ctx context.Context, each func(*protocol.BlockUpdate)) error {
+		if watchBlockRequestFunc != nil {
+			return watchBlockRequestFunc(ctx, req, each)
+		}
 		if watchBlockFunc != nil {
 			return watchBlockFunc(ctx, name, scope, locale, standalone, each)
 		}
@@ -743,7 +803,7 @@ func (m *model) followBlockScoped(ctx context.Context, name, scope, locale strin
 		if err != nil {
 			return err
 		}
-		return c.WatchBlockView(ctx, name, scope, locale, standalone, each)
+		return c.WatchBlockRequest(ctx, req, each)
 	}, time.Second, fn)
 }
 
@@ -787,7 +847,8 @@ func followStream(ctx context.Context, watch func(context.Context, func(*protoco
 			}
 			whole := &protocol.BlockUpdate{Block: u.GetBlock(), Seq: u.GetSeq(), Tree: tree, Plugin: u.GetPlugin(),
 				SessionId: u.GetSessionId(), Agent: u.GetAgent(), Title: u.GetTitle(), State: u.GetState(),
-				Error: u.GetError(), Stale: u.GetStale(), Gone: u.GetGone(), Scope: u.GetScope(), Chrome: chrome}
+				Error: u.GetError(), Stale: u.GetStale(), Gone: u.GetGone(), Scope: u.GetScope(), Chrome: chrome,
+				Instance: u.GetInstance()}
 			fn(whole)
 		})
 		restart()
@@ -1051,6 +1112,10 @@ func blockBody(m *model, name string, origin blockOrigin, st blockScopeState, u 
 // blockBodyContent renders the block's inner body; when liftTB is true, a
 // leading toolbar row is stripped because the layout chrome draws it in Tools.
 func blockBodyContent(m *model, name string, origin blockOrigin, st blockScopeState, u *protocol.BlockUpdate, form *blockForm, liftTB bool) ggui.Widget {
+	return blockBodyContentInstance(m, name, "", origin, st, u, form, liftTB)
+}
+
+func blockBodyContentInstance(m *model, name, instance string, origin blockOrigin, st blockScopeState, u *protocol.BlockUpdate, form *blockForm, liftTB bool) ggui.Widget {
 	if origin.plugin != "" && isScoped(st.BlockScope) && st.Key == "" {
 		return emptyScopeCard(m, name, st)
 	}
@@ -1090,6 +1155,7 @@ func blockBodyContent(m *model, name string, origin blockOrigin, st blockScopeSt
 		}
 		v := newTreeView(m, name, st.Key, form, tree)
 		v.plugin = origin.plugin
+		v.instance = instance
 		if tree.GetFill() {
 			content := v.node(renderRoot, false)
 			if !(lifted && u.GetChrome() == "toolbar") {

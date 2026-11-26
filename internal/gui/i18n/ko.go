@@ -1861,4 +1861,13 @@ var catalogKo = map[string]string{
 	"Enter a valid Git repository URL (https://, ssh://, or git@host:owner/repo.git).": "올바른 Git 저장소 주소(https://, ssh:// 또는 git@host:owner/repo.git)를 입력하세요.",
 	"Tip: configure default project locations in Settings ▸ General.":                  "팁: 설정 ▸ 일반에서 기본 프로젝트 저장 위치를 미리 등록할 수 있습니다.",
 	"Manage…": "관리…",
+
+	// Revision 49: sidebar plugin pages, custom plugin tabs & UI components
+	"Copy code":          "코드 복사",
+	"Copied":             "복사됨",
+	"Slider":             "슬라이더",
+	"Show %s in sidebar": "사이드바에서 %s 보기",
+	"Open %s tab":        "%s 탭 열기",
+	"Reload plugin":      "플러그인 다시 불러오기",
+	"Tab actions":        "탭 작업",
 }

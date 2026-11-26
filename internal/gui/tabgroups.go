@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -36,11 +37,11 @@ type tabProject struct {
 
 // tabProjects are the projects of tabs, by tab, among groups, named as the
 // sidebar names them: a folder of a project of several by its own name.
-func tabProjects(tabs []string, groups []sessionGroup, nodes []*protocol.Node, looks map[string]projectLook, docs map[string]docInfo, diffs map[string]diffTab) map[string]tabProject {
+func tabProjects(tabs []string, groups []sessionGroup, nodes []*protocol.Node, looks map[string]projectLook, docs map[string]docInfo, diffs map[string]diffTab, ptabs ...map[string]pluginTab) map[string]tabProject {
 	labels := projectLabels(groups, nodes)
 	out := make(map[string]tabProject, len(tabs))
 	for _, id := range tabs {
-		i, root := tabPlace(id, groups, docs, diffs)
+		i, root := tabPlace(id, groups, docs, diffs, ptabs...)
 		if i < 0 {
 			continue
 		}
@@ -87,7 +88,7 @@ func tabProjectKey(g sessionGroup, root int) string {
 // among the project's roots, else -1. A session is where the sidebar lists
 // it; a file in the deepest folder holding it, and a diff in the one
 // holding its repository, else the folder it was opened from.
-func tabPlace(id string, groups []sessionGroup, docs map[string]docInfo, diffs map[string]diffTab) (section, root int) {
+func tabPlace(id string, groups []sessionGroup, docs map[string]docInfo, diffs map[string]diffTab, ptabs ...map[string]pluginTab) (section, root int) {
 	var from fileRoot
 	switch {
 	case isDocTab(id):
@@ -98,6 +99,21 @@ func tabPlace(id string, groups []sessionGroup, docs map[string]docInfo, diffs m
 		from = d.Root
 		if d.Repo != "" {
 			from.Path = d.Repo
+		}
+	case isPluginTab(id):
+		var pt pluginTab
+		if len(ptabs) > 0 && ptabs[0] != nil {
+			pt = ptabs[0][id]
+		}
+		if pt.Root.Path != "" {
+			from = pt.Root
+		} else if projID, ok := strings.CutPrefix(pt.Scope, protocol.ScopeProject+":"); ok && projID != "" {
+			for i, g := range groups {
+				if g.Key == projID {
+					return i, -1
+				}
+			}
+			return -1, -1
 		}
 	default:
 		for i, g := range groups {
@@ -166,7 +182,7 @@ func tabsByProject(tabs []string, key func(string) string) []string {
 func (m *model) tabKeys(tabs []string) func(string) string {
 	l := ggui.Peek(m.Spaces)
 	groups := groupProjects(ggui.Peek(m.Sessions), ggui.Peek(m.Nodes), ggui.Peek(m.Prefs).Projects, l.Projects, l.Names)
-	docs, diffs := ggui.Peek(m.Docs), ggui.Peek(m.Diffs)
+	docs, diffs, ptabs := ggui.Peek(m.Docs), ggui.Peek(m.Diffs), ggui.Peek(m.PluginTabs)
 	keys := make(map[string]string, len(tabs))
 	for idx, id := range tabs {
 		if idx > 0 && isLaunchTab(id) {
@@ -175,7 +191,7 @@ func (m *model) tabKeys(tabs []string) func(string) string {
 				continue
 			}
 		}
-		if i, root := tabPlace(id, groups, docs, diffs); i >= 0 {
+		if i, root := tabPlace(id, groups, docs, diffs, ptabs); i >= 0 {
 			keys[id] = tabProjectKey(groups[i], root)
 		}
 	}
@@ -189,7 +205,7 @@ func paneProjects(m *model, group ggui.Readable[tabGroup]) ggui.Readable[map[str
 		l := m.Spaces.Get()
 		nodes := m.Nodes.Get()
 		groups := groupProjects(m.Sessions.Get(), nodes, kept.Get(), l.Projects, l.Names)
-		return tabProjects(group.Get().Tabs, groups, nodes, l.Looks, m.Docs.Get(), m.Diffs.Get())
+		return tabProjects(group.Get().Tabs, groups, nodes, l.Looks, m.Docs.Get(), m.Diffs.Get(), m.PluginTabs.Get())
 	}).WithEqual(func(a, b map[string]tabProject) bool {
 		if len(a) != len(b) {
 			return false

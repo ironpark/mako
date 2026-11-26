@@ -137,13 +137,13 @@ func (m *Manager) CallToolScoped(ctx context.Context, pluginID, toolID string, a
 			for _, b := range cur.man.Blocks {
 				switch {
 				case b.Scope == "" || b.Scope == protocol.ScopeGlobal:
-					in, ev := p.getOrCreateInstanceLocked(b.ID, "")
+					in, ev := p.getOrCreateInstanceLocked(b.ID, "", "", "")
 					evicted = append(evicted, ev...)
 					if !in.loaded {
 						unloaded = append(unloaded, in)
 					}
 				case scopeKey != "" && b.Scope == resolvedScope.Scope:
-					in, ev := p.getOrCreateInstanceLocked(b.ID, scopeKey)
+					in, ev := p.getOrCreateInstanceLocked(b.ID, scopeKey, "", "")
 					evicted = append(evicted, ev...)
 					if !in.loaded {
 						unloaded = append(unloaded, in)

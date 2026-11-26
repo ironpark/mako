@@ -45,7 +45,7 @@ public interface PluginBlockOrBuilder extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -56,7 +56,7 @@ public interface PluginBlockOrBuilder extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -66,7 +66,7 @@ public interface PluginBlockOrBuilder extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -77,7 +77,7 @@ public interface PluginBlockOrBuilder extends
   /**
    * <pre>
    * slots are where the manifest suggests placing it: "left", "right",
-   * "top", "bottom".
+   * "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
    * </pre>
    *
    * <code>repeated string slots = 3 [json_name = "slots"];</code>
@@ -108,4 +108,26 @@ public interface PluginBlockOrBuilder extends
    */
   com.google.protobuf.ByteString
       getScopeBytes();
+
+  /**
+   * <pre>
+   * icon is an optional bundled icon name for sidebar switcher, custom tab,
+   * and block picker (revision 49).
+   * </pre>
+   *
+   * <code>string icon = 5 [json_name = "icon"];</code>
+   * @return The icon.
+   */
+  java.lang.String getIcon();
+  /**
+   * <pre>
+   * icon is an optional bundled icon name for sidebar switcher, custom tab,
+   * and block picker (revision 49).
+   * </pre>
+   *
+   * <code>string icon = 5 [json_name = "icon"];</code>
+   * @return The bytes for icon.
+   */
+  com.google.protobuf.ByteString
+      getIconBytes();
 }

@@ -241,4 +241,24 @@ public interface BlockUpdateOrBuilder extends
    */
   com.google.protobuf.ByteString
       getChromeBytes();
+
+  /**
+   * <pre>
+   * instance is the instance key of this block stream (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 15 [json_name = "instance"];</code>
+   * @return The instance.
+   */
+  java.lang.String getInstance();
+  /**
+   * <pre>
+   * instance is the instance key of this block stream (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 15 [json_name = "instance"];</code>
+   * @return The bytes for instance.
+   */
+  com.google.protobuf.ByteString
+      getInstanceBytes();
 }

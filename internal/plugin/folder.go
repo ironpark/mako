@@ -26,16 +26,22 @@ import (
 const (
 	maxModules     = 64
 	maxSourceBytes = 2 << 20
+	maxWasmBytes   = 8 << 20
 	maxFolderDepth = 8
 )
 
 // version is a plugin's code as read from its folder, checked.
 type version struct {
 	man   *Manifest
-	src   map[string]string // module name, its path in the folder, to its source
-	order []string          // the module names, sorted
+	src   map[string]string // module name, its path in the folder, to its source (.js plugins)
+	order []string          // the module names, sorted (.js plugins)
+	wasm  []byte            // WebAssembly binary when entry ends in .wasm
 	print string            // the folder's fingerprint when read
-	sum   string            // its manifest's and modules' content, hashed
+	sum   string            // its manifest's and modules'/wasm's content, hashed
+}
+
+func (v *version) isWasm() bool {
+	return v != nil && v.man != nil && path.Ext(v.man.Entry) == ".wasm"
 }
 
 // skipDir says a folder of a plugin's is not read.
@@ -156,6 +162,29 @@ func readVersionFS(fsys fs.FS, id, print string, bundled bool) (*version, error)
 		return nil, fmt.Errorf("the manifest's id %q is not its folder's name %q", man.ID, id)
 	}
 	v := &version{man: man, src: map[string]string{}, print: print}
+	if path.Ext(man.Entry) == ".wasm" {
+		// Validate directory tree (no symlinks / deep folders), then read the entry binary.
+		if err := walkPluginFS(fsys, func(string, fs.FileInfo) error { return nil }); err != nil {
+			return nil, err
+		}
+		b, err := readBoundedFS(fsys, man.Entry, maxWasmBytes)
+		if err != nil {
+			return nil, fmt.Errorf("the entry %s: %w", man.Entry, err)
+		}
+		if len(b) < 8 || string(b[:4]) != "\x00asm" {
+			return nil, fmt.Errorf("the entry %s is not a WebAssembly binary", man.Entry)
+		}
+		v.wasm = b
+		h := sha256.New()
+		fmt.Fprintf(h, "%d\x00%s", len(data), data)
+		fmt.Fprintf(h, "%s\x00%d\x00", man.Entry, len(b))
+		h.Write(b)
+		v.sum = hex.EncodeToString(h.Sum(nil))
+		if v.print == "" {
+			v.print = v.sum
+		}
+		return v, nil
+	}
 	total := 0
 	err = walkPluginFS(fsys, func(name string, fi fs.FileInfo) error {
 		if path.Ext(name) != ".js" || !entryPath.MatchString(name) {

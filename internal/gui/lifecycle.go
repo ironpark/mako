@@ -69,6 +69,8 @@ func (m *model) forceCloseTab(id string) {
 		m.closeDoc(id)
 	case isDiffTab(id):
 		m.closeDiff(id)
+	case isPluginTab(id):
+		m.closePluginTab(id)
 	case isLaunchTab(id):
 		m.closeLaunch(id)
 	default:
@@ -89,6 +91,9 @@ func (m *model) askKill(id string) {
 		return
 	case isDiffTab(id):
 		m.closeDiff(id)
+		return
+	case isPluginTab(id):
+		m.closePluginTab(id)
 		return
 	case isLaunchTab(id):
 		m.closeLaunch(id)
@@ -208,7 +213,7 @@ func tidyable(id string, sessions []*protocol.SessionInfo, docs map[string]docIn
 	switch {
 	case isDocTab(id):
 		return !docs[id].Dirty
-	case isDiffTab(id), isLaunchTab(id):
+	case isDiffTab(id), isLaunchTab(id), isPluginTab(id):
 		return true
 	}
 	s, ok := sessionIn(sessions, id)
@@ -235,6 +240,8 @@ func (m *model) tidyTabs(ids []string) {
 			}
 		case isDiffTab(id):
 			m.closeDiff(id)
+		case isPluginTab(id):
+			m.closePluginTab(id)
 		case isLaunchTab(id):
 			m.closeLaunch(id)
 		default:

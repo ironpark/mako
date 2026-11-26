@@ -12,7 +12,8 @@ public interface PluginOpenOrBuilder extends
 
   /**
    * <pre>
-   * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+   * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+   * "tab", or "close_tab".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -21,7 +22,8 @@ public interface PluginOpenOrBuilder extends
   java.lang.String getKind();
   /**
    * <pre>
-   * kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+   * kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+   * "tab", or "close_tab".
    * </pre>
    *
    * <code>string kind = 1 [json_name = "kind"];</code>
@@ -161,4 +163,84 @@ public interface PluginOpenOrBuilder extends
    * @return The line.
    */
   int getLine();
+
+  /**
+   * <pre>
+   * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+   * </pre>
+   *
+   * <code>string block = 16 [json_name = "block"];</code>
+   * @return The block.
+   */
+  java.lang.String getBlock();
+  /**
+   * <pre>
+   * Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+   * </pre>
+   *
+   * <code>string block = 16 [json_name = "block"];</code>
+   * @return The bytes for block.
+   */
+  com.google.protobuf.ByteString
+      getBlockBytes();
+
+  /**
+   * <code>string key = 17 [json_name = "key"];</code>
+   * @return The key.
+   */
+  java.lang.String getKey();
+  /**
+   * <code>string key = 17 [json_name = "key"];</code>
+   * @return The bytes for key.
+   */
+  com.google.protobuf.ByteString
+      getKeyBytes();
+
+  /**
+   * <code>string title = 18 [json_name = "title"];</code>
+   * @return The title.
+   */
+  java.lang.String getTitle();
+  /**
+   * <code>string title = 18 [json_name = "title"];</code>
+   * @return The bytes for title.
+   */
+  com.google.protobuf.ByteString
+      getTitleBytes();
+
+  /**
+   * <code>string icon = 19 [json_name = "icon"];</code>
+   * @return The icon.
+   */
+  java.lang.String getIcon();
+  /**
+   * <code>string icon = 19 [json_name = "icon"];</code>
+   * @return The bytes for icon.
+   */
+  com.google.protobuf.ByteString
+      getIconBytes();
+
+  /**
+   * <code>string params = 20 [json_name = "params"];</code>
+   * @return The params.
+   */
+  java.lang.String getParams();
+  /**
+   * <code>string params = 20 [json_name = "params"];</code>
+   * @return The bytes for params.
+   */
+  com.google.protobuf.ByteString
+      getParamsBytes();
+
+  /**
+   * <code>string scope = 21 [json_name = "scope"];</code>
+   * @return The scope.
+   */
+  java.lang.String getScope();
+  /**
+   * <code>string scope = 21 [json_name = "scope"];</code>
+   * @return The bytes for scope.
+   */
+  com.google.protobuf.ByteString
+      getScopeBytes();
 }

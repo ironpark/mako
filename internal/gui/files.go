@@ -164,6 +164,10 @@ func (m *model) filesRoot() fileRoot {
 		return m.Docs.Get()[id].Root
 	case isDiffTab(id):
 		return m.Diffs.Get()[id].Root
+	case isPluginTab(id):
+		if r := m.PluginTabs.Get()[id].Root; r.Path != "" {
+			return r
+		}
 	}
 	curScope := m.Scope.Get()
 	defs := m.Spaces.Get().Projects

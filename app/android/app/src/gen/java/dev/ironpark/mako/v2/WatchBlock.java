@@ -26,6 +26,8 @@ public  final class WatchBlock extends
     nodeId_ = "";
     scope_ = "";
     locale_ = "";
+    instance_ = "";
+    params_ = "";
   }
   public static final int BLOCK_FIELD_NUMBER = 1;
   private java.lang.String block_;
@@ -334,6 +336,150 @@ public  final class WatchBlock extends
   private void clearStandalone() {
 
     standalone_ = false;
+  }
+
+  public static final int INSTANCE_FIELD_NUMBER = 6;
+  private java.lang.String instance_;
+  /**
+   * <pre>
+   * instance separates multiple independent instances of the same block
+   * within a scope, such as custom workspace tabs (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 6 [json_name = "instance"];</code>
+   * @return The instance.
+   */
+  @java.lang.Override
+  public java.lang.String getInstance() {
+    return instance_;
+  }
+  /**
+   * <pre>
+   * instance separates multiple independent instances of the same block
+   * within a scope, such as custom workspace tabs (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 6 [json_name = "instance"];</code>
+   * @return The bytes for instance.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getInstanceBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(instance_);
+  }
+  /**
+   * <pre>
+   * instance separates multiple independent instances of the same block
+   * within a scope, such as custom workspace tabs (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 6 [json_name = "instance"];</code>
+   * @param value The instance to set.
+   */
+  private void setInstance(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    instance_ = value;
+  }
+  /**
+   * <pre>
+   * instance separates multiple independent instances of the same block
+   * within a scope, such as custom workspace tabs (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 6 [json_name = "instance"];</code>
+   */
+  private void clearInstance() {
+
+    instance_ = getDefaultInstance().getInstance();
+  }
+  /**
+   * <pre>
+   * instance separates multiple independent instances of the same block
+   * within a scope, such as custom workspace tabs (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 6 [json_name = "instance"];</code>
+   * @param value The bytes for instance to set.
+   */
+  private void setInstanceBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    instance_ = value.toStringUtf8();
+
+  }
+
+  public static final int PARAMS_FIELD_NUMBER = 7;
+  private java.lang.String params_;
+  /**
+   * <pre>
+   * params is an optional JSON object passed to this instance via ctx.tab
+   * (revision 49).
+   * </pre>
+   *
+   * <code>string params = 7 [json_name = "params"];</code>
+   * @return The params.
+   */
+  @java.lang.Override
+  public java.lang.String getParams() {
+    return params_;
+  }
+  /**
+   * <pre>
+   * params is an optional JSON object passed to this instance via ctx.tab
+   * (revision 49).
+   * </pre>
+   *
+   * <code>string params = 7 [json_name = "params"];</code>
+   * @return The bytes for params.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getParamsBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(params_);
+  }
+  /**
+   * <pre>
+   * params is an optional JSON object passed to this instance via ctx.tab
+   * (revision 49).
+   * </pre>
+   *
+   * <code>string params = 7 [json_name = "params"];</code>
+   * @param value The params to set.
+   */
+  private void setParams(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    params_ = value;
+  }
+  /**
+   * <pre>
+   * params is an optional JSON object passed to this instance via ctx.tab
+   * (revision 49).
+   * </pre>
+   *
+   * <code>string params = 7 [json_name = "params"];</code>
+   */
+  private void clearParams() {
+
+    params_ = getDefaultInstance().getParams();
+  }
+  /**
+   * <pre>
+   * params is an optional JSON object passed to this instance via ctx.tab
+   * (revision 49).
+   * </pre>
+   *
+   * <code>string params = 7 [json_name = "params"];</code>
+   * @param value The bytes for params to set.
+   */
+  private void setParamsBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    params_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.WatchBlock parseFrom(
@@ -759,6 +905,154 @@ public  final class WatchBlock extends
       return this;
     }
 
+    /**
+     * <pre>
+     * instance separates multiple independent instances of the same block
+     * within a scope, such as custom workspace tabs (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 6 [json_name = "instance"];</code>
+     * @return The instance.
+     */
+    @java.lang.Override
+    public java.lang.String getInstance() {
+      return instance.getInstance();
+    }
+    /**
+     * <pre>
+     * instance separates multiple independent instances of the same block
+     * within a scope, such as custom workspace tabs (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 6 [json_name = "instance"];</code>
+     * @return The bytes for instance.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getInstanceBytes() {
+      return instance.getInstanceBytes();
+    }
+    /**
+     * <pre>
+     * instance separates multiple independent instances of the same block
+     * within a scope, such as custom workspace tabs (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 6 [json_name = "instance"];</code>
+     * @param value The instance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInstance(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setInstance(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * instance separates multiple independent instances of the same block
+     * within a scope, such as custom workspace tabs (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 6 [json_name = "instance"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInstance() {
+      copyOnWrite();
+      instance.clearInstance();
+      return this;
+    }
+    /**
+     * <pre>
+     * instance separates multiple independent instances of the same block
+     * within a scope, such as custom workspace tabs (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 6 [json_name = "instance"];</code>
+     * @param value The bytes for instance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInstanceBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setInstanceBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * params is an optional JSON object passed to this instance via ctx.tab
+     * (revision 49).
+     * </pre>
+     *
+     * <code>string params = 7 [json_name = "params"];</code>
+     * @return The params.
+     */
+    @java.lang.Override
+    public java.lang.String getParams() {
+      return instance.getParams();
+    }
+    /**
+     * <pre>
+     * params is an optional JSON object passed to this instance via ctx.tab
+     * (revision 49).
+     * </pre>
+     *
+     * <code>string params = 7 [json_name = "params"];</code>
+     * @return The bytes for params.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getParamsBytes() {
+      return instance.getParamsBytes();
+    }
+    /**
+     * <pre>
+     * params is an optional JSON object passed to this instance via ctx.tab
+     * (revision 49).
+     * </pre>
+     *
+     * <code>string params = 7 [json_name = "params"];</code>
+     * @param value The params to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParams(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setParams(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * params is an optional JSON object passed to this instance via ctx.tab
+     * (revision 49).
+     * </pre>
+     *
+     * <code>string params = 7 [json_name = "params"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearParams() {
+      copyOnWrite();
+      instance.clearParams();
+      return this;
+    }
+    /**
+     * <pre>
+     * params is an optional JSON object passed to this instance via ctx.tab
+     * (revision 49).
+     * </pre>
+     *
+     * <code>string params = 7 [json_name = "params"];</code>
+     * @param value The bytes for params to set.
+     * @return This builder for chaining.
+     */
+    public Builder setParamsBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setParamsBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.WatchBlock)
   }
   @java.lang.Override
@@ -780,10 +1074,12 @@ public  final class WatchBlock extends
             "scope_",
             "locale_",
             "standalone_",
+            "instance_",
+            "params_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0007";
+              "\u0000\u0007\u0000\u0000\u0001\u0007\u0007\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0007\u0006\u0208\u0007\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

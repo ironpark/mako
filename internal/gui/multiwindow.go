@@ -599,7 +599,7 @@ func (m *model) returnAllDetachedPanes() {
 func (m *model) paneWindowTitle(ref paneRef) string {
 	g := m.peekLayoutForKey(ref.Key).group(ref.GroupID)
 	if g != nil && g.Active != "" {
-		label := tabLabel(g.Active, ggui.Peek(m.Sessions), ggui.Peek(m.Titles), ggui.Peek(m.Docs), ggui.Peek(m.Diffs))
+		label := tabLabel(g.Active, ggui.Peek(m.Sessions), ggui.Peek(m.Titles), ggui.Peek(m.Docs), ggui.Peek(m.Diffs), ggui.Peek(m.PluginTabs))
 		if label != "" {
 			return label + " — mako"
 		}
@@ -610,7 +610,7 @@ func (m *model) paneWindowTitle(ref paneRef) string {
 func (m *model) paneWindowTitleReactive(ref paneRef) string {
 	g := m.layoutForKey(ref.Key).group(ref.GroupID)
 	if g != nil && g.Active != "" {
-		label := tabLabel(g.Active, m.Sessions.Get(), m.Titles.Get(), m.Docs.Get(), m.Diffs.Get())
+		label := tabLabel(g.Active, m.Sessions.Get(), m.Titles.Get(), m.Docs.Get(), m.Diffs.Get(), m.PluginTabs.Get())
 		if label != "" {
 			return label + " — mako"
 		}
@@ -649,7 +649,7 @@ func detachedPanesPlaceholder(m *model, key string) ggui.Widget {
 		detached := m.DetachedPanes.Get()
 		refs := detachedRefsInLayout(root, detached, key)
 		sessions, titles := m.Sessions.Get(), m.Titles.Get()
-		docs, diffs := m.Docs.Get(), m.Diffs.Get()
+		docs, diffs, ptabs := m.Docs.Get(), m.Diffs.Get(), m.PluginTabs.Get()
 
 		rows := []ggui.Widget{
 			icon("external-link").Size(32).Color(skin.ExtraMuted),
@@ -664,7 +664,7 @@ func detachedPanesPlaceholder(m *model, key string) ggui.Widget {
 				g := root.group(r.GroupID)
 				name := Tf("Pane %d", r.GroupID)
 				if g != nil && g.Active != "" {
-					name = tabLabel(g.Active, sessions, titles, docs, diffs)
+					name = tabLabel(g.Active, sessions, titles, docs, diffs, ptabs)
 				}
 				tabCount := 0
 				if g != nil {
@@ -1000,10 +1000,32 @@ func spaceWindowSidebar(m *model, sw *spaceWindowState) ggui.Widget {
 			bottom: spaceWindowAgentsPanel(m, st, sw),
 			split:  sw.sidebarSplit,
 		}
+		page := ggui.State("")
+		activePage := ggui.Derived(func() string {
+			cur := page.Get()
+			if cur == "" {
+				return ""
+			}
+			if _, ok := findSidebarPage(sidebarPluginBlocks(m.plugins.List.Get()), cur); !ok {
+				return ""
+			}
+			return cur
+		})
+		pageBody := ggui.Key(activePage, func(blockName string) ggui.Widget {
+			if blockName == "" {
+				return body
+			}
+			pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
+			if !ok {
+				return body
+			}
+			return sidebarPluginPageView(m, pg)
+		})
 		column := widget.Column(
 			header,
 			hline(),
-			widget.Expanded(body),
+			sidebarPageBar(m, page),
+			widget.Expanded(pageBody),
 		).Stretch()
 		washed := ggui.Reactive(func() ggui.Widget {
 			set := m.spaces()
@@ -1257,6 +1279,11 @@ func spaceWindowHeader(m *model, sw *spaceWindowState) ggui.Widget {
 				return widget.Text(d.Name()).Size(13.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()
 			}
 		}
+		if isPluginTab(id) {
+			if pt, ok := m.PluginTabs.Get()[id]; ok {
+				return widget.Text(pt.Name()).Size(13.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()
+			}
+		}
 		if s, ok := sessionIn(m.Sessions.Get(), id); ok {
 			host, path := nodeName(m.Nodes.Get(), s.GetNodeId()), prettyPath(s.GetProject())
 			return widget.Row(
@@ -1356,7 +1383,7 @@ func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup]
 		g := group.Get()
 		sessions := m.Sessions.Get()
 		titles := m.Titles.Get()
-		docs, diffs := m.Docs.Get(), m.Diffs.Get()
+		docs, diffs, ptabs := m.Docs.Get(), m.Diffs.Get(), m.PluginTabs.Get()
 		focused := detached || focusGroup == nil || focusGroup.Get() == id
 		index := indexSessions(sessions)
 		hosts := index.tabHosts(g.Tabs)
@@ -1373,6 +1400,8 @@ func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup]
 			nodeID, project = localLocationOf(self, d.Root.Node, d.Root.Path, "", "", defs, sessions, kept)
 		} else if d, ok := diffs[g.Active]; ok && d.Root.Path != "" {
 			nodeID, project = localLocationOf(self, d.Root.Node, d.Root.Path, "", "", defs, sessions, kept)
+		} else if pt, ok := ptabs[g.Active]; ok && pt.Root.Path != "" {
+			nodeID, project = localLocationOf(self, pt.Root.Node, pt.Root.Path, "", "", defs, sessions, kept)
 		}
 
 		var children []ggui.Widget
@@ -1382,7 +1411,7 @@ func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup]
 			}
 			tid := tabID
 			tabIdx := idx
-			label := tabLabel(tid, sessions, titles, docs, diffs)
+			label := tabLabel(tid, sessions, titles, docs, diffs, ptabs)
 			selected := tid == active
 			fg := pick[color.Color](selected, skin.Fg, skin.Muted)
 			var glyph ggui.Widget
@@ -1393,6 +1422,8 @@ func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup]
 				glyph = icon(fileIconName(docs[tid].Name())).Size(14).Color(fg)
 			case diffs[tid].File != nil:
 				glyph = statusIcon(diffs[tid].File.GetStatus())
+			case ptabs[tid].Block != "":
+				glyph = pluginIcon(cmp.Or(ptabs[tid].Icon, "package")).Size(14).Color(fg)
 			default:
 				s, _ := sessionIn(sessions, tid)
 				glyph = agentGlyph(s.GetAgent(), fg).Size(14)
@@ -1541,6 +1572,8 @@ func keyedPaneBody(m *model, key string, id int, group ggui.Readable[tabGroup], 
 			return docView(m, p.ID, focusGroup == nil || ggui.Peek(focusGroup) == id)
 		case isDiffTab(p.ID):
 			return diffTabView(m, p.ID)
+		case isPluginTab(p.ID):
+			return pluginTabView(m, p.ID)
 		case isLaunchTab(p.ID):
 			return launchView(m, p.ID)
 		case !p.Ready:

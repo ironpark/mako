@@ -733,4 +733,79 @@ public interface UiNodeOrBuilder extends
    */
   com.google.protobuf.ByteString
       getPlaceholderBytes();
+
+  /**
+   * <pre>
+   * min, max, and step configure a slider node (revision 49).
+   * </pre>
+   *
+   * <code>double min = 41 [json_name = "min"];</code>
+   * @return The min.
+   */
+  double getMin();
+
+  /**
+   * <code>double max = 42 [json_name = "max"];</code>
+   * @return The max.
+   */
+  double getMax();
+
+  /**
+   * <code>double step = 43 [json_name = "step"];</code>
+   * @return The step.
+   */
+  double getStep();
+
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.UiDiffLine> 
+      getDiffLinesList();
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  dev.ironpark.mako.v2.UiDiffLine getDiffLines(int index);
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  int getDiffLinesCount();
+
+  /**
+   * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+   * @return The diffFrom.
+   */
+  java.lang.String getDiffFrom();
+  /**
+   * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+   * @return The bytes for diffFrom.
+   */
+  com.google.protobuf.ByteString
+      getDiffFromBytes();
+
+  /**
+   * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+   * @return The diffTo.
+   */
+  java.lang.String getDiffTo();
+  /**
+   * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+   * @return The bytes for diffTo.
+   */
+  com.google.protobuf.ByteString
+      getDiffToBytes();
 }

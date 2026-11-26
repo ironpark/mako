@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"path/filepath"
 	"slices"
 	"time"
 
@@ -76,12 +77,20 @@ func (p *plugin) reload() {
 	p.showAll()
 }
 
-// check compiles a version's modules in a runtime of their own, so that
-// one that does not parse is refused before it replaces the one running.
+func (p *plugin) wasmCacheDir() string {
+	if p.m.cfg.DataDir == "" {
+		return ""
+	}
+	return filepath.Join(p.m.cfg.DataDir, ".compiled", p.id)
+}
+
+// check compiles a version's modules (or WebAssembly binary) in a runtime of
+// their own, so that one that does not parse is refused before it replaces the
+// one running.
 func (p *plugin) check(v *version) error {
 	b := newBudget(p.m.ctx, p.m.lim.CPU, p.m.lim.Wall)
 	defer b.release()
-	rt, err := startRuntime(b, v, p.m.lim, func(context.Context, string, []byte) ([]byte, error) {
+	rt, err := startPluginRuntime(b, v, p.m.lim, p.wasmCacheDir(), func(context.Context, string, []byte) ([]byte, error) {
 		return nil, errors.New("the plugin is being checked")
 	})
 	if err != nil {
@@ -152,7 +161,7 @@ func (p *plugin) ensure() error {
 	v := p.current()
 	b := newBudget(p.m.ctx, p.m.lim.CPU, p.m.lim.Wall)
 	defer b.release()
-	rt, err := startRuntime(b, v, p.m.lim, p.bridge)
+	rt, err := startPluginRuntime(b, v, p.m.lim, p.wasmCacheDir(), p.bridge)
 	if err == nil {
 		p.rt = rt
 		_, err = rt.invoke(b, "activate")
@@ -169,8 +178,8 @@ func (p *plugin) ensure() error {
 	p.mu.Unlock()
 	var restoreErr error
 	for _, key := range slices.Sorted(maps.Keys(p.saved)) {
-		blockID, scopeKey := splitInstanceKey(key)
-		if _, err := p.invoke("restore", false, blockID, scopeKey, p.saved[key]); err != nil {
+		blockID, scopeKey, instID := splitInstanceFull(key)
+		if _, err := p.invoke("restore", false, blockID, runtimeStateKey(scopeKey, instID), p.saved[key]); err != nil {
 			restoreErr = err
 			break
 		}
@@ -224,15 +233,15 @@ func (p *plugin) sleep(why string) {
 	}
 	p.mu.Lock()
 	type saveTarget struct {
-		key, id, scopeKey string
+		key, id, stateKey string
 	}
 	targets := make([]saveTarget, 0, len(p.inst))
 	for key, in := range p.inst {
-		targets = append(targets, saveTarget{key: key, id: in.id, scopeKey: in.scopeKey})
+		targets = append(targets, saveTarget{key: key, id: in.id, stateKey: runtimeStateKey(in.scopeKey, in.instID)})
 	}
 	p.mu.Unlock()
 	for _, t := range targets {
-		if s, err := p.invoke("save", false, t.id, t.scopeKey); err == nil && len(s) <= maxSavedState && s != "null" {
+		if s, err := p.invoke("save", false, t.id, t.stateKey); err == nil && len(s) <= maxSavedState && s != "null" {
 			p.saved[t.key] = s
 		}
 		if p.rt == nil {

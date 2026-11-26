@@ -29,6 +29,7 @@ public  final class BlockEvent extends
     nodeId_ = "";
     scope_ = "";
     locale_ = "";
+    instance_ = "";
   }
   public static final int BLOCK_FIELD_NUMBER = 1;
   private java.lang.String block_;
@@ -568,6 +569,73 @@ java.lang.String defaultValue) {
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     locale_ = value.toStringUtf8();
+
+  }
+
+  public static final int INSTANCE_FIELD_NUMBER = 9;
+  private java.lang.String instance_;
+  /**
+   * <pre>
+   * instance is the instance key of the target block instance (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 9 [json_name = "instance"];</code>
+   * @return The instance.
+   */
+  @java.lang.Override
+  public java.lang.String getInstance() {
+    return instance_;
+  }
+  /**
+   * <pre>
+   * instance is the instance key of the target block instance (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 9 [json_name = "instance"];</code>
+   * @return The bytes for instance.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getInstanceBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(instance_);
+  }
+  /**
+   * <pre>
+   * instance is the instance key of the target block instance (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 9 [json_name = "instance"];</code>
+   * @param value The instance to set.
+   */
+  private void setInstance(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    instance_ = value;
+  }
+  /**
+   * <pre>
+   * instance is the instance key of the target block instance (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 9 [json_name = "instance"];</code>
+   */
+  private void clearInstance() {
+
+    instance_ = getDefaultInstance().getInstance();
+  }
+  /**
+   * <pre>
+   * instance is the instance key of the target block instance (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 9 [json_name = "instance"];</code>
+   * @param value The bytes for instance to set.
+   */
+  private void setInstanceBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    instance_ = value.toStringUtf8();
 
   }
 
@@ -1245,6 +1313,75 @@ java.lang.String defaultValue) {
       return this;
     }
 
+    /**
+     * <pre>
+     * instance is the instance key of the target block instance (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 9 [json_name = "instance"];</code>
+     * @return The instance.
+     */
+    @java.lang.Override
+    public java.lang.String getInstance() {
+      return instance.getInstance();
+    }
+    /**
+     * <pre>
+     * instance is the instance key of the target block instance (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 9 [json_name = "instance"];</code>
+     * @return The bytes for instance.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getInstanceBytes() {
+      return instance.getInstanceBytes();
+    }
+    /**
+     * <pre>
+     * instance is the instance key of the target block instance (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 9 [json_name = "instance"];</code>
+     * @param value The instance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInstance(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setInstance(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * instance is the instance key of the target block instance (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 9 [json_name = "instance"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInstance() {
+      copyOnWrite();
+      instance.clearInstance();
+      return this;
+    }
+    /**
+     * <pre>
+     * instance is the instance key of the target block instance (revision 49).
+     * </pre>
+     *
+     * <code>string instance = 9 [json_name = "instance"];</code>
+     * @param value The bytes for instance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInstanceBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setInstanceBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.BlockEvent)
   }
   @java.lang.Override
@@ -1270,10 +1407,11 @@ java.lang.String defaultValue) {
             "nodeId_",
             "scope_",
             "locale_",
+            "instance_",
           };
           java.lang.String info =
-              "\u0000\b\u0000\u0000\u0001\b\b\u0001\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
-              "\u0004\u0208\u00052\u0006\u0208\u0007\u0208\b\u0208";
+              "\u0000\t\u0000\u0000\u0001\t\t\u0001\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0004\u0208\u00052\u0006\u0208\u0007\u0208\b\u0208\t\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

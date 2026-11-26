@@ -51,6 +51,9 @@ public  final class UiNode extends
     contextArg_ = "";
     rows_ = emptyProtobufList();
     placeholder_ = "";
+    diffLines_ = emptyProtobufList();
+    diffFrom_ = "";
+    diffTo_ = "";
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -2816,6 +2819,339 @@ public  final class UiNode extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     placeholder_ = value.toStringUtf8();
+
+  }
+
+  public static final int MIN_FIELD_NUMBER = 41;
+  private double min_;
+  /**
+   * <pre>
+   * min, max, and step configure a slider node (revision 49).
+   * </pre>
+   *
+   * <code>double min = 41 [json_name = "min"];</code>
+   * @return The min.
+   */
+  @java.lang.Override
+  public double getMin() {
+    return min_;
+  }
+  /**
+   * <pre>
+   * min, max, and step configure a slider node (revision 49).
+   * </pre>
+   *
+   * <code>double min = 41 [json_name = "min"];</code>
+   * @param value The min to set.
+   */
+  private void setMin(double value) {
+    
+    min_ = value;
+  }
+  /**
+   * <pre>
+   * min, max, and step configure a slider node (revision 49).
+   * </pre>
+   *
+   * <code>double min = 41 [json_name = "min"];</code>
+   */
+  private void clearMin() {
+
+    min_ = 0D;
+  }
+
+  public static final int MAX_FIELD_NUMBER = 42;
+  private double max_;
+  /**
+   * <code>double max = 42 [json_name = "max"];</code>
+   * @return The max.
+   */
+  @java.lang.Override
+  public double getMax() {
+    return max_;
+  }
+  /**
+   * <code>double max = 42 [json_name = "max"];</code>
+   * @param value The max to set.
+   */
+  private void setMax(double value) {
+    
+    max_ = value;
+  }
+  /**
+   * <code>double max = 42 [json_name = "max"];</code>
+   */
+  private void clearMax() {
+
+    max_ = 0D;
+  }
+
+  public static final int STEP_FIELD_NUMBER = 43;
+  private double step_;
+  /**
+   * <code>double step = 43 [json_name = "step"];</code>
+   * @return The step.
+   */
+  @java.lang.Override
+  public double getStep() {
+    return step_;
+  }
+  /**
+   * <code>double step = 43 [json_name = "step"];</code>
+   * @param value The step to set.
+   */
+  private void setStep(double value) {
+    
+    step_ = value;
+  }
+  /**
+   * <code>double step = 43 [json_name = "step"];</code>
+   */
+  private void clearStep() {
+
+    step_ = 0D;
+  }
+
+  public static final int DIFF_LINES_FIELD_NUMBER = 44;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiDiffLine> diffLines_;
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.UiDiffLine> getDiffLinesList() {
+    return diffLines_;
+  }
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.UiDiffLineOrBuilder> 
+      getDiffLinesOrBuilderList() {
+    return diffLines_;
+  }
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  @java.lang.Override
+  public int getDiffLinesCount() {
+    return diffLines_.size();
+  }
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.UiDiffLine getDiffLines(int index) {
+    return diffLines_.get(index);
+  }
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  public dev.ironpark.mako.v2.UiDiffLineOrBuilder getDiffLinesOrBuilder(
+      int index) {
+    return diffLines_.get(index);
+  }
+  private void ensureDiffLinesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiDiffLine> tmp = diffLines_;
+    if (!tmp.isModifiable()) {
+      diffLines_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  private void setDiffLines(
+      int index, dev.ironpark.mako.v2.UiDiffLine value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDiffLinesIsMutable();
+    diffLines_.set(index, value);
+  }
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  private void addDiffLines(dev.ironpark.mako.v2.UiDiffLine value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDiffLinesIsMutable();
+    diffLines_.add(value);
+  }
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  private void addDiffLines(
+      int index, dev.ironpark.mako.v2.UiDiffLine value) {
+    java.util.Objects.requireNonNull(value);
+    ensureDiffLinesIsMutable();
+    diffLines_.add(index, value);
+  }
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  private void addAllDiffLines(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.UiDiffLine> values) {
+    ensureDiffLinesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, diffLines_);
+  }
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  private void clearDiffLines() {
+    diffLines_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+   * labels (revision 49).
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+   */
+  private void removeDiffLines(int index) {
+    ensureDiffLinesIsMutable();
+    diffLines_.remove(index);
+  }
+
+  public static final int DIFF_FROM_FIELD_NUMBER = 45;
+  private java.lang.String diffFrom_;
+  /**
+   * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+   * @return The diffFrom.
+   */
+  @java.lang.Override
+  public java.lang.String getDiffFrom() {
+    return diffFrom_;
+  }
+  /**
+   * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+   * @return The bytes for diffFrom.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDiffFromBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(diffFrom_);
+  }
+  /**
+   * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+   * @param value The diffFrom to set.
+   */
+  private void setDiffFrom(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    diffFrom_ = value;
+  }
+  /**
+   * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+   */
+  private void clearDiffFrom() {
+
+    diffFrom_ = getDefaultInstance().getDiffFrom();
+  }
+  /**
+   * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+   * @param value The bytes for diffFrom to set.
+   */
+  private void setDiffFromBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    diffFrom_ = value.toStringUtf8();
+
+  }
+
+  public static final int DIFF_TO_FIELD_NUMBER = 46;
+  private java.lang.String diffTo_;
+  /**
+   * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+   * @return The diffTo.
+   */
+  @java.lang.Override
+  public java.lang.String getDiffTo() {
+    return diffTo_;
+  }
+  /**
+   * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+   * @return The bytes for diffTo.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDiffToBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(diffTo_);
+  }
+  /**
+   * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+   * @param value The diffTo to set.
+   */
+  private void setDiffTo(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    diffTo_ = value;
+  }
+  /**
+   * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+   */
+  private void clearDiffTo() {
+
+    diffTo_ = getDefaultInstance().getDiffTo();
+  }
+  /**
+   * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+   * @param value The bytes for diffTo to set.
+   */
+  private void setDiffToBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    diffTo_ = value.toStringUtf8();
 
   }
 
@@ -5813,6 +6149,362 @@ public  final class UiNode extends
       return this;
     }
 
+    /**
+     * <pre>
+     * min, max, and step configure a slider node (revision 49).
+     * </pre>
+     *
+     * <code>double min = 41 [json_name = "min"];</code>
+     * @return The min.
+     */
+    @java.lang.Override
+    public double getMin() {
+      return instance.getMin();
+    }
+    /**
+     * <pre>
+     * min, max, and step configure a slider node (revision 49).
+     * </pre>
+     *
+     * <code>double min = 41 [json_name = "min"];</code>
+     * @param value The min to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMin(double value) {
+      copyOnWrite();
+      instance.setMin(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * min, max, and step configure a slider node (revision 49).
+     * </pre>
+     *
+     * <code>double min = 41 [json_name = "min"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMin() {
+      copyOnWrite();
+      instance.clearMin();
+      return this;
+    }
+
+    /**
+     * <code>double max = 42 [json_name = "max"];</code>
+     * @return The max.
+     */
+    @java.lang.Override
+    public double getMax() {
+      return instance.getMax();
+    }
+    /**
+     * <code>double max = 42 [json_name = "max"];</code>
+     * @param value The max to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMax(double value) {
+      copyOnWrite();
+      instance.setMax(value);
+      return this;
+    }
+    /**
+     * <code>double max = 42 [json_name = "max"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMax() {
+      copyOnWrite();
+      instance.clearMax();
+      return this;
+    }
+
+    /**
+     * <code>double step = 43 [json_name = "step"];</code>
+     * @return The step.
+     */
+    @java.lang.Override
+    public double getStep() {
+      return instance.getStep();
+    }
+    /**
+     * <code>double step = 43 [json_name = "step"];</code>
+     * @param value The step to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStep(double value) {
+      copyOnWrite();
+      instance.setStep(value);
+      return this;
+    }
+    /**
+     * <code>double step = 43 [json_name = "step"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStep() {
+      copyOnWrite();
+      instance.clearStep();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.UiDiffLine> getDiffLinesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getDiffLinesList());
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    @java.lang.Override
+    public int getDiffLinesCount() {
+      return instance.getDiffLinesCount();
+    }/**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.UiDiffLine getDiffLines(int index) {
+      return instance.getDiffLines(index);
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    public Builder setDiffLines(
+        int index, dev.ironpark.mako.v2.UiDiffLine value) {
+      copyOnWrite();
+      instance.setDiffLines(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    public Builder setDiffLines(
+        int index, dev.ironpark.mako.v2.UiDiffLine.Builder builderForValue) {
+      copyOnWrite();
+      instance.setDiffLines(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    public Builder addDiffLines(dev.ironpark.mako.v2.UiDiffLine value) {
+      copyOnWrite();
+      instance.addDiffLines(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    public Builder addDiffLines(
+        int index, dev.ironpark.mako.v2.UiDiffLine value) {
+      copyOnWrite();
+      instance.addDiffLines(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    public Builder addDiffLines(
+        dev.ironpark.mako.v2.UiDiffLine.Builder builderForValue) {
+      copyOnWrite();
+      instance.addDiffLines(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    public Builder addDiffLines(
+        int index, dev.ironpark.mako.v2.UiDiffLine.Builder builderForValue) {
+      copyOnWrite();
+      instance.addDiffLines(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    public Builder addAllDiffLines(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.UiDiffLine> values) {
+      copyOnWrite();
+      instance.addAllDiffLines(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    public Builder clearDiffLines() {
+      copyOnWrite();
+      instance.clearDiffLines();
+      return this;
+    }
+    /**
+     * <pre>
+     * diff_lines, diff_from, and diff_to define a diff node's hunks and header
+     * labels (revision 49).
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiDiffLine diff_lines = 44 [json_name = "diffLines"];</code>
+     */
+    public Builder removeDiffLines(int index) {
+      copyOnWrite();
+      instance.removeDiffLines(index);
+      return this;
+    }
+
+    /**
+     * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+     * @return The diffFrom.
+     */
+    @java.lang.Override
+    public java.lang.String getDiffFrom() {
+      return instance.getDiffFrom();
+    }
+    /**
+     * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+     * @return The bytes for diffFrom.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDiffFromBytes() {
+      return instance.getDiffFromBytes();
+    }
+    /**
+     * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+     * @param value The diffFrom to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDiffFrom(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setDiffFrom(value);
+      return this;
+    }
+    /**
+     * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDiffFrom() {
+      copyOnWrite();
+      instance.clearDiffFrom();
+      return this;
+    }
+    /**
+     * <code>string diff_from = 45 [json_name = "diffFrom"];</code>
+     * @param value The bytes for diffFrom to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDiffFromBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setDiffFromBytes(value);
+      return this;
+    }
+
+    /**
+     * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+     * @return The diffTo.
+     */
+    @java.lang.Override
+    public java.lang.String getDiffTo() {
+      return instance.getDiffTo();
+    }
+    /**
+     * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+     * @return The bytes for diffTo.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDiffToBytes() {
+      return instance.getDiffToBytes();
+    }
+    /**
+     * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+     * @param value The diffTo to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDiffTo(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setDiffTo(value);
+      return this;
+    }
+    /**
+     * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDiffTo() {
+      copyOnWrite();
+      instance.clearDiffTo();
+      return this;
+    }
+    /**
+     * <code>string diff_to = 46 [json_name = "diffTo"];</code>
+     * @param value The bytes for diffTo to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDiffToBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setDiffToBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.UiNode)
   }
   @java.lang.Override
@@ -5875,14 +6567,22 @@ public  final class UiNode extends
             "rows_",
             dev.ironpark.mako.v2.UiRow.class,
             "placeholder_",
+            "min_",
+            "max_",
+            "step_",
+            "diffLines_",
+            dev.ironpark.mako.v2.UiDiffLine.class,
+            "diffFrom_",
+            "diffTo_",
           };
           java.lang.String info =
-              "\u0000(\u0000\u0000\u0001((\u0000\t\u0000\u0001\u0208\u0002\u0208\u0003\u0208\u0004" +
+              "\u0000.\u0000\u0000\u0001..\u0000\n\u0000\u0001\u0208\u0002\u0208\u0003\u0208\u0004" +
               "\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a\u000b\u0000\f" +
               "\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012\u001b\u0013" +
               "\u0208\u0014\u001b\u0015\u021a\u0016\u0208\u0017\u0007\u0018\u0208\u0019\u021a\u001a" +
               "\u0208\u001b\u0000\u001c\u0208\u001d\u0004\u001e\u0000\u001f\u0007 \u001b!\u001b" +
-              "\"\u001b#\u0208$\u0007%\u0208&\u0208\'\u001b(\u0208";
+              "\"\u001b#\u0208$\u0007%\u0208&\u0208\'\u001b(\u0208)\u0000*\u0000+\u0000,\u001b-" +
+              "\u0208.\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

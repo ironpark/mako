@@ -10,21 +10,29 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
+// TabContext describes a custom workspace tab instance passed into a plugin
+// block via ctx.tab (revision 49).
+type TabContext struct {
+	Key    string          `json:"key"`
+	Params json.RawMessage `json:"params,omitempty"`
+}
+
 // ScopeContext describes the active workspace scope passed into plugin blocks,
 // commands, and scoped MCP tools.
 type ScopeContext struct {
-	Scope       string   `json:"scope"`
-	ScopeKey    string   `json:"scopeKey"`
-	SpaceID     string   `json:"spaceId"`
-	SpaceName   string   `json:"spaceName"`
-	ProjectID   string   `json:"projectId"`
-	ProjectName string   `json:"projectName"`
-	SessionID   string   `json:"sessionId"`
-	Node        string   `json:"node"`
-	Folder      string   `json:"folder"`
-	Roots       []string `json:"roots"`
-	Locale      string   `json:"locale"`
-	View        View     `json:"view"`
+	Scope       string      `json:"scope"`
+	ScopeKey    string      `json:"scopeKey"`
+	SpaceID     string      `json:"spaceId"`
+	SpaceName   string      `json:"spaceName"`
+	ProjectID   string      `json:"projectId"`
+	ProjectName string      `json:"projectName"`
+	SessionID   string      `json:"sessionId"`
+	Node        string      `json:"node"`
+	Folder      string      `json:"folder"`
+	Roots       []string    `json:"roots"`
+	Locale      string      `json:"locale"`
+	View        View        `json:"view"`
+	Tab         *TabContext `json:"tab,omitempty"`
 }
 
 // localeRe validates a safe BCP-47 language tag (e.g. "en", "ko", "ko-KR", "zh-Hans-CN").
@@ -117,19 +125,102 @@ func parseScopeKey(scopeKey string) (kind, id string, err error) {
 	}
 }
 
+// maxTabParams bounds the JSON object passed to a custom plugin tab instance.
+const maxTabParams = 16 << 10
+
+// tabKeyRe validates a custom plugin tab instance key (no '@', '#', '/', or control chars).
+var tabKeyRe = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._:-]{0,127}$`)
+
+// validateInstanceID checks an optional block instance key (e.g. custom tab key).
+func validateInstanceID(inst string) error {
+	if inst == "" {
+		return nil
+	}
+	if !tabKeyRe.MatchString(inst) || strings.Contains(inst, "..") {
+		return fmt.Errorf("instance key %q is not a safe identifier of 1 to 128 characters", inst)
+	}
+	return nil
+}
+
+// validateTabParams validates an optional JSON object string for a tab instance.
+func validateTabParams(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "null" {
+		return "", nil
+	}
+	if len(raw) > maxTabParams {
+		return "", fmt.Errorf("tab params exceed %d KiB", maxTabParams>>10)
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(raw), &obj); err != nil {
+		return "", fmt.Errorf("tab params must be a JSON object: %w", err)
+	}
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // instanceKey builds the unique map key for a (blockID, scopeKey) runtime
 // instance. Global instances (scopeKey == "") keep the bare blockID.
 func instanceKey(blockID, scopeKey string) string {
-	if scopeKey == "" {
-		return blockID
+	return instanceKeyOf(blockID, scopeKey, "")
+}
+
+// instanceKeyOf builds the unique map key for a (blockID, scopeKey, instID)
+// runtime instance. When instID is empty it matches instanceKey(blockID, scopeKey).
+func instanceKeyOf(blockID, scopeKey, instID string) string {
+	if instID == "" {
+		if scopeKey == "" {
+			return blockID
+		}
+		return blockID + "@" + scopeKey
 	}
-	return blockID + "@" + scopeKey
+	return blockID + "@" + scopeKey + "#" + instID
+}
+
+// runtimeStateKey is the per-block state map key passed to the plugin runtime
+// (scopeKey when instID is empty, or scopeKey+"#"+instID for tab instances).
+func runtimeStateKey(scopeKey, instID string) string {
+	if instID == "" {
+		return scopeKey
+	}
+	return scopeKey + "#" + instID
+}
+
+// splitRuntimeStateKey splits runtimeStateKey back into (scopeKey, instID).
+func splitRuntimeStateKey(stateKey string) (scopeKey, instID string) {
+	scopeKey, instID, _ = strings.Cut(stateKey, "#")
+	return scopeKey, instID
+}
+
+// splitInstanceFull splits instanceKeyOf(blockID, scopeKey, instID) back into its parts.
+func splitInstanceFull(key string) (blockID, scopeKey, instID string) {
+	blockID, rest, ok := strings.Cut(key, "@")
+	if !ok {
+		return blockID, "", ""
+	}
+	scopeKey, instID, _ = strings.Cut(rest, "#")
+	return blockID, scopeKey, instID
 }
 
 // splitInstanceKey splits instanceKey(blockID, scopeKey) back into its parts.
 func splitInstanceKey(key string) (blockID, scopeKey string) {
-	blockID, scopeKey, _ = strings.Cut(key, "@")
+	blockID, scopeKey, _ = splitInstanceFull(key)
 	return blockID, scopeKey
+}
+
+// tabContextFor builds a TabContext when instID is non-empty.
+func tabContextFor(instID, params string) *TabContext {
+	if instID == "" {
+		return nil
+	}
+	tc := &TabContext{Key: instID}
+	if params != "" {
+		tc.Params = json.RawMessage(params)
+	}
+	return tc
 }
 
 // resolveScope builds a ScopeContext for a validated canonical scopeKey,

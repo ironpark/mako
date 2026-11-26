@@ -182,7 +182,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		sessions := m.Sessions.Get()
 		titles := m.Titles.Get()
 		focused := m.FocusGroup.Get() == id
-		docs, diffs := m.Docs.Get(), m.Diffs.Get()
+		docs, diffs, ptabs := m.Docs.Get(), m.Diffs.Get(), m.PluginTabs.Get()
 		// The launchers start in the project of the tab shown, or without
 		// one (or when scoped to a sub-project whose tab is not shown), in
 		// the sidebar's selected scope, else the default place on this node.
@@ -211,6 +211,12 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			nodeID, project = localLocationOf(self, d.Root.Node, d.Root.Path, "", "", spaces.Projects, sessions, kept)
 			tabLocated = true
 			if scopedHere && !scope.scopeKey.holds(rootScope(spaces.Projects, d.Root)) {
+				tabLocated = false
+			}
+		} else if pt, ok := ptabs[g.Active]; ok && pt.Root.Path != "" {
+			nodeID, project = localLocationOf(self, pt.Root.Node, pt.Root.Path, "", "", spaces.Projects, sessions, kept)
+			tabLocated = true
+			if scopedHere && !scope.scopeKey.holds(rootScope(spaces.Projects, pt.Root)) {
 				tabLocated = false
 			}
 		}
@@ -374,6 +380,8 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 				face = docTab(m, tabID, d, tabID == g.Active, focused)
 			} else if d, ok := diffs[tabID]; ok {
 				face = diffTabFace(m, tabID, d, tabID == g.Active, focused)
+			} else if pt, ok := ptabs[tabID]; ok {
+				face = pluginTabFace(m, tabID, pt, tabID == g.Active, focused)
 			} else {
 				s, ok := sessionIn(sessions, tabID)
 				if !ok {
@@ -460,7 +468,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		// The + follows the last tab, as far as the bar's end, where it
 		// stays in sight as the tabs scroll; and when they do, a menu
 		// lists them all, and how many are out of sight.
-		need := tabsWidth(shown, sessions, titles, docs, diffs) + chips + extra + 16
+		need := tabsWidth(shown, sessions, titles, docs, diffs, ptabs) + chips + extra + 16
 		for _, k := range kids {
 			need += familyMarksWidth(len(k))
 		}
@@ -470,7 +478,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			OnHover(func(bool) { m.leaveHint(id) })
 		row := []ggui.Widget{
 			widget.Expanded(tabsAndPlus),
-			widget.Responsive(need, widget.Box().Size(0, 0), tabList(m, id, g, sessions, titles, docs, diffs)),
+			widget.Responsive(need, widget.Box().Size(0, 0), tabList(m, id, g, sessions, titles, docs, diffs, ptabs)),
 		}
 		if popout != nil {
 			row = append(row, popout)
@@ -491,16 +499,16 @@ func tabWidth(label string) float64 {
 }
 
 // tabsWidth estimates a pane's tabs' width together.
-func tabsWidth(tabs []string, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) float64 {
+func tabsWidth(tabs []string, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab, ptabs ...map[string]pluginTab) float64 {
 	w := 0.0
 	for _, id := range tabs {
-		w += tabWidth(tabLabel(id, sessions, titles, docs, diffs))
+		w += tabWidth(tabLabel(id, sessions, titles, docs, diffs, ptabs...))
 	}
 	return w
 }
 
 // tabLabel is what a tab is called.
-func tabLabel(id string, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) string {
+func tabLabel(id string, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab, ptabs ...map[string]pluginTab) string {
 	if isLaunchTab(id) {
 		return T("New session")
 	}
@@ -510,16 +518,21 @@ func tabLabel(id string, sessions []*protocol.SessionInfo, titles map[string]str
 	if d, ok := diffs[id]; ok {
 		return d.Name()
 	}
+	if len(ptabs) > 0 && ptabs[0] != nil {
+		if pt, ok := ptabs[0][id]; ok {
+			return pt.Name()
+		}
+	}
 	s, _ := sessionIn(sessions, id)
 	return sessionTitle(s, titles[id])
 }
 
 // tabList is a menu of a pane's tabs, for when they do not all fit, with
 // how many are out of sight on it.
-func tabList(m *model, pane int, g tabGroup, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab) ggui.Widget {
+func tabList(m *model, pane int, g tabGroup, sessions []*protocol.SessionInfo, titles map[string]string, docs map[string]docInfo, diffs map[string]diffTab, ptabs ...map[string]pluginTab) ggui.Widget {
 	items := make([]ggui.Widget, 0, len(g.Tabs))
 	for _, id := range g.Tabs {
-		label := tabLabel(id, sessions, titles, docs, diffs)
+		label := tabLabel(id, sessions, titles, docs, diffs, ptabs...)
 		if id == g.Active {
 			label = "✓ " + label
 		}
@@ -608,6 +621,8 @@ func paneBody(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 			return docView(m, p.ID, ggui.Peek(m.FocusGroup) == id)
 		case isDiffTab(p.ID):
 			return diffTabView(m, p.ID)
+		case isPluginTab(p.ID):
+			return pluginTabView(m, p.ID)
 		case isLaunchTab(p.ID):
 			return launchView(m, p.ID)
 		case !p.Ready:

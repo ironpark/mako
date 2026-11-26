@@ -66,6 +66,7 @@ var blockChromes = []string{BlockChromeAuto, BlockChromeToolbar}
 type BlockDecl struct {
 	ID     string
 	Title  string
+	Icon   string
 	Slots  []string
 	Scope  string
 	Chrome string
@@ -102,7 +103,7 @@ const (
 var settingTypes = []string{SettingString, SettingSecret, SettingBoolean, SettingNumber, SettingSelect}
 
 // slots are where a manifest may suggest a block goes.
-var slots = []string{"left", "right", "top", "bottom"}
+var slots = []string{"left", "right", "top", "bottom", "sidebar", "tab"}
 
 // The bounds of what a manifest declares.
 const (
@@ -127,7 +128,8 @@ var (
 	toolID     = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 	settingKey = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 	semver     = regexp.MustCompile(`^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})(-[0-9A-Za-z.-]{1,32})?$`)
-	entryPath  = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*\.js$`)
+	entryPath  = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*\.(js|wasm)$`)
+	iconNameRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 
 var toolParamTypes = []string{"string", "number", "boolean"}
@@ -143,6 +145,7 @@ type rawManifest struct {
 		Block []struct {
 			ID     string   `toml:"id"`
 			Title  string   `toml:"title"`
+			Icon   string   `toml:"icon"`
 			Slots  []string `toml:"slots"`
 			Scope  string   `toml:"scope"`
 			Chrome string   `toml:"chrome"`
@@ -230,6 +233,9 @@ func parseManifest(data []byte, bundled bool) (*Manifest, error) {
 		if err := checkText("block "+b.ID+" title", b.Title, maxTitle, true); err != nil {
 			return nil, err
 		}
+		if b.Icon != "" && (len(b.Icon) > 48 || !iconNameRe.MatchString(b.Icon)) {
+			return nil, fmt.Errorf("block %s: icon %q is not an icon's name", b.ID, b.Icon)
+		}
 		for i, s := range b.Slots {
 			if !slices.Contains(slots, s) || slices.Index(b.Slots, s) != i {
 				return nil, fmt.Errorf("block %s: slot %q is not one of %s, once", b.ID, s, strings.Join(slots, ", "))
@@ -249,7 +255,7 @@ func parseManifest(data []byte, bundled bool) (*Manifest, error) {
 		if b.Hidden && !bundled {
 			return nil, fmt.Errorf("block %s: hidden is only for bundled plugins", b.ID)
 		}
-		m.Blocks = append(m.Blocks, BlockDecl{ID: b.ID, Title: b.Title, Slots: b.Slots, Scope: scope, Chrome: chrome, Hidden: b.Hidden})
+		m.Blocks = append(m.Blocks, BlockDecl{ID: b.ID, Title: b.Title, Icon: b.Icon, Slots: b.Slots, Scope: scope, Chrome: chrome, Hidden: b.Hidden})
 	}
 	if len(raw.Contributes.Command) > maxCommands {
 		return nil, fmt.Errorf("more than %d commands", maxCommands)
@@ -337,11 +343,11 @@ func parseManifest(data []byte, bundled bool) (*Manifest, error) {
 	return m, nil
 }
 
-// checkEntry refuses an entry that is not a plain relative path to a .js
-// file below the folder: no "..", no absolute path, no backslashes.
+// checkEntry refuses an entry that is not a plain relative path to a .js or
+// .wasm file below the folder: no "..", no absolute path, no backslashes.
 func checkEntry(e string) error {
 	if len(e) > 128 || !entryPath.MatchString(e) || path.Clean(e) != e || strings.Contains(e, "..") {
-		return fmt.Errorf("entry %q is not a relative path to a .js file in the plugin's folder", e)
+		return fmt.Errorf("entry %q is not a relative path to a .js or .wasm file in the plugin's folder", e)
 	}
 	return nil
 }

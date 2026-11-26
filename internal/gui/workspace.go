@@ -576,6 +576,9 @@ func (m *model) isOpenTransient(id string) bool {
 	case isDiffTab(id):
 		_, open := ggui.Peek(m.Diffs)[id]
 		return open
+	case isPluginTab(id):
+		_, open := ggui.Peek(m.PluginTabs)[id]
+		return open
 	}
 	return false
 }

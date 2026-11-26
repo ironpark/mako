@@ -907,3 +907,102 @@ func TestPlaceholderPreservedAcrossKinds(t *testing.T) {
 		}
 	}
 }
+
+func TestRev49ComponentsAndValidation(t *testing.T) {
+	tr, err := Read([]byte(`{"kind":"column","children":[
+		{"kind":"text","key":"h","text":"Heading","variant":"heading"},
+		{"kind":"text","key":"m","text":"0xdeadbeef","variant":"mono"},
+		{"kind":"text","key":"c","text":"Updated 1m ago","variant":"caption"},
+		{"kind":"card","key":"crd","text":"Summary","icon":"activity","badges":[{"text":"live","tone":"success"}],"children":[
+			{"kind":"stat","key":"st","text":"Pass rate","value":"99.4%","placeholder":"+0.3% vs yesterday","icon":"check","tone":"success","badges":[{"text":"24h"}],"onTap":["openStat"]}
+		]},
+		{"kind":"alert","key":"al","text":"Rate limit low","placeholder":"12 requests left","tone":"warning","variant":"outline","icon":"alert-triangle","onChange":["dismissAlert"],"children":[
+			{"kind":"button","key":"retry","text":"Upgrade","onTap":["upgrade"]}
+		]},
+		{"kind":"empty","key":"em","text":"No deployments","placeholder":"Trigger a build to see results","icon":"rocket","children":[
+			{"kind":"button","key":"go","text":"Deploy","onTap":["deploy"]}
+		]},
+		{"kind":"diff","key":"df","diffFrom":"a/main.go","diffTo":"b/main.go","language":"go","variant":"unified","maxHeight":320,"onChange":["pickLine"],"diffLines":[
+			{"op":"@","text":"@@ -1,2 +1,2 @@"},
+			{"op":" ","text":"package main","oldLine":1,"newLine":1},
+			{"op":"-","text":"var x = 1","oldLine":2},
+			{"op":"+","text":"var x = 2","newLine":2}
+		]},
+		{"kind":"radio","key":"rd","value":"fast","options":["fast","balanced","thorough"],"direction":"horizontal","onChange":["setMode"]},
+		{"kind":"slider","key":"sl","text":"Concurrency","value":"4","min":1,"max":16,"step":1,"onChange":["setConc"]},
+		{"kind":"kbd","key":"kb","options":["Cmd","K"]},
+		{"kind":"skeleton","key":"sk","variant":"rect","size":"large","maxHeight":48},
+		{"kind":"row","children":[{"kind":"text","text":"L"},{"kind":"spacer","key":"sp"},{"kind":"text","text":"R"}]},
+		{"kind":"input","key":"srch","value":"foo","variant":"search","icon":"search","placeholder":"Search…","onChange":["q"]},
+		{"kind":"input","key":"pw","value":"secret","variant":"password","placeholder":"Token","onChange":["pw"]},
+		{"kind":"textarea","key":"ta","value":"SELECT 1","variant":"mono","onChange":["sql"]},
+		{"kind":"tabs","key":"tb","value":"Diff","options":["Diff","Logs"],"variant":"underline","onChange":["tab"]},
+		{"kind":"progress","key":"pr","progress":0.75,"variant":"ring","text":"75%"},
+		{"kind":"code","key":"cd","text":"func main() {}","language":"go","maxHeight":200},
+		{"kind":"table","key":"tbl","labels":["Name","Duration"],"value":"Duration:desc","variant":"striped","onChange":["sort"],"children":[
+			{"kind":"row","children":[{"kind":"text","text":"build"},{"kind":"text","text":"12s"}]}
+		]}
+	]}`))
+	if err != nil {
+		t.Fatalf("Read rev 49 tree failed: %v", err)
+	}
+
+	// Verify event validation for new/updated kinds.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/al", Kind: protocol.UiChange, Value: "dismiss"}); err != nil || m.Name != "dismissAlert" {
+		t.Fatalf("alert dismiss: %+v %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/al", Kind: protocol.UiChange, Value: "other"}); err == nil {
+		t.Error("alert accepted non-dismiss value")
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/df", Kind: protocol.UiChange, Value: "2"}); err != nil || m.Name != "pickLine" || string(m.Args[0]) != "2" {
+		t.Fatalf("diff change: %+v %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/df", Kind: protocol.UiChange, Value: "99"}); err == nil {
+		t.Error("diff accepted out-of-range line index")
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/rd", Kind: protocol.UiChange, Value: "thorough"}); err != nil || string(m.Args[0]) != `"thorough"` {
+		t.Fatalf("radio change: %+v %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/rd", Kind: protocol.UiChange, Value: "nope"}); err == nil {
+		t.Error("radio accepted unknown option")
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/sl", Kind: protocol.UiChange, Value: "8"}); err != nil || string(m.Args[0]) != "8" {
+		t.Fatalf("slider change: %+v %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/sl", Kind: protocol.UiChange, Value: "999"}); err == nil {
+		t.Error("slider accepted out-of-range value")
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/tbl", Kind: protocol.UiChange, Value: "Name:asc"}); err != nil || string(m.Args[0]) != `"Name:asc"` {
+		t.Fatalf("table sort: %+v %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/tbl", Kind: protocol.UiChange, Value: "Missing:asc"}); err == nil {
+		t.Error("table accepted unknown sort column")
+	}
+
+	// Verify radio and slider participate in form Values().
+	vals, err := tr.Values(map[string]string{"/rd": "balanced", "/sl": "12", "/srch": "bar"})
+	if err != nil || vals["/rd"] != "balanced" || vals["/sl"] != "12" || vals["/srch"] != "bar" {
+		t.Fatalf("Values = %v, err = %v", vals, err)
+	}
+
+	// Verify invalid inputs are rejected.
+	bad := map[string]string{
+		"slider-min-ge-max": `{"kind":"slider","min":10,"max":10,"value":"10"}`,
+		"slider-bad-step":   `{"kind":"slider","min":0,"max":10,"step":-1,"value":"5"}`,
+		"slider-onTap":      `{"kind":"slider","min":0,"max":10,"onTap":["x"]}`,
+		"min-on-text":       `{"kind":"text","text":"hi","min":1}`,
+		"radio-empty-opts":  `{"kind":"radio","options":[]}`,
+		"diff-bad-op":       `{"kind":"diff","diffLines":[{"op":"bogus","text":"x"}]}`,
+		"diff-onTap":        `{"kind":"diff","onTap":["x"]}`,
+		"kbd-onTap":         `{"kind":"kbd","text":"K","onTap":["x"]}`,
+		"spacer-children":   `{"kind":"spacer","children":[{"kind":"text","text":"x"}]}`,
+		"skeleton-children": `{"kind":"skeleton","children":[{"kind":"text","text":"x"}]}`,
+		"alert-bad-var":     `{"kind":"alert","text":"hi","variant":"neon"}`,
+		"skeleton-bad-var":  `{"kind":"skeleton","variant":"blob"}`,
+	}
+	for name, raw := range bad {
+		if _, err := Read([]byte(raw)); err == nil {
+			t.Errorf("%s: expected error, got nil", name)
+		}
+	}
+}

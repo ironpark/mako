@@ -126,11 +126,14 @@ message PluginBlock {
   string name = 1;
   string title = 2;
   // slots are where the manifest suggests placing it: "left", "right",
-  // "top", "bottom".
+  // "top", "bottom", "sidebar", "tab" (revision 49 adds "sidebar" and "tab").
   repeated string slots = 3;
   // scope is the block's declared scope: "", "global", "space", "project" or
   // "session" (revision 42).
   string scope = 4;
+  // icon is an optional bundled icon name for sidebar switcher, custom tab,
+  // and block picker (revision 49).
+  string icon = 5;
 }
 
 // PluginCommand is a command a plugin contributes to the palette.
@@ -201,9 +204,10 @@ message PluginDone {
 }
 
 // PluginOpen is a window intent a plugin asked for in answer to a user
-// gesture (revision 46).
+// gesture (revision 46; extended with custom plugin tabs in revision 49).
 message PluginOpen {
-  // kind is the intent kind: "diff", "file", "pr", "runs", or "create_pr".
+  // kind is the intent kind: "diff", "file", "pr", "runs", "create_pr",
+  // "tab", or "close_tab".
   string kind = 1;
   string node = 2;
   string folder = 3;
@@ -219,6 +223,13 @@ message PluginOpen {
   int64 number = 13;
   bool preview = 14;
   int32 line = 15;
+  // Custom plugin tab fields (kind "tab" or "close_tab", revision 49).
+  string block = 16;
+  string key = 17;
+  string title = 18;
+  string icon = 19;
+  string params = 20;
+  string scope = 21;
 }
 
 // WatchBlock follows a plugin's block, plugin:<id>/<block>: the daemon
@@ -240,6 +251,12 @@ message WatchBlock {
   // standalone says this viewer displays the block solo rather than as one
   // tab of a multi-tab stack (revision 46).
   bool standalone = 5;
+  // instance separates multiple independent instances of the same block
+  // within a scope, such as custom workspace tabs (revision 49).
+  string instance = 6;
+  // params is an optional JSON object passed to this instance via ctx.tab
+  // (revision 49).
+  string params = 7;
 }
 
 // BlockUpdate is a block's tree, whole or as the changes since the last.
@@ -274,6 +291,8 @@ message BlockUpdate {
   // chrome is the block's manifest chrome hint: "auto" or "toolbar"
   // (revision 46).
   string chrome = 14;
+  // instance is the instance key of this block stream (revision 49).
+  string instance = 15;
 }
 
 // BlockEvent is the user acting on a node of a block's tree: kind "tap",
@@ -296,6 +315,8 @@ message BlockEvent {
   // locale is the front-end's optional BCP-47 language tag (e.g. "en", "ko",
   // "ko-KR"; empty defaults to "en", revision 44).
   string locale = 8;
+  // instance is the instance key of the target block instance (revision 49).
+  string instance = 9;
 }
 
 // UiNode is a node of a plugin block's tree. The kinds are a fixed set
@@ -404,6 +425,25 @@ message UiNode {
   // accessible label on icon-only buttons, menus, tree_item checkboxes, etc.
   // (revision 46).
   string placeholder = 40;
+  // min, max, and step configure a slider node (revision 49).
+  double min = 41;
+  double max = 42;
+  double step = 43;
+  // diff_lines, diff_from, and diff_to define a diff node's hunks and header
+  // labels (revision 49).
+  repeated UiDiffLine diff_lines = 44;
+  string diff_from = 45;
+  string diff_to = 46;
+}
+
+// UiDiffLine is one line of a diff node (revision 49): op is "+", "-", " " or
+// "@" for a hunk header; old_line and new_line are 1-based line numbers (0
+// when absent).
+message UiDiffLine {
+  string op = 1;
+  string text = 2;
+  int32 old_line = 3;
+  int32 new_line = 4;
 }
 
 // UiSeries is a series of a chart node: its name, colour token and values,

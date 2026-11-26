@@ -38,6 +38,22 @@ var hostDelay func()
 // its request as JSON, to the response as JSON.
 type bridgeFunc func(ctx context.Context, method string, req []byte) ([]byte, error)
 
+// pluginRuntime is the execution engine for one plugin version: either
+// QuickJS (*jsRuntime) for .js plugins or Wasmtime (*wasmRuntime) for .wasm
+// plugins. Used from the plugin's actor goroutine alone.
+type pluginRuntime interface {
+	invoke(ctx context.Context, method string, args ...any) (string, error)
+	close()
+}
+
+// startPluginRuntime starts either the JS or WebAssembly runtime matching v.
+func startPluginRuntime(ctx context.Context, v *version, lim Limits, cacheDir string, bridge bridgeFunc) (pluginRuntime, error) {
+	if v.isWasm() {
+		return startWasmRuntime(ctx, v, lim, cacheDir, bridge)
+	}
+	return startRuntime(ctx, v, lim, bridge)
+}
+
 // jsRuntime is a plugin's runtime: one version of its code, started. It
 // is used from the plugin's goroutine alone.
 type jsRuntime struct {

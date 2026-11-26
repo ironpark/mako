@@ -55,15 +55,15 @@ func (p *plugin) count(n *int, what string, err error) {
 	}
 }
 
-// evictInstances removes LRU-evicted (block, scope) states from both saved
-// state and the live JS runtime.
+// evictInstances removes LRU-evicted (block, scope, instID) states from both
+// saved state and the live plugin runtime.
 func (p *plugin) evictInstances(keys []string) {
 	for _, key := range keys {
 		p.stopGitWatchesForInstance(key)
 		delete(p.saved, key)
 		if p.rt != nil {
-			blockID, scopeKey := splitInstanceKey(key)
-			_, _ = p.invoke("evict", false, blockID, scopeKey)
+			blockID, scopeKey, instID := splitInstanceFull(key)
+			_, _ = p.invoke("evict", false, blockID, runtimeStateKey(scopeKey, instID))
 		}
 	}
 }
@@ -118,15 +118,17 @@ func (p *plugin) render(key string) {
 		p.mu.Unlock()
 		return
 	}
-	blockID, scopeKey, locale, standalone := in.id, in.scopeKey, in.locale, in.standaloneLocked()
+	blockID, scopeKey, instID, params, locale, standalone := in.id, in.scopeKey, in.instID, in.params, in.locale, in.standaloneLocked()
 	p.mu.Unlock()
 	sc := p.m.resolveScope(scopeKey)
 	sc.Locale = normalizeLocale(locale)
 	sc.View = View{Standalone: standalone}
+	sc.Tab = tabContextFor(instID, params)
 	ctxJSON := marshalScopeContext(sc)
+	stateKey := runtimeStateKey(scopeKey, instID)
 	prevInst := p.activeInstance
 	p.activeInstance = key
-	out, err := p.invoke("render", false, blockID, scopeKey, ctxJSON)
+	out, err := p.invoke("render", false, blockID, stateKey, ctxJSON)
 	p.activeInstance = prevInst
 	var t *uiblock.Tree
 	var over *limitError
@@ -206,7 +208,7 @@ func (p *plugin) load(in *instance) {
 	p.mu.Lock()
 	in.loading = true
 	in.dirty = false
-	locale, standalone := in.locale, in.standaloneLocked()
+	locale, standalone, instID, params := in.locale, in.standaloneLocked(), in.instID, in.params
 	p.mu.Unlock()
 	defer func() {
 		p.mu.Lock()
@@ -231,10 +233,12 @@ func (p *plugin) load(in *instance) {
 	sc := p.m.resolveScope(in.scopeKey)
 	sc.Locale = normalizeLocale(locale)
 	sc.View = View{Standalone: standalone}
+	sc.Tab = tabContextFor(instID, params)
 	ctxJSON := marshalScopeContext(sc)
+	stateKey := runtimeStateKey(in.scopeKey, instID)
 	prevInst := p.activeInstance
 	p.activeInstance = in.key
-	_, err := p.invoke("load", false, in.id, in.scopeKey, ctxJSON)
+	_, err := p.invoke("load", false, in.id, stateKey, ctxJSON)
 	p.activeInstance = prevInst
 	if err != nil {
 		p.setErr(in.key, fmt.Errorf("load: %w", err))
@@ -294,7 +298,8 @@ func (p *plugin) afterCall(scopeKey string, extraKeys ...string) {
 		}
 		_ = json.Unmarshal([]byte(out), &reloads)
 		for _, r := range reloads {
-			k := instanceKey(r.ID, r.Scope)
+			rScope, rInst := splitRuntimeStateKey(r.Scope)
+			k := instanceKeyOf(r.ID, rScope, rInst)
 			p.mu.Lock()
 			in, ok := p.inst[k]
 			p.mu.Unlock()

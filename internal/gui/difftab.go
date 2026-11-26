@@ -34,26 +34,29 @@ const diffPrefix = "diff\x00"
 // isDiffTab reports whether a tab shows a diff.
 func isDiffTab(id string) bool { return strings.HasPrefix(id, diffPrefix) }
 
-// isSessionTab reports whether a tab shows a session, rather than a file
-// or a diff.
+// isSessionTab reports whether a tab shows a session, rather than a file,
+// a diff, a launcher, or a custom plugin tab.
 func isSessionTab(id string) bool {
-	return id != "" && !isDocTab(id) && !isDiffTab(id) && !isLaunchTab(id)
+	return id != "" && !isDocTab(id) && !isDiffTab(id) && !isLaunchTab(id) && !isPluginTab(id)
 }
 
 // How each kind of tab goes with the workspace (workspace.go): whether it
 // is written down, and how it comes back.
 
 // keptTab reports whether a tab is written down with the workspace: a
-// session's and a file's are; a diff's, read as it opens, is not.
-func keptTab(id string) bool { return !isDiffTab(id) && !isLaunchTab(id) }
+// session's and a file's are; a diff's, launcher's, or plugin tab's is not.
+func keptTab(id string) bool { return !isDiffTab(id) && !isLaunchTab(id) && !isPluginTab(id) }
 
 // bringBack makes ready what a tab of a layout brought back shows, and
 // reports whether it can show it: a file is read again, unless it is open
-// already; a diff comes back only while it is still open.
+// already; a diff or plugin tab comes back only while it is still open.
 func (m *model) bringBack(id string) bool {
 	switch {
 	case isDiffTab(id):
 		_, open := ggui.Peek(m.Diffs)[id]
+		return open
+	case isPluginTab(id):
+		_, open := ggui.Peek(m.PluginTabs)[id]
 		return open
 	case isLaunchTab(id):
 		return m.launches[id] != nil

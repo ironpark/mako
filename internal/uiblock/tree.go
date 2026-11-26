@@ -18,6 +18,7 @@ import (
 	"math"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -61,13 +62,23 @@ const (
 	KindCheckbox    = "checkbox"
 	KindDialog      = "dialog"
 	KindDag         = "dag"
+	KindDiff        = "diff"
+	KindAlert       = "alert"
+	KindEmpty       = "empty"
+	KindStat        = "stat"
+	KindRadio       = "radio"
+	KindSlider      = "slider"
+	KindKbd         = "kbd"
+	KindSkeleton    = "skeleton"
+	KindSpacer      = "spacer"
 )
 
 // Kinds are the vocabulary, in the order docs/plugins.md lists it.
 var Kinds = []string{KindColumn, KindRow, KindStack, KindCard, KindScroll, KindWrap, KindGrid, KindSplit,
 	KindCollapsible, KindBreadcrumb, KindTree, KindTreeItem, KindText, KindIcon, KindPill, KindChip, KindButton,
 	KindList, KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindTable, KindMarkdown, KindCode,
-	KindProgress, KindDivider, KindChart, KindGraph, KindMenu, KindMenuItem, KindCheckbox, KindDialog, KindDag}
+	KindProgress, KindDivider, KindChart, KindGraph, KindMenu, KindMenuItem, KindCheckbox, KindDialog, KindDag,
+	KindDiff, KindAlert, KindEmpty, KindStat, KindRadio, KindSlider, KindKbd, KindSkeleton, KindSpacer}
 
 // Charts are the kinds of chart a chart node draws.
 var Charts = []string{"line", "bar", "sparkline", "donut", "pie"}
@@ -84,19 +95,29 @@ var BadgeVariants = []string{"", "soft", "solid", "outline", "mono"}
 // variantsOf says which variant tokens each node kind accepts (excluding "").
 var variantsOf = map[string][]string{
 	KindRow:      {"toolbar"},
+	KindText:     {"mono", "caption", "heading"},
 	KindButton:   {"primary", "secondary", "outline", "ghost", "danger"},
 	KindCard:     {"primary", "secondary", "outline", "ghost", "danger", "soft"},
 	KindPill:     {"soft", "solid", "outline"},
 	KindChip:     {"soft", "solid", "outline"},
-	KindProgress: {"spinner"},
+	KindInput:    {"search", "password"},
+	KindTextarea: {"mono"},
+	KindTabs:     {"pills", "underline"},
+	KindTable:    {"compact", "striped"},
+	KindProgress: {"spinner", "ring"},
 	KindScroll:   {"follow"},
 	KindTreeItem: {"badge"},
 	KindMenu:     {"ghost", "outline", "context"},
 	KindDialog:   {"danger"},
+	KindDiff:     {"unified", "split"},
+	KindAlert:    {"soft", "outline", "solid"},
+	KindSkeleton: {"text", "rect", "circle"},
 }
 
 // Variants are every style variant token, for docs; VariantsOf says which a kind takes.
-var Variants = []string{"", "primary", "secondary", "outline", "ghost", "danger", "soft", "solid", "spinner", "follow", "badge", "toolbar", "context"}
+var Variants = []string{"", "primary", "secondary", "outline", "ghost", "danger", "soft", "solid", "spinner", "ring",
+	"follow", "badge", "toolbar", "context", "mono", "caption", "heading", "search", "password", "pills", "underline",
+	"compact", "striped", "unified", "split", "text", "rect", "circle"}
 
 // VariantsOf returns the non-empty variant tokens accepted by kind.
 func VariantsOf(kind string) []string {
@@ -157,6 +178,11 @@ const (
 	maxDagDetail    = 320
 	maxDagMeta      = 128
 	maxDagRowBadges = 6
+	// Diff and slider bounds (revision 49).
+	maxDiffLines    = 2000
+	maxDiffLineText = 4 << 10
+	maxDiffLabel    = 256
+	maxSliderBound  = 1e12
 )
 
 var (
@@ -210,6 +236,20 @@ type jsNode struct {
 	ContextMenu string          `json:"contextMenu"`
 	ContextArg  string          `json:"contextArg"`
 	Rows        []*jsRow        `json:"rows"`
+	Min         *float64        `json:"min"`
+	Max         *float64        `json:"max"`
+	Step        *float64        `json:"step"`
+	DiffLines   []*jsDiffLine   `json:"diffLines"`
+	DiffFrom    string          `json:"diffFrom"`
+	DiffTo      string          `json:"diffTo"`
+}
+
+// jsDiffLine is one line of a diff node as the prelude writes it.
+type jsDiffLine struct {
+	Op      string `json:"op"`
+	Text    string `json:"text"`
+	OldLine int32  `json:"oldLine"`
+	NewLine int32  `json:"newLine"`
 }
 
 // jsSeries is a chart's series as the prelude writes it.
@@ -505,7 +545,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 	}
 	if j.Direction != "" {
 		switch j.Kind {
-		case KindScroll:
+		case KindScroll, KindRadio:
 			if j.Direction != "vertical" && j.Direction != "horizontal" {
 				return nil, fmt.Errorf("%s: direction %q is not vertical or horizontal", where(id), j.Direction)
 			}
@@ -514,12 +554,12 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 				return nil, fmt.Errorf("%s: direction %q is not vertical, horizontal or auto", where(id), j.Direction)
 			}
 		default:
-			return nil, fmt.Errorf("%s: only a scroll or split node takes direction", where(id))
+			return nil, fmt.Errorf("%s: only a scroll, split or radio node takes direction", where(id))
 		}
 	}
 	if j.MaxHeight != 0 {
 		switch j.Kind {
-		case KindScroll, KindDag:
+		case KindScroll, KindDag, KindCode, KindDiff, KindSkeleton:
 			if !finite(j.MaxHeight, 0, maxScrollH) {
 				return nil, fmt.Errorf("%s: maxHeight is from 0 to %d", where(id), maxScrollH)
 			}
@@ -528,7 +568,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 				return nil, fmt.Errorf("%s: graph maxHeight is from %d to %d", where(id), minGraphHeight, maxGraphHeight)
 			}
 		default:
-			return nil, fmt.Errorf("%s: only a scroll, graph or dag node takes maxHeight", where(id))
+			return nil, fmt.Errorf("%s: only a scroll, graph, dag, code, diff or skeleton node takes maxHeight", where(id))
 		}
 	}
 	if j.ContextMenu != "" {
@@ -562,7 +602,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 	}
 	if j.Placeholder != "" {
 		switch j.Kind {
-		case KindInput, KindTextarea, KindButton, KindMenu, KindTreeItem, KindCheckbox, KindIcon, KindPill, KindChip:
+		case KindInput, KindTextarea, KindButton, KindMenu, KindTreeItem, KindCheckbox, KindIcon, KindPill, KindChip, KindStat, KindDiff, KindSlider, KindRadio, KindAlert, KindEmpty:
 			n.Placeholder = j.Placeholder
 		}
 	}
@@ -595,6 +635,12 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 		return nil, err
 	}
 	if err := r.dag(j, n, id); err != nil {
+		return nil, err
+	}
+	if err := r.slider(j, n, id); err != nil {
+		return nil, err
+	}
+	if err := r.diff(j, n, id); err != nil {
 		return nil, err
 	}
 	if j.ContextMenu != "" {
@@ -647,12 +693,16 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 		}
 	}
 	switch j.Kind {
-	case KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindBreadcrumb, KindGraph, KindCheckbox, KindDialog, KindDag:
+	case KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindBreadcrumb, KindGraph, KindCheckbox, KindDialog, KindDag, KindRadio, KindSlider, KindDiff, KindAlert:
 		if a.tap != nil {
 			return nil, fmt.Errorf("%s: a %s takes onChange, not onTap", where(id), j.Kind)
 		}
 		if j.Drag != "" || a.drop != nil {
 			return nil, fmt.Errorf("%s: a %s does not take drag or onDrop", where(id), j.Kind)
+		}
+	case KindTable:
+		if a.submit != nil {
+			return nil, fmt.Errorf("%s: a table takes onChange, not onSubmit", where(id))
 		}
 	case KindCollapsible:
 		if a.tap != nil {
@@ -675,7 +725,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 			return nil, fmt.Errorf("%s: a markdown does not take drag", where(id))
 		}
 		a.change = linkMsg
-	case KindDivider, KindProgress, KindCode, KindChart, KindMenu:
+	case KindDivider, KindProgress, KindCode, KindChart, KindMenu, KindKbd, KindSkeleton, KindSpacer:
 		if a.tap != nil || a.change != nil || a.submit != nil || a.drop != nil {
 			return nil, fmt.Errorf("%s: a %s sends no messages", where(id), j.Kind)
 		}
@@ -695,6 +745,14 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 			return nil, fmt.Errorf("%s: tabs value %q is not one of its options", where(id), j.Value)
 		}
 	}
+	if j.Kind == KindRadio {
+		if len(j.Options) == 0 {
+			return nil, fmt.Errorf("%s: radio requires at least one option", where(id))
+		}
+		if j.Value != "" && !slices.Contains(j.Options, j.Value) {
+			return nil, fmt.Errorf("%s: radio value %q is not one of its options", where(id), j.Value)
+		}
+	}
 	if j.Kind == KindBreadcrumb && len(j.Options) == 0 {
 		return nil, fmt.Errorf("%s: breadcrumb requires at least one option", where(id))
 	}
@@ -711,7 +769,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 	container := j.Kind == KindColumn || j.Kind == KindRow || j.Kind == KindStack || j.Kind == KindCard ||
 		j.Kind == KindScroll || j.Kind == KindWrap || j.Kind == KindGrid || j.Kind == KindSplit ||
 		j.Kind == KindCollapsible || j.Kind == KindTree || j.Kind == KindTreeItem || j.Kind == KindList ||
-		j.Kind == KindTable || j.Kind == KindMenu || j.Kind == KindDialog
+		j.Kind == KindTable || j.Kind == KindMenu || j.Kind == KindDialog || j.Kind == KindAlert || j.Kind == KindEmpty
 	if !container && len(j.Children) > 0 {
 		return nil, fmt.Errorf("%s: a %s holds no children", where(id), j.Kind)
 	}
@@ -1036,6 +1094,87 @@ func (r *treeReader) dag(j *jsNode, n *protocol.UiNode, id string) error {
 			Badges: rowBadges, Tone: row.Tone, Strong: row.Strong, Icon: row.Icon,
 		})
 	}
+	return nil
+}
+
+// slider validates a slider node's min, max, step, and numeric value.
+func (r *treeReader) slider(j *jsNode, n *protocol.UiNode, id string) error {
+	if j.Kind != KindSlider {
+		if j.Min != nil || j.Max != nil || j.Step != nil {
+			return fmt.Errorf("%s: only a slider has min, max or step", where(id))
+		}
+		return nil
+	}
+	lo, hi := 0.0, 100.0
+	if j.Min != nil {
+		lo = *j.Min
+	}
+	if j.Max != nil {
+		hi = *j.Max
+	}
+	if !finite(lo, -maxSliderBound, maxSliderBound) || !finite(hi, -maxSliderBound, maxSliderBound) || lo >= hi {
+		return fmt.Errorf("%s: slider requires finite min < max", where(id))
+	}
+	step := 0.0
+	if j.Step != nil {
+		step = *j.Step
+		if !finite(step, 0, hi-lo) {
+			return fmt.Errorf("%s: slider step must be from 0 to %g", where(id), hi-lo)
+		}
+	}
+	if j.Value != "" {
+		v, err := strconv.ParseFloat(j.Value, 64)
+		if err != nil || !finite(v, lo-1e-9, hi+1e-9) {
+			return fmt.Errorf("%s: slider value %q must be a number from %g to %g", where(id), j.Value, lo, hi)
+		}
+	}
+	n.Min, n.Max, n.Step = lo, hi, step
+	return nil
+}
+
+// diff validates a diff node's lines and header labels.
+func (r *treeReader) diff(j *jsNode, n *protocol.UiNode, id string) error {
+	if j.Kind != KindDiff {
+		if len(j.DiffLines) > 0 || j.DiffFrom != "" || j.DiffTo != "" {
+			return fmt.Errorf("%s: only a diff has diffLines, diffFrom or diffTo", where(id))
+		}
+		return nil
+	}
+	if len(j.DiffLines) > maxDiffLines {
+		return fmt.Errorf("%s: a diff has at most %d lines", where(id), maxDiffLines)
+	}
+	if utf8.RuneCountInString(j.DiffFrom) > maxDiffLabel || strings.ContainsFunc(j.DiffFrom, Spoofing) {
+		return fmt.Errorf("%s: diffFrom is over %d characters or holds control or reordering characters", where(id), maxDiffLabel)
+	}
+	if utf8.RuneCountInString(j.DiffTo) > maxDiffLabel || strings.ContainsFunc(j.DiffTo, Spoofing) {
+		return fmt.Errorf("%s: diffTo is over %d characters or holds control or reordering characters", where(id), maxDiffLabel)
+	}
+	r.text += len(j.DiffFrom) + len(j.DiffTo)
+	for i, l := range j.DiffLines {
+		if l == nil {
+			return fmt.Errorf("%s: diff line %d is null", where(id), i)
+		}
+		if l.Op != "+" && l.Op != "-" && l.Op != " " && l.Op != "@" {
+			return fmt.Errorf("%s: diff line %d op %q is not +, -, space or @", where(id), i, l.Op)
+		}
+		if len(l.Text) > maxDiffLineText || strings.ContainsFunc(l.Text, spoofingInline) {
+			return fmt.Errorf("%s: diff line %d text is over %d bytes or holds control or reordering characters", where(id), i, maxDiffLineText)
+		}
+		if l.OldLine < 0 || l.NewLine < 0 {
+			return fmt.Errorf("%s: diff line %d line numbers must be >= 0", where(id), i)
+		}
+		r.text += len(l.Text)
+		if r.text > maxTreeText {
+			return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+		}
+		n.DiffLines = append(n.DiffLines, &protocol.UiDiffLine{
+			Op: l.Op, Text: l.Text, OldLine: l.OldLine, NewLine: l.NewLine,
+		})
+	}
+	if r.text > maxTreeText {
+		return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+	}
+	n.DiffFrom, n.DiffTo = j.DiffFrom, j.DiffTo
 	return nil
 }
 

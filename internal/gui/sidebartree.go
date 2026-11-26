@@ -239,9 +239,9 @@ func (m *model) tabScopeInGroups(id string, defs []project, groups []sessionGrou
 		}
 		f := ggui.Peek(l.Form)
 		return locationScope(fileRoot{Node: f.NodeID, Path: f.Project}, groups)
-	case isDocTab(id), isDiffTab(id):
-		docs, diffs := ggui.Peek(m.Docs), ggui.Peek(m.Diffs)
-		if sec, root := tabPlace(id, groups, docs, diffs); sec >= 0 {
+	case isDocTab(id), isDiffTab(id), isPluginTab(id):
+		docs, diffs, ptabs := ggui.Peek(m.Docs), ggui.Peek(m.Diffs), ggui.Peek(m.PluginTabs)
+		if sec, root := tabPlace(id, groups, docs, diffs, ptabs); sec >= 0 {
 			g := groups[sec]
 			k := scopeKey{Section: g.Key}
 			if root >= 0 && g.Def != nil && root < len(g.Def.Roots) {

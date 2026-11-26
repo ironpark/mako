@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -98,14 +101,37 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 			if ev.GetValue() != "on" && ev.GetValue() != "off" {
 				return Message{}, fmt.Errorf("invalid checkbox value %q for %q of %s", ev.GetValue(), ev.GetNode(), ev.GetBlock())
 			}
-		case KindDialog:
+		case KindDialog, KindAlert:
 			if ev.GetValue() != "dismiss" {
-				return Message{}, fmt.Errorf("invalid dialog change value %q for %q of %s", ev.GetValue(), ev.GetNode(), ev.GetBlock())
+				return Message{}, fmt.Errorf("invalid %s change value %q for %q of %s", kind, ev.GetValue(), ev.GetNode(), ev.GetBlock())
 			}
 		case KindDag:
 			if !dagHasRow(node, ev.GetValue()) {
 				return Message{}, fmt.Errorf("dag %q of %s has no row %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
 			}
+		case KindRadio:
+			if !slices.Contains(node.GetOptions(), ev.GetValue()) {
+				return Message{}, fmt.Errorf("radio %q of %s has no option %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
+			}
+		case KindSlider:
+			v, err := strconv.ParseFloat(ev.GetValue(), 64)
+			if err != nil || math.IsNaN(v) || math.IsInf(v, 0) || v < node.GetMin()-1e-9 || v > node.GetMax()+1e-9 {
+				return Message{}, fmt.Errorf("invalid slider value %q for %q of %s", ev.GetValue(), ev.GetNode(), ev.GetBlock())
+			}
+			value = v
+		case KindTable:
+			col := ev.GetValue()
+			if !slices.Contains(node.GetLabels(), col) {
+				if c, dir, ok := strings.Cut(col, ":"); !ok || (dir != "asc" && dir != "desc") || !slices.Contains(node.GetLabels(), c) {
+					return Message{}, fmt.Errorf("table %q of %s has no column %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
+				}
+			}
+		case KindDiff:
+			idx, err := strconv.Atoi(ev.GetValue())
+			if err != nil || idx < 0 || idx >= len(node.GetDiffLines()) {
+				return Message{}, fmt.Errorf("diff %q of %s has no line %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
+			}
+			value = idx
 		}
 		b, _ := json.Marshal(value)
 		m.Args = append(m.Args, b)
@@ -168,8 +194,8 @@ func (t *Tree) Values(in map[string]string) (map[string]string, error) {
 		switch kind, ok := kinds[id]; {
 		case !ok:
 			continue
-		case kind != KindInput && kind != KindTextarea && kind != KindToggle && kind != KindCheckbox && kind != KindSelect && kind != KindTabs:
-			return nil, fmt.Errorf("node %q is no input, textarea, toggle, checkbox, select or tabs of the block", id)
+		case kind != KindInput && kind != KindTextarea && kind != KindToggle && kind != KindCheckbox && kind != KindSelect && kind != KindTabs && kind != KindRadio && kind != KindSlider:
+			return nil, fmt.Errorf("node %q is no input, textarea, toggle, checkbox, select, tabs, radio or slider of the block", id)
 		}
 		out[id] = v
 	}

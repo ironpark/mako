@@ -129,6 +129,30 @@ func (m *model) dispatchPluginOpen(o *protocol.PluginOpen) {
 			}
 		}
 		m.askPR()
+
+	case "tab":
+		if o.GetBlock() == "" {
+			return
+		}
+		pt := pluginTab{
+			Block:   o.GetBlock(),
+			Key:     o.GetKey(),
+			Title:   o.GetTitle(),
+			Icon:    o.GetIcon(),
+			Scope:   o.GetScope(),
+			Params:  o.GetParams(),
+			Preview: o.GetPreview(),
+		}
+		if folder != "" {
+			pt.Root = fileRoot{Node: node, Path: folder}
+		}
+		m.openPluginTab(pt)
+
+	case "close_tab":
+		if o.GetBlock() == "" {
+			return
+		}
+		m.closePluginTabByKey(o.GetBlock(), o.GetKey())
 	}
 }
 

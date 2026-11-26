@@ -236,7 +236,11 @@ func (d *Daemon) handleWatchBlock(ctx context.Context, stream *transport.Stream,
 		cancel()
 		err = h.finish(parentCtx, env.GetId(), err)
 	}()
-	err = src.Watch(ctx, req.GetBlock(), req.GetScope(), req.GetLocale(), plugin.View{Standalone: req.GetStandalone()}, func(u *protocol.BlockUpdate) error {
+	err = src.Watch(ctx, req.GetBlock(), req.GetScope(), req.GetLocale(), plugin.View{
+		Standalone: req.GetStandalone(),
+		Instance:   req.GetInstance(),
+		Params:     req.GetParams(),
+	}, func(u *protocol.BlockUpdate) error {
 		return stream.Send(protocol.TypeBlockUpdate, env.GetId(), u)
 	})
 	if ctx.Err() != nil {

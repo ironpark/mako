@@ -19,9 +19,12 @@ var ErrGitUnavailable = errors.New("git unavailable")
 // ErrForgeUnavailable is returned when the Manager has no ForgeHost configured.
 var ErrForgeUnavailable = errors.New("forge unavailable")
 
-// View describes how a front-end viewer presents a block instance (revision 46).
+// View describes how a front-end viewer presents a block instance (revision 46;
+// extended with custom tab instance and params in revision 49).
 type View struct {
-	Standalone bool `json:"standalone"`
+	Standalone bool   `json:"standalone"`
+	Instance   string `json:"-"`
+	Params     string `json:"-"`
 }
 
 // GitTarget identifies a git work tree on a node (empty node or "local" means

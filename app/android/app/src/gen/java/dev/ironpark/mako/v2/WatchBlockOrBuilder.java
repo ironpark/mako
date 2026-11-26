@@ -100,4 +100,48 @@ public interface WatchBlockOrBuilder extends
    * @return The standalone.
    */
   boolean getStandalone();
+
+  /**
+   * <pre>
+   * instance separates multiple independent instances of the same block
+   * within a scope, such as custom workspace tabs (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 6 [json_name = "instance"];</code>
+   * @return The instance.
+   */
+  java.lang.String getInstance();
+  /**
+   * <pre>
+   * instance separates multiple independent instances of the same block
+   * within a scope, such as custom workspace tabs (revision 49).
+   * </pre>
+   *
+   * <code>string instance = 6 [json_name = "instance"];</code>
+   * @return The bytes for instance.
+   */
+  com.google.protobuf.ByteString
+      getInstanceBytes();
+
+  /**
+   * <pre>
+   * params is an optional JSON object passed to this instance via ctx.tab
+   * (revision 49).
+   * </pre>
+   *
+   * <code>string params = 7 [json_name = "params"];</code>
+   * @return The params.
+   */
+  java.lang.String getParams();
+  /**
+   * <pre>
+   * params is an optional JSON object passed to this instance via ctx.tab
+   * (revision 49).
+   * </pre>
+   *
+   * <code>string params = 7 [json_name = "params"];</code>
+   * @return The bytes for params.
+   */
+  com.google.protobuf.ByteString
+      getParamsBytes();
 }

@@ -169,7 +169,9 @@ type model struct {
 	Docs *ggui.StateValue[map[string]docInfo]
 	// Diffs are the diffs open in tabs, by tab.
 	Diffs *ggui.StateValue[map[string]diffTab]
-	docs  map[string]*document // UI goroutine only
+	// PluginTabs are custom plugin blocks open as workspace tabs, by tab ID.
+	PluginTabs *ggui.StateValue[map[string]pluginTab]
+	docs       map[string]*document // UI goroutine only
 
 	hl  *highlighter // highlighting, which takes languages from ext; see highlight.go
 	ext *extState    // the extensions and MCP servers; see extstate.go
@@ -199,6 +201,7 @@ type model struct {
 	AgentsSplit  *ggui.StateValue[float64] // the agents panel's agents over its messages
 
 	SidebarOpen *ggui.StateValue[bool]
+	SidebarPage *ggui.StateValue[string] // "" for Projects/Agents, or "plugin:<id>/<block>" for a sidebar plugin page
 	DetailsOpen *ggui.StateValue[bool]
 	// DetailsWidth is the right panel's width, following a drag of its
 	// edge; the settings keep it when the drag ends.
@@ -322,6 +325,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Docs:                ggui.State(map[string]docInfo{}).WithEqual(maps.Equal),
 		docs:                map[string]*document{},
 		Diffs:               ggui.State(map[string]diffTab{}).WithEqual(deepEqual),
+		PluginTabs:          ggui.State(map[string]pluginTab{}).WithEqual(deepEqual),
 		pickers:             newPickerState(),
 		ext:                 newExtState(cfg),
 		plugins:             newPluginsState(),
@@ -373,6 +377,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		Confirmation:  ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),
 		AgentsSplit:   ggui.State(0.4),
 		SidebarOpen:   ggui.State(true),
+		SidebarPage:   ggui.State(""),
 		DetailsOpen:   ggui.State(true),
 		DetailsWidth:  ggui.State(float64(detailsWidth)), // as the document and the settings say, below
 		SidebarWidth:  ggui.State(float64(sidebarWidth)),

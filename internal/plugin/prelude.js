@@ -33,6 +33,7 @@ const reloads = new Map();
 const i18nCatalogs = new Map();
 let plugin = null;
 let activeScope = "";
+let activeStateKey = "";
 let activeCtx = null;
 
 function normalizeLocaleTag(raw) {
@@ -106,7 +107,7 @@ function need(id) {
 }
 
 function resolveScopeArg(scopeKey) {
-  return scopeKey === undefined ? activeScope : String(scopeKey || "");
+  return scopeKey === undefined ? activeStateKey : String(scopeKey || "");
 }
 
 function getState(id, scopeKey) {
@@ -327,6 +328,12 @@ function makeContext(ctxJson) {
   const node = raw.node || "";
   const folder = raw.folder || "";
   const view = Object.freeze({ standalone: Boolean(raw.view && raw.view.standalone) });
+  const tab = raw.tab && typeof raw.tab === "object"
+    ? Object.freeze({
+        key: String(raw.tab.key || ""),
+        params: (raw.tab.params && typeof raw.tab.params === "object") ? Object.freeze({ ...raw.tab.params }) : Object.freeze({}),
+      })
+    : null;
   const defaultTarget = () => (scopeKey
     ? { scope: scopeKey }
     : (node || folder ? { node, path: folder } : {}));
@@ -362,6 +369,16 @@ function makeContext(ctxJson) {
       if (r.node === undefined || r.node === "") r.node = node;
       return host.commands.runCommand({ id: "mako.openFile", arg: JSON.stringify(r) });
     },
+    openTab: (o) => {
+      const r = typeof o === "string" ? { block: o } : { ...(o || {}) };
+      if (r.scope === undefined) r.scope = scopeKey;
+      return host.commands.runCommand({ id: "mako.openTab", arg: JSON.stringify(r) });
+    },
+    closeTab: (o) => {
+      const r = typeof o === "string" ? { block: o } : { ...(o || {}) };
+      if (r.key === undefined && tab) r.key = tab.key;
+      return host.commands.runCommand({ id: "mako.closeTab", arg: JSON.stringify(r) });
+    },
     copy: (text) => host.commands.runCommand({ id: "mako.copyText", arg: String(text ?? "") }),
     openForge: (o) => host.commands.runCommand({ id: "mako.openForge", arg: JSON.stringify(withFolder(o)) }),
     createPullRequest: (o) => host.commands.runCommand({ id: "mako.createPullRequest", arg: JSON.stringify(withFolder(o)) }),
@@ -379,6 +396,7 @@ function makeContext(ctxJson) {
     node,
     folder,
     view,
+    tab,
     roots: Object.freeze(Array.isArray(raw.roots) ? [...raw.roots] : []),
     locale,
     t,
@@ -486,6 +504,19 @@ function normalizeRow(r) {
 
 function normalizeRows(list) {
   return children(list).map(normalizeRow);
+}
+
+function normalizeDiffLine(l) {
+  return {
+    op: String(l?.op ?? " "),
+    text: String(l?.text ?? ""),
+    oldLine: Number(l?.oldLine ?? l?.old ?? 0) | 0,
+    newLine: Number(l?.newLine ?? l?.new ?? 0) | 0,
+  };
+}
+
+function normalizeDiffLines(list) {
+  return children(list).map(normalizeDiffLine);
 }
 
 // The UI vocabulary. A node is a plain description; its methods set what
@@ -603,6 +634,34 @@ class UiNode {
     this.n.dropAccept = groups.map(String);
     return this;
   }
+  placeholder(p) {
+    this.n.placeholder = String(p ?? "");
+    return this;
+  }
+  language(lang) {
+    this.n.language = String(lang ?? "");
+    return this;
+  }
+  min(v) {
+    this.n.min = Number(v);
+    return this;
+  }
+  max(v) {
+    this.n.max = Number(v);
+    return this;
+  }
+  step(v) {
+    this.n.step = Number(v);
+    return this;
+  }
+  diffFrom(s) {
+    this.n.diffFrom = String(s ?? "");
+    return this;
+  }
+  diffTo(s) {
+    this.n.diffTo = String(s ?? "");
+    return this;
+  }
 }
 
 const options = [
@@ -610,6 +669,7 @@ const options = [
   "icon", "checked", "value", "disabled", "onTap", "onChange", "onSubmit", "onLink",
   "drag", "dragGroup", "onDrop", "dropAccept", "direction", "maxHeight", "placeholder", "labels",
   "badges", "check", "onCheck", "contextMenu", "contextArg", "rows",
+  "min", "max", "step", "diffLines", "diffFrom", "diffTo", "language",
 ];
 
 function node(kind, fields, opts) {
@@ -617,7 +677,7 @@ function node(kind, fields, opts) {
   for (const [k, v] of Object.entries(opts || {})) {
     if (!options.includes(k)) throw new Error(`${k} is not an option of a node`);
     if (v === undefined) continue;
-    if (k === "key" || k === "text" || k === "drag" || k === "dragGroup" || k === "direction" || k === "variant" || k === "value" || k === "contextMenu" || k === "contextArg" || k === "placeholder") {
+    if (k === "key" || k === "text" || k === "drag" || k === "dragGroup" || k === "direction" || k === "variant" || k === "value" || k === "contextMenu" || k === "contextArg" || k === "placeholder" || k === "diffFrom" || k === "diffTo" || k === "language") {
       n.n[k] = String(v ?? "");
     } else if (k === "check") {
       n.n.check = normalizeCheck(v);
@@ -625,9 +685,11 @@ function node(kind, fields, opts) {
       n.n.badges = normalizeBadges(v);
     } else if (k === "rows") {
       n.n.rows = normalizeRows(v);
+    } else if (k === "diffLines") {
+      n.n.diffLines = normalizeDiffLines(v);
     } else if (k === "labels" || k === "dropAccept") {
       n.n[k] = children(v).map(String);
-    } else if (k === "maxHeight" || k === "columns" || k === "ratio") {
+    } else if (k === "maxHeight" || k === "columns" || k === "ratio" || k === "min" || k === "max" || k === "step") {
       n.n[k] = Number(v);
     } else if (k === "fill" || k === "checked" || k === "disabled") {
       n.n[k] = Boolean(v);
@@ -681,6 +743,21 @@ const ui = Object.freeze({
   },
   dialog: (title, items, o) => node("dialog", { text: String(title ?? ""), children: children(items) }, o),
   dag: (rows, o) => node("dag", { rows: normalizeRows(rows) }, o),
+  diff: (lines, o) => node("diff", { diffLines: normalizeDiffLines(lines) }, o),
+  alert: (title, childrenOrOpts, o) => (Array.isArray(childrenOrOpts)
+    ? node("alert", { text: String(title ?? ""), children: childrenOrOpts }, o)
+    : node("alert", { text: String(title ?? "") }, childrenOrOpts)),
+  empty: (title, childrenOrOpts, o) => (Array.isArray(childrenOrOpts)
+    ? node("empty", { text: String(title ?? ""), children: childrenOrOpts }, o)
+    : node("empty", { text: String(title ?? "") }, childrenOrOpts)),
+  stat: (label, value, o) => node("stat", { text: String(label ?? ""), value: String(value ?? "") }, o),
+  radio: (v, opts, o) => node("radio", { value: String(v ?? ""), options: children(opts).map(String) }, o),
+  slider: (v, o) => node("slider", { value: v === undefined || v === null ? "" : String(v) }, o),
+  kbd: (keys, o) => (Array.isArray(keys)
+    ? node("kbd", { options: keys.map(String) }, o)
+    : node("kbd", { text: String(keys ?? "") }, o)),
+  skeleton: (o) => node("skeleton", {}, o),
+  spacer: (o) => node("spacer", {}, o),
   text: (t, o) => node("text", { text: String(t) }, o),
   icon: (name, o) => node("icon", { icon: String(name) }, o),
   pill: (t, o) => node("pill", { text: String(t) }, o),
@@ -756,15 +833,18 @@ const R = {
     const sk = scopeKey || "";
     const ctx = makeContext(ctxJson);
     const prevScope = activeScope;
+    const prevStateKey = activeStateKey;
     const prevCtx = activeCtx;
     const prevBlockCtx = blockContexts.get(id);
-    activeScope = sk;
+    activeScope = ctx.scopeKey;
+    activeStateKey = sk;
     activeCtx = ctx;
     blockContexts.set(id, ctx);
     try {
       if (typeof b.load === "function") await b.load(getState(id, sk), ctx);
     } finally {
       activeScope = prevScope;
+      activeStateKey = prevStateKey;
       activeCtx = prevCtx;
       if (prevBlockCtx === undefined) blockContexts.delete(id);
       else blockContexts.set(id, prevBlockCtx);
@@ -774,15 +854,18 @@ const R = {
     const sk = scopeKey || "";
     const ctx = makeContext(ctxJson);
     const prevScope = activeScope;
+    const prevStateKey = activeStateKey;
     const prevCtx = activeCtx;
     const prevBlockCtx = blockContexts.get(id);
-    activeScope = sk;
+    activeScope = ctx.scopeKey;
+    activeStateKey = sk;
     activeCtx = ctx;
     blockContexts.set(id, ctx);
     try {
       return JSON.stringify(need(id).render(getState(id, sk), ui, ctx));
     } finally {
       activeScope = prevScope;
+      activeStateKey = prevStateKey;
       activeCtx = prevCtx;
       if (prevBlockCtx === undefined) blockContexts.delete(id);
       else blockContexts.set(id, prevBlockCtx);
@@ -803,9 +886,11 @@ const R = {
     }
     byScope.set(sk, parsedVals);
     const prevScope = activeScope;
+    const prevStateKey = activeStateKey;
     const prevCtx = activeCtx;
     const prevBlockCtx = blockContexts.get(id);
-    activeScope = sk;
+    activeScope = ctx.scopeKey;
+    activeStateKey = sk;
     activeCtx = ctx;
     blockContexts.set(id, ctx);
     try {
@@ -813,6 +898,7 @@ const R = {
     } finally {
       byScope.delete(sk);
       activeScope = prevScope;
+      activeStateKey = prevStateKey;
       activeCtx = prevCtx;
       if (prevBlockCtx === undefined) blockContexts.delete(id);
       else blockContexts.set(id, prevBlockCtx);
@@ -823,13 +909,16 @@ const R = {
     if (!run) throw new Error(`the plugin registered nothing for command ${id}`);
     const ctx = makeContext(ctxJson);
     const prevScope = activeScope;
+    const prevStateKey = activeStateKey;
     const prevCtx = activeCtx;
     activeScope = ctx.scopeKey;
+    activeStateKey = ctx.scopeKey;
     activeCtx = ctx;
     try {
       await run(ctx);
     } finally {
       activeScope = prevScope;
+      activeStateKey = prevStateKey;
       activeCtx = prevCtx;
     }
   },
@@ -838,14 +927,17 @@ const R = {
     if (!run) throw new Error(`the plugin registered nothing for tool ${id}`);
     const ctx = makeContext(ctxJson);
     const prevScope = activeScope;
+    const prevStateKey = activeStateKey;
     const prevCtx = activeCtx;
     activeScope = ctx.scopeKey;
+    activeStateKey = ctx.scopeKey;
     activeCtx = ctx;
     try {
       const res = await run(argsJson ? JSON.parse(argsJson) : {}, ctx);
       return JSON.stringify(res === undefined ? null : res);
     } finally {
       activeScope = prevScope;
+      activeStateKey = prevStateKey;
       activeCtx = prevCtx;
     }
   },

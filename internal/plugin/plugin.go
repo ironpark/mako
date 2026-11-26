@@ -94,7 +94,7 @@ type plugin struct {
 	logs    []*protocol.PluginLog
 
 	// The actor's alone.
-	rt       *jsRuntime
+	rt       pluginRuntime
 	saved    map[string]string // blocks' states while the runtime is down
 	failures int               // the handlers' calls failed in a row
 	// renderFailures are the renders failed in a row.
@@ -132,12 +132,14 @@ func (p *plugin) recordLog(level, msg string) {
 // evicted.
 const maxScopeInstancesPerBlock = 16
 
-// instance is one (block, scope) instance of a plugin: its state lives in the
-// runtime; its tree, last error, watchers, and LRU timestamp here.
+// instance is one (block, scope, instID) instance of a plugin: its state lives
+// in the runtime; its tree, last error, watchers, and LRU timestamp here.
 type instance struct {
-	key      string        // instanceKey(id, scopeKey)
+	key      string        // instanceKeyOf(id, scopeKey, instID)
 	id       string        // block ID from manifest
 	scopeKey string        // canonical scope key: "", "space:<id>", "project:<id>", "session:<id>", "folder:<node>/<b64>"
+	instID   string        // optional custom tab instance key (revision 49)
+	params   string        // optional validated JSON object string for tab params (revision 49)
 	locale   string        // active BCP-47 locale for this instance; guarded by plugin.mu
 	tree     *uiblock.Tree // the last render that read; guarded by plugin.mu
 	err      string        // the last call's error; guarded by plugin.mu
@@ -158,17 +160,21 @@ func (in *instance) standaloneLocked() bool {
 	return in.subs > 0 && in.solo == in.subs
 }
 
-// getOrCreateInstanceLocked returns the instance for (blockID, scopeKey),
+// getOrCreateInstanceLocked returns the instance for (blockID, scopeKey, instID),
 // creating it if absent and evicting LRU unwatched instances beyond
 // maxScopeInstancesPerBlock. Caller must hold p.mu.
-func (p *plugin) getOrCreateInstanceLocked(blockID, scopeKey string) (*instance, []string) {
-	key := instanceKey(blockID, scopeKey)
+func (p *plugin) getOrCreateInstanceLocked(blockID, scopeKey, instID, params string) (*instance, []string) {
+	key := instanceKeyOf(blockID, scopeKey, instID)
 	now := time.Now()
 	if in, ok := p.inst[key]; ok {
 		in.lastUsed = now
+		if params != "" && params != in.params {
+			in.params = params
+			in.loaded = false
+		}
 		return in, nil
 	}
-	in := &instance{key: key, id: blockID, scopeKey: scopeKey, lastUsed: now}
+	in := &instance{key: key, id: blockID, scopeKey: scopeKey, instID: instID, params: params, lastUsed: now}
 	p.inst[key] = in
 	evicted := p.trimBlockInstancesLocked(blockID, key)
 	return in, evicted
@@ -456,7 +462,7 @@ func (p *plugin) info() *protocol.PluginInfo {
 		if b.Hidden {
 			continue
 		}
-		out.Blocks = append(out.Blocks, &protocol.PluginBlock{Name: blockName(p.id, b.ID), Title: b.Title, Slots: b.Slots, Scope: b.Scope})
+		out.Blocks = append(out.Blocks, &protocol.PluginBlock{Name: blockName(p.id, b.ID), Title: b.Title, Icon: b.Icon, Slots: b.Slots, Scope: b.Scope})
 	}
 	for _, c := range man.Commands {
 		out.Commands = append(out.Commands, &protocol.PluginCommand{Id: c.ID, Title: c.Title})
