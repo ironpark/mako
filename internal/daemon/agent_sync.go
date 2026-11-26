@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -152,6 +153,7 @@ func (d *Daemon) followedSnapshot() followedConfig {
 		servers:     cloneContextServers(f.servers),
 		workspace:   cloneWorkspace(f.workspace),
 		decision:    cloneDecision(f.decision),
+		projectDirs: slices.Clone(f.projectDirs),
 	}
 }
 
@@ -205,11 +207,17 @@ func (d *Daemon) readCurrentAgentSnapshot() (curAgents map[string]agentspec.Agen
 	}
 	skillsMap = map[string][]byte{}
 	if sdir := d.skillsDir(); sdir != "" {
-		for _, name := range skills.Names() {
-			p := filepath.Join(sdir, name, "SKILL.md")
-			if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Size() <= maxSyncedFileBytes {
-				if data, err := os.ReadFile(p); err == nil {
-					skillsMap[name] = data
+		for _, sk := range skills.Builtin() {
+			for _, f := range sk.Files {
+				p := filepath.Join(sdir, sk.Name, filepath.FromSlash(f.Path))
+				if fi, err := os.Stat(p); err == nil && !fi.IsDir() && fi.Size() <= maxSyncedFileBytes {
+					if data, err := os.ReadFile(p); err == nil {
+						key := sk.Name
+						if f.Path != "SKILL.md" {
+							key = sk.Name + "/" + f.Path
+						}
+						skillsMap[key] = data
+					}
 				}
 			}
 		}
@@ -569,18 +577,26 @@ func (d *Daemon) applySyncedSkills(skillRegs map[string]*protocol.BytesReg) bool
 		return false
 	}
 	changed := false
-	for name, reg := range skillRegs {
-		if !syncstate.ValidSkillName(name) {
+	for key, reg := range skillRegs {
+		if !syncstate.ValidSkillKey(key) {
 			continue
 		}
-		if _, ok := skills.BuiltinByName(name); !ok {
+		name, relPath, hasSub := strings.Cut(key, "/")
+		if !hasSub {
+			relPath = "SKILL.md"
+		}
+		if _, ok := skills.BuiltinFile(name, relPath); !ok {
 			continue
 		}
-		dst := filepath.Join(sdir, name, "SKILL.md")
+		dst := filepath.Join(sdir, name, filepath.FromSlash(relPath))
 		if reg.GetDeleted() {
 			if _, err := os.Stat(dst); err == nil {
 				if os.Remove(dst) == nil {
-					_ = os.Remove(filepath.Dir(dst))
+					for cur := filepath.Dir(dst); cur != sdir && strings.HasPrefix(cur, sdir+string(filepath.Separator)); cur = filepath.Dir(cur) {
+						if os.Remove(cur) != nil {
+							break
+						}
+					}
 					changed = true
 				}
 			}

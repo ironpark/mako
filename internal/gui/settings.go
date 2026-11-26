@@ -320,6 +320,7 @@ func generalSettings(m *model) ggui.Widget {
 				widget.Box(language).Width(200)),
 		),
 	)
+	projectsSection := projectDirsSection(m)
 	defaultAgents := ggui.Map(m.Agents, sessionAgentTargets).WithEqual(slices.Equal)
 	sessionsSection := section(T("Sessions"),
 		card(
@@ -371,9 +372,86 @@ func generalSettings(m *model) ggui.Widget {
 
 	return widePage(T("General"), T("How new sessions start and which daemon this window talks to."),
 		twoColumns(
-			[]ggui.Widget{languageSection, sessionsSection, idleSection, connSection},
+			[]ggui.Widget{languageSection, sessionsSection, projectsSection, idleSection, connSection},
 			[]int{1},
-			[]int{0, 2, 3},
+			[]int{0, 2, 3, 4},
+		),
+	)
+}
+
+// projectDirsSection lets the user configure one or more default project
+// storage locations used when cloning Git URLs, importing repositories, or
+// adding projects via CLI.
+func projectDirsSection(m *model) ggui.Widget {
+	draft := ggui.State("")
+	addPath := func(raw string) {
+		p := strings.TrimSpace(raw)
+		if p == "" {
+			return
+		}
+		cur := slices.Clone(ggui.Peek(m.ProjectDirs))
+		m.setProjectDirs(append(cur, p))
+		draft.Set("")
+	}
+	browseAdd := ui.Button(T("Browse…"), func() {
+		start := ""
+		if cur := ggui.Peek(m.ProjectDirs); len(cur) > 0 {
+			start = cur[0]
+		}
+		browseInto(addPath, func(d runtime.Dialogs) (string, error) {
+			return d.PickFolder(runtime.FileDialog{Title: T("Default project locations"), Directory: start})
+		})
+	}).Outline()
+
+	listView := ggui.View(m.ProjectDirs, func(dirs []string) ggui.Widget {
+		if len(dirs) == 0 {
+			return muted(widget.Text(T("No default project locations configured yet.")).Size(12))
+		}
+		rows := make([]ggui.Widget, 0, len(dirs))
+		for i, dir := range dirs {
+			idx, d := i, dir
+			cells := []ggui.Widget{
+				icon("folder").Size(14).Color(skin.Muted),
+				widget.Expanded(widget.Text(prettyPath(d)).Size(12.5).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()),
+			}
+			if idx == 0 {
+				cells = append(cells, widget.Box(widget.Text(T("Default")).Size(10.5).Color(skin.AccentBright).NoWrap()).
+					Pad(1, 6).Border(1, skin.BorderAccent).Radius(4))
+			} else {
+				cells = append(cells, ui.Button(T("Set default"), func() {
+					cur := slices.Clone(ggui.Peek(m.ProjectDirs))
+					if idx < len(cur) {
+						chosen := cur[idx]
+						cur = append([]string{chosen}, slices.Delete(cur, idx, idx+1)...)
+						m.setProjectDirs(cur)
+					}
+				}).Ghost().Pad(2, 6).Radius(5))
+			}
+			cells = append(cells, iconButton("x", Tf("Remove %s", prettyPath(d)), func() {
+				cur := slices.Clone(ggui.Peek(m.ProjectDirs))
+				if idx < len(cur) {
+					m.setProjectDirs(slices.Delete(cur, idx, idx+1))
+				}
+			}))
+			rows = append(rows, widget.Box(widget.Row(cells...).Gap(8).Align(widget.AlignCenter)).
+				Pad(6, 10).Radius(7).Fill(skin.Surface2))
+		}
+		return widget.Column(rows...).Gap(6).Stretch()
+	})
+
+	addRow := widget.Row(
+		widget.Expanded(ui.TextField(draft).Placeholder("~/Projects").Name(T("Add project location")).
+			OnSubmit(func(v string) { addPath(v) })),
+		ui.Button(T("Add"), func() { addPath(ggui.Peek(draft)) }).Outline().
+			BindDisabled(ggui.Map(draft, func(s string) bool { return strings.TrimSpace(s) == "" })),
+		browseAdd,
+	).Gap(8).Align(widget.AlignCenter)
+
+	return section(T("Projects"),
+		card(
+			stackedRow(T("Default project locations"),
+				T("Folders where projects are stored and cloned by default. You can add multiple locations; the first is used as the default."),
+				widget.Column(listView, addRow).Gap(10).Stretch()),
 		),
 	)
 }

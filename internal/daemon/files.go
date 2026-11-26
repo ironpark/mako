@@ -171,6 +171,19 @@ func (d *Daemon) handleGitRun(ctx context.Context, stream *transport.Stream, env
 }
 
 func (d *Daemon) gitRunLocal(ctx context.Context, r *protocol.GitRun) (*protocol.GitResult, error) {
+	if r.GetOp() == protocol.GitOpClone {
+		dest := mcp.ExpandHome(strings.TrimSpace(r.GetRoot()))
+		if err := absolute(dest); err != nil {
+			return nil, err
+		}
+		cloneCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+		defer cancel()
+		clonedPath, err := gitstat.Clone(cloneCtx, r.GetMessage(), dest)
+		if err != nil {
+			return nil, err
+		}
+		return &protocol.GitResult{Output: clonedPath}, nil
+	}
 	return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
 		run := gitstat.Run
 		if r.GetOp() == protocol.GitOpPR {

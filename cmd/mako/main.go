@@ -33,6 +33,13 @@ Usage:
   mako rename <session-id> [name]   name a session (no name clears it)
   mako agents                       list agents and profiles this node can launch
 
+Projects:
+  mako projects [list]              list workspace projects
+  mako projects add <path|git-url> [-name <name>] [-dir <base-dir>] [-folder <name>] [-space <space>]
+                                     add a local folder or clone a Git URL as a project
+  mako projects dirs [add <path>|remove <path>|default <path>]
+                                     list or configure default project storage directories
+
 Devices (docs/devices.md: one node's devices, used from another):
   mako devices                      list the devices attached to every node
   mako borrow <device>              borrow a device for this node (or -node's),
@@ -121,6 +128,9 @@ func main() {
 func run(args []string, daemonAddr, nodeID, project string, devices []string) error {
 	if args[0] == "plugins" && len(args) > 1 && publishOps[args[1]] {
 		return publish(args[1], args[2:])
+	}
+	if args[0] == "projects" && len(args) > 1 && args[1] == "dirs" {
+		return projectsDirs(args[2:])
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -241,6 +251,8 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 		return err
 	case "plugins":
 		return plugins(ctx, c, args[1:])
+	case "projects":
+		return projectsCmd(ctx, c, cfg, nodeID, args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}

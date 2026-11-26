@@ -107,6 +107,7 @@ func addProjectMenu(m *model) ggui.Widget {
 func addProjectMenuFor(m *model, spaceID string) ggui.Widget {
 	return iconMenu(ui.MenuOf(icon("plus"),
 		ui.MenuItem(T("Add folder…"), m.addProjectFolder).Icon(icon("folder-plus").Size(14)),
+		ui.MenuItem(T("Clone from Git URL…"), func() { m.openCloneProjectIn(spaceID) }).Icon(icon("git-branch").Size(14)),
 		ui.MenuItem(T("Import git projects…"), func() { m.openImportProjectsIn(spaceID) }).Icon(icon("lang-git").Size(14)),
 	).Name(T("Add a project")), 6)
 }
@@ -1067,6 +1068,11 @@ func importProjectsForm(m *model) ggui.Widget {
 		).Gap(8).Justify(widget.JustifyEnd)
 	})
 
+	quickPicks := projectDirQuickPicks(m, local, imp.Folder, func(dir string) {
+		imp.Folder.Set(dir)
+		m.startImportScan()
+	})
+
 	return widget.Column(
 		muted(widget.Text(T("Scan a folder for git repositories and add them to the sidebar. Existing repositories are skipped.")).Size(12)),
 		ggui.If(multiNode, func() ggui.Widget {
@@ -1074,7 +1080,7 @@ func importProjectsForm(m *model) ggui.Widget {
 				return nodeName(ggui.Peek(m.Nodes), id)
 			}).Name(T("Node")))
 		}),
-		ui.Field(T("Folder"), folderRow),
+		ui.Field(T("Folder"), widget.Column(folderRow, quickPicks).Gap(6).Stretch()),
 		widget.Box(results).Border(1, skin.Border).Radius(8),
 		footer,
 	).Gap(12).Stretch()

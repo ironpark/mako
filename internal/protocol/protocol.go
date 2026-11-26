@@ -519,6 +519,7 @@ const (
 	GitOpTag          = "tag"           // Tag at Commit, annotated with Message if any
 	GitOpContinue     = "continue"      // the operation under way, its conflicts resolved
 	GitOpAbort        = "abort"         // the operation under way
+	GitOpClone        = "clone"         // clones Message (a git URL) into Root (destination folder)
 )
 
 // What a ForgeList and a ForgeView are of.

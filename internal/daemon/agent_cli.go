@@ -25,10 +25,11 @@ import (
 )
 
 const (
-	agentMsgArg    = "agent-msg"
-	agentPluginArg = "agent-plugin"
-	agySidecarArg  = "agy-sidecar"
-	agentCLISock   = "agent-cli.sock"
+	agentMsgArg     = "agent-msg"
+	agentPluginArg  = "agent-plugin"
+	agentProjectArg = "agent-project"
+	agySidecarArg   = "agy-sidecar"
+	agentCLISock    = "agent-cli.sock"
 )
 
 // writeAgentMsgTool writes the `mako-msg` helper script into dir (alongside
@@ -66,6 +67,24 @@ func writeAgentPluginTool(dir, program, socket string) error {
 	return os.WriteFile(filepath.Join(dir, "mako-plugin"), []byte(script), 0o700)
 }
 
+// writeAgentProjectTool writes the `mako-project` helper script into dir
+// (alongside `mako-msg` and `mako-plugin`) so agents inside a Mako session can
+// list default project locations, list projects, and add local or git URL projects.
+func writeAgentProjectTool(dir, program, socket string) error {
+	if dir == "" || program == "" || socket == "" {
+		return nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		script := fmt.Sprintf("@echo off\r\n\"%s\" %s \"%s\" %%*\r\n", program, agentProjectArg, socket)
+		return os.WriteFile(filepath.Join(dir, "mako-project.cmd"), []byte(script), 0o700)
+	}
+	script := "#!/bin/sh\nexec " + agentspec.JoinArgs([]string{program, agentProjectArg, socket}) + " \"$@\"\n"
+	return os.WriteFile(filepath.Join(dir, "mako-project"), []byte(script), 0o700)
+}
+
 type agentCLIRequest struct {
 	Session string `json:"session"`
 	Token   string `json:"token"`
@@ -94,6 +113,13 @@ type agentCLIRequest struct {
 	PluginID string          `json:"plugin_id,omitempty"`
 	ToolID   string          `json:"tool_id,omitempty"`
 	Args     json.RawMessage `json:"args,omitempty"`
+
+	// project_add options:
+	Target  string `json:"target,omitempty"`
+	Name    string `json:"name,omitempty"`
+	BaseDir string `json:"base_dir,omitempty"`
+	Folder  string `json:"folder,omitempty"`
+	Space   string `json:"space,omitempty"`
 }
 
 type agentCLIResponse struct {
@@ -108,6 +134,9 @@ type agentCLIResponse struct {
 	Profiles    *listAgentProfilesResult `json:"profiles,omitempty"`
 	Tools       []plugin.ContributedTool `json:"tools,omitempty"`
 	Output      json.RawMessage          `json:"output,omitempty"`
+	Projects    []agentProjectSummary    `json:"projects,omitempty"`
+	ProjectDirs []string                 `json:"project_dirs,omitempty"`
+	Added       *agentProjectAddResult   `json:"added,omitempty"`
 	Status      string                   `json:"status,omitempty"`
 	State       string                   `json:"state,omitempty"`
 }
@@ -141,6 +170,7 @@ func (d *Daemon) listenAgentCLI(ctx context.Context, dir string) error {
 	if d.clipTools != "" && d.hookBinary != "" {
 		_ = writeAgentMsgTool(d.clipTools, d.hookBinary, path)
 		_ = writeAgentPluginTool(d.clipTools, d.hookBinary, path)
+		_ = writeAgentProjectTool(d.clipTools, d.hookBinary, path)
 	}
 	context.AfterFunc(ctx, func() {
 		_ = ln.Close()
@@ -317,6 +347,33 @@ func (d *Daemon) serveAgentCLI(ctx context.Context, conn net.Conn) {
 			rawOut, _ = json.Marshal(out)
 		}
 		writeResp(agentCLIResponse{OK: true, Output: rawOut})
+
+	case "project_list":
+		if _, err := d.projectCaller(peer); err != nil {
+			writeResp(agentCLIResponse{Error: err.Error()})
+			return
+		}
+		writeResp(agentCLIResponse{OK: true, Projects: d.listWorkspaceProjects()})
+
+	case "project_dirs":
+		if _, err := d.projectCaller(peer); err != nil {
+			writeResp(agentCLIResponse{Error: err.Error()})
+			return
+		}
+		writeResp(agentCLIResponse{OK: true, ProjectDirs: d.projectStorageDirs()})
+
+	case "project_add":
+		s, err := d.projectCaller(peer)
+		if err != nil {
+			writeResp(agentCLIResponse{Error: err.Error()})
+			return
+		}
+		res, err := d.addProjectFromCLI(reqCtx, s.Info().GetProject(), req.Target, req.Name, req.BaseDir, req.Folder, req.Space)
+		if err != nil {
+			writeResp(agentCLIResponse{Error: err.Error()})
+			return
+		}
+		writeResp(agentCLIResponse{OK: true, Added: &res})
 
 	default:
 		writeResp(agentCLIResponse{Error: fmt.Sprintf("unknown op %q", req.Op)})

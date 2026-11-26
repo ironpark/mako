@@ -127,6 +127,7 @@ func cloneConfig(c *config.Config) *config.Config {
 	out.Devices.Share = slices.Clone(c.Devices.Share)
 	out.Workspace = cloneWorkspace(c.Workspace)
 	out.Decision = cloneDecision(c.Decision)
+	out.ProjectDirs = slices.Clone(c.ProjectDirs)
 	return &out
 }
 
@@ -151,8 +152,9 @@ type agentFile struct {
 	shell       agentspec.Shell
 	servers     map[string]mcp.Server
 	// workspace is how the node shares its workspace.
-	workspace config.Workspace
-	decision  config.Decision
+	workspace   config.Workspace
+	decision    config.Decision
+	projectDirs []string
 }
 
 func (f *agentFile) setFromConfigLocked(c *config.Config) {
@@ -162,6 +164,7 @@ func (f *agentFile) setFromConfigLocked(c *config.Config) {
 	f.servers = cloneContextServers(c.ContextServers)
 	f.workspace = cloneWorkspace(c.Workspace)
 	f.decision = cloneDecision(c.Decision)
+	f.projectDirs = config.NormalizeProjectDirs(c.ProjectDirs)
 	f.read = true
 }
 
@@ -173,6 +176,7 @@ func (d *Daemon) syncConfigFromAgentFileLocked(f *agentFile) {
 		c.ContextServers = cloneContextServers(f.servers)
 		c.Workspace = cloneWorkspace(f.workspace)
 		c.Decision = cloneDecision(f.decision)
+		c.ProjectDirs = slices.Clone(f.projectDirs)
 	})
 }
 
@@ -226,6 +230,11 @@ func (d *Daemon) contextServers() map[string]mcp.Server {
 // decisionConfig returns the active decision provider/model defaults.
 func (d *Daemon) decisionConfig() config.Decision {
 	return cloneDecision(d.followed().decision)
+}
+
+// projectStorageDirs returns this node's configured default project storage locations.
+func (d *Daemon) projectStorageDirs() []string {
+	return slices.Clone(d.followed().projectDirs)
 }
 
 // setDecisionConfig updates the daemon's decision defaults and persists them
@@ -302,6 +311,7 @@ type followedConfig struct {
 	servers     map[string]mcp.Server
 	workspace   config.Workspace
 	decision    config.Decision
+	projectDirs []string
 }
 
 func (d *Daemon) followed() followedConfig {
@@ -310,7 +320,7 @@ func (d *Daemon) followed() followedConfig {
 	if !f.read {
 		f.setFromConfigLocked(d.config())
 	}
-	now := followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision}
+	now := followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision, projectDirs: f.projectDirs}
 	reloaded := false
 	if f.path != "" {
 		fi, err := os.Stat(f.path)
@@ -337,7 +347,7 @@ func (d *Daemon) followed() followedConfig {
 							f.setFromConfigLocked(&file)
 							f.sum, f.hasSum, f.hasBadSum = sum, true, false
 							d.syncConfigFromAgentFileLocked(f)
-							now = followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision}
+							now = followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision, projectDirs: f.projectDirs}
 							reloaded = true
 							d.log.Info("configuration reloaded", "path", f.path)
 						}

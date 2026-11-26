@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"image/color"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,15 +18,28 @@ import (
 	"github.com/ironpark/mako/internal/skills"
 )
 
-// Settings ▸ Skills lets the user inspect and customize Mako's built-in skills
-// (such as mako-plugin and mako-template). Saved edits live under
-// <configDir>/skills/<name>/SKILL.md and are synced immediately to every
+// Settings ▸ Skills lets the user inspect and customize Mako's built-in skill
+// (the unified multi-folder "mako" skill). Saved edits live under
+// <configDir>/skills/<name>/<relPath> and are synced immediately to every
 // supported agent skills directory; resetting removes the override and restores
 // the embedded default.
 
+type skillFileDraft struct {
+	Path       string
+	Content    string
+	Saved      string
+	Builtin    string
+	Customized bool
+}
+
+func (f skillFileDraft) dirty() bool { return f.Content != f.Saved }
+
 type skillDraft struct {
-	Name        string
-	Description string
+	Name         string
+	Description  string
+	Files        []skillFileDraft
+	SelectedFile string
+	// Content, Saved, Builtin mirror the currently selected file for convenience.
 	Content     string
 	Saved       string
 	Builtin     string
@@ -35,7 +49,82 @@ type skillDraft struct {
 	Err         string
 }
 
-func (d skillDraft) dirty() bool { return d.Content != d.Saved }
+func (d skillDraft) selectedPath() string {
+	if d.SelectedFile != "" {
+		return d.SelectedFile
+	}
+	if len(d.Files) > 0 {
+		return d.Files[0].Path
+	}
+	return "SKILL.md"
+}
+
+func (d skillDraft) activeFile() (skillFileDraft, bool) {
+	want := d.selectedPath()
+	for _, f := range d.Files {
+		if f.Path == want {
+			return f, true
+		}
+	}
+	if len(d.Files) > 0 {
+		return d.Files[0], true
+	}
+	return skillFileDraft{}, false
+}
+
+func (d *skillDraft) syncMirrorFromFiles() {
+	anyCustom := false
+	for _, f := range d.Files {
+		if f.Customized {
+			anyCustom = true
+			break
+		}
+	}
+	d.Customized = anyCustom
+	if f, ok := d.activeFile(); ok {
+		d.SelectedFile = f.Path
+		d.Content = f.Content
+		d.Saved = f.Saved
+		d.Builtin = f.Builtin
+	}
+}
+
+func (d *skillDraft) setActiveContent(v string) {
+	want := d.selectedPath()
+	d.Content = v
+	for i := range d.Files {
+		if d.Files[i].Path == want {
+			d.Files[i].Content = v
+			return
+		}
+	}
+}
+
+func (d skillDraft) dirty() bool {
+	if d.Content != d.Saved {
+		return true
+	}
+	for _, f := range d.Files {
+		if f.dirty() {
+			return true
+		}
+	}
+	return false
+}
+
+func (d skillDraft) activeDirty() bool {
+	if f, ok := d.activeFile(); ok {
+		return f.dirty()
+	}
+	return d.Content != d.Saved
+}
+
+func (d skillDraft) activeCustomized() bool {
+	if f, ok := d.activeFile(); ok {
+		return f.Customized
+	}
+	return d.Customized
+}
 
 type skillPage struct {
 	drafts *ggui.StateValue[[]skillDraft]
@@ -64,17 +153,32 @@ func (pg *skillPage) reload() {
 	for _, sk := range eff {
 		builtin, _ := skills.BuiltinByName(sk.Name)
 		old := prev[sk.Name]
-		text := string(sk.Content)
-		out = append(out, skillDraft{
-			Name:        sk.Name,
-			Description: sk.Description,
-			Content:     text,
-			Saved:       text,
-			Builtin:     string(builtin.Content),
-			Customized:  sk.Customized,
-			Editing:     old.Editing,
-			ShowBuiltin: old.ShowBuiltin,
-		})
+		files := make([]skillFileDraft, 0, len(sk.Files))
+		for _, f := range sk.Files {
+			bf, _ := builtin.File(f.Path)
+			text := string(f.Content)
+			files = append(files, skillFileDraft{
+				Path:       f.Path,
+				Content:    text,
+				Saved:      text,
+				Builtin:    string(bf.Content),
+				Customized: f.Customized,
+			})
+		}
+		sel := old.SelectedFile
+		if !slices.ContainsFunc(files, func(f skillFileDraft) bool { return f.Path == sel }) {
+			sel = "SKILL.md"
+		}
+		draft := skillDraft{
+			Name:         sk.Name,
+			Description:  sk.Description,
+			Files:        files,
+			SelectedFile: sel,
+			Editing:      old.Editing,
+			ShowBuiltin:  old.ShowBuiltin,
+		}
+		draft.syncMirrorFromFiles()
+		out = append(out, draft)
 	}
 	pg.drafts.Set(out)
 }
@@ -92,11 +196,24 @@ func (pg *skillPage) update(name string, fn func(*skillDraft)) {
 	list := slices.Clone(ggui.Peek(pg.drafts))
 	for i := range list {
 		if list[i].Name == name {
+			list[i].Files = slices.Clone(list[i].Files)
+			prevContent := list[i].Content
 			fn(&list[i])
+			if list[i].Content != prevContent {
+				list[i].setActiveContent(list[i].Content)
+			}
+			list[i].syncMirrorFromFiles()
 			pg.drafts.Set(list)
 			return
 		}
 	}
+}
+
+func (pg *skillPage) selectFile(name, relPath string) {
+	pg.update(name, func(d *skillDraft) {
+		d.SelectedFile = relPath
+		d.Err = ""
+	})
 }
 
 func (pg *skillPage) field(name string, get func(skillDraft) string, set func(*skillDraft, string)) ggui.Binding[string] {
@@ -120,67 +237,107 @@ func (pg *skillPage) save(m *model, name string) {
 	if !ok {
 		return
 	}
-	if err := skills.SaveOverride(name, []byte(d.Content)); err != nil {
+	relPath := d.selectedPath()
+	content := d.Content
+	if err := skills.SaveOverrideFile(name, relPath, []byte(content)); err != nil {
 		pg.update(name, func(x *skillDraft) { x.Err = err.Error() })
 		if m != nil && m.toaster != nil {
 			m.toaster.Push(ui.Toast(T("Could not save skill"), err.Error()).Destructive())
 		}
 		return
 	}
-	_, desc := skills.Frontmatter([]byte(d.Content))
+	var desc string
+	if relPath == "SKILL.md" {
+		_, desc = skills.Frontmatter([]byte(content))
+	}
 	pg.update(name, func(x *skillDraft) {
-		x.Saved = x.Content
-		x.Customized = true
+		for i := range x.Files {
+			if x.Files[i].Path == relPath {
+				x.Files[i].Content = content
+				x.Files[i].Saved = content
+				x.Files[i].Customized = true
+				break
+			}
+		}
 		x.Err = ""
 		if desc != "" {
 			x.Description = desc
 		}
 	})
 	synced, err := m.syncSkillsToAgents()
+	label := name
+	if relPath != "SKILL.md" {
+		label = name + "/" + relPath
+	}
 	if m != nil && m.toaster != nil {
 		if err != nil {
-			m.toaster.Push(ui.Toast(Tf("Saved %s", name), err.Error()).Destructive())
+			m.toaster.Push(ui.Toast(Tf("Saved %s", label), err.Error()).Destructive())
 		} else if synced > 0 {
-			m.toaster.Push(ui.Toast(Tf("Saved %s", name), Tf("Synced to %d agent directories", synced)))
+			m.toaster.Push(ui.Toast(Tf("Saved %s", label), Tf("Synced to %d agent directories", synced)))
 		} else {
-			m.toaster.Push(ui.Toast(Tf("Saved %s", name), ""))
+			m.toaster.Push(ui.Toast(Tf("Saved %s", label), ""))
 		}
 	}
 }
 
 func (pg *skillPage) revert(name string) {
 	pg.update(name, func(d *skillDraft) {
-		d.Content = d.Saved
+		rel := d.selectedPath()
+		for i := range d.Files {
+			if d.Files[i].Path == rel {
+				d.Files[i].Content = d.Files[i].Saved
+				d.Content = d.Files[i].Saved
+				break
+			}
+		}
 		d.Err = ""
 	})
 }
 
 func (pg *skillPage) reset(m *model, name string) {
-	if err := skills.ResetOverride(name); err != nil {
+	d, ok := pg.draft(name)
+	if !ok {
+		return
+	}
+	relPath := d.selectedPath()
+	if err := skills.ResetOverrideFile(name, relPath); err != nil {
 		pg.update(name, func(x *skillDraft) { x.Err = err.Error() })
 		if m != nil && m.toaster != nil {
 			m.toaster.Push(ui.Toast(T("Could not reset skill"), err.Error()).Destructive())
 		}
 		return
 	}
-	builtin, _ := skills.BuiltinByName(name)
-	text := string(builtin.Content)
+	builtinFile, _ := skills.BuiltinFile(name, relPath)
+	builtinSkill, _ := skills.BuiltinByName(name)
+	text := string(builtinFile.Content)
 	pg.update(name, func(x *skillDraft) {
+		for i := range x.Files {
+			if x.Files[i].Path == relPath {
+				x.Files[i].Content = text
+				x.Files[i].Saved = text
+				x.Files[i].Builtin = text
+				x.Files[i].Customized = false
+				break
+			}
+		}
 		x.Content = text
-		x.Saved = text
-		x.Builtin = text
-		x.Description = builtin.Description
-		x.Customized = false
+		if relPath == "SKILL.md" {
+			x.Description = builtinSkill.Description
+		}
 		x.Err = ""
 	})
 	synced, err := m.syncSkillsToAgents()
+	label := name
+	if relPath != "SKILL.md" {
+		label = name + "/" + relPath
+	}
 	if m != nil && m.toaster != nil {
 		if err != nil {
-			m.toaster.Push(ui.Toast(Tf("Reset %s to built-in", name), err.Error()).Destructive())
+			m.toaster.Push(ui.Toast(Tf("Reset %s to built-in", label), err.Error()).Destructive())
 		} else if synced > 0 {
-			m.toaster.Push(ui.Toast(Tf("Reset %s to built-in", name), Tf("Synced to %d agent directories", synced)))
+			m.toaster.Push(ui.Toast(Tf("Reset %s to built-in", label), Tf("Synced to %d agent directories", synced)))
 		} else {
-			m.toaster.Push(ui.Toast(Tf("Reset %s to built-in", name), ""))
+			m.toaster.Push(ui.Toast(Tf("Reset %s to built-in", label), ""))
 		}
 	}
 }
@@ -190,8 +347,12 @@ func (pg *skillPage) askReset(m *model, name string) {
 		pg.reset(nil, name)
 		return
 	}
+	label := name
+	if d, ok := pg.draft(name); ok && d.selectedPath() != "SKILL.md" {
+		label = name + "/" + d.selectedPath()
+	}
 	m.askConfirm(confirmation{
-		Title:  Tf("Reset %s to built-in?", name),
+		Title:  Tf("Reset %s to built-in?", label),
 		Body:   T("Your customized copy in the skills folder will be deleted and the built-in version will be restored to your agents."),
 		Action: T("Reset"),
 		Run:    func() { pg.reset(m, name) },
@@ -390,12 +551,12 @@ func skillDetail(m *model, pg *skillPage, name string) ggui.Widget {
 }
 
 func skillBody(m *model, pg *skillPage, name string) ggui.Widget {
-	// Rebuild when switching between view/edit/builtin-diff modes, NOT while
+	// Rebuild when switching files or view/edit/builtin-diff modes, NOT while
 	// typing into the editor, so the text field keeps focus and caret position.
 	mode := ggui.Derived(func() string {
 		for _, d := range pg.drafts.Get() {
 			if d.Name == name {
-				return fmt.Sprintf("%v:%v:%v", d.Editing, d.ShowBuiltin, d.Customized)
+				return fmt.Sprintf("%s:%v:%v:%v:%v", d.selectedPath(), d.Editing, d.ShowBuiltin, d.activeCustomized(), d.Customized)
 			}
 		}
 		return ""
@@ -408,23 +569,50 @@ func skillBody(m *model, pg *skillPage, name string) ggui.Widget {
 		if !ok {
 			return widget.Box()
 		}
+		relPath := d.selectedPath()
 		var rows []ggui.Widget
 		if d.Description != "" {
 			rows = append(rows, widget.Text(d.Description).Size(13))
 		}
-		if path, err := skills.OverridePath(name); err == nil {
+		if len(d.Files) > 1 {
+			chips := make([]ggui.Widget, 0, len(d.Files))
+			for _, f := range d.Files {
+				filePath := f.Path
+				active := filePath == relPath
+				borderCol := pick[color.Color](active, skin.BorderAccent, skin.Border)
+				fgCol := pick[color.Color](active, skin.AccentBright, skin.Muted)
+				glyph := "file-text"
+				if strings.Contains(filePath, "/") {
+					glyph = "folder"
+				}
+				labelText := filePath
+				if f.Customized {
+					labelText += " •"
+				}
+				chip := ui.ButtonOf(
+					widget.Row(
+						icon(glyph).Size(12).Color(fgCol),
+						widget.Text(labelText).Size(11.5).Font(ggui.DefaultMonoFont()).Color(fgCol).NoWrap(),
+					).Gap(5).Align(widget.AlignCenter),
+					func() { pg.selectFile(name, filePath) },
+				).Ghost().Pad(4, 8).Radius(6).Name(filePath)
+				chips = append(chips, widget.Box(chip).Border(1, borderCol).Radius(6))
+			}
+			rows = append(rows, widget.Wrap(chips...).Gap(6))
+		}
+		if path, err := skills.OverrideFilePath(name, relPath); err == nil {
 			rows = append(rows, widget.Text(prettyPath(path)).Size(11.5).Font(ggui.DefaultMonoFont()).Color(skin.ExtraMuted))
 		}
 
 		if !d.Editing {
 			rows = append(rows,
-				codeView(m, name+".md", d.Content),
+				codeView(m, relPath, d.Content),
 				widget.Row(append(
 					[]ggui.Widget{
 						ui.Button(T("Edit"), func() { pg.update(name, func(x *skillDraft) { x.Editing = true }) }),
 					},
 					func() []ggui.Widget {
-						if !d.Customized {
+						if !d.activeCustomized() {
 							return nil
 						}
 						return []ggui.Widget{
@@ -448,7 +636,7 @@ func skillBody(m *model, pg *skillPage, name string) ggui.Widget {
 		dirtySig := ggui.Derived(func() bool {
 			for _, it := range pg.drafts.Get() {
 				if it.Name == name {
-					return it.dirty()
+					return it.activeDirty()
 				}
 			}
 			return false
@@ -460,7 +648,7 @@ func skillBody(m *model, pg *skillPage, name string) ggui.Widget {
 				pg.update(name, func(x *skillDraft) { x.ShowBuiltin = !x.ShowBuiltin })
 			}).Ghost(),
 		}
-		if d.Customized {
+		if d.activeCustomized() {
 			actions = append(actions, widget.Spacer(), ui.Button(T("Reset to built-in"), func() { pg.askReset(m, name) }).Outline())
 		}
 		rows = append(rows,
@@ -472,7 +660,7 @@ func skillBody(m *model, pg *skillPage, name string) ggui.Widget {
 			rows = append(rows,
 				hline(),
 				muted(widget.Text(T("Built-in source")).Size(12)),
-				codeView(m, name+"-builtin.md", d.Builtin),
+				codeView(m, relPath+"-builtin.md", d.Builtin),
 			)
 		}
 		return widget.Column(rows...).Gap(10).Stretch()

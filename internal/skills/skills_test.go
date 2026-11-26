@@ -9,66 +9,108 @@ import (
 	"testing"
 )
 
-func TestBuiltinSkillsHaveFrontmatterAndMarker(t *testing.T) {
+func TestBuiltinSkillsHaveFrontmatterFoldersAndMarker(t *testing.T) {
 	list := Builtin()
-	wantNames := []string{"mako-plugin", "mako-template"}
+	wantNames := []string{"mako"}
 	if got := Names(); !slices.Equal(got, wantNames) {
 		t.Fatalf("Names() = %v, want %v", got, wantNames)
 	}
-	for _, sk := range list {
-		text := string(sk.Content)
-		if !strings.HasPrefix(text, "---\nname: "+sk.Name+"\n") {
-			t.Errorf("%s missing expected YAML frontmatter name", sk.Name)
+	sk := list[0]
+	text := string(sk.Content)
+	if !strings.HasPrefix(text, "---\nname: "+sk.Name+"\n") {
+		t.Errorf("%s missing expected YAML frontmatter name", sk.Name)
+	}
+	if sk.Description == "" || strings.HasPrefix(sk.Description, ">") {
+		t.Errorf("%s frontmatter folded description not parsed: %q", sk.Name, sk.Description)
+	}
+	if !strings.Contains(text, ManagedMarker) {
+		t.Errorf("%s missing ManagedMarker %q", sk.Name, ManagedMarker)
+	}
+	wantFiles := []string{
+		"SKILL.md",
+		"cli/projects-and-agents.md",
+		"plugins/authoring.md",
+		"plugins/ui-components.md",
+		"templates/scripting.md",
+		"templates/syntax.md",
+	}
+	var gotFiles []string
+	for _, f := range sk.Files {
+		gotFiles = append(gotFiles, f.Path)
+		if !strings.Contains(string(f.Content), ManagedMarker) {
+			t.Errorf("%s/%s missing ManagedMarker", sk.Name, f.Path)
 		}
-		if !strings.Contains(text, "description:") {
-			t.Errorf("%s missing frontmatter description", sk.Name)
-		}
-		if !strings.Contains(text, ManagedMarker) {
-			t.Errorf("%s missing ManagedMarker %q", sk.Name, ManagedMarker)
-		}
+	}
+	if !slices.Equal(gotFiles, wantFiles) {
+		t.Fatalf("mako skill files = %v, want %v", gotFiles, wantFiles)
 	}
 }
 
-func TestSyncToDirInstallsUpdatesAndPreservesUserOverrides(t *testing.T) {
+func TestSyncToDirInstallsUpdatesPreservesUserOverridesAndPrunesLegacy(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	root := t.TempDir()
 
-	// Initial install creates both managed skills.
+	// Seed a legacy managed mako-plugin skill (should be pruned) and a
+	// manually-authored legacy mako-template skill without ManagedMarker (must stay).
+	legacyPlugin := filepath.Join(root, "mako-plugin", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(legacyPlugin), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyPlugin, []byte("old managed\n"+ManagedMarker+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	legacyTmpl := filepath.Join(root, "mako-template", "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(legacyTmpl), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manualLegacy := "---\nname: mako-template\ndescription: custom\n---\nUser custom legacy skill\n"
+	if err := os.WriteFile(legacyTmpl, []byte(manualLegacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initial install creates the unified multi-folder mako skill and prunes managed legacy.
 	if err := SyncToDir(root); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range Names() {
-		b, err := os.ReadFile(filepath.Join(root, name, "SKILL.md"))
+	for _, rel := range []string{"SKILL.md", "cli/projects-and-agents.md", "plugins/authoring.md", "plugins/ui-components.md", "templates/syntax.md", "templates/scripting.md"} {
+		b, err := os.ReadFile(filepath.Join(root, "mako", filepath.FromSlash(rel)))
 		if err != nil {
-			t.Fatalf("missing installed skill %s: %v", name, err)
+			t.Fatalf("missing installed file mako/%s: %v", rel, err)
 		}
 		if !strings.Contains(string(b), ManagedMarker) {
-			t.Fatalf("installed skill %s missing marker", name)
+			t.Fatalf("installed file mako/%s missing marker", rel)
 		}
 	}
+	if _, err := os.Stat(filepath.Join(root, "mako-plugin")); !os.IsNotExist(err) {
+		t.Fatalf("managed legacy mako-plugin should have been pruned, stat err=%v", err)
+	}
+	gotManual, err := os.ReadFile(legacyTmpl)
+	if err != nil || string(gotManual) != manualLegacy {
+		t.Fatalf("manually placed legacy mako-template was altered: (%q, %v)", string(gotManual), err)
+	}
 
-	// An older managed file is refreshed on sync.
-	pluginPath := filepath.Join(root, "mako-plugin", "SKILL.md")
-	if err := os.WriteFile(pluginPath, []byte("old managed\n"+ManagedMarker+"\n"), 0o644); err != nil {
+	// An older managed file inside mako/ is refreshed on sync, while a user-edited
+	// file without ManagedMarker is preserved untouched.
+	managedSub := filepath.Join(root, "mako", "plugins", "authoring.md")
+	if err := os.WriteFile(managedSub, []byte("old managed\n"+ManagedMarker+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// A user-customized file without ManagedMarker is preserved untouched.
-	tmplPath := filepath.Join(root, "mako-template", "SKILL.md")
-	custom := "---\nname: mako-template\ndescription: custom\n---\nUser custom skill\n"
-	if err := os.WriteFile(tmplPath, []byte(custom), 0o644); err != nil {
+	userSub := filepath.Join(root, "mako", "cli", "projects-and-agents.md")
+	customCLI := "# My custom CLI notes\n"
+	if err := os.WriteFile(userSub, []byte(customCLI), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := SyncToDir(root); err != nil {
 		t.Fatal(err)
 	}
-	gotPlugin, _ := os.ReadFile(pluginPath)
-	if !strings.Contains(string(gotPlugin), "Revision 44") {
-		t.Fatalf("managed mako-plugin skill was not refreshed: %s", string(gotPlugin))
+	gotManaged, _ := os.ReadFile(managedSub)
+	if !strings.Contains(string(gotManaged), "Revision 46") {
+		t.Fatalf("managed plugins/authoring.md was not refreshed: %s", string(gotManaged))
 	}
-	gotTmpl, _ := os.ReadFile(tmplPath)
-	if string(gotTmpl) != custom {
-		t.Fatalf("user-customized mako-template skill was overwritten:\n%s", string(gotTmpl))
+	gotUser, _ := os.ReadFile(userSub)
+	if string(gotUser) != customCLI {
+		t.Fatalf("user-customized cli/projects-and-agents.md was overwritten:\n%s", string(gotUser))
 	}
 }
 
@@ -123,19 +165,19 @@ func TestEnsureAgentSkillsResolvesPerAgentEnv(t *testing.T) {
 	}
 
 	for _, p := range []string{
-		filepath.Join(agyHome, ".gemini", "config", "skills", "mako-plugin", "SKILL.md"),
-		filepath.Join(agyHome, ".gemini", "config", "skills", "mako-template", "SKILL.md"),
-		filepath.Join(claudeDir, "skills", "mako-plugin", "SKILL.md"),
-		filepath.Join(claudeDir, "skills", "mako-template", "SKILL.md"),
-		filepath.Join(codexDir, "skills", "mako-plugin", "SKILL.md"),
-		filepath.Join(codexDir, "skills", "mako-template", "SKILL.md"),
-		filepath.Join(piDir, "skills", "mako-template", "SKILL.md"),
-		filepath.Join(piHome, ".pi", "agent", "skills", "mako-template", "SKILL.md"),
-		filepath.Join(ompDir, "skills", "mako-template", "SKILL.md"),
-		filepath.Join(ompHome, ".omp", "agent", "skills", "mako-template", "SKILL.md"),
-		filepath.Join(omoDir, "skills", "mako-template", "SKILL.md"),
-		filepath.Join(omoHome, ".omo", "agent", "skills", "mako-template", "SKILL.md"),
-		filepath.Join(openCodeHome, ".config", "opencode", "skills", "mako-template", "SKILL.md"),
+		filepath.Join(agyHome, ".gemini", "config", "skills", "mako", "SKILL.md"),
+		filepath.Join(agyHome, ".gemini", "config", "skills", "mako", "cli", "projects-and-agents.md"),
+		filepath.Join(claudeDir, "skills", "mako", "SKILL.md"),
+		filepath.Join(claudeDir, "skills", "mako", "plugins", "authoring.md"),
+		filepath.Join(codexDir, "skills", "mako", "SKILL.md"),
+		filepath.Join(codexDir, "skills", "mako", "templates", "syntax.md"),
+		filepath.Join(piDir, "skills", "mako", "SKILL.md"),
+		filepath.Join(piHome, ".pi", "agent", "skills", "mako", "SKILL.md"),
+		filepath.Join(ompDir, "skills", "mako", "SKILL.md"),
+		filepath.Join(ompHome, ".omp", "agent", "skills", "mako", "SKILL.md"),
+		filepath.Join(omoDir, "skills", "mako", "SKILL.md"),
+		filepath.Join(omoHome, ".omo", "agent", "skills", "mako", "SKILL.md"),
+		filepath.Join(openCodeHome, ".config", "opencode", "skills", "mako", "SKILL.md"),
 	} {
 		if _, err := os.Stat(p); err != nil {
 			t.Fatalf("expected skill at %s: %v", p, err)
@@ -151,45 +193,61 @@ func TestSaveAndResetOverrideSyncsToAgents(t *testing.T) {
 	if err := SyncToDir(agentDir); err != nil {
 		t.Fatal(err)
 	}
-	sk, ok := EffectiveByName("mako-template")
+	sk, ok := EffectiveByName("mako")
 	if !ok || sk.Customized {
 		t.Fatalf("initial EffectiveByName = (%+v, %v), want not customized", sk, ok)
 	}
 
-	// Saving an override updates Effective() and propagates to managed agent files.
-	custom := "---\nname: mako-template\ndescription: Custom workflow\n---\nEdited body\n"
-	if err := SaveOverride("mako-template", []byte(custom)); err != nil {
+	// Saving an override on SKILL.md and a subfolder file updates Effective() and syncs.
+	custom := "---\nname: mako\ndescription: Custom workflow\n---\nEdited body\n"
+	if err := SaveOverride("mako", []byte(custom)); err != nil {
 		t.Fatalf("SaveOverride: %v", err)
 	}
-	sk, ok = EffectiveByName("mako-template")
+	customCLI := "# Custom CLI guide\n"
+	if err := SaveOverrideFile("mako", "cli/projects-and-agents.md", []byte(customCLI)); err != nil {
+		t.Fatalf("SaveOverrideFile: %v", err)
+	}
+	sk, ok = EffectiveByName("mako")
 	if !ok || !sk.Customized || sk.Description != "Custom workflow" || string(sk.Content) != custom {
 		t.Fatalf("after SaveOverride: %+v", sk)
+	}
+	cliFile, ok := sk.File("cli/projects-and-agents.md")
+	if !ok || !cliFile.Customized || string(cliFile.Content) != customCLI {
+		t.Fatalf("after SaveOverrideFile: %+v", cliFile)
 	}
 	if err := SyncToDir(agentDir); err != nil {
 		t.Fatal(err)
 	}
-	synced, err := os.ReadFile(filepath.Join(agentDir, "mako-template", "SKILL.md"))
+	synced, err := os.ReadFile(filepath.Join(agentDir, "mako", "SKILL.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(synced), "Edited body") || !strings.Contains(string(synced), ManagedMarker) {
 		t.Fatalf("synced agent skill missing edited body or marker:\n%s", string(synced))
 	}
+	syncedCLI, err := os.ReadFile(filepath.Join(agentDir, "mako", "cli", "projects-and-agents.md"))
+	if err != nil || !strings.Contains(string(syncedCLI), "Custom CLI guide") {
+		t.Fatalf("synced subfile missing custom body: (%q, %v)", string(syncedCLI), err)
+	}
 
-	// Resetting removes the override and restores the embedded default on next sync.
-	if err := ResetOverride("mako-template"); err != nil {
+	// Resetting removes all overrides and restores embedded defaults on next sync.
+	if err := ResetOverride("mako"); err != nil {
 		t.Fatalf("ResetOverride: %v", err)
 	}
-	sk, ok = EffectiveByName("mako-template")
+	sk, ok = EffectiveByName("mako")
 	if !ok || sk.Customized {
 		t.Fatalf("after ResetOverride: %+v, want not customized", sk)
 	}
 	if err := SyncToDir(agentDir); err != nil {
 		t.Fatal(err)
 	}
-	restored, _ := os.ReadFile(filepath.Join(agentDir, "mako-template", "SKILL.md"))
+	restored, _ := os.ReadFile(filepath.Join(agentDir, "mako", "SKILL.md"))
 	if strings.Contains(string(restored), "Edited body") {
 		t.Fatalf("expected built-in content restored, got:\n%s", string(restored))
+	}
+	restoredCLI, _ := os.ReadFile(filepath.Join(agentDir, "mako", "cli", "projects-and-agents.md"))
+	if strings.Contains(string(restoredCLI), "Custom CLI guide") {
+		t.Fatalf("expected built-in subfile restored, got:\n%s", string(restoredCLI))
 	}
 }
 
@@ -205,8 +263,8 @@ func TestSyncAndSaveOverrideConcurrent(t *testing.T) {
 		wg.Add(2)
 		go func(i int) {
 			defer wg.Done()
-			content := []byte("---\nname: mako-template\ndescription: concurrent\n---\nBody " + string(rune('A'+i)) + "\n")
-			errs <- SaveOverride("mako-template", content)
+			content := []byte("---\nname: mako\ndescription: concurrent\n---\nBody " + string(rune('A'+i)) + "\n")
+			errs <- SaveOverride("mako", content)
 		}(i)
 		go func() {
 			defer wg.Done()
@@ -220,22 +278,16 @@ func TestSyncAndSaveOverrideConcurrent(t *testing.T) {
 			t.Fatalf("concurrent skill operation failed: %v", err)
 		}
 	}
-	// Final sync picks up latest override cleanly.
 	if err := SyncToDir(agentDir); err != nil {
 		t.Fatal(err)
 	}
-	for _, dir := range []string{
-		filepath.Join(makoHome, "skills", "mako-template"),
-		filepath.Join(agentDir, "mako-template"),
-	} {
-		entries, err := os.ReadDir(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, e := range entries {
-			if e.Name() != "SKILL.md" {
-				t.Fatalf("unexpected leftover temp file %q in %s", e.Name(), dir)
-			}
+	entries, err := os.ReadDir(filepath.Join(makoHome, "skills", "mako"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() != "SKILL.md" {
+			t.Fatalf("unexpected leftover temp file %q", e.Name())
 		}
 	}
 }

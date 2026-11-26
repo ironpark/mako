@@ -196,7 +196,11 @@ func TestValidationAndEmptyDigests(t *testing.T) {
 	if !ValidTemplateFilename("review.md") || ValidTemplateFilename("../evil.md") || ValidTemplateFilename(".hidden.md") || ValidTemplateFilename("plain.txt") {
 		t.Fatal("ValidTemplateFilename failed")
 	}
-	if !ValidSkillName("mako-plugin") || ValidSkillName("../etc") || ValidSkillName(".git") {
+	if !ValidSkillName("mako") || ValidSkillName("../etc") || ValidSkillName(".git") {
 		t.Fatal("ValidSkillName failed")
+	}
+	if !ValidSkillKey("mako") || !ValidSkillKey("mako/cli/projects-and-agents.md") ||
+		ValidSkillKey("mako/../evil.md") || ValidSkillKey("mako/.hidden.md") || ValidSkillKey("mako/plain.txt") {
+		t.Fatal("ValidSkillKey failed")
 	}
 }

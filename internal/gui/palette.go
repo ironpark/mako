@@ -182,12 +182,13 @@ func (m *model) commands() []command {
 			Run: m.openCurrentSpaceWindow},
 		command{ID: "Extensions…", Category: "App", Keys: []string{"zed", "language", "grammar", "highlight", "mcp"},
 			Run: func() { m.ext.Open.Set(true) }},
-		command{ID: "Built-in skills", Category: "App", Keys: []string{"skill", "mako-plugin", "mako-template", "edit", "settings"},
+		command{ID: "Built-in skills", Category: "App", Keys: []string{"skill", "mako", "plugin", "template", "edit", "settings"},
 			Run: func() { m.openSettings("skills") }},
 		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: m.shortcutChord("open_settings"), Run: func() { m.openSettings("") }},
 	)
 	cmds = append(cmds,
 		command{ID: "Add project folder…", Category: "Sidebar", Keys: []string{"project", "folder", "add"}, Run: m.addProjectFolder},
+		command{ID: "Clone from Git URL…", Category: "Sidebar", Keys: []string{"project", "git", "url", "clone", "repo", "add"}, Run: m.openCloneProject},
 		command{ID: "Import git projects…", Category: "Sidebar", Keys: []string{"project", "folder", "git", "repo", "scan", "import"}, Run: m.openImportProjects},
 	)
 	for _, by := range agentGroups {

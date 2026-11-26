@@ -11,8 +11,8 @@ args:
 Build a complete, working Mako plugin from the description below and install it
 into this node's plugins directory.
 
-If the `mako-plugin` skill is available in your environment, load and follow it
-first.
+If the `mako` skill is available in your environment, load `plugins/authoring.md`
+and `plugins/ui-components.md` first.
 
 The description:
 

@@ -429,7 +429,7 @@ func MergeAgentConfig(dst, src *protocol.AgentSyncState, clock *crdt.Clock, phys
 		}
 	}
 	for name, sr := range src.GetSkills() {
-		if !ValidSkillName(name) {
+		if !ValidSkillKey(name) {
 			continue
 		}
 		if dst.Skills == nil {
@@ -618,6 +618,28 @@ func ValidSkillName(name string) bool {
 		return false
 	}
 	return filepath.Base(name) == name
+}
+
+// ValidSkillKey validates a synced skill override key: either a bare skill name
+// (for SKILL.md) or a slash-separated relative path "<skill>/<subdir>/<file>.md"
+// with no empty, hidden, or traversal segments.
+func ValidSkillKey(key string) bool {
+	if key == "" || strings.Contains(key, `\`) || strings.HasPrefix(key, "/") || strings.HasSuffix(key, "/") {
+		return false
+	}
+	parts := strings.Split(key, "/")
+	if !ValidSkillName(parts[0]) {
+		return false
+	}
+	if len(parts) == 1 {
+		return true
+	}
+	for _, seg := range parts[1:] {
+		if seg == "" || seg == "." || seg == ".." || strings.HasPrefix(seg, ".") {
+			return false
+		}
+	}
+	return strings.HasSuffix(parts[len(parts)-1], ".md")
 }
 
 // ValidTemplateFilename reports whether name is a safe base Markdown filename.

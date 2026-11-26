@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -71,8 +72,8 @@ sleep 30
 	}
 	t.Cleanup(d.sessions.closeAll)
 
-	// mako-msg and mako-plugin shims must exist in clipTools.
-	for _, shim := range []string{"mako-msg", "mako-plugin"} {
+	// mako-msg, mako-plugin, and mako-project shims must exist in clipTools.
+	for _, shim := range []string{"mako-msg", "mako-plugin", "mako-project"} {
 		if _, err := os.Stat(filepath.Join(d.clipTools, shim)); err != nil {
 			t.Fatalf("expected %s shim in %s: %v", shim, d.clipTools, err)
 		}
@@ -766,4 +767,153 @@ func TestServeAgentCLIDoesNotLeakGoroutines(t *testing.T) {
 		runtime.GC()
 		return runtime.NumGoroutine() <= before+8
 	})
+}
+
+func TestAgentProjectCLIAddLocalAndGitURL(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	sessionDir := t.TempDir()
+	defaultStore := filepath.Join(t.TempDir(), "default-projects")
+	secondStore := filepath.Join(t.TempDir(), "work-projects")
+
+	binDir := t.TempDir()
+	fakeClaude := filepath.Join(binDir, "claude")
+	if err := os.WriteFile(fakeClaude, []byte("#!/bin/sh\nsleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{
+		NodeID:      "node",
+		ProjectDirs: []string{defaultStore, secondStore},
+		Agents: map[string]agentspec.Agent{
+			"claude": {Command: []string{fakeClaude}},
+		},
+	}
+	d := New(cfg, slog.New(slog.DiscardHandler))
+	d.dir, d.ctx, d.mcp, d.hookBinary = t.TempDir(), t.Context(), nil, "/bin/makod"
+	if err := d.loadSessions(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.projectAgents.messages.load(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	run, err := config.RunDir(d.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.listenHooks(t.Context(), run)
+	if err := d.listenAgentMCP(t.Context(), run); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.sessions.closeAll)
+	d.workspace.load(d.dir, d.config().NodeID)
+
+	sess, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: sessionDir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	peer := d.projectAgents.peer(sess.ID())
+	if peer == nil {
+		t.Fatal("missing session peer")
+	}
+
+	runProjectCLI := func(cliArgs ...string) (int, string, string) {
+		t.Helper()
+		t.Setenv("AGENT_MAKO_SESSION", peer.id)
+		t.Setenv(agentMCPTokenEnv, peer.token)
+		var out, errBuf bytes.Buffer
+		code := runAgentProject(append([]string{d.projectAgents.cliSocket}, cliArgs...), strings.NewReader(""), &out, &errBuf)
+		return code, out.String(), errBuf.String()
+	}
+
+	// 1. dirs lists configured default project storage locations.
+	code, out, stderr := runProjectCLI("dirs", "--json")
+	if code != 0 {
+		t.Fatalf("dirs failed: code=%d stderr=%q", code, stderr)
+	}
+	var dirs []string
+	if err := json.Unmarshal([]byte(out), &dirs); err != nil || len(dirs) != 2 || dirs[0] != defaultStore {
+		t.Fatalf("unexpected dirs output %q (err=%v)", out, err)
+	}
+
+	// 2. add local directory registers it into workspace CRDT.
+	localProj := filepath.Join(t.TempDir(), "my-local-app")
+	if err := os.MkdirAll(localProj, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	code, out, stderr = runProjectCLI("add", localProj, "--name", "Local App", "--json")
+	if code != 0 {
+		t.Fatalf("add local failed: code=%d stderr=%q", code, stderr)
+	}
+	var addedLocal agentProjectAddResult
+	if err := json.Unmarshal([]byte(out), &addedLocal); err != nil {
+		t.Fatalf("invalid json %q: %v", out, err)
+	}
+	if addedLocal.Name != "Local App" || addedLocal.Cloned || addedLocal.AlreadyExisted {
+		t.Fatalf("unexpected addedLocal: %+v", addedLocal)
+	}
+
+	// 3. Re-adding the same local directory deduplicates cleanly.
+	code, out, stderr = runProjectCLI("add", localProj, "--json")
+	if code != 0 {
+		t.Fatalf("re-add local failed: code=%d stderr=%q", code, stderr)
+	}
+	var addedAgain agentProjectAddResult
+	if err := json.Unmarshal([]byte(out), &addedAgain); err != nil || !addedAgain.AlreadyExisted || addedAgain.ID != addedLocal.ID {
+		t.Fatalf("expected AlreadyExisted with id %s, got %+v (err=%v)", addedLocal.ID, addedAgain, err)
+	}
+
+	// 4. list shows the registered project.
+	code, out, stderr = runProjectCLI("list", "--json")
+	if code != 0 {
+		t.Fatalf("list failed: code=%d stderr=%q", code, stderr)
+	}
+	var listed []agentProjectSummary
+	if err := json.Unmarshal([]byte(out), &listed); err != nil || len(listed) != 1 || listed[0].ID != addedLocal.ID {
+		t.Fatalf("unexpected list output: %q (err=%v)", out, err)
+	}
+
+	// 5. add with a Git URL clones into the first configured project_dirs and registers it.
+	if _, err := exec.LookPath("git"); err == nil {
+		bare := filepath.Join(t.TempDir(), "cli-repo.git")
+		if o, err := exec.Command("git", "init", "--bare", bare).CombinedOutput(); err != nil {
+			t.Fatalf("git init --bare: %v: %s", err, o)
+		}
+		seed := filepath.Join(t.TempDir(), "seed")
+		if err := os.MkdirAll(seed, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		runGit := func(args ...string) {
+			t.Helper()
+			cmd := exec.Command("git", append([]string{"-C", seed}, args...)...)
+			cmd.Env = append(os.Environ(),
+				"GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@example.com",
+				"GIT_COMMITTER_NAME=Test", "GIT_COMMITTER_EMAIL=test@example.com",
+			)
+			if o, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("git %v: %v: %s", args, err, o)
+			}
+		}
+		runGit("init")
+		if err := os.WriteFile(filepath.Join(seed, "README.md"), []byte("cli\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		runGit("add", "README.md")
+		runGit("commit", "-m", "init")
+		runGit("remote", "add", "origin", bare)
+		runGit("push", "-u", "origin", "HEAD")
+
+		code, out, stderr = runProjectCLI("add", "file://"+bare, "--json")
+		if code != 0 {
+			t.Fatalf("add git URL failed: code=%d stderr=%q", code, stderr)
+		}
+		var addedGit agentProjectAddResult
+		if err := json.Unmarshal([]byte(out), &addedGit); err != nil {
+			t.Fatalf("invalid json %q: %v", out, err)
+		}
+		if !addedGit.Cloned || filepath.Base(addedGit.Path) != "cli-repo" {
+			t.Fatalf("unexpected addedGit: %+v", addedGit)
+		}
+		if _, err := os.Stat(filepath.Join(defaultStore, "cli-repo", "README.md")); err != nil {
+			t.Fatalf("expected clone inside defaultStore: %v", err)
+		}
+	}
 }

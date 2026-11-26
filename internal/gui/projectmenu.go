@@ -46,6 +46,8 @@ type projectAsk struct {
 
 	// Import scans a folder for git repositories to add to the sidebar.
 	Import *importAsk
+	// Clone clones a repository from a Git URL and adds it to the sidebar.
+	Clone *cloneAsk
 }
 
 func newProjectAsk() *projectAsk {
@@ -56,6 +58,7 @@ func newProjectAsk() *projectAsk {
 		SettingsOpen: ggui.State(false),
 		Draft:        ggui.State(project{}).WithEqual(deepEqual[project]),
 		Import:       newImportAsk(),
+		Clone:        newCloneAsk(),
 	}
 }
 
@@ -403,7 +406,7 @@ func projectDialogs(m *model) ggui.Widget {
 		Title: T("Rename project"), Field: T("Project name"), Action: T("Rename"),
 		Placeholder: T("Its folder's name"), Submit: m.submitProjectName,
 	})
-	return widget.Stack(name, addFolderDialog(m), a.merge.dialog(), projectSettingsDialog(m), importProjectsDialog(m))
+	return widget.Stack(name, addFolderDialog(m), a.merge.dialog(), projectSettingsDialog(m), importProjectsDialog(m), cloneProjectDialog(m))
 }
 
 // addFolderDialog asks for a folder to add to a project: the node it is

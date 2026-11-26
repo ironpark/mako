@@ -76,6 +76,7 @@ type model struct {
 	PluginSync          *ggui.StateValue[bool]
 	AgentSync           *ggui.StateValue[bool]
 	IsolateHome         *ggui.StateValue[bool]
+	ProjectDirs         *ggui.StateValue[[]string]
 	AgentDraft          *ggui.StateValue[[]agentDraft]
 	AgentCatalogs       *ggui.StateValue[map[string][]*protocol.AgentModel]
 	AgentCatalogLoading *ggui.StateValue[map[string]bool]
@@ -303,6 +304,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		PluginSync:          ggui.State(cfg.Workspace.PluginsEnabled()),
 		AgentSync:           ggui.State(cfg.Workspace.AgentsEnabled()),
 		IsolateHome:         ggui.State(cfg.IsolateHome),
+		ProjectDirs:         ggui.State(config.NormalizeProjectDirs(cfg.ProjectDirs)).WithEqual(slices.Equal),
 		AgentDraft:          ggui.State(draftAgents(cfg.Agents)).WithEqual(slices.Equal),
 		AgentCatalogs:       ggui.State(map[string][]*protocol.AgentModel{}).WithEqual(equalCatalogMaps),
 		AgentCatalogLoading: ggui.State(map[string]bool{}).WithEqual(maps.Equal),

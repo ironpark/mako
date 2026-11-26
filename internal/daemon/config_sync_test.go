@@ -264,8 +264,8 @@ func TestAgentConfigSyncAcrossMesh(t *testing.T) {
 	writeConfigJSON(t, cfgPathA, cfgA)
 	a.FollowAgents(cfgPathA)
 
-	skillContent := "---\nname: mako-plugin\ndescription: Custom synced skill\n---\n# Synced skill body\n"
-	skillPathA := filepath.Join(a.dir, "skills", "mako-plugin", "SKILL.md")
+	skillContent := "---\nname: mako\ndescription: Custom synced skill\n---\n# Synced skill body\n"
+	skillPathA := filepath.Join(a.dir, "skills", "mako", "SKILL.md")
 	if err := os.MkdirAll(filepath.Dir(skillPathA), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func TestAgentConfigSyncAcrossMesh(t *testing.T) {
 	a.pokeStatus()
 
 	// Wait for everything to converge on Node B.
-	skillPathB := filepath.Join(b.dir, "skills", "mako-plugin", "SKILL.md")
+	skillPathB := filepath.Join(b.dir, "skills", "mako", "SKILL.md")
 	tmplPathB := filepath.Join(b.dir, "templates", "review.md")
 
 	deadline := time.Now().Add(15 * time.Second)

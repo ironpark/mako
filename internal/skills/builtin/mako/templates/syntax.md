@@ -1,16 +1,9 @@
----
-name: mako-template
-description: >-
-  Author, refine, and debug Mako prompt templates (//name) with YAML frontmatter,
-  Svelte-style control flow, sandboxed JavaScript blocks, multi-agent mako.ask /
-  mako.spawn / mako.decide workflows, and the save_template MCP tool.
----
+# Mako Prompt Template Syntax & Authoring Guide
 
-# Mako Prompt Template Authoring Skill
-
-Use this skill whenever the user asks to create, update, or troubleshoot a Mako
-prompt template (`//name`) saved via the `mako` MCP server's `save_template` tool
-(or in `<configDir>/templates/<name>.md`).
+Use this reference whenever creating, updating, or troubleshooting a Mako prompt
+template (`//name`) saved via the `mako` MCP server's `save_template` tool
+(or in `<configDir>/templates/<name>.md`). Pair with `templates/scripting.md`
+for sandboxed JS blocks and multi-agent host calls.
 
 ## 1. Authoring Workflow
 
@@ -75,28 +68,9 @@ Rules:
   - **Must be exhaustive**: every `select` option or both `true`/`false` must be covered, or include `{:else}`. Impossible patterns are rejected at save time!
 - **Raw blocks**: `{#raw} ... {/raw}` preserves literal `{{...}}`, Svelte tags, and ` ```js ` fences.
 
-## 4. Sandboxed JavaScript & Multi-Agent `mako` Host API
+## 4. Common Pitfalls to Avoid
 
-- ` ```js ` prints its final expression (or `return` value) inline.
-- ` ```js run ` executes for side effects / helper definitions:
-  - Synchronous: `var` and `function` declarations are visible to later expressions/blocks (`let`/`const`/`class` are block-local).
-  - **Async / `return` blocks**: run inside an async function wrapper — export values via `globalThis.myVar = await ...` so later `{{myVar}}` expressions can read them!
-- Sandbox limits: QuickJS, no filesystem/network, 5s CPU & 64 MiB per run (excluding `await mako.*` wait), 5 min wall-clock max.
-
-### Host `mako` Object (available when expanding in a live session)
-- `await mako.agents(agentOrOpts?)` -> `{ nodeId, agents }` (profiles, models, effort levels).
-- `await mako.spawn({ agent, profile, target, model, effort, yolo, name, project, prompt })` -> `{ sessionId, agent, profile, name, project }`.
-  Shorthand: `await mako.spawn("claude:worker", "Prompt...")`.
-- `await mako.ask({ agent, profile, target, model, effort, yolo, project, prompt, format, schema })` (alias `mako.prompt`):
-  - One-off non-interactive call. Pass `format: "json"` or a JSON `schema` to get a parsed JS object directly.
-  - Shorthand: `await mako.ask("codex:fast", "Summarize...")`.
-- `await mako.decide({ state, type, options, criteria, levels, questions, provider, model })`:
-  - Helpers: `await mako.decide.choice(state, optionsOrCriteria, extra?)`, `await mako.decide.yes(state, instructions?, extra?)`, `await mako.decide.score(state, levelsOrCriteria, extra?)`.
-
-## 5. Common Pitfalls to Avoid
-
-- **Using `const`/`let` in ` ```js run `** and referencing it later in `{{...}}` -> fails validation! Use `var` for sync blocks or `globalThis.x = ...` for `await`/`return` blocks.
 - **Non-exhaustive `{#match}`** on a `select` or `boolean` arg -> fails validation! Cover every option or add `{:else}`.
-- **Calling `mako.ask`/`mako.spawn` in a template that does not need it** -> slows down invocation and fails in Settings preview; only use host calls for real orchestration/triage.
 - **Putting `rest: true` on a non-last argument** -> rejected.
+- **Using unknown frontmatter keys** -> rejected; stick strictly to `description`, `agents`, `args`.
 <!-- mako-managed-skill -->

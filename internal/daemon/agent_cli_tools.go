@@ -559,3 +559,194 @@ func coercePluginParam(raw, typ string) (any, error) {
 		return raw, nil
 	}
 }
+
+// runAgentProject implements the `mako-project` CLI available in every agent
+// session's PATH, letting agents list projects/default storage locations and
+// register local folders or clone Git URLs into Mako's workspace.
+func runAgentProject(args []string, _ io.Reader, stdout, stderr io.Writer) int {
+	const helpText = `usage:
+  mako-project list [--json]
+  mako-project dirs [--json]
+  mako-project add <path-or-git-url> [--name <name>] [--dir <base-dir>] [--folder <folder>] [--space <space>] [--json]
+`
+	if len(args) < 2 {
+		fmt.Fprint(stderr, helpText)
+		return 2
+	}
+	socket := args[0]
+	sub := args[1]
+	rest := args[2:]
+
+	if sub == "-h" || sub == "--help" || sub == "help" {
+		fmt.Fprint(stdout, helpText)
+		return 0
+	}
+
+	sessionID := os.Getenv("AGENT_MAKO_SESSION")
+	if sessionID == "" {
+		sessionID = os.Getenv("MAKO_SESSION")
+	}
+	token := os.Getenv(agentMCPTokenEnv)
+	if sessionID == "" || token == "" {
+		fmt.Fprintln(stderr, "mako-project: missing AGENT_MAKO_SESSION / MAKO_AGENT_MCP_TOKEN in environment")
+		return 1
+	}
+
+	switch sub {
+	case "list":
+		fs := flag.NewFlagSet("mako-project list", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		asJSON := fs.Bool("json", false, "output JSON")
+		if err := fs.Parse(rest); err != nil {
+			return 2
+		}
+		resp, err := dialAgentCLI(socket, agentCLIRequest{
+			Session: sessionID,
+			Token:   token,
+			Op:      "project_list",
+		})
+		if err != nil {
+			fmt.Fprintln(stderr, "mako-project:", err)
+			return 1
+		}
+		if !resp.OK {
+			fmt.Fprintln(stderr, "mako-project:", resp.Error)
+			return 1
+		}
+		projs := resp.Projects
+		if projs == nil {
+			projs = []agentProjectSummary{}
+		}
+		if *asJSON {
+			out, _ := json.MarshalIndent(projs, "", "  ")
+			_, _ = stdout.Write(append(out, '\n'))
+			return 0
+		}
+		if len(projs) == 0 {
+			fmt.Fprintln(stdout, "No projects registered.")
+			return 0
+		}
+		w := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(w, "ID\tNAME\tPATHS\tREMOTE")
+		for _, p := range projs {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", p.ID, p.Name, strings.Join(p.Paths, ", "), p.Remote)
+		}
+		_ = w.Flush()
+		return 0
+
+	case "dirs":
+		fs := flag.NewFlagSet("mako-project dirs", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		asJSON := fs.Bool("json", false, "output JSON")
+		if err := fs.Parse(rest); err != nil {
+			return 2
+		}
+		resp, err := dialAgentCLI(socket, agentCLIRequest{
+			Session: sessionID,
+			Token:   token,
+			Op:      "project_dirs",
+		})
+		if err != nil {
+			fmt.Fprintln(stderr, "mako-project:", err)
+			return 1
+		}
+		if !resp.OK {
+			fmt.Fprintln(stderr, "mako-project:", resp.Error)
+			return 1
+		}
+		dirs := resp.ProjectDirs
+		if dirs == nil {
+			dirs = []string{}
+		}
+		if *asJSON {
+			out, _ := json.MarshalIndent(dirs, "", "  ")
+			_, _ = stdout.Write(append(out, '\n'))
+			return 0
+		}
+		if len(dirs) == 0 {
+			fmt.Fprintln(stdout, "No default project storage directories configured.")
+			return 0
+		}
+		for i, dir := range dirs {
+			if i == 0 {
+				fmt.Fprintf(stdout, "%s (default)\n", dir)
+			} else {
+				fmt.Fprintln(stdout, dir)
+			}
+		}
+		return 0
+
+	case "add":
+		fs := flag.NewFlagSet("mako-project add", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		name := fs.String("name", "", "optional project display name")
+		baseDir := fs.String("dir", "", "base directory to clone into (for git URLs; defaults to first configured project_dirs)")
+		folder := fs.String("folder", "", "optional subfolder name when cloning a git URL")
+		space := fs.String("space", "", "optional target space ID or name")
+		asJSON := fs.Bool("json", false, "output JSON")
+		pos, err := parseInterleavedAgentFlags(fs, rest)
+		if err != nil {
+			return 2
+		}
+		if len(pos) != 1 {
+			fmt.Fprintln(stderr, "usage: mako-project add <path-or-git-url> [--name <name>] [--dir <base-dir>] [--folder <folder>] [--space <space>] [--json]")
+			return 2
+		}
+		resp, err := dialAgentCLI(socket, agentCLIRequest{
+			Session: sessionID,
+			Token:   token,
+			Op:      "project_add",
+			Target:  pos[0],
+			Name:    *name,
+			BaseDir: *baseDir,
+			Folder:  *folder,
+			Space:   *space,
+		})
+		if err != nil {
+			fmt.Fprintln(stderr, "mako-project:", err)
+			return 1
+		}
+		if !resp.OK || resp.Added == nil {
+			fmt.Fprintln(stderr, "mako-project:", resp.Error)
+			return 1
+		}
+		if *asJSON {
+			out, _ := json.MarshalIndent(resp.Added, "", "  ")
+			_, _ = stdout.Write(append(out, '\n'))
+			return 0
+		}
+		action := "Added"
+		if resp.Added.Cloned {
+			action = "Cloned and added"
+		} else if resp.Added.AlreadyExisted {
+			action = "Already registered"
+		}
+		fmt.Fprintf(stdout, "%s project %s (%s) at %s\n", action, resp.Added.Name, resp.Added.ID, resp.Added.Path)
+		return 0
+
+	default:
+		fmt.Fprintf(stderr, "mako-project: unknown subcommand %q\n%s", sub, helpText)
+		return 2
+	}
+}
+
+// parseInterleavedAgentFlags allows flags before or after positional arguments.
+func parseInterleavedAgentFlags(fs *flag.FlagSet, args []string) ([]string, error) {
+	var pos []string
+	for len(args) > 0 {
+		if err := fs.Parse(args); err != nil {
+			return nil, err
+		}
+		rem := fs.Args()
+		if len(rem) == 0 {
+			break
+		}
+		if rem[0] == "--" {
+			pos = append(pos, rem[1:]...)
+			break
+		}
+		pos = append(pos, rem[0])
+		args = rem[1:]
+	}
+	return pos, nil
+}

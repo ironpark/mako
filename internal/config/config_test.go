@@ -102,3 +102,41 @@ func TestWorkspaceSyncs(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeProjectDirsAndRoundtrip(t *testing.T) {
+	home, dir := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("MAKO_HOME", dir)
+
+	got := NormalizeProjectDirs([]string{
+		"  ",
+		"~/Projects/",
+		filepath.Join(home, "Projects"),
+		"/opt/work//repos/",
+		"~",
+		home,
+	})
+	want := []string{"~/Projects", "/opt/work/repos", "~"}
+	if len(got) != len(want) {
+		t.Fatalf("NormalizeProjectDirs = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("NormalizeProjectDirs[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+
+	cfg := Default()
+	cfg.ProjectDirs = []string{"~/Projects/", "/tmp/work"}
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.ProjectDirs) != 2 || loaded.ProjectDirs[0] != "~/Projects" || loaded.ProjectDirs[1] != "/tmp/work" {
+		t.Fatalf("loaded.ProjectDirs = %v", loaded.ProjectDirs)
+	}
+}

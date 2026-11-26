@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/mcp"
@@ -68,6 +69,10 @@ type Config struct {
 	// Decision configures the default provider and model used by decision
 	// model calls in prompt templates.
 	Decision Decision `json:"decision,omitzero"`
+	// ProjectDirs are the node's default project storage locations (e.g.
+	// ~/Projects, ~/Work). Multiple folders may be configured; the first is
+	// used as the default clone destination when adding a project by Git URL.
+	ProjectDirs []string `json:"project_dirs,omitempty"`
 }
 
 // Decision configures the default provider and model for decision calls.
@@ -354,7 +359,57 @@ func Load() (*Config, error) {
 		cfg.NodeID = newNodeID()
 	}
 	cfg.TakeShell()
+	cfg.ProjectDirs = NormalizeProjectDirs(cfg.ProjectDirs)
 	return cfg, nil
+}
+
+// NormalizeProjectDirs cleans and deduplicates a list of project storage
+// locations while preserving order. Leading ~ is preserved for display, while
+// duplicates resolving to the same expanded path are removed.
+func NormalizeProjectDirs(dirs []string) []string {
+	if len(dirs) == 0 {
+		return nil
+	}
+	home, _ := os.UserHomeDir()
+	expand := func(p string) string {
+		if home != "" {
+			if p == "~" {
+				p = home
+			} else if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
+				p = filepath.Join(home, p[2:])
+			}
+		}
+		return filepath.Clean(p)
+	}
+	seen := make(map[string]bool, len(dirs))
+	out := make([]string, 0, len(dirs))
+	for _, raw := range dirs {
+		d := strings.TrimSpace(raw)
+		if d == "" {
+			continue
+		}
+		// Clean without destroying a leading "~/" shorthand.
+		if d == "~" || strings.HasPrefix(d, "~/") || strings.HasPrefix(d, `~\`) {
+			rest := strings.TrimLeft(d[1:], `/\`)
+			if rest == "" {
+				d = "~"
+			} else {
+				d = "~/" + filepath.ToSlash(filepath.Clean(rest))
+			}
+		} else {
+			d = filepath.Clean(d)
+		}
+		key := expand(d)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, d)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // TakeShell moves the shell an older configuration kept among its agents

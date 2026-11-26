@@ -11,8 +11,8 @@ args:
 Write a high-signal, reusable mako prompt template from the description below,
 and save it with the `save_template` tool of the `mako` MCP server.
 
-If the `mako-template` skill is available in your environment, consult it for
-additional patterns and pitfalls.
+If the `mako` skill is available in your environment, consult `templates/syntax.md`
+and `templates/scripting.md` for additional patterns and pitfalls.
 
 The description:
 

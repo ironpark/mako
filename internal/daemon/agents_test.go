@@ -72,8 +72,11 @@ func TestSyncBuiltinSkillsSupportsOmpAndOmo(t *testing.T) {
 	d.syncBuiltinSkills(t.Context())
 
 	for _, root := range []string{ompDir, omoDir} {
-		if _, err := os.Stat(filepath.Join(root, "skills", "mako-template", "SKILL.md")); err != nil {
+		if _, err := os.Stat(filepath.Join(root, "skills", "mako", "SKILL.md")); err != nil {
 			t.Fatalf("expected synced skill under %s: %v", root, err)
+		}
+		if _, err := os.Stat(filepath.Join(root, "skills", "mako", "cli", "projects-and-agents.md")); err != nil {
+			t.Fatalf("expected synced subfolder skill under %s: %v", root, err)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(home, ".claude", "skills")); !os.IsNotExist(err) {

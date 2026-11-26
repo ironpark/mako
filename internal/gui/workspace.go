@@ -785,6 +785,24 @@ func (m *model) setAgentSync(on bool) {
 	m.AgentSync.Set(on)
 }
 
+// setProjectDirs persists this node's default project storage locations in config.json.
+func (m *model) setProjectDirs(dirs []string) {
+	norm := config.NormalizeProjectDirs(dirs)
+	cfg, err := config.Load()
+	if err == nil {
+		cfg.ProjectDirs = norm
+		err = config.Save(cfg)
+	}
+	if err != nil {
+		if m.toaster != nil {
+			m.toaster.Push(ui.Toast(Tf("Could not save: %v", err), "").Destructive())
+		}
+		return
+	}
+	m.cfg.ProjectDirs = slices.Clone(norm)
+	m.ProjectDirs.Set(norm)
+}
+
 // reloadSyncedConfig reloads config.json after the daemon applies peer-synced
 // agents, MCP servers, skills, or prompt templates, preserving any unsaved
 // local edits in Settings.
@@ -800,6 +818,7 @@ func (m *model) reloadSyncedConfig() {
 	m.WorkspaceSync.Set(workspaceSyncs(cfg))
 	m.PluginSync.Set(cfg.Workspace.PluginsEnabled())
 	m.AgentSync.Set(cfg.Workspace.AgentsEnabled())
+	m.ProjectDirs.Set(config.NormalizeProjectDirs(cfg.ProjectDirs))
 	if !hostDirty {
 		m.Host.Set(draftFrom(cfg))
 	}
