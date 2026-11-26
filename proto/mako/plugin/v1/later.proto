@@ -65,6 +65,8 @@ message StartAgentRequest {
   string prompt = 5;
   // name is the session's, "" for its agent's.
   string name = 6;
+  // parent_session_id optionally links the spawned session to an existing parent session.
+  string parent_session_id = 7;
 }
 
 // StartAgentResponse says the start was taken.

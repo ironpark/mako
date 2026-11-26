@@ -103,6 +103,8 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		DataDir:           filepath.Join(dir, "plugin-data"),
 		Log:               d.log,
 		Sessions:          d.listSessions,
+		Nodes:             d.nodes,
+		MeshSessions:      d.pluginMeshSessions,
 		Transcript:        d.pluginTranscript,
 		Projects:          d.pluginProjects,
 		ResolveScope:      d.resolvePluginScope,
@@ -140,6 +142,24 @@ func (d *Daemon) startPlugins(ctx context.Context, dir string) (done <-chan stru
 		wg.Wait()
 	}()
 	return ch
+}
+
+// pluginMeshSessions lists sessions on this node and reachable trusted peers,
+// deduplicated by session ID with local entries taking precedence.
+func (d *Daemon) pluginMeshSessions() []*protocol.SessionInfo {
+	out := d.listSessions()
+	seen := make(map[string]struct{}, len(out))
+	for _, s := range out {
+		seen[s.GetId()] = struct{}{}
+	}
+	for _, s := range d.meshSessions(d.routing()) {
+		if _, ok := seen[s.GetId()]; ok {
+			continue
+		}
+		seen[s.GetId()] = struct{}{}
+		out = append(out, s)
+	}
+	return out
 }
 
 // pluginDir is where a plugin in development is written: a folder of

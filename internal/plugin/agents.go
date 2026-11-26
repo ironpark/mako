@@ -54,7 +54,7 @@ const (
 // AgentStart is an agent a plugin starts: the agent and profile, in a
 // folder of a project of this node's, with a prompt and a name.
 type AgentStart struct {
-	Agent, Profile, Project, Root, Prompt, Name string
+	Agent, Profile, Project, Root, Prompt, Name, ParentSessionID string
 }
 
 // AgentHost is the daemon's side of sessions:write.
@@ -174,8 +174,12 @@ func (h *host) MessagesStartAgent(_ context.Context, req *hostapi.StartAgentRequ
 	if p.asks.get() != nil {
 		return nil, errors.New("another agent the plugin asked to start waits for the user")
 	}
+	parentID := strings.TrimSpace(req.GetParentSessionId())
+	if parentID != "" && (len(parentID) > 128 || !utf8.ValidString(parentID) || strings.HasPrefix(parentID, "plugin:") || strings.ContainsFunc(parentID, uiblock.Spoofing)) {
+		return nil, errors.New("parentSessionId is invalid")
+	}
 	ask := &agentAsk{id: "a" + nonce(), name: project.Name, since: time.Now(),
-		req: AgentStart{Agent: req.GetAgent(), Profile: req.GetProfile(), Project: req.GetProject(), Root: req.GetRoot(), Prompt: prompt, Name: name}}
+		req: AgentStart{Agent: req.GetAgent(), Profile: req.GetProfile(), Project: req.GetProject(), Root: req.GetRoot(), Prompt: prompt, Name: name, ParentSessionID: parentID}}
 	if p.m.grant.get(p.id).AgentsAllowed {
 		go p.startAgent(ask)
 		return &hostapi.StartAgentResponse{RequestId: ask.id}, nil

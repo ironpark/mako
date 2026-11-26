@@ -111,6 +111,12 @@ type Config struct {
 	Log     *slog.Logger
 	// Sessions lists the node's sessions, for sessions:read.
 	Sessions func() []*protocol.SessionInfo
+	// Nodes lists this node and known mesh peers, for sessions:read;
+	// nil synthesizes a self node from NodeID when non-empty.
+	Nodes func() []*protocol.Node
+	// MeshSessions lists sessions across this node and reachable trusted
+	// peers, for sessions:read; nil falls back to Sessions.
+	MeshSessions func() []*protocol.SessionInfo
 	// Transcript reads a page of a session's conversation, for
 	// sessions:read; nil reads none.
 	Transcript TranscriptFunc
@@ -199,6 +205,18 @@ func New(cfg Config) *Manager {
 	}
 	if cfg.Sessions == nil {
 		cfg.Sessions = func() []*protocol.SessionInfo { return nil }
+	}
+	if cfg.Nodes == nil {
+		nodeID := cfg.NodeID
+		cfg.Nodes = func() []*protocol.Node {
+			if nodeID == "" {
+				return nil
+			}
+			return []*protocol.Node{{Id: nodeID, Name: nodeID, Source: "self"}}
+		}
+	}
+	if cfg.MeshSessions == nil {
+		cfg.MeshSessions = cfg.Sessions
 	}
 	if cfg.Changed == nil {
 		cfg.Changed = func() {}

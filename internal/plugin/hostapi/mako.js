@@ -35,6 +35,10 @@ export function hostApi(call) {
       subscribe: (req) => call("sessions.subscribe", req),
       unsubscribe: (req) => call("sessions.unsubscribe", req),
     }),
+    mesh: Object.freeze({
+      listNodes: (req) => call("mesh.listNodes", req),
+      listSessions: (req) => call("mesh.listSessions", req),
+    }),
     http: Object.freeze({
       fetch: (req) => call("http.fetch", req),
     }),

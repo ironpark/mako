@@ -371,6 +371,8 @@ export interface HostApi {
   readonly storage: StorageApi;
   /** SessionsService reads this node's sessions. */
   readonly sessions: SessionsApi;
+  /** MeshService exposes the node's P2P mesh topology and sessions across this */
+  readonly mesh: MeshApi;
   /** HttpService makes HTTP requests for the plugin, to the hosts its */
   readonly http: HttpApi;
   /** CommandsService runs the window's commands a plugin may use. */
@@ -562,6 +564,25 @@ export interface SessionsApi {
    * Needs sessions:read.
    */
   unsubscribe(req?: UnsubscribeRequest): Promise<UnsubscribeResponse>;
+}
+
+/**
+ * MeshService exposes the node's P2P mesh topology and sessions across this
+ * node and reachable trusted peers.
+ */
+export interface MeshApi {
+  /**
+   * ListNodes lists this node and known mesh peers.
+   *
+   * Needs sessions:read.
+   */
+  listNodes(req?: ListNodesRequest): Promise<ListNodesResponse>;
+  /**
+   * ListSessions lists sessions across this node and reachable trusted peers.
+   *
+   * Needs sessions:read.
+   */
+  listSessions(req?: MeshServiceListSessionsRequest): Promise<MeshServiceListSessionsResponse>;
 }
 
 /**
@@ -1425,6 +1446,57 @@ export interface Session {
   /** status is its agent's: "idle", "working", "waiting" or "done". */
   status?: string;
   nodeId?: string;
+  /**
+   * parent_session_id and parent_node_id link a subagent or spawned session
+   * back to its parent.
+   */
+  parentSessionId?: string;
+  /** branch is the session's checked-out git branch when known. */
+  branch?: string;
+  /** profile is the agent profile name when configured. */
+  profile?: string;
+  /** approval_tool is the tool awaiting approval when status is "waiting". */
+  approvalTool?: string;
+  /** started_at and last_activity_at are Unix timestamps in milliseconds (0 if unset). */
+  startedAt?: number;
+  lastActivityAt?: number;
+  parentNodeId?: string;
+}
+
+/** ListNodesRequest asks for known mesh nodes. */
+export interface ListNodesRequest {
+}
+
+/** ListNodesResponse holds this node and known mesh peers. */
+export interface ListNodesResponse {
+  nodes?: Node[];
+}
+
+/** MeshServiceListSessionsRequest asks for sessions across the mesh. */
+export interface MeshServiceListSessionsRequest {
+}
+
+/** MeshServiceListSessionsResponse holds sessions across local and reachable peers. */
+export interface MeshServiceListSessionsResponse {
+  sessions?: Session[];
+}
+
+/** MeshProject identifies a project configured on a mesh node. */
+export interface MeshProject {
+  id?: string;
+  name?: string;
+}
+
+/** Node describes a machine in the mesh. */
+export interface Node {
+  id?: string;
+  name?: string;
+  os?: string;
+  arch?: string;
+  link?: string;
+  self?: boolean;
+  trusted?: boolean;
+  projects?: MeshProject[];
 }
 
 /** FetchRequest is a request. */
@@ -1708,6 +1780,8 @@ export interface StartAgentRequest {
   prompt?: string;
   /** name is the session's, "" for its agent's. */
   name?: string;
+  /** parent_session_id optionally links the spawned session to an existing parent session. */
+  parentSessionId?: string;
 }
 
 /** StartAgentResponse says the start was taken. */

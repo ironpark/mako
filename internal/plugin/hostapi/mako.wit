@@ -445,6 +445,47 @@ interface types {
     /// status is its agent's: "idle", "working", "waiting" or "done".
     status: string,
     node-id: string,
+    /// parent_session_id and parent_node_id link a subagent or spawned session
+    /// back to its parent.
+    parent-session-id: string,
+    /// branch is the session's checked-out git branch when known.
+    branch: string,
+    /// profile is the agent profile name when configured.
+    profile: string,
+    /// approval_tool is the tool awaiting approval when status is "waiting".
+    approval-tool: string,
+    /// started_at and last_activity_at are Unix timestamps in milliseconds (0 if unset).
+    started-at: f64,
+    last-activity-at: f64,
+    parent-node-id: string,
+  }
+
+  /// ListNodesResponse holds this node and known mesh peers.
+  record list-nodes-response {
+    nodes: list<node>,
+  }
+
+  /// MeshServiceListSessionsResponse holds sessions across local and reachable peers.
+  record mesh-service-list-sessions-response {
+    sessions: list<session>,
+  }
+
+  /// MeshProject identifies a project configured on a mesh node.
+  record mesh-project {
+    id: string,
+    name: string,
+  }
+
+  /// Node describes a machine in the mesh.
+  record node {
+    id: string,
+    name: string,
+    os: string,
+    arch: string,
+    link: string,
+    self: bool,
+    trusted: bool,
+    projects: list<mesh-project>,
   }
 
   /// FetchRequest is a request.
@@ -708,6 +749,8 @@ interface types {
     prompt: string,
     /// name is the session's, "" for its agent's.
     name: string,
+    /// parent_session_id optionally links the spawned session to an existing parent session.
+    parent-session-id: string,
   }
 
   /// StartAgentResponse says the start was taken.
@@ -1108,6 +1151,20 @@ interface sessions {
   unsubscribe: func(req: unsubscribe-request) -> result<unsubscribe-response, string>;
 }
 
+/// MeshService exposes the node's P2P mesh topology and sessions across this
+/// node and reachable trusted peers.
+interface mesh {
+  use types.{list-nodes-response, mesh-service-list-sessions-response};
+
+  /// ListNodes lists this node and known mesh peers.
+  /// Needs the permission sessions:read.
+  list-nodes: func() -> result<list-nodes-response, string>;
+
+  /// ListSessions lists sessions across this node and reachable trusted peers.
+  /// Needs the permission sessions:read.
+  list-sessions: func() -> result<mesh-service-list-sessions-response, string>;
+}
+
 /// HttpService makes HTTP requests for the plugin, to the hosts its
 /// manifest names as net:<host> and the user allowed: by https, on the
 /// default port, following redirects only within the host. Each request
@@ -1387,6 +1444,7 @@ world plugin {
   import settings;
   import storage;
   import sessions;
+  import mesh;
   import http;
   import commands;
   import db;

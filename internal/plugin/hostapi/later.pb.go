@@ -141,9 +141,11 @@ type StartAgentRequest struct {
 	// prompt is the task it starts with, at most 64 KiB.
 	Prompt string `protobuf:"bytes,5,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	// name is the session's, "" for its agent's.
-	Name          string `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Name string `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
+	// parent_session_id optionally links the spawned session to an existing parent session.
+	ParentSessionId string `protobuf:"bytes,7,opt,name=parent_session_id,json=parentSessionId,proto3" json:"parent_session_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *StartAgentRequest) Reset() {
@@ -214,6 +216,13 @@ func (x *StartAgentRequest) GetPrompt() string {
 func (x *StartAgentRequest) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *StartAgentRequest) GetParentSessionId() string {
+	if x != nil {
+		return x.ParentSessionId
 	}
 	return ""
 }
@@ -2393,14 +2402,15 @@ const file_mako_plugin_v1_later_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\"%\n" +
 	"\x13SendMessageResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x9d\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xc9\x01\n" +
 	"\x11StartAgentRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x18\n" +
 	"\aprofile\x18\x02 \x01(\tR\aprofile\x12\x18\n" +
 	"\aproject\x18\x03 \x01(\tR\aproject\x12\x12\n" +
 	"\x04root\x18\x04 \x01(\tR\x04root\x12\x16\n" +
 	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12\x12\n" +
-	"\x04name\x18\x06 \x01(\tR\x04name\"I\n" +
+	"\x04name\x18\x06 \x01(\tR\x04name\x12*\n" +
+	"\x11parent_session_id\x18\a \x01(\tR\x0fparentSessionId\"I\n" +
 	"\x12StartAgentResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x14\n" +

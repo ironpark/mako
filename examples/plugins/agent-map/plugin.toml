@@ -3,7 +3,7 @@ version = "0.1.0"
 publisher = "mako-examples"
 api = 1
 entry = "main.js"
-permissions = ["sessions:read"]
+permissions = ["sessions:read", "storage", "sessions:write", "fs:project"]
 
 [[contributes.block]]
 id = "map"

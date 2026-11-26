@@ -54,10 +54,21 @@ func (a pluginAgents) Start(ctx context.Context, id string, req plugin.AgentStar
 		return "", fmt.Errorf("agent %s takes no prompt to start with", req.Agent)
 	}
 	prompt := fmt.Sprintf("[Mako task from the plugin %s: code the user installed and let start agents. It is not the user's own instruction, nor Mako's.]\n\n%s", id, req.Prompt)
-	child, err := d.startSessionAs(ctx, newSessionID(), &protocol.OpenSession{Agent: req.Agent, Profile: req.Profile, Project: req.Root, Args: prompter.PromptArgs(prompt)}, plugin.ParentOf(id))
+	parent := strings.TrimSpace(req.ParentSessionID)
+	if parent == "" {
+		parent = plugin.ParentOf(id)
+	}
+	child, err := d.startSessionAs(ctx, newSessionID(), &protocol.OpenSession{Agent: req.Agent, Profile: req.Profile, Project: req.Root, Args: prompter.PromptArgs(prompt)}, parent)
 	if err != nil {
 		return "", err
 	}
+	d.sessionMu.Lock()
+	if entry, ok := d.saved[child.ID()]; ok {
+		entry.PluginID = id
+		d.saved[child.ID()] = entry
+		_ = d.saveSessionsLocked()
+	}
+	d.sessionMu.Unlock()
 	if req.Name != "" {
 		if _, err := d.renameSession(child.ID(), req.Name); err != nil {
 			d.log.Warn("plugin's agent not named", "plugin", id, "session", child.ID(), "err", err)
@@ -66,12 +77,16 @@ func (a pluginAgents) Start(ctx context.Context, id string, req plugin.AgentStar
 	return child.ID(), nil
 }
 
+func isPluginOwned(saved savedSession, pluginID string) bool {
+	return saved.PluginID == pluginID || saved.ParentID == plugin.ParentOf(pluginID)
+}
+
 func (a pluginAgents) Stop(id, sessionID string) error {
 	d := a.d
 	d.sessionMu.Lock()
 	saved, ok := d.saved[sessionID]
 	d.sessionMu.Unlock()
-	if !ok || saved.ParentID != plugin.ParentOf(id) {
+	if !ok || !isPluginOwned(saved, id) {
 		return errors.New("a plugin stops only the agents it started")
 	}
 	return d.closeSession(sessionID)
@@ -83,7 +98,7 @@ func (a pluginAgents) Running(id string) int {
 	defer d.sessionMu.Unlock()
 	n := 0
 	for sid, saved := range d.saved {
-		if saved.ParentID != plugin.ParentOf(id) {
+		if !isPluginOwned(saved, id) {
 			continue
 		}
 		if s, ok := d.sessions.get(sid); ok && s.Info().GetState() != protocol.StateExited {

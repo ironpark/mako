@@ -367,6 +367,66 @@ message Session {
   // status is its agent's: "idle", "working", "waiting" or "done".
   string status = 6;
   string node_id = 7;
+  // parent_session_id and parent_node_id link a subagent or spawned session
+  // back to its parent.
+  string parent_session_id = 8;
+  // branch is the session's checked-out git branch when known.
+  string branch = 9;
+  // profile is the agent profile name when configured.
+  string profile = 10;
+  // approval_tool is the tool awaiting approval when status is "waiting".
+  string approval_tool = 11;
+  // started_at and last_activity_at are Unix timestamps in milliseconds (0 if unset).
+  double started_at = 12;
+  double last_activity_at = 13;
+  string parent_node_id = 14;
+}
+
+// MeshService exposes the node's P2P mesh topology and sessions across this
+// node and reachable trusted peers.
+service MeshService {
+  // ListNodes lists this node and known mesh peers.
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse) {
+    option (permission) = "sessions:read";
+  }
+  // ListSessions lists sessions across this node and reachable trusted peers.
+  rpc ListSessions(MeshServiceListSessionsRequest) returns (MeshServiceListSessionsResponse) {
+    option (permission) = "sessions:read";
+  }
+}
+
+// ListNodesRequest asks for known mesh nodes.
+message ListNodesRequest {}
+
+// ListNodesResponse holds this node and known mesh peers.
+message ListNodesResponse {
+  repeated Node nodes = 1;
+}
+
+// MeshServiceListSessionsRequest asks for sessions across the mesh.
+message MeshServiceListSessionsRequest {}
+
+// MeshServiceListSessionsResponse holds sessions across local and reachable peers.
+message MeshServiceListSessionsResponse {
+  repeated Session sessions = 1;
+}
+
+// MeshProject identifies a project configured on a mesh node.
+message MeshProject {
+  string id = 1;
+  string name = 2;
+}
+
+// Node describes a machine in the mesh.
+message Node {
+  string id = 1;
+  string name = 2;
+  string os = 3;
+  string arch = 4;
+  string link = 5;
+  bool self = 6;
+  bool trusted = 7;
+  repeated MeshProject projects = 8;
 }
 
 // HttpService makes HTTP requests for the plugin, to the hosts its

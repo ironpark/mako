@@ -529,15 +529,17 @@ plugin lacks the permission. The schema, with every field, is
 | `datafs.deleteData({path, recursive, scope})` | `fs:data` | `{deleted}`: removes a file or folder (`recursive: true` for non-empty folders) inside the plugin's private data directory. |
 | `datafs.moveData({fromPath, toPath, makeDirs, scope})` | `fs:data` | Renames or moves a file or folder within the same scope of the plugin's private data directory. |
 | `datafs.dataStats({scope})` | `fs:data` | `{usedBytes, quotaBytes, fileCount}`: returns total bytes and file count across the plugin's private data directory. |
-| `sessions.listSessions()` | `sessions:read` | This node's sessions: `id`, `name`, `agent`, `project`, `state`, `status`, `nodeId`. |
+| `sessions.listSessions()` | `sessions:read` | This node's sessions: `id`, `name`, `agent`, `project`, `state`, `status`, `nodeId`, `parentSessionId`, `parentNodeId`, `branch`, `profile`, `approvalTool`, `startedAt`, `lastActivityAt`. |
 | `sessions.getSession({id})` | `sessions:read` | `{found, session}`. |
 | `sessions.readTranscript({sessionId, before, limit})` | `sessions:read` | A page of a session's conversation, as its agent logged it: `{supported, messages, before, truncated}`, the latest messages, or those before the cursor `before` a page gave; see [Transcripts and events](#transcripts-and-events). |
 | `sessions.subscribe({events})` | `sessions:read` | `{events}`: has the plugin told of events of those kinds, by its default export's `on`. |
 | `sessions.unsubscribe({events})` | `sessions:read` | `{events}` left; none named stops them all. |
+| `mesh.listNodes()` | `sessions:read` | `{nodes}`: this node and known mesh peers (`id`, `name`, `os`, `arch`, `link`, `self`, `trusted`, `projects`). |
+| `mesh.listSessions()` | `sessions:read` | `{sessions}`: sessions across this node and reachable trusted peers. |
 | `http.fetch({url, method, headers, body})` | `net:<host>` | `{status, headers, body}`; see [Permissions](#permissions). |
 | `commands.runCommand({id, arg})` | none | Runs a window intent command: `mako.openUrl` (http/https URL), `mako.toast` (notice ≤ 240 runes), `mako.copyText` (UTF-8 text ≤ 64 KiB), `mako.openDiff`, `mako.openFile`, `mako.openForge`, `mako.createPullRequest` (revision 46), and `mako.openTab` / `mako.closeTab` (revision 49). All except `mako.toast` require a user gesture (at most 8 intents per gesture); prelude exposes `ctx.ui.*` helpers. See [Window intents](#window-intents). |
 | `messages.sendMessage({sessionId, text})` | `sessions:write` | `{id}`: leaves a message for a session's agent, headed as the plugin's; see [Agents](#agents). |
-| `messages.startAgent({agent, profile, project, root, prompt, name})` | `sessions:write` | `{requestId, asked}`: asks to start an agent; its outcome comes to `on.agentStarted` or `on.agentRefused`. |
+| `messages.startAgent({agent, profile, project, root, prompt, name, parentSessionId})` | `sessions:write` | `{requestId, asked}`: asks to start an agent; its outcome comes to `on.agentStarted` or `on.agentRefused`. |
 | `messages.stopAgent({sessionId})` | `sessions:write` | Stops an agent the plugin started. |
 | `files.listProjects()` | `fs:project` | `{projects}`: the projects this node knows, each `{id, name, roots}`, its folders on this node. See [Project files](#project-files). |
 | `files.readFile({project, root, path, offset, length})` | `fs:project` | `{text, data, size, eof, binary}`: a file of a project's folder, or a piece of it, 1 MiB at most. |

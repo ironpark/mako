@@ -15,6 +15,7 @@ import (
 
 	"github.com/ironpark/mako/internal/plugin/hostapi"
 	"github.com/ironpark/mako/internal/protocol"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // host carries out a plugin's calls of the Host API. The dispatcher has
@@ -122,10 +123,42 @@ func (h *host) StorageListKeys(_ context.Context, req *hostapi.ListKeysRequest) 
 	return &hostapi.ListKeysResponse{Keys: keys}, nil
 }
 
+func tsMillis(ts *timestamppb.Timestamp) float64 {
+	if ts == nil || !ts.IsValid() {
+		return 0
+	}
+	ms := ts.AsTime().UnixMilli()
+	if ms <= 0 {
+		return 0
+	}
+	return float64(ms)
+}
+
 // session is a session as a plugin sees it.
 func session(s *protocol.SessionInfo) *hostapi.Session {
-	return &hostapi.Session{Id: s.GetId(), Name: cmp.Or(s.GetName(), protocol.BareTitle(s.GetTitle())), Agent: s.GetAgent(), Project: s.GetProject(),
-		State: s.GetState(), Status: s.GetStatus(), NodeId: s.GetNodeId()}
+	startedAt := tsMillis(s.GetStartedAt())
+	lastActivity := max(
+		tsMillis(s.GetLastMessage()),
+		tsMillis(s.GetLastOutput()),
+		tsMillis(s.GetStatusAt()),
+		startedAt,
+	)
+	return &hostapi.Session{
+		Id:              s.GetId(),
+		Name:            cmp.Or(s.GetName(), protocol.BareTitle(s.GetTitle())),
+		Agent:           s.GetAgent(),
+		Project:         s.GetProject(),
+		State:           s.GetState(),
+		Status:          s.GetStatus(),
+		NodeId:          s.GetNodeId(),
+		ParentSessionId: s.GetParentSessionId(),
+		ParentNodeId:    s.GetParentNodeId(),
+		Branch:          s.GetBranch(),
+		Profile:         s.GetProfile(),
+		ApprovalTool:    s.GetApproval().GetTool(),
+		StartedAt:       startedAt,
+		LastActivityAt:  lastActivity,
+	}
 }
 
 func (h *host) SessionsListSessions(context.Context, *hostapi.ListSessionsRequest) (*hostapi.ListSessionsResponse, error) {
@@ -143,6 +176,44 @@ func (h *host) SessionsGetSession(_ context.Context, req *hostapi.GetSessionRequ
 		}
 	}
 	return &hostapi.GetSessionResponse{}, nil
+}
+
+func meshNode(n *protocol.Node, selfNodeID string) *hostapi.Node {
+	projects := make([]*hostapi.MeshProject, 0, len(n.GetProjects()))
+	for _, p := range n.GetProjects() {
+		projects = append(projects, &hostapi.MeshProject{
+			Id:   p.GetId(),
+			Name: p.GetName(),
+		})
+	}
+	self := n.GetSource() == "self" || (selfNodeID != "" && n.GetId() == selfNodeID)
+	return &hostapi.Node{
+		Id:       n.GetId(),
+		Name:     n.GetName(),
+		Os:       n.GetOs(),
+		Arch:     n.GetArch(),
+		Link:     n.GetLink(),
+		Self:     self,
+		Trusted:  n.GetTrusted(),
+		Projects: projects,
+	}
+}
+
+func (h *host) MeshListNodes(context.Context, *hostapi.ListNodesRequest) (*hostapi.ListNodesResponse, error) {
+	out := &hostapi.ListNodesResponse{}
+	selfID := h.p.m.cfg.NodeID
+	for _, n := range h.p.m.cfg.Nodes() {
+		out.Nodes = append(out.Nodes, meshNode(n, selfID))
+	}
+	return out, nil
+}
+
+func (h *host) MeshListSessions(context.Context, *hostapi.MeshServiceListSessionsRequest) (*hostapi.MeshServiceListSessionsResponse, error) {
+	out := &hostapi.MeshServiceListSessionsResponse{}
+	for _, s := range h.p.m.cfg.MeshSessions() {
+		out.Sessions = append(out.Sessions, session(s))
+	}
+	return out, nil
 }
 
 func (h *host) HttpFetch(ctx context.Context, req *hostapi.FetchRequest) (*hostapi.FetchResponse, error) {
@@ -503,6 +574,17 @@ func (h *host) CommandsRunCommand(_ context.Context, req *hostapi.RunCommandRequ
 					node = s.GetNodeId()
 				}
 				break
+			}
+		}
+		if !found && h.p.m.cfg.MeshSessions != nil {
+			for _, s := range h.p.m.cfg.MeshSessions() {
+				if s.GetId() == sid {
+					found = true
+					if node == "" {
+						node = s.GetNodeId()
+					}
+					break
+				}
 			}
 		}
 		if !found {

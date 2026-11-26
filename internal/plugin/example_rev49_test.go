@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	wasmtime "github.com/ironpark/wasmtime-pure-go"
 
@@ -397,12 +398,13 @@ func TestWasmInspectorExamplePlugin(t *testing.T) {
 }
 
 // TestAgentMapExamplePlugin verifies examples/plugins/agent-map end-to-end:
-// live sessions grouped into project hubs & agent nodes on ui.graph, real-time
-// agentMessage communication edges, node inspection, and mako.openSession intent.
+// multi-machine -> project -> agent -> subagent topology on ui.graph cards,
+// minimap, branch/profile/approval badges, drag-drop position persistence,
+// double-tap and context menu session open intents, inspector, and KO i18n.
 func TestAgentMapExamplePlugin(t *testing.T) {
 	sessions := []*protocol.SessionInfo{
-		{Id: "s-mako-1", Name: "Plugin Architect", Agent: "agy", Project: "/work/oss/mako", State: protocol.StateRunning, Status: protocol.AgentWorking, NodeId: "mac-studio"},
-		{Id: "s-mako-2", Title: "◐ Claude Code", Agent: "claude", Project: "/work/oss/mako", State: protocol.StateRunning, Status: protocol.AgentWaiting, NodeId: "mac-studio"},
+		{Id: "s-mako-1", Name: "Plugin Architect", Agent: "agy", Project: "/work/oss/mako", State: protocol.StateRunning, Status: protocol.AgentWorking, NodeId: "mac-studio", Branch: "feat/graph-v2", Profile: "architect"},
+		{Id: "s-mako-2", Title: "◐ Claude Code", Agent: "claude", Project: "/work/oss/mako", State: protocol.StateRunning, Status: protocol.AgentWaiting, NodeId: "mac-studio", ParentSessionId: "s-mako-1", Approval: &protocol.Approval{Id: "ap-1", Tool: "Bash"}},
 		{Id: "s-game-1", Name: "Engine Refactor", Agent: "codex", Project: "/work/stone-remaster", State: protocol.StateStopped, Status: protocol.AgentIdle, NodeId: "mac-studio"},
 	}
 	r := newRig(t, testLimits, nil, sessions...)
@@ -421,28 +423,94 @@ func TestAgentMapExamplePlugin(t *testing.T) {
 	w := watchViewForTest(t, t.Context(), r.m, "plugin:agent-map/map", "", "ko", View{})
 	tree := w.until("initial agent map graph", func(n *protocol.UiNode) bool {
 		g := findByKind(n, "graph")
-		return g != nil && len(g.GetGraphNodes()) == 5 && len(g.GetGraphEdges()) == 3
+		return g != nil && len(g.GetGraphNodes()) == 6 && len(g.GetGraphEdges()) == 5
 	})
 
 	g := findByKind(tree, "graph")
-	var sawClaudeTitle bool
+	if g.GetVariant() != "cards" || !g.GetMinimap() {
+		t.Fatalf("expected variant=cards & minimap=true, got variant=%q minimap=%v", g.GetVariant(), g.GetMinimap())
+	}
+	var sawClaudeTitle, sawSubagentEdge, sawBadges bool
 	for _, nd := range g.GetGraphNodes() {
-		if nd.GetId() == "sess:s-mako-2" && strings.Contains(nd.GetLabel(), "Claude Code") {
-			sawClaudeTitle = true
+		if nd.GetId() == "sess:s-mako-2" {
+			if strings.Contains(nd.GetLabel(), "Claude Code") {
+				sawClaudeTitle = true
+			}
+			if nd.GetTone() != "warning" || nd.GetStatus() != "waiting" {
+				t.Fatalf("waiting approval node = %+v", nd)
+			}
+			for _, b := range nd.GetBadges() {
+				if b.GetText() == "Bash" {
+					sawBadges = true
+				}
+			}
+		}
+		if nd.GetShape() != "card" {
+			t.Fatalf("expected card shape on node %s, got %q", nd.GetId(), nd.GetShape())
 		}
 	}
-	if !sawClaudeTitle {
-		t.Fatalf("expected BareTitle fallback for unnamed session s-mako-2, nodes=%+v", g.GetGraphNodes())
+	for _, ge := range g.GetGraphEdges() {
+		if ge.GetFrom() == "sess:s-mako-1" && ge.GetTo() == "sess:s-mako-2" && ge.GetKind() == "parent" {
+			sawSubagentEdge = true
+		}
+	}
+	if !sawClaudeTitle || !sawSubagentEdge || !sawBadges {
+		t.Fatalf("missing expected topology features: title=%v subagentEdge=%v badges=%v", sawClaudeTitle, sawSubagentEdge, sawBadges)
 	}
 
-	// Select agent node s-mako-1 -> inspector renders Jump to Session button.
+	// Drag-drop position persistence.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiDrop, Value: `{"id":"sess:s-mako-1","x":240,"y":120}`,
+	}); err != nil {
+		t.Fatalf("drop graph node: %v", err)
+	}
+	w.until("saved node coordinates", func(n *protocol.UiNode) bool {
+		ng := findByKind(n, "graph")
+		if ng == nil {
+			return false
+		}
+		for _, nd := range ng.GetGraphNodes() {
+			if nd.GetId() == "sess:s-mako-1" {
+				return nd.GetHasPos() && nd.GetX() == 240 && nd.GetY() == 120
+			}
+		}
+		return false
+	})
+
+	// Double-tap session node -> emits PluginOpen{Kind: "session", Key: "s-mako-1"}.
+	dtapRes, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiDoubleTap, Value: "sess:s-mako-1",
+	})
+	if err != nil {
+		t.Fatalf("double tap graph node: %v", err)
+	}
+	if len(dtapRes.GetOpen()) != 1 || dtapRes.GetOpen()[0].GetKey() != "s-mako-1" {
+		t.Fatalf("unexpected double-tap openSession intent: %+v", dtapRes.GetOpen())
+	}
+
+	// Context menu open-session item -> emits PluginOpen{Kind: "session", Key: "s-mako-2"}.
+	ctxOpen := findBySuffix(tree, "ctx-open")
+	if ctxOpen == nil {
+		t.Fatal("missing ctx-open menu item in tree")
+	}
+	ctxRes, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: ctxOpen.GetId(), Kind: protocol.UiTap, Value: "sess:s-mako-2",
+	})
+	if err != nil {
+		t.Fatalf("context menu tap: %v", err)
+	}
+	if len(ctxRes.GetOpen()) != 1 || ctxRes.GetOpen()[0].GetKey() != "s-mako-2" {
+		t.Fatalf("unexpected context menu openSession intent: %+v", ctxRes.GetOpen())
+	}
+
+	// Select agent node s-mako-1 -> inspector renders enriched metadata & Jump to Session button.
 	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
 		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiChange, Value: "sess:s-mako-1",
 	}); err != nil {
 		t.Fatalf("select graph node: %v", err)
 	}
 	inspTree := w.until("agent inspector", func(n *protocol.UiNode) bool {
-		return findBySuffix(n, "btn-jump-session") != nil && hasText(n, "Plugin Architect")
+		return findBySuffix(n, "btn-jump-session") != nil && hasText(n, "Plugin Architect") && hasText(n, "feat/graph-v2")
 	})
 
 	// Tap Jump to session -> emits PluginOpen{Kind: "session", Key: "s-mako-1"}.
@@ -457,7 +525,7 @@ func TestAgentMapExamplePlugin(t *testing.T) {
 		t.Fatalf("unexpected openSession intent: %+v", jumpRes.GetOpen())
 	}
 
-	// Switch to Projects cards view and Sessions table view in Korean.
+	// Switch to Sessions table view in Korean.
 	viewTabs := findBySuffix(inspTree, "view-tabs")
 	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
 		Block: "plugin:agent-map/map", Node: viewTabs.GetId(), Kind: protocol.UiChange, Value: "세션 목록",
@@ -467,4 +535,488 @@ func TestAgentMapExamplePlugin(t *testing.T) {
 	w.until("sessions table view", func(n *protocol.UiNode) bool {
 		return findByKind(n, "table") != nil && hasText(n, "Engine Refactor")
 	})
+}
+
+func loadAgentMapFiles(t *testing.T) map[string]string {
+	t.Helper()
+	files := map[string]string{}
+	for _, name := range []string{ManifestName, "main.js"} {
+		b, err := os.ReadFile(filepath.Join("../../examples/plugins/agent-map", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[name] = string(b)
+	}
+	return files
+}
+
+// TestAgentMapSubagentContextMenu verifies that agent-map declares "fs:project",
+// resolves project + root via mako.files.listProjects() (including subdirectory
+// sessions and fallback), and spawns a subagent with ParentSessionID via the
+// ctx-subagent -> dlg-input -> dlg-submit flow.
+func TestAgentMapSubagentContextMenu(t *testing.T) {
+	agents := &fakeAgents{}
+	sessions := []*protocol.SessionInfo{
+		{Id: "s-parent", Name: "Parent Agent", Agent: "claude", Project: "/work/oss/mako/sub", State: protocol.StateRunning, Status: protocol.AgentIdle, NodeId: "mac-studio"},
+		{Id: "s-unmatched", Name: "External Session", Agent: "codex", Project: "/other/unregistered/dir", State: protocol.StateRunning, Status: protocol.AgentIdle, NodeId: "mac-studio"},
+	}
+	r := startRig(t, Config{
+		Limits:   testLimits,
+		Sessions: func() []*protocol.SessionInfo { return sessions },
+		Projects: func() []ProjectRoots {
+			return []ProjectRoots{{ID: "proj-mako", Name: "Mako", Roots: []string{"/work/oss/mako"}}}
+		},
+		Agents: agents,
+	})
+	r.write("agent-map", loadAgentMapFiles(t))
+	info := r.state("agent-map", protocol.PluginWaiting)
+	if !slices.Contains(info.GetPermissions(), "fs:project") {
+		t.Fatalf("agent-map permissions = %v, want fs:project included", info.GetPermissions())
+	}
+	r.grant("agent-map")
+
+	w := watchViewForTest(t, t.Context(), r.m, "plugin:agent-map/map", "", "en", View{})
+	tree := w.until("initial graph", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "ctx-subagent") != nil
+	})
+
+	// 1. Trigger ctx-subagent on subdirectory session s-parent -> dlg-input -> dlg-submit.
+	ctxSub := findBySuffix(tree, "ctx-subagent")
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: ctxSub.GetId(), Kind: protocol.UiTap, Value: "sess:s-parent",
+	}); err != nil {
+		t.Fatalf("ctx-subagent tap: %v", err)
+	}
+	dlgTree := w.until("subagent dialog", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "dlg-input") != nil && findBySuffix(n, "dlg-submit") != nil
+	})
+	dlgInput := findBySuffix(dlgTree, "dlg-input")
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: dlgInput.GetId(), Kind: protocol.UiChange, Value: "audit mesh endpoints",
+	}); err != nil {
+		t.Fatalf("dlg-input change: %v", err)
+	}
+	dlgSubmit := findBySuffix(dlgTree, "dlg-submit")
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: dlgSubmit.GetId(), Kind: protocol.UiTap,
+	}); err != nil {
+		t.Fatalf("dlg-submit tap: %v", err)
+	}
+
+	ask := r.ask("agent-map")
+	if _, err := r.act(&protocol.PluginAction{
+		PluginId: "agent-map",
+		Op:       protocol.PluginAllowAgent,
+		Key:      ask.GetId(),
+		Value:    protocol.AgentAlways,
+	}); err != nil {
+		t.Fatalf("allow agent: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for agents.starts() == 0 && time.Now().Before(deadline) {
+		time.Sleep(15 * time.Millisecond)
+	}
+	agents.mu.Lock()
+	if len(agents.started) != 1 {
+		agents.mu.Unlock()
+		t.Fatalf("started count = %d, want 1", len(agents.started))
+	}
+	got := agents.started[0]
+	agents.mu.Unlock()
+	if got.ParentSessionID != "s-parent" || got.Project != "proj-mako" || got.Root != "/work/oss/mako" {
+		t.Fatalf("first AgentStart = %+v, want ParentSessionID=s-parent Project=proj-mako Root=/work/oss/mako", got)
+	}
+
+	// 2. Fallback on s-unmatched (/other/unregistered/dir): must set BOTH project and root from p.roots[0].
+	w.until("dialog closed", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "dlg-input") == nil
+	})
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: ctxSub.GetId(), Kind: protocol.UiTap, Value: "sess:s-unmatched",
+	}); err != nil {
+		t.Fatalf("ctx-subagent fallback tap: %v", err)
+	}
+	dlgTree2 := w.until("subagent dialog 2", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "dlg-input") != nil && findBySuffix(n, "dlg-submit") != nil
+	})
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: findBySuffix(dlgTree2, "dlg-input").GetId(), Kind: protocol.UiChange, Value: "fallback root task",
+	}); err != nil {
+		t.Fatalf("dlg-input 2 change: %v", err)
+	}
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: findBySuffix(dlgTree2, "dlg-submit").GetId(), Kind: protocol.UiTap,
+	}); err != nil {
+		t.Fatalf("dlg-submit 2 tap: %v", err)
+	}
+	deadline = time.Now().Add(5 * time.Second)
+	for agents.starts() < 2 && time.Now().Before(deadline) {
+		time.Sleep(15 * time.Millisecond)
+	}
+	agents.mu.Lock()
+	defer agents.mu.Unlock()
+	if len(agents.started) != 2 {
+		t.Fatalf("started count = %d, want 2", len(agents.started))
+	}
+	if agents.started[1].ParentSessionID != "s-unmatched" || agents.started[1].Project != "proj-mako" || agents.started[1].Root != "/work/oss/mako" {
+		t.Fatalf("fallback AgentStart = %+v, want ParentSessionID=s-unmatched Project=proj-mako Root=/work/oss/mako", agents.started[1])
+	}
+}
+
+// TestAgentMapUTF8TruncationAndControlFallback verifies that long Korean/CJK
+// machine, project, and session names (>= 30 Korean characters) stay within
+// uiblock UTF-8 byte limits and control-char-only names fall back cleanly.
+func TestAgentMapUTF8TruncationAndControlFallback(t *testing.T) {
+	longMachine := strings.Repeat("가", 30) + strings.Repeat("🚀", 5)
+	longProject := "/work/" + strings.Repeat("🚀", 8) + strings.Repeat("프", 30)
+	longSession := strings.Repeat("한", 35)
+	longBranch := strings.Repeat("브", 30)
+
+	nodes := []*protocol.Node{
+		{Id: "node-kr", Name: longMachine, Os: "darwin", Arch: "arm64", Source: "self", Link: protocol.LinkUp, Trusted: true},
+		{Id: "node-ctrl", Name: "\x00\x01\u202e\x1f  ", Os: "linux", Arch: "amd64", Link: protocol.LinkUp, Trusted: true},
+	}
+	sessions := []*protocol.SessionInfo{
+		{Id: "s-kr", Name: longSession, Agent: "claude", Project: longProject, State: protocol.StateRunning, Status: protocol.AgentWorking, NodeId: "node-kr", Branch: longBranch},
+		{Id: "s-ctrl", Name: "\x00\u202e", Agent: "codex", Project: "/work/app", State: protocol.StateRunning, Status: protocol.AgentIdle, NodeId: "node-ctrl"},
+	}
+
+	r := startRig(t, Config{
+		Limits:   testLimits,
+		NodeID:   "node-kr",
+		Sessions: func() []*protocol.SessionInfo { return sessions },
+		Nodes:    func() []*protocol.Node { return nodes },
+	})
+	r.write("agent-map", loadAgentMapFiles(t))
+	r.state("agent-map", protocol.PluginWaiting)
+	r.grant("agent-map")
+
+	w := watchViewForTest(t, t.Context(), r.m, "plugin:agent-map/map", "", "ko", View{})
+	tree := w.until("UTF-8 Korean and control-fallback graph", func(n *protocol.UiNode) bool {
+		g := findByKind(n, "graph")
+		return g != nil && len(g.GetGraphNodes()) == 6
+	})
+
+	g := findByKind(tree, "graph")
+	var sawCtrlMachine, sawCtrlSession bool
+	for _, nd := range g.GetGraphNodes() {
+		if nd.GetLabel() == "" || len(nd.GetLabel()) > 128 || !utf8.ValidString(nd.GetLabel()) {
+			t.Fatalf("node %q invalid label: %q (bytes=%d)", nd.GetId(), nd.GetLabel(), len(nd.GetLabel()))
+		}
+		if len(nd.GetGroup()) > 64 || !utf8.ValidString(nd.GetGroup()) {
+			t.Fatalf("node %q invalid group: %q (bytes=%d)", nd.GetId(), nd.GetGroup(), len(nd.GetGroup()))
+		}
+		if len(nd.GetSubtitle()) > 160 || !utf8.ValidString(nd.GetSubtitle()) {
+			t.Fatalf("node %q invalid subtitle: %q (bytes=%d)", nd.GetId(), nd.GetSubtitle(), len(nd.GetSubtitle()))
+		}
+		if nd.GetId() == "mach:node-ctrl" {
+			sawCtrlMachine = true
+			if nd.GetLabel() != "node-ctrl" {
+				t.Fatalf("control-char machine label = %q, want %q", nd.GetLabel(), "node-ctrl")
+			}
+		}
+		if nd.GetId() == "sess:s-ctrl" {
+			sawCtrlSession = true
+			if !strings.Contains(nd.GetLabel(), "codex") {
+				t.Fatalf("control-char session label = %q, want fallback containing codex", nd.GetLabel())
+			}
+		}
+	}
+	if !sawCtrlMachine || !sawCtrlSession {
+		t.Fatalf("missing expected fallback nodes: mach=%v sess=%v", sawCtrlMachine, sawCtrlSession)
+	}
+}
+
+func assertNoSpoofingInTree(t *testing.T, n *protocol.UiNode) {
+	t.Helper()
+	if n == nil {
+		return
+	}
+	check := func(field, s string) {
+		if strings.ContainsFunc(s, protocol.Spoofing) {
+			t.Fatalf("node %q (%s) %s contains spoofing rune: %q", n.GetId(), n.GetKind(), field, s)
+		}
+		if !utf8.ValidString(s) {
+			t.Fatalf("node %q (%s) %s has invalid UTF-8: %q", n.GetId(), n.GetKind(), field, s)
+		}
+	}
+	check("text", n.GetText())
+	check("value", n.GetValue())
+	check("placeholder", n.GetPlaceholder())
+	for _, b := range n.GetBadges() {
+		if b.GetText() == "" && b.GetIcon() == "" {
+			t.Fatalf("node %q has empty badge", n.GetId())
+		}
+		check("badge", b.GetText())
+	}
+	for _, gn := range n.GetGraphNodes() {
+		check("graph.id", gn.GetId())
+		check("graph.label", gn.GetLabel())
+		check("graph.group", gn.GetGroup())
+		check("graph.subtitle", gn.GetSubtitle())
+		for _, b := range gn.GetBadges() {
+			if b.GetText() == "" && b.GetIcon() == "" {
+				t.Fatalf("graph node %q has empty badge", gn.GetId())
+			}
+			check("graph.badge", b.GetText())
+		}
+	}
+	for _, ge := range n.GetGraphEdges() {
+		check("edge.label", ge.GetLabel())
+	}
+	for _, c := range n.GetChildren() {
+		assertNoSpoofingInTree(t, c)
+	}
+}
+
+// TestAgentMapZWJAndSpoofingChars verifies that ZWJ emoji ("🧑‍💻", "👨‍👩‍👧‍👦")
+// and zero-width / BOM / directional marks (\u061c, \u200b-\u200f, \ufeff)
+// in machine, session, and project metadata render cleanly through uiblock.Read
+// across map, inspector, projects, and table views, and that control-only Os/Link
+// fields do not emit empty badges.
+func TestAgentMapZWJAndSpoofingChars(t *testing.T) {
+	nodes := []*protocol.Node{
+		{Id: "node-zwj-1", Name: "🧑‍💻 Studio-\u061c\u200b\u200c\u200d\u200e\u200f\ufeffHost", Os: "\x00\u202e", Arch: "arm64", Source: "self", Link: "\u200b\x1f", Trusted: true},
+		{Id: "node-zwj-2", Name: "👨‍👩‍👧‍👦 Family-Node", Os: "linux", Arch: "amd64", Link: "up", Trusted: true},
+	}
+	sessions := []*protocol.SessionInfo{
+		{
+			Id: "s-zwj-1", Name: "🧑‍💻 Architect \u200b\ufeffLead", Agent: "claude",
+			Project: "/work/\u061c🧑‍💻mako\u200f", State: protocol.StateRunning, Status: protocol.AgentWorking,
+			NodeId: "node-zwj-1", Branch: "feat/\u200bzwj-\u200demoji", Profile: "\u200epro\ufeff",
+			Approval: &protocol.Approval{Id: "ap-zwj", Tool: "\u061cBash\u200f"},
+		},
+		{
+			Id: "s-zwj-2", Name: "👨‍👩‍👧‍👦 Subagent", Agent: "codex",
+			Project: "/work/\u200b\u200c\u200d\ufeff", State: protocol.StateRunning, Status: protocol.AgentIdle,
+			NodeId: "node-zwj-2",
+		},
+	}
+
+	r := startRig(t, Config{
+		Limits:   testLimits,
+		NodeID:   "node-zwj-1",
+		Sessions: func() []*protocol.SessionInfo { return sessions },
+		Nodes:    func() []*protocol.Node { return nodes },
+	})
+	r.write("agent-map", loadAgentMapFiles(t))
+	r.state("agent-map", protocol.PluginWaiting)
+	r.grant("agent-map")
+
+	w := watchViewForTest(t, t.Context(), r.m, "plugin:agent-map/map", "", "en", View{})
+	tree := w.until("ZWJ emoji initial map", func(n *protocol.UiNode) bool {
+		g := findByKind(n, "graph")
+		return g != nil && len(g.GetGraphNodes()) == 6 && findBySuffix(n, "insp-overview") != nil
+	})
+	assertNoSpoofingInTree(t, tree)
+
+	g := findByKind(tree, "graph")
+	var sawZWJSession, sawCleanMach bool
+	for _, nd := range g.GetGraphNodes() {
+		if nd.GetId() == "sess:s-zwj-1" {
+			sawZWJSession = true
+			// ZWJ stripped with "" so adjacent emoji glyphs stay joined without an inserted space.
+			if !strings.Contains(nd.GetLabel(), "🧑💻") {
+				t.Fatalf("ZWJ session label = %q, want adjacent glyph sequence %q", nd.GetLabel(), "🧑💻")
+			}
+		}
+		if nd.GetId() == "mach:node-zwj-1" {
+			sawCleanMach = true
+			if !strings.Contains(nd.GetLabel(), "🧑💻") {
+				t.Fatalf("ZWJ machine label = %q, want adjacent glyph sequence %q", nd.GetLabel(), "🧑💻")
+			}
+			for _, b := range nd.GetBadges() {
+				if b.GetText() == "" {
+					t.Fatalf("mach:node-zwj-1 emitted empty badge for control-only Os/Link: %+v", b)
+				}
+			}
+		}
+	}
+	if !sawZWJSession || !sawCleanMach {
+		t.Fatalf("missing expected nodes: sess=%v mach=%v", sawZWJSession, sawCleanMach)
+	}
+
+	// Select session, project, and machine nodes in inspector.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiChange, Value: "sess:s-zwj-1",
+	}); err != nil {
+		t.Fatalf("select s-zwj-1: %v", err)
+	}
+	sessInsp := w.until("ZWJ session inspector", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "insp-session") != nil && hasText(n, "Bash")
+	})
+	assertNoSpoofingInTree(t, sessInsp)
+
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiChange, Value: "proj:0:0",
+	}); err != nil {
+		t.Fatalf("select proj:0:0: %v", err)
+	}
+	projInsp := w.until("ZWJ project inspector", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "insp-project") != nil
+	})
+	assertNoSpoofingInTree(t, projInsp)
+
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiChange, Value: "mach:node-zwj-1",
+	}); err != nil {
+		t.Fatalf("select mach:node-zwj-1: %v", err)
+	}
+	machInsp := w.until("ZWJ machine inspector", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "insp-machine") != nil
+	})
+	assertNoSpoofingInTree(t, machInsp)
+
+	// Switch to Projects and Sessions (table) views.
+	viewTabs := findBySuffix(machInsp, "view-tabs")
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: viewTabs.GetId(), Kind: protocol.UiChange, Value: "Projects",
+	}); err != nil {
+		t.Fatalf("switch to projects view: %v", err)
+	}
+	projTree := w.until("ZWJ projects view", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "projects-grid") != nil
+	})
+	assertNoSpoofingInTree(t, projTree)
+
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: viewTabs.GetId(), Kind: protocol.UiChange, Value: "Sessions",
+	}); err != nil {
+		t.Fatalf("switch to table view: %v", err)
+	}
+	tblTree := w.until("ZWJ table view", func(n *protocol.UiNode) bool {
+		return findByKind(n, "table") != nil
+	})
+	assertNoSpoofingInTree(t, tblTree)
+}
+
+// TestAgentMapAdversarialControlCharsAcrossAllViews verifies that control and
+// directional reordering characters in Session.Project, Branch, Profile,
+// Approval.Tool, Agent, and NodeId render cleanly across map, insp-overview,
+// insp-session, insp-project, insp-machine, projects, and table views.
+func TestAgentMapAdversarialControlCharsAcrossAllViews(t *testing.T) {
+	nodes := []*protocol.Node{
+		{Id: "node-clean", Name: "Clean\x00\u202eStudio", Os: "darwin\x07", Arch: "arm64\u2066", Source: "self", Link: "up\u200f", Trusted: true},
+	}
+	sessions := []*protocol.SessionInfo{
+		{
+			Id:              "s-adv-1",
+			Name:            "SafeName",
+			Agent:           "\u202eclaude\x1f",
+			Project:         "/work/\x00\u202eadv-proj\u2066",
+			State:           protocol.StateRunning,
+			Status:          protocol.AgentWaiting,
+			NodeId:          "node-clean",
+			Branch:          "\x1b[31mmain\u202e",
+			Profile:         "\u202aarch\x07",
+			ParentSessionId: "s-adv-2",
+			Approval:        &protocol.Approval{Id: "ap-adv", Tool: "\x00\u202eBash\u2069"},
+		},
+		{
+			Id:       "s-adv-2",
+			Name:     "\x00\u202e\u200b\ufeff",
+			Agent:    "\x00\u202e",
+			Project:  "\x00\x1b\u202e\u2066",
+			State:    protocol.StateStopped,
+			Status:   protocol.AgentIdle,
+			NodeId:   "\x00\u202e",
+			Branch:   "\x00\u202e",
+			Profile:  "\u200b\u202e",
+			Approval: &protocol.Approval{Id: "ap-ctrl", Tool: "\x00\u202e"},
+		},
+	}
+
+	r := startRig(t, Config{
+		Limits:   testLimits,
+		NodeID:   "node-clean",
+		Sessions: func() []*protocol.SessionInfo { return sessions },
+		Nodes:    func() []*protocol.Node { return nodes },
+	})
+	r.write("agent-map", loadAgentMapFiles(t))
+	r.state("agent-map", protocol.PluginWaiting)
+	r.grant("agent-map")
+
+	w := watchViewForTest(t, t.Context(), r.m, "plugin:agent-map/map", "", "en", View{})
+	tree := w.until("adversarial map + insp-overview", func(n *protocol.UiNode) bool {
+		g := findByKind(n, "graph")
+		return g != nil && findBySuffix(n, "insp-overview") != nil && hasText(n, "adv-proj")
+	})
+	assertNoSpoofingInTree(t, tree)
+
+	g := findByKind(tree, "graph")
+	// Select s-adv-1 -> insp-session.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiChange, Value: "sess:s-adv-1",
+	}); err != nil {
+		t.Fatalf("select s-adv-1: %v", err)
+	}
+	s1Tree := w.until("insp-session s-adv-1", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "insp-session") != nil && hasText(n, "SafeName") && hasText(n, "Bash") && hasText(n, "arch")
+	})
+	assertNoSpoofingInTree(t, s1Tree)
+
+	// Select s-adv-2 (control-char-only metadata) -> insp-session with non-empty fallbacks.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiChange, Value: "sess:s-adv-2",
+	}); err != nil {
+		t.Fatalf("select s-adv-2: %v", err)
+	}
+	s2Tree := w.until("insp-session s-adv-2", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "insp-session") != nil && hasText(n, "s-adv-2") && hasText(n, "(No folder)")
+	})
+	assertNoSpoofingInTree(t, s2Tree)
+
+	// Select proj:0:0 -> insp-project.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiChange, Value: "proj:0:0",
+	}); err != nil {
+		t.Fatalf("select proj:0:0: %v", err)
+	}
+	pTree := w.until("insp-project", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "insp-project") != nil
+	})
+	assertNoSpoofingInTree(t, pTree)
+
+	// Select mach:node-clean -> insp-machine.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: g.GetId(), Kind: protocol.UiChange, Value: "mach:node-clean",
+	}); err != nil {
+		t.Fatalf("select mach:node-clean: %v", err)
+	}
+	mTree := w.until("insp-machine", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "insp-machine") != nil
+	})
+	assertNoSpoofingInTree(t, mTree)
+
+	// Switch view-tabs -> Projects -> Sessions (table) -> Topology Map.
+	viewTabs := findBySuffix(mTree, "view-tabs")
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: viewTabs.GetId(), Kind: protocol.UiChange, Value: "Projects",
+	}); err != nil {
+		t.Fatalf("switch to Projects: %v", err)
+	}
+	projectsTree := w.until("projects view", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "projects-grid") != nil && hasText(n, "adv-proj")
+	})
+	assertNoSpoofingInTree(t, projectsTree)
+
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: viewTabs.GetId(), Kind: protocol.UiChange, Value: "Sessions",
+	}); err != nil {
+		t.Fatalf("switch to Sessions: %v", err)
+	}
+	tableTree := w.until("table view", func(n *protocol.UiNode) bool {
+		return findByKind(n, "table") != nil && hasText(n, "SafeName")
+	})
+	assertNoSpoofingInTree(t, tableTree)
+
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:agent-map/map", Node: viewTabs.GetId(), Kind: protocol.UiChange, Value: "Topology Map",
+	}); err != nil {
+		t.Fatalf("switch back to Topology Map: %v", err)
+	}
+	backTree := w.until("back to map view", func(n *protocol.UiNode) bool {
+		return findByKind(n, "graph") != nil
+	})
+	assertNoSpoofingInTree(t, backTree)
 }

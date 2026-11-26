@@ -104,6 +104,12 @@ type Handler interface {
 	// Unsubscribe stops the events of the kinds named; none named stops
 	// every one.
 	SessionsUnsubscribe(ctx context.Context, req *UnsubscribeRequest) (*UnsubscribeResponse, error)
+	// MeshListNodes carries out mesh.listNodes.
+	// ListNodes lists this node and known mesh peers.
+	MeshListNodes(ctx context.Context, req *ListNodesRequest) (*ListNodesResponse, error)
+	// MeshListSessions carries out mesh.listSessions.
+	// ListSessions lists sessions across this node and reachable trusted peers.
+	MeshListSessions(ctx context.Context, req *MeshServiceListSessionsRequest) (*MeshServiceListSessionsResponse, error)
 	// HttpFetch carries out http.fetch.
 	// Fetch makes a request and reads the response.
 	HttpFetch(ctx context.Context, req *FetchRequest) (*FetchResponse, error)
@@ -259,6 +265,8 @@ var Methods = []Method{
 	{Name: "sessions.readTranscript", Permission: PermSessionsRead},
 	{Name: "sessions.subscribe", Permission: PermSessionsRead},
 	{Name: "sessions.unsubscribe", Permission: PermSessionsRead},
+	{Name: "mesh.listNodes", Permission: PermSessionsRead},
+	{Name: "mesh.listSessions", Permission: PermSessionsRead},
 	{Name: "http.fetch", Permission: PermNet},
 	{Name: "commands.runCommand", Permission: PermNone},
 	{Name: "db.query", Permission: PermDb},
@@ -389,6 +397,16 @@ func Dispatch(ctx context.Context, grants Grants, h Handler, name string, req []
 			return nil, &DeniedError{Method: name, Permission: PermSessionsRead}
 		}
 		return call(ctx, req, new(UnsubscribeRequest), h.SessionsUnsubscribe)
+	case "mesh.listNodes":
+		if !grants.Has(PermSessionsRead) {
+			return nil, &DeniedError{Method: name, Permission: PermSessionsRead}
+		}
+		return call(ctx, req, new(ListNodesRequest), h.MeshListNodes)
+	case "mesh.listSessions":
+		if !grants.Has(PermSessionsRead) {
+			return nil, &DeniedError{Method: name, Permission: PermSessionsRead}
+		}
+		return call(ctx, req, new(MeshServiceListSessionsRequest), h.MeshListSessions)
 	case "http.fetch":
 		if !grants.Has(PermNet) {
 			return nil, &DeniedError{Method: name, Permission: PermNet}

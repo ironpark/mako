@@ -37,6 +37,7 @@ type savedSession struct {
 	TranscriptPath string
 	ParentID       string
 	ParentNodeID   string
+	PluginID       string
 }
 
 // savedJSON is a savedSession as sessions.json has it. The messages are in
@@ -48,6 +49,7 @@ type savedJSON struct {
 	TranscriptPath string          `json:"transcript_path,omitempty"`
 	ParentID       string          `json:"parent_session,omitempty"`
 	ParentNodeID   string          `json:"parent_node,omitempty"`
+	PluginID       string          `json:"plugin_id,omitempty"`
 }
 
 var (
@@ -64,7 +66,7 @@ func (e savedSession) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(savedJSON{Info: info, Request: req, TranscriptPath: e.TranscriptPath, ParentID: e.ParentID, ParentNodeID: e.ParentNodeID})
+	return json.Marshal(savedJSON{Info: info, Request: req, TranscriptPath: e.TranscriptPath, ParentID: e.ParentID, ParentNodeID: e.ParentNodeID, PluginID: e.PluginID})
 }
 
 func (e *savedSession) UnmarshalJSON(data []byte) error {
@@ -75,6 +77,7 @@ func (e *savedSession) UnmarshalJSON(data []byte) error {
 	e.Info, e.Request, e.TranscriptPath = &protocol.SessionInfo{}, &protocol.OpenSession{}, raw.TranscriptPath
 	e.ParentID = raw.ParentID
 	e.ParentNodeID = raw.ParentNodeID
+	e.PluginID = raw.PluginID
 	if len(raw.Info) > 0 {
 		if err := savedUnmarshal.Unmarshal(raw.Info, e.Info); err != nil {
 			return fmt.Errorf("info: %w", err)
@@ -416,9 +419,11 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 
 	d.sessionMu.Lock()
 	previous, existed := d.saved[id]
+	var pluginID string
 	if existed {
 		parent = previous.ParentID
 		parentNode = previous.ParentNodeID
+		pluginID = previous.PluginID
 	}
 	var claimed map[string]bool // only an older saved session recovers one
 	if existed && previous.Info.GetConversationId() == "" {
@@ -521,7 +526,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	info := s.Info()
 	// Commands can embed ephemeral MCP config and secrets; only persist inputs.
 	info.Command = nil
-	d.saved[id] = savedSession{Info: info, Request: req, TranscriptPath: transcriptPath, ParentID: parent, ParentNodeID: parentNode}
+	d.saved[id] = savedSession{Info: info, Request: req, TranscriptPath: transcriptPath, ParentID: parent, ParentNodeID: parentNode, PluginID: pluginID}
 	if err := d.saveSessionsLocked(); err != nil {
 		if existed {
 			d.saved[id] = previous
