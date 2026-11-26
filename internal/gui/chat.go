@@ -495,7 +495,17 @@ func chatView(m *model, id string, group int) ggui.Widget {
 		return chatMessages(state.result.Get(), state.older.Get())
 	})
 	logged := ggui.Derived(func() []chatTurnItem {
-		turns := chatTurns(loaded.Get(), agentsByCall(state.result.Get().Chat.GetAgents()))
+		v, older := state.result.Get(), state.older.Get()
+		fullHistory := v.Chat.GetStart() == 0
+		if older.End > 0 {
+			fullHistory = older.Start == 0
+		}
+		turns := chatTurns(loaded.Get(), agentsByCall(v.Chat.GetAgents()))
+		if fullHistory {
+			for i := range turns {
+				turns[i].FullHistory = true
+			}
+		}
 		return append(turns, pendingTurns(state.pending.Get())...)
 	}).WithEqual(deepEqual)
 	turns := withLive(logged, state)
@@ -717,9 +727,10 @@ func chatTurns(messages []*protocol.ChatMessage, agents map[string]*protocol.Sub
 		}
 	}
 	seen := map[string]int{}
+	userIdx := 0
 	for i := 0; i < len(messages); {
 		start := i
-		t := chatTurnItem{Key: chatMessageKey(messages[i])}
+		t := chatTurnItem{Key: chatMessageKey(messages[i]), UserTurnIndex: -1}
 		if messages[i].GetRole() == "tool" {
 			t.Key = "run:" + t.Key
 			t.SwarmSync = isSwarmSyncTool(messages[start])
@@ -730,6 +741,10 @@ func chatTurns(messages []*protocol.ChatMessage, agents map[string]*protocol.Sub
 				i++
 			}
 		} else {
+			if messages[i].GetRole() == "user" {
+				t.UserTurnIndex = userIdx
+				userIdx++
+			}
 			t.Messages = messages[i : i+1]
 			i++
 		}
@@ -749,14 +764,16 @@ func chatTurns(messages []*protocol.ChatMessage, agents map[string]*protocol.Sub
 // chatTurnItem is one turn of the feed: a message, or a run of tool calls
 // with the sub-agent each started, if any.
 type chatTurnItem struct {
-	Key       string
-	Messages  []*protocol.ChatMessage
-	Agents    []*protocol.SubAgent
-	Folded    bool   // a long run folded to a line
-	SwarmSync bool   // a coalesced run of low-signal swarm coordination calls
-	Sending   bool   // a message sent, not yet in the log
-	Thinking  bool   // the agent thinks or reports a live activity status
-	Status    string // live activity label (e.g. "Reading file…"), empty for default "Thinking…"
+	Key           string
+	Messages      []*protocol.ChatMessage
+	Agents        []*protocol.SubAgent
+	UserTurnIndex int    // 0-based index among user turns in the loaded chat; -1 for non-user turns
+	FullHistory   bool   // true when offset 0 of the conversation log is loaded
+	Folded        bool   // a long run folded to a line
+	SwarmSync     bool   // a coalesced run of low-signal swarm coordination calls
+	Sending       bool   // a message sent, not yet in the log
+	Thinking      bool   // the agent thinks or reports a live activity status
+	Status        string // live activity label (e.g. "Reading file…"), empty for default "Thinking…"
 }
 
 // chatGap is the room between the feed's turns, and chatTurnEstimate how
@@ -781,10 +798,11 @@ func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatSta
 	}
 	if t.Sending {
 		label := widget.Row(widget.Spacer(), icon("clock").Size(11).Color(skin.ExtraMuted), widget.Text(T("Sent")).Size(11).Color(skin.ExtraMuted)).Gap(4).Align(widget.AlignCenter)
-		return widget.Column(widget.Opacity(chatTurn(m, id, info, t.Messages[0]), 0.6), label).Gap(4).Stretch()
+		return widget.Column(widget.Opacity(chatTurn(m, id, info, t.Messages[0], -1, false), 0.6), label).Gap(4).Stretch()
 	}
 	if t.Messages[0].GetRole() != "tool" {
-		return chatTurn(m, id, info, t.Messages[0])
+		canRewind := ggui.Peek(state.agent) == "" && canRewindTurn(info, t.Messages[0], t.UserTurnIndex, t.FullHistory)
+		return chatTurn(m, id, info, t.Messages[0], t.UserTurnIndex, canRewind)
 	}
 	var tools []ggui.Widget
 	for i, msg := range t.Messages {
@@ -868,14 +886,35 @@ func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name 
 	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(name)
 }
 
-func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage) ggui.Widget {
+func canRewindTurn(info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, fullHistory bool) bool {
+	if info == nil || msg == nil || msg.GetRole() != "user" || userTurnIndex < 0 {
+		return false
+	}
+	if info.GetConversationId() == "" {
+		return false
+	}
+	switch info.GetAgent() {
+	case "claude":
+		return msg.GetId() != "" || fullHistory
+	case "codex":
+		return fullHistory
+	default:
+		return false
+	}
+}
+
+func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, canRewind bool) ggui.Widget {
 	if msg.GetRole() == "user" {
 		if marks := chatMarks(msg.GetText()); marks != nil {
 			return markedTurn(m, id, info, msg, marks)
 		}
 		bubble := widget.Box(widget.Text(msg.GetText()).Size(14).Selectable()).
 			Fill(skin.Surface2).Radius(12).Pad(10, 14).MaxWidth(680)
-		var turn ggui.Widget = widget.Row(widget.Spacer(), &withCopy{content: bubble, button: copyButton(m, msg.GetText())}).Stretch()
+		actions := copyButton(m, msg.GetText())
+		if canRewind {
+			actions = widget.Row(rewindButton(m, id, info, msg, userTurnIndex), actions).Gap(2).Align(widget.AlignCenter)
+		}
+		var turn ggui.Widget = widget.Row(widget.Spacer(), &withCopy{content: bubble, button: actions}).Stretch()
 		// The images it holds, and those it names by their paths, over it.
 		named := imageRefs(msg.GetText(), info.GetProject())
 		if len(msg.GetImages())+len(named) > 0 {
@@ -889,6 +928,57 @@ func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.Cha
 	}
 	host := pageHost{m: m, id: id, doc: docInfo{Node: info.GetNodeId(), Path: joinPath(info.GetProject(), "conversation.md")}}
 	return &withCopy{content: mdview.Column(host, msg.GetText()), button: copyButton(m, msg.GetText())}
+}
+
+func rewindButton(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int) ggui.Widget {
+	glyph := icon("undo-2").Size(13).Color(skin.Muted)
+	return ui.Tooltip(ui.ButtonOf(glyph, func() {
+		m.askRewindSession(id, info, msg, userTurnIndex)
+	}).Ghost().Pad(3).Radius(5).Name(T("Rewind from here")), T("Rewind from here"))
+}
+
+func (m *model) askRewindSession(id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int) {
+	messageID := msg.GetId()
+	promptText := msg.GetText()
+	m.askConfirm(confirmation{
+		Title:  T("Rewind conversation from here?"),
+		Body:   T("Opens a new forked session from right before this message without modifying the current session. This message will be placed in the new session's composer so you can edit and resend it."),
+		Action: T("Rewind"),
+		Safe:   true,
+		Run: func() {
+			m.rewindSession(id, info, messageID, userTurnIndex, promptText)
+		},
+	})
+}
+
+func (m *model) rewindSession(id string, info *protocol.SessionInfo, messageID string, userTurnIndex int, promptText string) {
+	req := &protocol.RewindSession{
+		NodeId:        m.remoteID(info.GetNodeId()),
+		SessionId:     id,
+		MessageId:     messageID,
+		UserTurnIndex: int32(userTurnIndex),
+	}
+	fetch(m, 35*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
+		return c.RewindSession(ctx, req)
+	}, func(newInfo *protocol.SessionInfo, err error) {
+		if err != nil {
+			m.toaster.Push(ui.Toast(T("Could not rewind conversation"), nodeErr(err)).Destructive())
+			return
+		}
+		newID := newInfo.GetId()
+		if newID == "" {
+			return
+		}
+		if _, exists := m.session(newID); !exists {
+			sessions := slices.Clone(ggui.Peek(m.Sessions))
+			m.Sessions.Set(append(sessions, newInfo))
+		}
+		m.setChatMode(newID, true)
+		if strings.TrimSpace(promptText) != "" {
+			m.chatState(newID).draft.Set(promptText)
+		}
+		m.selectSession(newID)
+	})
 }
 
 // withCopy is a message with its copy button over its bottom-right

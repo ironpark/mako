@@ -30,6 +30,7 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/skills"
 	"github.com/ironpark/mako/internal/transport"
+	"github.com/ironpark/mako/internal/usage"
 )
 
 // peerTTL drops a discovered node that has not been seen for this long.
@@ -57,6 +58,7 @@ type Daemon struct {
 	sessions      *registry
 	codexMu       sync.Mutex
 	codexBridges  map[string]*codexBridge
+	codexStartup  codexStartupCoordinator
 	conversations conversations
 	approvals     approvals
 	layouts       windowLayouts // the window layouts' changes staged here, and what is node-local of them; see layouts.go
@@ -106,9 +108,11 @@ type Daemon struct {
 	store         *store.Store    // the registries the plugins are installed from; see pluginstore.go
 	decisionsMu   sync.Mutex
 	decisions     *decision.Store // provider API keys & decision models; see decisions.go
-	agentUI       *agentui.Store  // the blocks agents show; see agent_ui.go
-	uiWatched     onceSet         // the sessions whose end closes their blocks
-	mcp           *mcp.Resolver   // nil without a configuration directory
+	usageMu       sync.Mutex
+	usage         *usage.Collector // global account quota collector; see account_usage.go
+	agentUI       *agentui.Store   // the blocks agents show; see agent_ui.go
+	uiWatched     onceSet          // the sessions whose end closes their blocks
+	mcp           *mcp.Resolver    // nil without a configuration directory
 	projectAgents projectAgents
 
 	hookBinary  string // the program agents run as their hook; see HookMain
@@ -496,6 +500,10 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleSleepSession(ctx, stream, env)
 	case protocol.TypeListAgentModels:
 		return d.handleListAgentModels(ctx, stream, env)
+	case protocol.TypeReadAccountUsage:
+		return d.handleReadAccountUsage(ctx, stream, env)
+	case protocol.TypeRewindSession:
+		return d.handleRewindSession(ctx, stream, env)
 	case protocol.TypeInspectAgentHome:
 		return d.handleInspectAgentHome(ctx, stream, env)
 	case protocol.TypeMigrateAgentHome:

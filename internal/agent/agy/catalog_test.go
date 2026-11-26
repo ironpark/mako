@@ -2,6 +2,7 @@ package agy
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -58,5 +59,34 @@ func TestNormalizeModelEffort(t *testing.T) {
 		if gm != tc.wantModel || ge != tc.wantEffort {
 			t.Errorf("NormalizeModelEffort(%q, %q) = (%q, %q), want (%q, %q)", tc.model, tc.effort, gm, ge, tc.wantModel, tc.wantEffort)
 		}
+	}
+}
+
+func TestDetectSSHSessionAndSignInDiagnostic(t *testing.T) {
+	t.Setenv("SSH_CONNECTION", "")
+	t.Setenv("SSH_CLIENT", "")
+	t.Setenv("SSH_TTY", "")
+
+	if v, ok := DetectSSHSession(nil); ok || v != "" {
+		t.Fatalf("DetectSSHSession(empty) = (%q, %v), want (\"\", false)", v, ok)
+	}
+	if diag := SignInDiagnostic(nil); !strings.Contains(diag, "OS keyring") {
+		t.Fatalf("local SignInDiagnostic = %q, want mention of OS keyring", diag)
+	}
+
+	if v, ok := DetectSSHSession(map[string]string{"SSH_CONNECTION": "10.0.0.1 51234 10.0.0.2 22"}); !ok || v != "SSH_CONNECTION" {
+		t.Fatalf("DetectSSHSession(SSH_CONNECTION) = (%q, %v), want (SSH_CONNECTION, true)", v, ok)
+	}
+	if diag := SignInDiagnostic(map[string]string{"SSH_TTY": "/dev/pts/1"}); !strings.Contains(diag, "SSH_TTY") || !strings.Contains(diag, "token-file") {
+		t.Fatalf("SSH SignInDiagnostic = %q, want SSH_TTY and token-file", diag)
+	}
+
+	// Explicit empty override masks inherited process env var.
+	t.Setenv("SSH_CLIENT", "1.2.3.4 1234 22")
+	if v, ok := DetectSSHSession(map[string]string{"SSH_CLIENT": ""}); ok || v != "" {
+		t.Fatalf("explicit empty override should mask process SSH_CLIENT, got (%q, %v)", v, ok)
+	}
+	if v, ok := DetectSSHSession(nil); !ok || v != "SSH_CLIENT" {
+		t.Fatalf("inherited process SSH_CLIENT = (%q, %v), want (SSH_CLIENT, true)", v, ok)
 	}
 }

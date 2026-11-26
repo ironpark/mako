@@ -274,6 +274,36 @@ func (s *Session) ReportTasks(id string, tasks []*protocol.BackgroundTask) {
 	s.tasks = tasks
 }
 
+// ReportBridgeTasks replaces a live session's background tasks from a native
+// control bridge (such as Codex app-server's thread/backgroundTerminals/list)
+// and notifies listeners when the task set changes.
+func (s *Session) ReportBridgeTasks(tasks []*protocol.BackgroundTask) {
+	s.mu.Lock()
+	if s.state == protocol.StateExited {
+		s.mu.Unlock()
+		return
+	}
+	same := len(s.tasks) == len(tasks)
+	if same {
+		for i := range tasks {
+			if !protocol.Same(s.tasks[i], tasks[i]) {
+				same = false
+				break
+			}
+		}
+	}
+	if same {
+		s.mu.Unlock()
+		return
+	}
+	s.tasks = tasks
+	onChange := s.spec.OnChange
+	s.mu.Unlock()
+	if onChange != nil {
+		onChange()
+	}
+}
+
 // tasksLocked is the tasks Info reports: none once the session has ended.
 func (s *Session) tasksLocked() []*protocol.BackgroundTask {
 	if s.state == protocol.StateExited {

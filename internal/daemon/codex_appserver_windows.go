@@ -56,13 +56,17 @@ func newCodexAppServerTransport(runDir, sessionID string) (*codexAppServerTransp
 	}, nil
 }
 
-func (t *codexAppServerTransport) waitReady(ctx context.Context, procDone <-chan struct{}, stderr io.Reader) (*codex.AppServerClient, string, error) {
+func (t *codexAppServerTransport) waitReady(ctx context.Context, procDone <-chan struct{}, stderr io.Reader, tail *stderrTail) (*codex.AppServerClient, string, error) {
 	if stderr == nil {
 		return nil, "", errors.New("codex app-server: missing stderr pipe for ws discovery")
 	}
 	found := make(chan string, 1)
 	go func() {
-		br := bufio.NewReader(stderr)
+		src := stderr
+		if tail != nil {
+			src = io.TeeReader(stderr, tail)
+		}
+		br := bufio.NewReader(src)
 		var sent bool
 		for !sent {
 			line, err := br.ReadString('\n')
@@ -86,10 +90,12 @@ func (t *codexAppServerTransport) waitReady(ctx context.Context, procDone <-chan
 	select {
 	case url, ok := <-found:
 		if !ok || url == "" {
+			time.Sleep(25 * time.Millisecond)
 			return nil, "", errors.New("codex app-server exited without printing ws listen address")
 		}
 		wsURL = url
 	case <-procDone:
+		time.Sleep(25 * time.Millisecond)
 		return nil, "", errors.New("codex app-server exited before ws listener was ready")
 	case <-ctx.Done():
 		return nil, "", ctx.Err()

@@ -21,6 +21,37 @@ const (
 
 var agyEfforts = []string{"low", "medium", "high", "xhigh", "max"}
 
+// SSHSessionVariables are the environment variables agy inspects to decide
+// whether to read credentials from a token file (SSH) or the OS keyring
+// (non-SSH). See google-antigravity/antigravity-cli#1336.
+var SSHSessionVariables = []string{"SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY"}
+
+// DetectSSHSession reports whether the effective environment for agy indicates
+// an SSH session and returns the first matching variable name.
+func DetectSSHSession(env map[string]string) (variable string, isSSH bool) {
+	for _, name := range SSHSessionVariables {
+		if v, ok := env[name]; ok {
+			if strings.TrimSpace(v) != "" {
+				return name, true
+			}
+			continue
+		}
+		if strings.TrimSpace(os.Getenv(name)) != "" {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// SignInDiagnostic returns a short human-readable note explaining which sign-in
+// store (SSH token file vs OS keyring) agy will use in this daemon environment.
+func SignInDiagnostic(env map[string]string) string {
+	if v, ok := DetectSSHSession(env); ok {
+		return "SSH session (" + v + "): uses token-file sign-in (may differ from desktop keyring)"
+	}
+	return "Local session: uses OS keyring sign-in (may differ from SSH token file)"
+}
+
 type catalogEntry struct {
 	models []agent.ModelInfo
 	at     time.Time
@@ -32,9 +63,13 @@ var (
 )
 
 // Catalog discovers agy's available models by running `agy models`, cached for
-// catalogCacheTTL per HOME directory unless refresh is true.
+// catalogCacheTTL per (HOME, SSH sign-in mode) unless refresh is true.
 func (a *Agent) Catalog(ctx context.Context, env map[string]string, refresh bool) ([]agent.ModelInfo, error) {
-	key := env["HOME"]
+	sshVar, isSSH := DetectSSHSession(env)
+	key := env["HOME"] + "\x00" + sshVar
+	if isSSH && sshVar == "" {
+		key += "ssh"
+	}
 	if !refresh {
 		catalogMu.Lock()
 		entry, ok := catalogCache[key]

@@ -1870,4 +1870,19 @@ var catalogKo = map[string]string{
 	"Open %s tab":        "%s 탭 열기",
 	"Reload plugin":      "플러그인 다시 불러오기",
 	"Tab actions":        "탭 작업",
+
+	// Revision 50: Global Account Usage, agy sign-in diagnostic & Chat Rewind
+	"Account usage & quotas":                             "계정 사용량 및 한도",
+	"Session-independent quota across installed agents.": "설치된 에이전트의 계정 단위 사용량과 한도를 확인합니다.",
+	"Checking account quotas…":                           "계정 사용량을 확인하는 중…",
+	"No account quota data available yet.":               "아직 계정 사용량 데이터가 없습니다.",
+	"Credits $%.2f":                                      "크레딧 $%.2f",
+	"Unavailable":                                        "사용 불가",
+	"resets in %s":                                       "%s 후 초기화",
+	"Sign-in store":                                      "로그인 저장소",
+	"Rewind from here":                                   "여기서 되감기",
+	"Rewind conversation from here?":                     "이 메시지 이전으로 되감을까요?",
+	"Opens a new forked session from right before this message without modifying the current session. This message will be placed in the new session's composer so you can edit and resend it.": "현재 세션은 그대로 두고, 이 메시지 직전 시점에서 분기된 새 세션을 엽니다. 이 메시지는 새 세션의 입력창에 채워져 수정 후 다시 보낼 수 있습니다.",
+	"Rewind":                        "되감기",
+	"Could not rewind conversation": "대화를 되감지 못했습니다",
 }

@@ -1549,5 +1549,46 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.RelayStopAgent getRelayStopAgent();
 
+  /**
+   * <pre>
+   * Session-independent account usage/quotas and conversation rewind (revision 50).
+   * </pre>
+   *
+   * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+   * @return Whether the readAccountUsage field is set.
+   */
+  boolean hasReadAccountUsage();
+  /**
+   * <pre>
+   * Session-independent account usage/quotas and conversation rewind (revision 50).
+   * </pre>
+   *
+   * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+   * @return The readAccountUsage.
+   */
+  dev.ironpark.mako.v2.ReadAccountUsage getReadAccountUsage();
+
+  /**
+   * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+   * @return Whether the accountUsage field is set.
+   */
+  boolean hasAccountUsage();
+  /**
+   * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+   * @return The accountUsage.
+   */
+  dev.ironpark.mako.v2.AccountUsage getAccountUsage();
+
+  /**
+   * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+   * @return Whether the rewindSession field is set.
+   */
+  boolean hasRewindSession();
+  /**
+   * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+   * @return The rewindSession.
+   */
+  dev.ironpark.mako.v2.RewindSession getRewindSession();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

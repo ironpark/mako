@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -25,9 +26,142 @@ import (
 )
 
 const (
-	codexServerBootTimeout = 10 * time.Second
-	codexRPCTimeout        = 10 * time.Second
+	codexServerBootTimeout   = 10 * time.Second
+	codexRPCTimeout          = 10 * time.Second
+	codexStartupQueueTimeout = 60 * time.Second
+	codexStartupMaxAttempts  = 3
+	codexStderrTailMaxBytes  = 8192
+	codexBGCommandMaxLen     = 1000
 )
+
+var codexBGPollInterval = 5 * time.Second
+
+// stderrTail retains the last codexStderrTailMaxBytes written to it so startup
+// failures can inspect Codex's stderr (e.g. SQLite runtime initialization errors).
+type stderrTail struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+func (t *stderrTail) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	t.buf = append(t.buf, p...)
+	if len(t.buf) > codexStderrTailMaxBytes {
+		t.buf = append(t.buf[:0], t.buf[len(t.buf)-codexStderrTailMaxBytes:]...)
+	}
+	t.mu.Unlock()
+	return len(p), nil
+}
+
+func (t *stderrTail) String() string {
+	if t == nil {
+		return ""
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return strings.TrimSpace(string(t.buf))
+}
+
+func isCodexSQLiteStartupError(stderrText string) bool {
+	return strings.Contains(strings.ToLower(stderrText), "failed to initialize sqlite state runtime")
+}
+
+func isCodexArchivedThreadError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "is archived") || strings.Contains(msg, "archived thread")
+}
+
+func isCodexNoArchivedRolloutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "no archived rollout found")
+}
+
+func codexStateDirKey(env map[string]string) string {
+	if h := strings.TrimSpace(env["CODEX_HOME"]); h != "" {
+		return filepath.Clean(h)
+	}
+	if h := strings.TrimSpace(os.Getenv("CODEX_HOME")); h != "" {
+		return filepath.Clean(h)
+	}
+	home := strings.TrimSpace(env["HOME"])
+	if home == "" {
+		home, _ = os.UserHomeDir()
+	}
+	if home != "" {
+		return filepath.Clean(filepath.Join(home, ".codex"))
+	}
+	return ".codex"
+}
+
+// codexStartupCoordinator serializes `codex app-server` startup per CODEX_HOME
+// so concurrent session boots do not race on Codex's shared SQLite state DB.
+type codexStartupCoordinator struct {
+	mu    sync.Mutex
+	tails map[string]chan struct{}
+}
+
+func (c *codexStartupCoordinator) acquire(ctx context.Context, key string) (func(), error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	if c.tails == nil {
+		c.tails = map[string]chan struct{}{}
+	}
+	prev := c.tails[key]
+	mine := make(chan struct{})
+	c.tails[key] = mine
+	c.mu.Unlock()
+
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() {
+			close(mine)
+			c.mu.Lock()
+			if c.tails[key] == mine {
+				delete(c.tails, key)
+			}
+			c.mu.Unlock()
+		})
+	}
+	if prev != nil {
+		select {
+		case <-prev:
+		case <-ctx.Done():
+			// Chain release only after prev completes so a cancelled waiter never
+			// lets later waiters bypass the active owner.
+			go func() {
+				<-prev
+				release()
+			}()
+			return nil, ctx.Err()
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		release()
+		return nil, err
+	}
+	return release, nil
+}
+
+// resumeCodexThread calls thread/resume and, if Codex reports the thread is
+// archived, calls thread/unarchive (ignoring "no archived rollout found") and
+// retries thread/resume once.
+func resumeCodexThread(ctx context.Context, client *codex.AppServerClient, params codex.ThreadResumeParams) (codex.ThreadResumeResult, error) {
+	res, err := client.ThreadResume(ctx, params)
+	if err == nil || !isCodexArchivedThreadError(err) {
+		return res, err
+	}
+	if unarchErr := client.ThreadUnarchive(ctx, params.ThreadID); unarchErr != nil && !isCodexNoArchivedRolloutError(unarchErr) {
+		return codex.ThreadResumeResult{}, unarchErr
+	}
+	return client.ThreadResume(ctx, params)
+}
 
 // codexBridge owns a session's managed `codex app-server` subprocess and its
 // WebSocket JSON-RPC observer/controller connection.
@@ -42,19 +176,28 @@ type codexBridge struct {
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 
-	mu           sync.Mutex
-	tid          string
-	pendingPath  string // rollout path reported by app-server, bound once written on disk
-	subscribed   bool
-	bound        bool            // true once ConversationId + verified rollout path are bound
-	ignored      map[string]bool // ephemeral / subagent thread IDs to ignore
-	abandoned    map[string]bool // previous top-level thread IDs switched away from
-	initUsage    *protocol.Usage
-	lastSeq      int64
-	activeTurn   string
-	itemIndices  map[string]int32
-	nextBlock    int32
-	thinkingSeen map[string]bool
+	mu              sync.Mutex
+	serverUserAgent string
+	tid             string
+	pendingPath     string // rollout path reported by app-server, bound once written on disk
+	subscribed      bool
+	bound           bool            // true once ConversationId + verified rollout path are bound
+	ignored         map[string]bool // ephemeral / subagent thread IDs to ignore
+	abandoned       map[string]bool // previous top-level thread IDs switched away from
+	initUsage       *protocol.Usage
+	lastSeq         int64
+	activeTurn      string
+	itemIndices     map[string]int32
+	nextBlock       int32
+	thinkingSeen    map[string]bool
+	fgItems         map[string]bool
+	fgProcesses     map[string]bool
+	bgUnsupported   bool
+	bgInFlight      bool
+	bgDirty         bool
+	bgTimer         *time.Timer
+	bgStarted       map[string]int64
+	bgHasTasks      bool
 }
 
 func newCodexBridge(parent context.Context, sessionID string, client *codex.AppServerClient, cmd *exec.Cmd, exited chan struct{}, cleanupFiles func()) *codexBridge {
@@ -74,6 +217,9 @@ func newCodexBridge(parent context.Context, sessionID string, client *codex.AppS
 		abandoned:    map[string]bool{},
 		itemIndices:  map[string]int32{},
 		thinkingSeen: map[string]bool{},
+		fgItems:      map[string]bool{},
+		fgProcesses:  map[string]bool{},
+		bgStarted:    map[string]int64{},
 	}
 }
 
@@ -107,6 +253,8 @@ func (b *codexBridge) resetTurnLocked(turnID string) {
 	b.itemIndices = map[string]int32{}
 	b.nextBlock = 0
 	b.thinkingSeen = map[string]bool{}
+	b.fgItems = map[string]bool{}
+	b.fgProcesses = map[string]bool{}
 }
 
 func (b *codexBridge) blockIndexLocked(itemID string) int32 {
@@ -119,6 +267,12 @@ func (b *codexBridge) blockIndexLocked(itemID string) int32 {
 	return idx
 }
 
+func (b *codexBridge) userAgent() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.serverUserAgent
+}
+
 // Close tears down the WebSocket client, terminates the managed app-server
 // process group, and removes socket/token files. Safe to call multiple times.
 func (b *codexBridge) Close() {
@@ -127,6 +281,12 @@ func (b *codexBridge) Close() {
 	}
 	b.closeOnce.Do(func() {
 		b.cancel()
+		b.mu.Lock()
+		if b.bgTimer != nil {
+			b.bgTimer.Stop()
+			b.bgTimer = nil
+		}
+		b.mu.Unlock()
 		if b.client != nil {
 			_ = b.client.Close()
 		}
@@ -135,6 +295,137 @@ func (b *codexBridge) Close() {
 			b.cleanupFiles()
 		}
 	})
+}
+
+func (b *codexBridge) scheduleBackgroundRefresh(s *session.Session) {
+	if b == nil || s == nil || b.client == nil {
+		return
+	}
+	b.mu.Lock()
+	if b.bgUnsupported || b.tid == "" || b.ctx.Err() != nil {
+		b.mu.Unlock()
+		return
+	}
+	if b.bgTimer != nil {
+		b.bgTimer.Stop()
+		b.bgTimer = nil
+	}
+	if b.bgInFlight {
+		b.bgDirty = true
+		b.mu.Unlock()
+		return
+	}
+	b.bgInFlight = true
+	b.bgDirty = false
+	b.mu.Unlock()
+
+	go b.runBackgroundRefresh(s)
+}
+
+func (b *codexBridge) runBackgroundRefresh(s *session.Session) {
+	for {
+		b.mu.Lock()
+		tid := b.tid
+		unsupported := b.bgUnsupported
+		b.mu.Unlock()
+		if unsupported || tid == "" || b.ctx.Err() != nil {
+			b.mu.Lock()
+			b.bgInFlight = false
+			b.bgDirty = false
+			b.mu.Unlock()
+			return
+		}
+
+		rows, err := b.listBackgroundTerminals(tid)
+
+		b.mu.Lock()
+		if err != nil {
+			if codex.IsMethodNotFound(err) {
+				b.bgUnsupported = true
+				b.bgInFlight = false
+				b.bgDirty = false
+				b.mu.Unlock()
+				return
+			}
+			// Transient error: re-poll later if we previously saw live tasks.
+			retry := b.bgHasTasks && b.ctx.Err() == nil
+			dirty := b.bgDirty && b.ctx.Err() == nil
+			if dirty {
+				b.bgDirty = false
+				b.mu.Unlock()
+				continue
+			}
+			b.bgInFlight = false
+			if retry {
+				b.bgTimer = time.AfterFunc(codexBGPollInterval, func() {
+					b.scheduleBackgroundRefresh(s)
+				})
+			}
+			b.mu.Unlock()
+			return
+		}
+
+		// Filter out commands currently executing in the active foreground turn.
+		now := time.Now().Unix()
+		seen := make(map[string]bool, len(rows))
+		var tasks []*protocol.BackgroundTask
+		for _, row := range rows {
+			if row.ProcessID == "" {
+				continue
+			}
+			if (row.ItemID != "" && b.fgItems[row.ItemID]) || b.fgProcesses[row.ProcessID] {
+				continue
+			}
+			seen[row.ProcessID] = true
+			started := b.bgStarted[row.ProcessID]
+			if started == 0 {
+				started = now
+				b.bgStarted[row.ProcessID] = started
+			}
+			cmd := row.Command
+			if len(cmd) > codexBGCommandMaxLen {
+				cmd = cmd[:codexBGCommandMaxLen]
+			}
+			tasks = append(tasks, &protocol.BackgroundTask{
+				Id:      row.ProcessID,
+				CallId:  row.ItemID,
+				Command: cmd,
+				Running: true,
+				Started: started,
+			})
+		}
+		for pid := range b.bgStarted {
+			if !seen[pid] {
+				delete(b.bgStarted, pid)
+			}
+		}
+		b.bgHasTasks = len(tasks) > 0
+		dirty := b.bgDirty && b.ctx.Err() == nil
+		if dirty {
+			b.bgDirty = false
+		}
+		if !dirty {
+			b.bgInFlight = false
+			if b.bgHasTasks && b.ctx.Err() == nil {
+				b.bgTimer = time.AfterFunc(codexBGPollInterval, func() {
+					b.scheduleBackgroundRefresh(s)
+				})
+			}
+		}
+		b.mu.Unlock()
+
+		s.ReportBridgeTasks(tasks)
+
+		if !dirty {
+			return
+		}
+	}
+}
+
+func (b *codexBridge) listBackgroundTerminals(tid string) ([]codex.BackgroundTerminal, error) {
+	tctx, cancel := context.WithTimeout(b.ctx, codexRPCTimeout)
+	defer cancel()
+	return b.client.ThreadBackgroundTerminalsList(tctx, tid)
 }
 
 // deliverMessage injects text into the active Codex thread via `thread/queue/add`
@@ -227,26 +518,6 @@ func (d *Daemon) prepareCodexAppServer(
 		return nil, noop
 	}
 
-	tr, err := newCodexAppServerTransport(runDir, sessionID)
-	if err != nil {
-		d.log.Warn("codex app-server: transport setup failed; falling back to direct PTY", "session", sessionID, "err", err)
-		return nil, noop
-	}
-
-	serverArgs := make([]string, 0, 3+len(tr.extraServerArgs)+len(split.ServerArgs))
-	serverArgs = append(serverArgs, "app-server", "--listen", tr.listenArg)
-	serverArgs = append(serverArgs, tr.extraServerArgs...)
-	serverArgs = append(serverArgs, split.ServerArgs...)
-
-	cmd := exec.Command(split.Program, serverArgs...)
-	cmd.Dir = project
-	cmd.Stdout = io.Discard
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		tr.cleanupFiles()
-		d.log.Warn("codex app-server: stderr pipe failed; falling back to direct PTY", "session", sessionID, "err", err)
-		return nil, noop
-	}
 	serverEnv := maps.Clone(launch.Env)
 	if serverEnv == nil {
 		serverEnv = map[string]string{}
@@ -254,41 +525,105 @@ func (d *Daemon) prepareCodexAppServer(
 	// Hooks configured via -c run inside codex app-server; pass MAKO_SESSION so
 	// `mako hook` routes events back to this session.
 	serverEnv["MAKO_SESSION"] = sessionID
-	cmd.Env = mergeEnvSlice(os.Environ(), serverEnv)
-	configureCodexServerCmd(cmd)
 
-	if err := safeexec.Start(cmd); err != nil {
-		tr.cleanupFiles()
-		d.log.Warn("codex app-server: start failed; falling back to direct PTY", "session", sessionID, "err", err)
+	// Serialize per-CODEX_HOME startup so concurrent launches do not collide on
+	// Codex's shared SQLite state database, and retry up to 3 times on SQLite
+	// runtime init failure.
+	queueCtx, queueCancel := context.WithTimeout(ctx, codexStartupQueueTimeout)
+	releaseLane, err := d.codexStartup.acquire(queueCtx, codexStateDirKey(serverEnv))
+	queueCancel()
+	if err != nil {
+		d.log.Warn("codex app-server: startup queue cancelled; falling back to direct PTY", "session", sessionID, "err", err)
 		return nil, noop
 	}
-	exited := make(chan struct{})
-	go func() {
-		_ = cmd.Wait()
-		close(exited)
-	}()
 
-	bootCtx, bootCancel := context.WithTimeout(ctx, codexServerBootTimeout)
-	defer bootCancel()
+	var (
+		tr         *codexAppServerTransport
+		cmd        *exec.Cmd
+		exited     chan struct{}
+		client     *codex.AppServerClient
+		remoteAddr string
+		initRes    codex.InitializeResult
+	)
+	for attempt := 1; attempt <= codexStartupMaxAttempts; attempt++ {
+		var attemptErr error
+		tr, attemptErr = newCodexAppServerTransport(runDir, sessionID)
+		if attemptErr != nil {
+			releaseLane()
+			d.log.Warn("codex app-server: transport setup failed; falling back to direct PTY", "session", sessionID, "err", attemptErr)
+			return nil, noop
+		}
 
-	client, remoteAddr, err := tr.waitReady(bootCtx, exited, stderrPipe)
-	if err != nil {
+		serverArgs := make([]string, 0, 3+len(tr.extraServerArgs)+len(split.ServerArgs))
+		serverArgs = append(serverArgs, "app-server", "--listen", tr.listenArg)
+		serverArgs = append(serverArgs, tr.extraServerArgs...)
+		serverArgs = append(serverArgs, split.ServerArgs...)
+
+		cmd = exec.Command(split.Program, serverArgs...)
+		cmd.Dir = project
+		cmd.Stdout = io.Discard
+		stderrPipe, pipeErr := cmd.StderrPipe()
+		if pipeErr != nil {
+			tr.cleanupFiles()
+			releaseLane()
+			d.log.Warn("codex app-server: stderr pipe failed; falling back to direct PTY", "session", sessionID, "err", pipeErr)
+			return nil, noop
+		}
+		cmd.Env = mergeEnvSlice(os.Environ(), serverEnv)
+		configureCodexServerCmd(cmd)
+
+		if startErr := safeexec.Start(cmd); startErr != nil {
+			tr.cleanupFiles()
+			releaseLane()
+			d.log.Warn("codex app-server: start failed; falling back to direct PTY", "session", sessionID, "err", startErr)
+			return nil, noop
+		}
+		exited = make(chan struct{})
+		go func(c *exec.Cmd, done chan struct{}) {
+			_ = c.Wait()
+			close(done)
+		}(cmd, exited)
+
+		tail := &stderrTail{}
+		bootCtx, bootCancel := context.WithTimeout(ctx, codexServerBootTimeout)
+		client, remoteAddr, attemptErr = tr.waitReady(bootCtx, exited, stderrPipe, tail)
+		if attemptErr == nil {
+			initRes, attemptErr = client.Initialize(bootCtx, codex.NonOriginatingClientName, codex.NonOriginatingClientVersion, true)
+		}
+		bootCancel()
+		if attemptErr == nil {
+			break
+		}
+
+		if client != nil {
+			_ = client.Close()
+			client = nil
+		}
 		stopCodexServerCmd(cmd, exited)
 		tr.cleanupFiles()
-		d.log.Warn("codex app-server: not ready; falling back to direct PTY", "session", sessionID, "err", err)
+
+		stderrText := tail.String()
+		if attempt < codexStartupMaxAttempts && ctx.Err() == nil && isCodexSQLiteStartupError(stderrText) {
+			d.log.Warn("codex app-server: SQLite state startup failed; retrying with fresh process",
+				"session", sessionID, "attempt", attempt, "max_attempts", codexStartupMaxAttempts, "err", attemptErr)
+			continue
+		}
+		releaseLane()
+		d.log.Warn("codex app-server: startup failed; falling back to direct PTY", "session", sessionID, "err", attemptErr)
 		return nil, noop
 	}
+	releaseLane()
 
 	bridge := newCodexBridge(d.ctx, sessionID, client, cmd, exited, tr.cleanupFiles)
+	bridge.serverUserAgent = initRes.UserAgent
 	fail := func(msg string, err error) (*codexBridge, func()) {
 		d.log.Warn("codex app-server: "+msg+"; falling back to direct PTY", "session", sessionID, "err", err)
 		bridge.Close()
 		return nil, noop
 	}
 
-	if _, err := client.Initialize(bootCtx, "mako", config.Version, true); err != nil {
-		return fail("initialize failed", err)
-	}
+	bootCtx, bootCancel := context.WithTimeout(ctx, codexServerBootTimeout)
+	defer bootCancel()
 
 	initUsage := &protocol.Usage{}
 	if rl, err := client.RateLimitsRead(bootCtx); err == nil {
@@ -299,7 +634,7 @@ func (d *Daemon) prepareCodexAppServer(
 	targetID := cmp.Or(*conversationID, split.ResumeID)
 	var threadID, threadPath string
 	if targetID != "" {
-		res, err := client.ThreadResume(bootCtx, codex.ThreadResumeParams{
+		res, err := resumeCodexThread(bootCtx, client, codex.ThreadResumeParams{
 			ThreadID:       targetID,
 			ExcludeTurns:   true,
 			Cwd:            cwd,
@@ -392,6 +727,9 @@ func (d *Daemon) attachCodexBridge(s *session.Session, b *codexBridge) {
 		s.Report(b.initUsage)
 	}
 	go d.runCodexBridge(s, b)
+	if b.threadID() != "" {
+		b.scheduleBackgroundRefresh(s)
+	}
 }
 
 func (d *Daemon) codexBridge(sessionID string) *codexBridge {
@@ -490,8 +828,11 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		b.pendingPath = p.Thread.Path
 		b.subscribed = false
 		b.bound = false
+		b.fgItems = map[string]bool{}
+		b.fgProcesses = map[string]bool{}
 		b.mu.Unlock()
 		d.maybeBindCodexThread(s, b)
+		b.scheduleBackgroundRefresh(s)
 
 	case "thread/status/changed":
 		var p codex.ThreadStatusChangedNotification
@@ -585,6 +926,10 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 				pieces = append(pieces, livePiece{Kind: "thinking", Index: idx})
 			}
 		case "commandExecution":
+			b.fgItems[p.Item.ID] = true
+			if p.Item.ProcessID != "" {
+				b.fgProcesses[p.Item.ProcessID] = true
+			}
 			pieces = append(pieces, livePiece{Kind: "tool", Index: idx, Tool: "Bash"})
 			if p.Item.Command != "" {
 				pieces = append(pieces, livePiece{Kind: "input", Index: idx, Text: p.Item.Command})
@@ -642,6 +987,21 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 			Pieces:  []livePiece{{Kind: "thinking", Index: idx}},
 		})
 
+	case "item/completed":
+		var p codex.ItemNotification
+		if json.Unmarshal(n.Params, &p) != nil || p.ThreadID != b.threadID() {
+			return
+		}
+		if p.Item.Type == "commandExecution" {
+			b.mu.Lock()
+			delete(b.fgItems, p.Item.ID)
+			if p.Item.ProcessID != "" {
+				delete(b.fgProcesses, p.Item.ProcessID)
+			}
+			b.mu.Unlock()
+			b.scheduleBackgroundRefresh(s)
+		}
+
 	case "turn/completed":
 		var p codex.TurnNotification
 		if json.Unmarshal(n.Params, &p) != nil || p.ThreadID != b.threadID() {
@@ -649,9 +1009,12 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		}
 		b.mu.Lock()
 		step := cmp.Or(p.Turn.ID, b.activeTurn, "turn")
+		b.fgItems = map[string]bool{}
+		b.fgProcesses = map[string]bool{}
 		b.mu.Unlock()
 		d.live.take(livePost{Session: s.ID(), Step: step, End: true})
 		d.maybeBindCodexThread(s, b)
+		b.scheduleBackgroundRefresh(s)
 		seq := b.seqFor(n.EmittedAtMs)
 		if p.Turn.Status == "completed" {
 			d.refreshActivity(s)
@@ -709,14 +1072,17 @@ func (d *Daemon) maybeSwitchCodexThread(s *session.Session, b *codexBridge, thre
 	b.pendingPath = res.Thread.Path
 	b.subscribed = false
 	b.bound = false
+	b.fgItems = map[string]bool{}
+	b.fgProcesses = map[string]bool{}
 	b.mu.Unlock()
+	b.scheduleBackgroundRefresh(s)
 	return true
 }
 
 func (d *Daemon) trySubscribeCodexThread(s *session.Session, b *codexBridge, threadID string) {
 	ctx, cancel := context.WithTimeout(b.ctx, 3*time.Second)
 	defer cancel()
-	res, err := b.client.ThreadResume(ctx, codex.ThreadResumeParams{
+	res, err := resumeCodexThread(ctx, b.client, codex.ThreadResumeParams{
 		ThreadID:     threadID,
 		ExcludeTurns: true,
 	})

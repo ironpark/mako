@@ -73,6 +73,7 @@ func window(m *model) ggui.Widget {
 		forgeDialogs(m),
 		confirmDialog(m),
 		homeMigrateDialog(m),
+		accountUsageDialog(m),
 		imageViewer(m),
 		shellDialog(m),
 		searchDialog(m),
@@ -360,6 +361,7 @@ func sidebarFooter(m *model) ggui.Widget {
 		widget.Expanded(host),
 		devicesMenu(m),
 		tunnelsMenu(m),
+		accountUsageButton(m),
 		iconButton("settings", T("Settings"), func() { m.openSettings("") }),
 	).Gap(4)).Pad(8, 10, 8, 16).Height(52)
 }

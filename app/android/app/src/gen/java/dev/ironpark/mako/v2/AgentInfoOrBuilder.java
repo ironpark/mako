@@ -170,4 +170,26 @@ public interface AgentInfoOrBuilder extends
    * @return The spawnable.
    */
   boolean getSpawnable();
+
+  /**
+   * <pre>
+   * Revision 50: optional diagnostic note about the agent's runtime sign-in
+   * context on this node (e.g. agy SSH token file vs OS keyring).
+   * </pre>
+   *
+   * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+   * @return The signInNote.
+   */
+  java.lang.String getSignInNote();
+  /**
+   * <pre>
+   * Revision 50: optional diagnostic note about the agent's runtime sign-in
+   * context on this node (e.g. agy SSH token file vs OS keyring).
+   * </pre>
+   *
+   * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+   * @return The bytes for signInNote.
+   */
+  com.google.protobuf.ByteString
+      getSignInNoteBytes();
 }

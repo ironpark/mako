@@ -184,6 +184,8 @@ func (m *model) commands() []command {
 			Run: func() { m.ext.Open.Set(true) }},
 		command{ID: "Built-in skills", Category: "App", Keys: []string{"skill", "mako", "plugin", "template", "edit", "settings"},
 			Run: func() { m.openSettings("skills") }},
+		command{ID: "Account usage & quotas", Category: "App", Keys: []string{"usage", "quota", "limits", "claude", "codex", "agy", "credits"},
+			Run: m.openAccountUsage},
 		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: m.shortcutChord("open_settings"), Run: func() { m.openSettings("") }},
 	)
 	cmds = append(cmds,

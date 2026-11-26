@@ -34,6 +34,7 @@ func TestEveryTypeHasABody(t *testing.T) {
 		TypeSyncPluginDB, TypePluginSyncBundle,
 		TypeSyncPluginConfig, TypePluginConfigSyncState, TypeSyncAgentConfig, TypeAgentSyncState,
 		TypeRelaySpawnAgent, TypeRelayStopAgent,
+		TypeReadAccountUsage, TypeAccountUsage, TypeRewindSession,
 	}
 	for _, typ := range types {
 		if _, ok := bodyFields[typ]; !ok {

@@ -26,6 +26,7 @@ public  final class AgentInfo extends
     profiles_ = emptyProtobufList();
     icon_ = "";
     profileDetails_ = emptyProtobufList();
+    signInNote_ = "";
   }
   private int bitField0_;
   public static final int NAME_FIELD_NUMBER = 1;
@@ -623,6 +624,78 @@ public  final class AgentInfo extends
   private void clearSpawnable() {
 
     spawnable_ = false;
+  }
+
+  public static final int SIGN_IN_NOTE_FIELD_NUMBER = 11;
+  private java.lang.String signInNote_;
+  /**
+   * <pre>
+   * Revision 50: optional diagnostic note about the agent's runtime sign-in
+   * context on this node (e.g. agy SSH token file vs OS keyring).
+   * </pre>
+   *
+   * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+   * @return The signInNote.
+   */
+  @java.lang.Override
+  public java.lang.String getSignInNote() {
+    return signInNote_;
+  }
+  /**
+   * <pre>
+   * Revision 50: optional diagnostic note about the agent's runtime sign-in
+   * context on this node (e.g. agy SSH token file vs OS keyring).
+   * </pre>
+   *
+   * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+   * @return The bytes for signInNote.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSignInNoteBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(signInNote_);
+  }
+  /**
+   * <pre>
+   * Revision 50: optional diagnostic note about the agent's runtime sign-in
+   * context on this node (e.g. agy SSH token file vs OS keyring).
+   * </pre>
+   *
+   * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+   * @param value The signInNote to set.
+   */
+  private void setSignInNote(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    signInNote_ = value;
+  }
+  /**
+   * <pre>
+   * Revision 50: optional diagnostic note about the agent's runtime sign-in
+   * context on this node (e.g. agy SSH token file vs OS keyring).
+   * </pre>
+   *
+   * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+   */
+  private void clearSignInNote() {
+
+    signInNote_ = getDefaultInstance().getSignInNote();
+  }
+  /**
+   * <pre>
+   * Revision 50: optional diagnostic note about the agent's runtime sign-in
+   * context on this node (e.g. agy SSH token file vs OS keyring).
+   * </pre>
+   *
+   * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+   * @param value The bytes for signInNote to set.
+   */
+  private void setSignInNoteBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    signInNote_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.AgentInfo parseFrom(
@@ -1353,6 +1426,80 @@ public  final class AgentInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Revision 50: optional diagnostic note about the agent's runtime sign-in
+     * context on this node (e.g. agy SSH token file vs OS keyring).
+     * </pre>
+     *
+     * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+     * @return The signInNote.
+     */
+    @java.lang.Override
+    public java.lang.String getSignInNote() {
+      return instance.getSignInNote();
+    }
+    /**
+     * <pre>
+     * Revision 50: optional diagnostic note about the agent's runtime sign-in
+     * context on this node (e.g. agy SSH token file vs OS keyring).
+     * </pre>
+     *
+     * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+     * @return The bytes for signInNote.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSignInNoteBytes() {
+      return instance.getSignInNoteBytes();
+    }
+    /**
+     * <pre>
+     * Revision 50: optional diagnostic note about the agent's runtime sign-in
+     * context on this node (e.g. agy SSH token file vs OS keyring).
+     * </pre>
+     *
+     * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+     * @param value The signInNote to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSignInNote(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSignInNote(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 50: optional diagnostic note about the agent's runtime sign-in
+     * context on this node (e.g. agy SSH token file vs OS keyring).
+     * </pre>
+     *
+     * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSignInNote() {
+      copyOnWrite();
+      instance.clearSignInNote();
+      return this;
+    }
+    /**
+     * <pre>
+     * Revision 50: optional diagnostic note about the agent's runtime sign-in
+     * context on this node (e.g. agy SSH token file vs OS keyring).
+     * </pre>
+     *
+     * <code>string sign_in_note = 11 [json_name = "signInNote"];</code>
+     * @param value The bytes for signInNote to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSignInNoteBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSignInNoteBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AgentInfo)
   }
   @java.lang.Override
@@ -1381,11 +1528,12 @@ public  final class AgentInfo extends
             "allowAgent_",
             "allowTemplate_",
             "spawnable_",
+            "signInNote_",
           };
           java.lang.String info =
-              "\u0000\n\u0000\u0001\u0001\n\n\u0000\u0002\u0000\u0001\u0208\u0002\u021a\u0003\u0208" +
-              "\u0004\u000b\u0005\u000b\u0006\u001b\u0007\u0007\b\u1007\u0000\t\u1007\u0001\n\u0007" +
-              "";
+              "\u0000\u000b\u0000\u0001\u0001\u000b\u000b\u0000\u0002\u0000\u0001\u0208\u0002\u021a" +
+              "\u0003\u0208\u0004\u000b\u0005\u000b\u0006\u001b\u0007\u0007\b\u1007\u0000\t\u1007" +
+              "\u0001\n\u0007\u000b\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

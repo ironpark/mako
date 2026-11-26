@@ -139,6 +139,9 @@ const (
 	TypeAgentSyncState        Type = "agent_sync_state"
 	TypeRelaySpawnAgent       Type = "relay_spawn_agent"
 	TypeRelayStopAgent        Type = "relay_stop_agent"
+	TypeReadAccountUsage      Type = "read_account_usage"
+	TypeAccountUsage          Type = "account_usage"
+	TypeRewindSession         Type = "rewind_session"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

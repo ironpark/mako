@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
@@ -403,6 +404,9 @@ func (d *Daemon) agentInfo() []*protocol.AgentInfo {
 			info.Icon, info.Caps, info.Color = e.Info.Icon, e.Caps, protocol.RGBA(c.R, c.G, c.B, c.A)
 			_, hasServers = e.Driver.(agent.Servers)
 			_, hasPrompter = e.Driver.(agent.Prompter)
+		}
+		if name == "agy" {
+			info.SignInNote = agy.SignInDiagnostic(a.Env)
 		}
 		if !hasServers && len(a.Command) > 0 {
 			if drv, ok := agents.ByProgram(a.Command[0]); ok {

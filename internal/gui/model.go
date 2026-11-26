@@ -160,8 +160,9 @@ type model struct {
 	chats     map[string]*chatState
 	// chatImages are the images Chat and pages show, read once, by node
 	// and path or by address, the latest used of them; see imageCache.
-	chatImages *imageCache
-	usages     map[string]*usageState // for the usage overlay
+	chatImages   *imageCache
+	usages       map[string]*usageState // for the usage overlay
+	AccountUsage *accountUsageState     // session-independent global account quotas; see accountusage.go
 
 	files *filesState // the Files tab's; see filesstate.go
 
@@ -371,6 +372,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		chats:               map[string]*chatState{},
 		chatImages:          newImageCache(),
 		usages:              map[string]*usageState{},
+		AccountUsage:        newAccountUsageState(),
 		diffChanges:         newDiffChangesState(),
 		RepoPick:            ggui.State(repoPick{}),
 		// Its functions do not compare: each asking is new.

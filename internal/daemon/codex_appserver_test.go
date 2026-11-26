@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -707,4 +709,304 @@ func TestCodexLiveAppServerSmoke(t *testing.T) {
 	if entries, err := os.ReadDir(filepath.Join(runRoot, "run")); err == nil && len(entries) != 0 {
 		t.Fatalf("leftover files in run dir: %v", entries)
 	}
+}
+
+func TestCodexStartupCoordinatorSerializesSameHome(t *testing.T) {
+	var coord codexStartupCoordinator
+	homeA := filepath.Join(t.TempDir(), "codex-a")
+	homeB := filepath.Join(t.TempDir(), "codex-b")
+
+	// 1. First holder acquires homeA.
+	rel1, err := coord.acquire(t.Context(), homeA)
+	if err != nil {
+		t.Fatalf("acquire 1: %v", err)
+	}
+
+	// 2. Different homeB acquires immediately without waiting for homeA.
+	relB, err := coord.acquire(t.Context(), homeB)
+	if err != nil {
+		t.Fatalf("acquire homeB: %v", err)
+	}
+	relB()
+
+	// 3. Cancelled waiter B on homeA must NOT let waiter C pass active holder 1.
+	ctxB, cancelB := context.WithCancel(t.Context())
+	errB := make(chan error, 1)
+	go func() {
+		_, err := coord.acquire(ctxB, homeA)
+		errB <- err
+	}()
+	time.Sleep(15 * time.Millisecond)
+
+	var enteredC atomic.Bool
+	doneC := make(chan struct{})
+	go func() {
+		relC, err := coord.acquire(t.Context(), homeA)
+		if err != nil {
+			t.Errorf("acquire C: %v", err)
+			return
+		}
+		enteredC.Store(true)
+		relC()
+		close(doneC)
+	}()
+	time.Sleep(15 * time.Millisecond)
+
+	cancelB()
+	if err := <-errB; err == nil {
+		t.Fatal("expected cancelled waiter B to return error")
+	}
+	time.Sleep(20 * time.Millisecond)
+	if enteredC.Load() {
+		t.Fatal("waiter C entered homeA before holder 1 released!")
+	}
+
+	rel1()
+	select {
+	case <-doneC:
+	case <-time.After(2 * time.Second):
+		t.Fatal("waiter C did not acquire after holder 1 released")
+	}
+}
+
+func TestCodexResumeAutoUnarchive(t *testing.T) {
+	var mu sync.Mutex
+	archived := true
+	unarchivedCalls := 0
+	mock := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		switch method {
+		case "thread/resume":
+			mu.Lock()
+			isArc := archived
+			mu.Unlock()
+			if isArc {
+				reply(map[string]any{
+					"id":    id,
+					"error": map[string]any{"code": -32600, "message": "thread th-arc is archived"},
+				})
+				return
+			}
+			reply(map[string]any{
+				"id":     id,
+				"result": map[string]any{"thread": map[string]any{"id": "th-arc", "path": "/tmp/th-arc.jsonl"}},
+			})
+		case "thread/unarchive":
+			mu.Lock()
+			unarchivedCalls++
+			archived = false
+			mu.Unlock()
+			// Also verify tolerating "no archived rollout found" when unarchiving!
+			reply(map[string]any{
+				"id":    id,
+				"error": map[string]any{"code": -32600, "message": "no archived rollout found for thread th-arc"},
+			})
+		}
+	})
+
+	client, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	res, err := resumeCodexThread(t.Context(), client, codex.ThreadResumeParams{ThreadID: "th-arc", ExcludeTurns: true})
+	if err != nil {
+		t.Fatalf("resumeCodexThread: %v", err)
+	}
+	if res.Thread.ID != "th-arc" {
+		t.Fatalf("thread ID = %q, want th-arc", res.Thread.ID)
+	}
+	mu.Lock()
+	calls := unarchivedCalls
+	mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("unarchive calls = %d, want 1", calls)
+	}
+}
+
+func TestCodexBridgeBackgroundTerminalsAndForegroundFilter(t *testing.T) {
+	origPoll := codexBGPollInterval
+	codexBGPollInterval = 50 * time.Millisecond
+	t.Cleanup(func() { codexBGPollInterval = origPoll })
+
+	var mu sync.Mutex
+	bgRows := []map[string]any{
+		{"itemId": "cmd-fg", "processId": "p-fg", "command": "go test ./..."},
+		{"itemId": "cmd-bg", "processId": "p-bg", "command": "npm run dev"},
+	}
+	unsupported := false
+	var listCalls atomic.Int32
+
+	mock := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		if method == "thread/backgroundTerminals/list" {
+			listCalls.Add(1)
+			mu.Lock()
+			unsup := unsupported
+			rows := bgRows
+			mu.Unlock()
+			if unsup {
+				reply(map[string]any{
+					"id":    id,
+					"error": map[string]any{"code": -32601, "message": "method not found"},
+				})
+				return
+			}
+			reply(map[string]any{
+				"id":     id,
+				"result": map[string]any{"data": rows, "nextCursor": nil},
+			})
+		}
+	})
+
+	client, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := session.Start(session.Spec{
+		ID: "codex-bg-1", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+		Command: testSleepCommand(), Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+
+	b := newCodexBridge(t.Context(), s.ID(), client, nil, nil, nil)
+	b.setThread("th-bg", true)
+	// Simulate foreground command in progress before attach triggers first poll.
+	b.mu.Lock()
+	b.fgItems["cmd-fg"] = true
+	b.fgProcesses["p-fg"] = true
+	b.mu.Unlock()
+	d.attachCodexBridge(s, b)
+	defer b.Close()
+
+	// Only p-bg should appear while p-fg is running in foreground.
+	waitFor(t, "background terminal not reported or foreground not filtered", func() bool {
+		tasks := s.Info().GetTasks()
+		return len(tasks) == 1 && tasks[0].GetId() == "p-bg" && tasks[0].GetCommand() == "npm run dev" && tasks[0].GetRunning()
+	})
+
+	// Once turn completes and p-fg disappears, only p-bg remains; when bgRows empties, tasks clear.
+	mu.Lock()
+	bgRows = nil
+	mu.Unlock()
+	mock.sendNotification(t, "turn/completed", map[string]any{
+		"threadId": "th-bg",
+		"turn":     map[string]any{"id": "turn-1", "status": "completed"},
+	})
+	waitFor(t, "background terminals did not clear", func() bool {
+		return len(s.Info().GetTasks()) == 0
+	})
+
+	// -32601 MethodNotFound marks background terminals unsupported and suppresses future calls.
+	mu.Lock()
+	unsupported = true
+	mu.Unlock()
+	b.scheduleBackgroundRefresh(s)
+	waitFor(t, "bgUnsupported not set after -32601", func() bool {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return b.bgUnsupported
+	})
+	before := listCalls.Load()
+	b.scheduleBackgroundRefresh(s)
+	time.Sleep(40 * time.Millisecond)
+	if listCalls.Load() != before {
+		t.Fatalf("expected no further RPC calls after -32601, got %d -> %d", before, listCalls.Load())
+	}
+}
+
+func TestCodexRewindThreadPaginatedAndLegacy(t *testing.T) {
+	t.Run("paginated beforeTurnId", func(t *testing.T) {
+		var gotBeforeTurn string
+		mock := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "thread/read":
+				reply(map[string]any{
+					"id": id,
+					"result": map[string]any{"thread": map[string]any{
+						"id":          "th-orig",
+						"historyMode": "paginated",
+						"turns":       []map[string]any{{"id": "t0"}, {"id": "t1"}, {"id": "t2"}},
+					}},
+				})
+			case "thread/fork":
+				var p codex.ThreadForkParams
+				_ = json.Unmarshal(params, &p)
+				gotBeforeTurn = p.BeforeTurnID
+				reply(map[string]any{
+					"id":     id,
+					"result": map[string]any{"thread": map[string]any{"id": "th-forked", "path": "/tmp/th-forked.jsonl"}},
+				})
+			}
+		})
+		client, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
+
+		res, err := codex.RewindThread(t.Context(), client, codex.RewindThreadOptions{
+			ThreadID:      "th-orig",
+			UserTurnIndex: 1,
+			Cwd:           "/tmp/proj",
+		})
+		if err != nil {
+			t.Fatalf("RewindThread paginated: %v", err)
+		}
+		if res.ThreadID != "th-forked" || gotBeforeTurn != "t1" {
+			t.Fatalf("res=%+v beforeTurnId=%q, want th-forked / t1", res, gotBeforeTurn)
+		}
+	})
+
+	t.Run("legacy fork plus rollback", func(t *testing.T) {
+		var rolledTurns int
+		mock := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "thread/read":
+				reply(map[string]any{
+					"id": id,
+					"result": map[string]any{"thread": map[string]any{
+						"id":          "th-leg",
+						"historyMode": "legacy",
+						"turns":       []map[string]any{{"id": "t0"}, {"id": "t1"}, {"id": "t2"}},
+					}},
+				})
+			case "thread/fork":
+				reply(map[string]any{
+					"id":     id,
+					"result": map[string]any{"thread": map[string]any{"id": "th-leg-fork", "path": "/tmp/th-leg-fork.jsonl"}},
+				})
+			case "thread/rollback":
+				var p codex.ThreadRollbackParams
+				_ = json.Unmarshal(params, &p)
+				rolledTurns = p.NumTurns
+				reply(map[string]any{
+					"id":     id,
+					"result": map[string]any{"thread": map[string]any{"id": p.ThreadID, "path": "/tmp/th-leg-fork.jsonl"}},
+				})
+			}
+		})
+		client, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
+
+		res, err := codex.RewindThread(t.Context(), client, codex.RewindThreadOptions{
+			ThreadID:        "th-leg",
+			UserTurnIndex:   1,
+			ServerUserAgent: "codex/0.150.0",
+		})
+		if err != nil {
+			t.Fatalf("RewindThread legacy: %v", err)
+		}
+		if res.ThreadID != "th-leg-fork" || rolledTurns != 2 {
+			t.Fatalf("res=%+v rolledTurns=%d, want th-leg-fork / 2", res, rolledTurns)
+		}
+	})
 }

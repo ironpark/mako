@@ -256,6 +256,17 @@ func (c *Client) ListAgentModels(ctx context.Context, req *protocol.ListAgentMod
 	return request[*protocol.AgentModels](ctx, c, protocol.TypeListAgentModels, req)
 }
 
+// ReadAccountUsage returns session-independent account quota snapshots across agents on a node.
+func (c *Client) ReadAccountUsage(ctx context.Context, req *protocol.ReadAccountUsage) (*protocol.AccountUsage, error) {
+	return request[*protocol.AccountUsage](ctx, c, protocol.TypeReadAccountUsage, req)
+}
+
+// RewindSession non-destructively forks an agent's conversation just before a
+// chosen user turn and starts a new session resumed at that fork point.
+func (c *Client) RewindSession(ctx context.Context, req *protocol.RewindSession) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeRewindSession, req)
+}
+
 // InspectAgentHome inspects what migrating an agent's data directory involves.
 func (c *Client) InspectAgentHome(ctx context.Context, req *protocol.InspectAgentHome) (*protocol.AgentHomeInfo, error) {
 	return request[*protocol.AgentHomeInfo](ctx, c, protocol.TypeInspectAgentHome, req)

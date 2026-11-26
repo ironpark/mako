@@ -152,3 +152,50 @@ message RateLimit {
   double used = 2; // percent
   int64 resets = 3; // Unix seconds
 }
+
+// ReadAccountUsage asks a node for session-independent account quota/usage
+// across its installed agents (claude, codex, agy) (revision 50).
+message ReadAccountUsage {
+  string node_id = 1;
+  bool refresh = 2; // bypass cache and re-query immediately
+}
+
+// AccountUsage answers ReadAccountUsage with per-agent quota snapshots.
+message AccountUsage {
+  repeated AgentAccountUsage accounts = 1;
+}
+
+// AgentAccountUsage is one agent's account-level quota snapshot on a node.
+message AgentAccountUsage {
+  string agent = 1; // "claude", "codex", "agy"
+  string status = 2; // "available", "unavailable", "error"
+  string plan = 3; // optional subscription plan label (e.g. "Max 5x", "Plus")
+  string detail = 4; // optional error, reason, or sign-in diagnostic
+  repeated AccountLimit limits = 5;
+  optional double credits = 6; // remaining credits balance when reported
+  int64 fetched_at = 7; // Unix seconds
+}
+
+// AccountLimit is one metered quota window of an agent account.
+message AccountLimit {
+  string id = 1;
+  string label = 2;
+  int64 minutes = 3; // window length in minutes (0 if unknown)
+  double used = 4; // percent used (0..100)
+  int64 resets = 5; // Unix seconds (0 if unknown)
+  bool disabled = 6;
+  string group = 7; // optional model/surface group label
+}
+
+// RewindSession non-destructively forks an agent's conversation just before
+// a chosen user turn and starts a new session resumed at that fork point
+// (revision 50). The reply is the newly opened SessionInfo.
+message RewindSession {
+  string node_id = 1;
+  string session_id = 2;
+  // message_id is the target user message's native ID (Claude record UUID, etc.).
+  string message_id = 3;
+  // user_turn_index is the 0-based index of the target user turn in the
+  // conversation (used by Codex and as a fallback when message_id is empty).
+  int32 user_turn_index = 4;
+}

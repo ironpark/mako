@@ -97,6 +97,9 @@ message AgentInfo {
   optional bool allow_agent = 8; // Revision 39: allow AI models to spawn default (no-profile) agent via MCP
   optional bool allow_template = 9; // Revision 39: allow prompt templates to run default (no-profile) agent
   bool spawnable = 10; // Revision 48: whether default (no-profile) agent can be spawned via MCP
+  // Revision 50: optional diagnostic note about the agent's runtime sign-in
+  // context on this node (e.g. agy SSH token file vs OS keyring).
+  string sign_in_note = 11;
 }
 
 // AgentProfileInfo describes a configured agent profile for callers choosing

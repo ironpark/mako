@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,6 +46,20 @@ func IsInvalidRequest(err error) bool {
 	var rpcErr *RPCError
 	return errors.As(err, &rpcErr) && rpcErr.Code == -32600
 }
+
+// IsMethodNotFound reports whether err is a JSON-RPC -32601 method not found error.
+func IsMethodNotFound(err error) bool {
+	var rpcErr *RPCError
+	return errors.As(err, &rpcErr) && rpcErr.Code == -32601
+}
+
+// NonOriginatingClientName is Codex's reserved non-originating app-server
+// client identity so managed sessions keep Codex's default CLI identity.
+const (
+	NonOriginatingClientName    = "codex_app_server_daemon"
+	NonOriginatingClientTitle   = "Codex App Server Daemon"
+	NonOriginatingClientVersion = "0.0.0"
+)
 
 // Notification is an unsolicited JSON-RPC notification from codex app-server.
 type Notification struct {
@@ -81,18 +97,26 @@ type ThreadStatus struct {
 	ActiveFlags []string `json:"activeFlags,omitempty"` // waitingOnApproval, waitingOnUserInput
 }
 
+// ThreadTurnSummary is minimal turn metadata returned by thread/read(includeTurns=true).
+type ThreadTurnSummary struct {
+	ID     string `json:"id"`
+	Status string `json:"status,omitempty"`
+}
+
 // ThreadInfo is thread metadata returned by thread/start, thread/resume, thread/read, and thread/started.
 type ThreadInfo struct {
-	ID              string          `json:"id"`
-	SessionID       string          `json:"sessionId,omitempty"`
-	ParentThreadID  string          `json:"parentThreadId,omitempty"`
-	Source          json.RawMessage `json:"source,omitempty"`
-	Path            string          `json:"path,omitempty"`
-	Cwd             string          `json:"cwd,omitempty"`
-	Model           string          `json:"model,omitempty"`
-	ReasoningEffort string          `json:"reasoningEffort,omitempty"`
-	Ephemeral       bool            `json:"ephemeral,omitempty"`
-	Status          ThreadStatus    `json:"status,omitempty"`
+	ID              string              `json:"id"`
+	SessionID       string              `json:"sessionId,omitempty"`
+	ParentThreadID  string              `json:"parentThreadId,omitempty"`
+	Source          json.RawMessage     `json:"source,omitempty"`
+	Path            string              `json:"path,omitempty"`
+	Cwd             string              `json:"cwd,omitempty"`
+	Model           string              `json:"model,omitempty"`
+	ReasoningEffort string              `json:"reasoningEffort,omitempty"`
+	Ephemeral       bool                `json:"ephemeral,omitempty"`
+	HistoryMode     string              `json:"historyMode,omitempty"` // "legacy" or "paginated"
+	Turns           []ThreadTurnSummary `json:"turns,omitempty"`
+	Status          ThreadStatus        `json:"status,omitempty"`
 }
 
 // IsSubagent reports whether this thread belongs to a subagent rather than
@@ -146,6 +170,48 @@ type ThreadReadResult struct {
 type ThreadLoadedListResult struct {
 	Data       []string `json:"data"`
 	NextCursor *string  `json:"nextCursor,omitempty"`
+}
+
+// ThreadForkParams forks an existing Codex thread, optionally just before beforeTurnId.
+type ThreadForkParams struct {
+	ThreadID               string `json:"threadId"`
+	BeforeTurnID           string `json:"beforeTurnId,omitempty"`
+	Cwd                    string `json:"cwd,omitempty"`
+	Model                  string `json:"model,omitempty"`
+	ApprovalPolicy         string `json:"approvalPolicy,omitempty"`
+	Sandbox                string `json:"sandbox,omitempty"`
+	ExcludeTurns           bool   `json:"excludeTurns,omitempty"`
+	PersistExtendedHistory bool   `json:"persistExtendedHistory,omitempty"`
+}
+
+type ThreadForkResult struct {
+	Thread ThreadInfo `json:"thread"`
+}
+
+type ThreadRollbackParams struct {
+	ThreadID string `json:"threadId"`
+	NumTurns int    `json:"numTurns"`
+}
+
+type ThreadRollbackResult struct {
+	Thread ThreadInfo `json:"thread"`
+}
+
+// BackgroundTerminal is a live background shell owned by a Codex thread.
+type BackgroundTerminal struct {
+	ItemID    string `json:"itemId,omitempty"`
+	ProcessID string `json:"processId"`
+	Command   string `json:"command"`
+}
+
+type BackgroundTerminalsListParams struct {
+	ThreadID string `json:"threadId"`
+	Cursor   string `json:"cursor,omitempty"`
+}
+
+type BackgroundTerminalsListResult struct {
+	Data       []BackgroundTerminal `json:"data"`
+	NextCursor *string              `json:"nextCursor,omitempty"`
 }
 
 // UserInput is one element of a user prompt submitted to Codex app-server.
@@ -240,13 +306,15 @@ type TurnNotification struct {
 }
 
 type ThreadItem struct {
-	Type    string `json:"type"`
-	ID      string `json:"id"`
-	Text    string `json:"text,omitempty"`
-	Command string `json:"command,omitempty"`
-	Tool    string `json:"tool,omitempty"`
-	Server  string `json:"server,omitempty"`
-	Query   string `json:"query,omitempty"`
+	Type      string `json:"type"`
+	ID        string `json:"id"`
+	ProcessID string `json:"processId,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Text      string `json:"text,omitempty"`
+	Command   string `json:"command,omitempty"`
+	Tool      string `json:"tool,omitempty"`
+	Server    string `json:"server,omitempty"`
+	Query     string `json:"query,omitempty"`
 }
 
 type ItemNotification struct {
@@ -562,11 +630,18 @@ func (c *AppServerClient) dropPending(id int64) {
 // Initialize performs the initialize request + initialized notification handshake.
 func (c *AppServerClient) Initialize(ctx context.Context, name, version string, experimentalAPI bool) (InitializeResult, error) {
 	var res InitializeResult
+	clientName := cmp.Or(name, "mako")
+	title := "Mako"
+	ver := cmp.Or(version, "0.1.0")
+	if clientName == NonOriginatingClientName {
+		title = NonOriginatingClientTitle
+		ver = cmp.Or(version, NonOriginatingClientVersion)
+	}
 	params := InitializeParams{
 		ClientInfo: ClientInfo{
-			Name:    cmp.Or(name, "mako"),
-			Title:   "Mako",
-			Version: cmp.Or(version, "0.1.0"),
+			Name:    clientName,
+			Title:   title,
+			Version: ver,
 		},
 		Capabilities: &InitializeCapabilities{ExperimentalAPI: experimentalAPI},
 	}
@@ -601,6 +676,44 @@ func (c *AppServerClient) ThreadLoadedList(ctx context.Context) (ThreadLoadedLis
 	var res ThreadLoadedListResult
 	err := c.Call(ctx, "thread/loaded/list", struct{}{}, &res)
 	return res, err
+}
+
+func (c *AppServerClient) ThreadUnarchive(ctx context.Context, threadID string) error {
+	return c.Call(ctx, "thread/unarchive", struct {
+		ThreadID string `json:"threadId"`
+	}{ThreadID: threadID}, nil)
+}
+
+func (c *AppServerClient) ThreadFork(ctx context.Context, params ThreadForkParams) (ThreadForkResult, error) {
+	var res ThreadForkResult
+	err := c.Call(ctx, "thread/fork", params, &res)
+	return res, err
+}
+
+func (c *AppServerClient) ThreadRollback(ctx context.Context, threadID string, numTurns int) (ThreadRollbackResult, error) {
+	var res ThreadRollbackResult
+	err := c.Call(ctx, "thread/rollback", ThreadRollbackParams{ThreadID: threadID, NumTurns: numTurns}, &res)
+	return res, err
+}
+
+func (c *AppServerClient) ThreadBackgroundTerminalsList(ctx context.Context, threadID string) ([]BackgroundTerminal, error) {
+	var out []BackgroundTerminal
+	var cursor string
+	for page := 0; page < 16; page++ {
+		var res BackgroundTerminalsListResult
+		if err := c.Call(ctx, "thread/backgroundTerminals/list", BackgroundTerminalsListParams{
+			ThreadID: threadID,
+			Cursor:   cursor,
+		}, &res); err != nil {
+			return nil, err
+		}
+		out = append(out, res.Data...)
+		if res.NextCursor == nil || *res.NextCursor == "" {
+			break
+		}
+		cursor = *res.NextCursor
+	}
+	return out, nil
 }
 
 func (c *AppServerClient) ThreadQueueAdd(ctx context.Context, params ThreadQueueAddParams) (ThreadQueueAddResult, error) {
@@ -801,6 +914,317 @@ func queryModelsStdioConn(ctx context.Context, r io.Reader, w io.Writer) ([]agen
 		cursor = pageRes.NextCursor
 	}
 	return models, nil
+}
+
+// RewindThreadOptions configures a non-destructive Codex conversation fork
+// immediately before UserTurnIndex (0-based).
+type RewindThreadOptions struct {
+	ThreadID        string
+	UserTurnIndex   int
+	ServerUserAgent string
+	Cwd             string
+	Model           string
+	ApprovalPolicy  string
+	Sandbox         string
+}
+
+// RewindThreadResult describes the forked thread created by RewindThread.
+type RewindThreadResult struct {
+	ThreadID  string
+	Path      string
+	ZeroTurns bool
+}
+
+var codexSemverRe = regexp.MustCompile(`(\d+)\.(\d+)\.(\d+)`)
+
+// codexVersionAtLeast reports whether a codex userAgent string contains a
+// semantic version >= (major, minor, patch).
+func codexVersionAtLeast(userAgent string, major, minor, patch int) bool {
+	m := codexSemverRe.FindStringSubmatch(userAgent)
+	if len(m) != 4 {
+		return false
+	}
+	maj, err1 := strconv.Atoi(m[1])
+	min, err2 := strconv.Atoi(m[2])
+	pat, err3 := strconv.Atoi(m[3])
+	if err1 != nil || err2 != nil || err3 != nil {
+		return false
+	}
+	if maj != major {
+		return maj > major
+	}
+	if min != minor {
+		return min > minor
+	}
+	return pat >= patch
+}
+
+// RewindThread forks an existing Codex thread just before UserTurnIndex using
+// an active app-server client. On Codex >=0.156 or paginated history threads it
+// uses `thread/fork` with `beforeTurnId`; on legacy threads it uses
+// `thread/fork` followed by `thread/rollback`.
+func RewindThread(ctx context.Context, client *AppServerClient, opts RewindThreadOptions) (RewindThreadResult, error) {
+	if client == nil {
+		return RewindThreadResult{}, errors.New("codex rewind: nil app-server client")
+	}
+	if opts.ThreadID == "" {
+		return RewindThreadResult{}, errors.New("codex rewind: missing thread id")
+	}
+	if opts.UserTurnIndex < 0 {
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: invalid turn index %d", opts.UserTurnIndex)
+	}
+	if opts.UserTurnIndex == 0 {
+		return RewindThreadResult{ZeroTurns: true}, nil
+	}
+
+	readRes, err := client.ThreadRead(ctx, opts.ThreadID, true)
+	if err != nil {
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: thread/read: %w", err)
+	}
+	turns := readRes.Thread.Turns
+	if opts.UserTurnIndex >= len(turns) {
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: turn index %d out of range (%d turns)", opts.UserTurnIndex, len(turns))
+	}
+	targetTurnID := turns[opts.UserTurnIndex].ID
+	numTurns := len(turns) - opts.UserTurnIndex
+
+	baseFork := ThreadForkParams{
+		ThreadID:               opts.ThreadID,
+		Cwd:                    opts.Cwd,
+		Model:                  opts.Model,
+		ApprovalPolicy:         opts.ApprovalPolicy,
+		Sandbox:                opts.Sandbox,
+		ExcludeTurns:           true,
+		PersistExtendedHistory: true,
+	}
+
+	preferBeforeTurn := readRes.Thread.HistoryMode == "paginated" || codexVersionAtLeast(opts.ServerUserAgent, 0, 156, 0)
+	if preferBeforeTurn && targetTurnID != "" {
+		p := baseFork
+		p.BeforeTurnID = targetTurnID
+		forked, err := client.ThreadFork(ctx, p)
+		if err == nil {
+			if forked.Thread.ID == "" {
+				return RewindThreadResult{}, errors.New("codex rewind: thread/fork returned empty thread id")
+			}
+			return RewindThreadResult{ThreadID: forked.Thread.ID, Path: forked.Thread.Path}, nil
+		}
+		if !IsInvalidRequest(err) {
+			return RewindThreadResult{}, fmt.Errorf("codex rewind: thread/fork: %w", err)
+		}
+		// Fall through to legacy fork + rollback if server rejected beforeTurnId.
+	}
+
+	forked, err := client.ThreadFork(ctx, baseFork)
+	if err != nil {
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: thread/fork: %w", err)
+	}
+	if forked.Thread.ID == "" {
+		return RewindThreadResult{}, errors.New("codex rewind: thread/fork returned empty thread id")
+	}
+	rolled, err := client.ThreadRollback(ctx, forked.Thread.ID, numTurns)
+	if err != nil {
+		// If Codex 0.156+ dropped thread/rollback despite an unrecognized User-Agent,
+		// retry via beforeTurnId.
+		if IsMethodNotFound(err) && targetTurnID != "" {
+			p := baseFork
+			p.BeforeTurnID = targetTurnID
+			fork2, err2 := client.ThreadFork(ctx, p)
+			if err2 == nil && fork2.Thread.ID != "" {
+				return RewindThreadResult{ThreadID: fork2.Thread.ID, Path: fork2.Thread.Path}, nil
+			}
+		}
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: thread/rollback: %w", err)
+	}
+	finalID := cmp.Or(rolled.Thread.ID, forked.Thread.ID)
+	finalPath := cmp.Or(rolled.Thread.Path, forked.Thread.Path)
+	return RewindThreadResult{ThreadID: finalID, Path: finalPath}, nil
+}
+
+// RewindThreadStdio runs a short-lived `codex app-server --stdio` subprocess to
+// rewind a thread when no live per-session app-server bridge is attached.
+func RewindThreadStdio(ctx context.Context, program string, env map[string]string, opts RewindThreadOptions) (RewindThreadResult, error) {
+	if opts.UserTurnIndex == 0 {
+		return RewindThreadResult{ZeroTurns: true}, nil
+	}
+	if program == "" {
+		return RewindThreadResult{}, errors.New("codex rewind: empty program")
+	}
+	cmd := exec.CommandContext(ctx, program, "app-server", "--stdio")
+	if len(env) > 0 {
+		cmd.Env = mergeProcessEnv(os.Environ(), env)
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return RewindThreadResult{}, err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return RewindThreadResult{}, err
+	}
+	cmd.Stderr = io.Discard
+	if err := safeexec.Start(cmd); err != nil {
+		return RewindThreadResult{}, err
+	}
+	defer func() {
+		_ = stdin.Close()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		_ = cmd.Wait()
+	}()
+	return rewindThreadStdioConn(ctx, stdout, stdin, opts)
+}
+
+func rewindThreadStdioConn(ctx context.Context, r io.Reader, w io.Writer, opts RewindThreadOptions) (RewindThreadResult, error) {
+	type readResult struct {
+		line []byte
+		err  error
+	}
+	lines := make(chan readResult, 8)
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		defer close(lines)
+		sc := bufio.NewScanner(r)
+		sc.Buffer(make([]byte, 64<<10), 8<<20)
+		for sc.Scan() {
+			select {
+			case lines <- readResult{line: slices.Clone(sc.Bytes())}:
+			case <-done:
+				return
+			}
+		}
+		if err := sc.Err(); err != nil {
+			select {
+			case lines <- readResult{err: err}:
+			case <-done:
+			}
+		}
+	}()
+
+	var nextID int64
+	call := func(method string, params any, out any) error {
+		nextID++
+		id := nextID
+		b, err := json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      id,
+			"method":  method,
+			"params":  params,
+		})
+		if err != nil {
+			return err
+		}
+		if _, err := w.Write(append(b, '\n')); err != nil {
+			return err
+		}
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case res, ok := <-lines:
+				if !ok {
+					return io.EOF
+				}
+				if res.err != nil {
+					return res.err
+				}
+				var msg wireMessage
+				if json.Unmarshal(res.line, &msg) != nil || len(msg.ID) == 0 || msg.Method != "" {
+					continue
+				}
+				var gotID int64
+				if json.Unmarshal(msg.ID, &gotID) != nil || gotID != id {
+					continue
+				}
+				if msg.Error != nil {
+					return msg.Error
+				}
+				if out != nil && len(msg.Result) > 0 {
+					return json.Unmarshal(msg.Result, out)
+				}
+				return nil
+			}
+		}
+	}
+
+	var initRes InitializeResult
+	if err := call("initialize", InitializeParams{
+		ClientInfo: ClientInfo{
+			Name:    NonOriginatingClientName,
+			Title:   NonOriginatingClientTitle,
+			Version: NonOriginatingClientVersion,
+		},
+		Capabilities: &InitializeCapabilities{ExperimentalAPI: true},
+	}, &initRes); err != nil {
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: initialize: %w", err)
+	}
+	if b, err := json.Marshal(map[string]any{"jsonrpc": "2.0", "method": "initialized"}); err == nil {
+		_, _ = w.Write(append(b, '\n'))
+	}
+
+	var readRes ThreadReadResult
+	if err := call("thread/read", ThreadReadParams{ThreadID: opts.ThreadID, IncludeTurns: true}, &readRes); err != nil {
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: thread/read: %w", err)
+	}
+	turns := readRes.Thread.Turns
+	if opts.UserTurnIndex >= len(turns) {
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: turn index %d out of range (%d turns)", opts.UserTurnIndex, len(turns))
+	}
+	targetTurnID := turns[opts.UserTurnIndex].ID
+	numTurns := len(turns) - opts.UserTurnIndex
+
+	baseFork := ThreadForkParams{
+		ThreadID:               opts.ThreadID,
+		Cwd:                    opts.Cwd,
+		Model:                  opts.Model,
+		ApprovalPolicy:         opts.ApprovalPolicy,
+		Sandbox:                opts.Sandbox,
+		ExcludeTurns:           true,
+		PersistExtendedHistory: true,
+	}
+
+	ua := cmp.Or(opts.ServerUserAgent, initRes.UserAgent)
+	if (readRes.Thread.HistoryMode == "paginated" || codexVersionAtLeast(ua, 0, 156, 0)) && targetTurnID != "" {
+		p := baseFork
+		p.BeforeTurnID = targetTurnID
+		var forked ThreadForkResult
+		err := call("thread/fork", p, &forked)
+		if err == nil {
+			if forked.Thread.ID == "" {
+				return RewindThreadResult{}, errors.New("codex rewind: thread/fork returned empty thread id")
+			}
+			return RewindThreadResult{ThreadID: forked.Thread.ID, Path: forked.Thread.Path}, nil
+		}
+		if !IsInvalidRequest(err) {
+			return RewindThreadResult{}, fmt.Errorf("codex rewind: thread/fork: %w", err)
+		}
+	}
+
+	var forked ThreadForkResult
+	if err := call("thread/fork", baseFork, &forked); err != nil {
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: thread/fork: %w", err)
+	}
+	if forked.Thread.ID == "" {
+		return RewindThreadResult{}, errors.New("codex rewind: thread/fork returned empty thread id")
+	}
+	var rolled ThreadRollbackResult
+	if err := call("thread/rollback", ThreadRollbackParams{ThreadID: forked.Thread.ID, NumTurns: numTurns}, &rolled); err != nil {
+		if IsMethodNotFound(err) && targetTurnID != "" {
+			p := baseFork
+			p.BeforeTurnID = targetTurnID
+			var fork2 ThreadForkResult
+			if err2 := call("thread/fork", p, &fork2); err2 == nil && fork2.Thread.ID != "" {
+				return RewindThreadResult{ThreadID: fork2.Thread.ID, Path: fork2.Thread.Path}, nil
+			}
+		}
+		return RewindThreadResult{}, fmt.Errorf("codex rewind: thread/rollback: %w", err)
+	}
+	return RewindThreadResult{
+		ThreadID: cmp.Or(rolled.Thread.ID, forked.Thread.ID),
+		Path:     cmp.Or(rolled.Thread.Path, forked.Thread.Path),
+	}, nil
 }
 
 func mergeProcessEnv(base []string, overrides map[string]string) []string {

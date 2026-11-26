@@ -198,6 +198,11 @@ message Envelope {
     // Cross-node project agent spawning and stopping (revision 48).
     RelaySpawnAgent relay_spawn_agent = 161;
     RelayStopAgent relay_stop_agent = 162;
+
+    // Session-independent account usage/quotas and conversation rewind (revision 50).
+    ReadAccountUsage read_account_usage = 163;
+    AccountUsage account_usage = 164;
+    RewindSession rewind_session = 165;
   }
 }
 

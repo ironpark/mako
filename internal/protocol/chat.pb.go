@@ -934,6 +934,365 @@ func (x *RateLimit) GetResets() int64 {
 	return 0
 }
 
+// ReadAccountUsage asks a node for session-independent account quota/usage
+// across its installed agents (claude, codex, agy) (revision 50).
+type ReadAccountUsage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Refresh       bool                   `protobuf:"varint,2,opt,name=refresh,proto3" json:"refresh,omitempty"` // bypass cache and re-query immediately
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReadAccountUsage) Reset() {
+	*x = ReadAccountUsage{}
+	mi := &file_mako_v2_chat_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReadAccountUsage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReadAccountUsage) ProtoMessage() {}
+
+func (x *ReadAccountUsage) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReadAccountUsage.ProtoReflect.Descriptor instead.
+func (*ReadAccountUsage) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ReadAccountUsage) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *ReadAccountUsage) GetRefresh() bool {
+	if x != nil {
+		return x.Refresh
+	}
+	return false
+}
+
+// AccountUsage answers ReadAccountUsage with per-agent quota snapshots.
+type AccountUsage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accounts      []*AgentAccountUsage   `protobuf:"bytes,1,rep,name=accounts,proto3" json:"accounts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountUsage) Reset() {
+	*x = AccountUsage{}
+	mi := &file_mako_v2_chat_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountUsage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountUsage) ProtoMessage() {}
+
+func (x *AccountUsage) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountUsage.ProtoReflect.Descriptor instead.
+func (*AccountUsage) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *AccountUsage) GetAccounts() []*AgentAccountUsage {
+	if x != nil {
+		return x.Accounts
+	}
+	return nil
+}
+
+// AgentAccountUsage is one agent's account-level quota snapshot on a node.
+type AgentAccountUsage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Agent         string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`   // "claude", "codex", "agy"
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // "available", "unavailable", "error"
+	Plan          string                 `protobuf:"bytes,3,opt,name=plan,proto3" json:"plan,omitempty"`     // optional subscription plan label (e.g. "Max 5x", "Plus")
+	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"` // optional error, reason, or sign-in diagnostic
+	Limits        []*AccountLimit        `protobuf:"bytes,5,rep,name=limits,proto3" json:"limits,omitempty"`
+	Credits       *float64               `protobuf:"fixed64,6,opt,name=credits,proto3,oneof" json:"credits,omitempty"`               // remaining credits balance when reported
+	FetchedAt     int64                  `protobuf:"varint,7,opt,name=fetched_at,json=fetchedAt,proto3" json:"fetched_at,omitempty"` // Unix seconds
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AgentAccountUsage) Reset() {
+	*x = AgentAccountUsage{}
+	mi := &file_mako_v2_chat_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AgentAccountUsage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentAccountUsage) ProtoMessage() {}
+
+func (x *AgentAccountUsage) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentAccountUsage.ProtoReflect.Descriptor instead.
+func (*AgentAccountUsage) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *AgentAccountUsage) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *AgentAccountUsage) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *AgentAccountUsage) GetPlan() string {
+	if x != nil {
+		return x.Plan
+	}
+	return ""
+}
+
+func (x *AgentAccountUsage) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *AgentAccountUsage) GetLimits() []*AccountLimit {
+	if x != nil {
+		return x.Limits
+	}
+	return nil
+}
+
+func (x *AgentAccountUsage) GetCredits() float64 {
+	if x != nil && x.Credits != nil {
+		return *x.Credits
+	}
+	return 0
+}
+
+func (x *AgentAccountUsage) GetFetchedAt() int64 {
+	if x != nil {
+		return x.FetchedAt
+	}
+	return 0
+}
+
+// AccountLimit is one metered quota window of an agent account.
+type AccountLimit struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	Minutes       int64                  `protobuf:"varint,3,opt,name=minutes,proto3" json:"minutes,omitempty"` // window length in minutes (0 if unknown)
+	Used          float64                `protobuf:"fixed64,4,opt,name=used,proto3" json:"used,omitempty"`      // percent used (0..100)
+	Resets        int64                  `protobuf:"varint,5,opt,name=resets,proto3" json:"resets,omitempty"`   // Unix seconds (0 if unknown)
+	Disabled      bool                   `protobuf:"varint,6,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	Group         string                 `protobuf:"bytes,7,opt,name=group,proto3" json:"group,omitempty"` // optional model/surface group label
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccountLimit) Reset() {
+	*x = AccountLimit{}
+	mi := &file_mako_v2_chat_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccountLimit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccountLimit) ProtoMessage() {}
+
+func (x *AccountLimit) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccountLimit.ProtoReflect.Descriptor instead.
+func (*AccountLimit) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *AccountLimit) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AccountLimit) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *AccountLimit) GetMinutes() int64 {
+	if x != nil {
+		return x.Minutes
+	}
+	return 0
+}
+
+func (x *AccountLimit) GetUsed() float64 {
+	if x != nil {
+		return x.Used
+	}
+	return 0
+}
+
+func (x *AccountLimit) GetResets() int64 {
+	if x != nil {
+		return x.Resets
+	}
+	return 0
+}
+
+func (x *AccountLimit) GetDisabled() bool {
+	if x != nil {
+		return x.Disabled
+	}
+	return false
+}
+
+func (x *AccountLimit) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
+// RewindSession non-destructively forks an agent's conversation just before
+// a chosen user turn and starts a new session resumed at that fork point
+// (revision 50). The reply is the newly opened SessionInfo.
+type RewindSession struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	NodeId    string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	SessionId string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// message_id is the target user message's native ID (Claude record UUID, etc.).
+	MessageId string `protobuf:"bytes,3,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// user_turn_index is the 0-based index of the target user turn in the
+	// conversation (used by Codex and as a fallback when message_id is empty).
+	UserTurnIndex int32 `protobuf:"varint,4,opt,name=user_turn_index,json=userTurnIndex,proto3" json:"user_turn_index,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RewindSession) Reset() {
+	*x = RewindSession{}
+	mi := &file_mako_v2_chat_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RewindSession) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RewindSession) ProtoMessage() {}
+
+func (x *RewindSession) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RewindSession.ProtoReflect.Descriptor instead.
+func (*RewindSession) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RewindSession) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *RewindSession) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *RewindSession) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *RewindSession) GetUserTurnIndex() int32 {
+	if x != nil {
+		return x.UserTurnIndex
+	}
+	return 0
+}
+
 var File_mako_v2_chat_proto protoreflect.FileDescriptor
 
 const file_mako_v2_chat_proto_rawDesc = "" +
@@ -1024,7 +1383,38 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\tRateLimit\x12\x18\n" +
 	"\aminutes\x18\x01 \x01(\x03R\aminutes\x12\x12\n" +
 	"\x04used\x18\x02 \x01(\x01R\x04used\x12\x16\n" +
-	"\x06resets\x18\x03 \x01(\x03R\x06resetsB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\x06resets\x18\x03 \x01(\x03R\x06resets\"E\n" +
+	"\x10ReadAccountUsage\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x18\n" +
+	"\arefresh\x18\x02 \x01(\bR\arefresh\"F\n" +
+	"\fAccountUsage\x126\n" +
+	"\baccounts\x18\x01 \x03(\v2\x1a.mako.v2.AgentAccountUsageR\baccounts\"\xe6\x01\n" +
+	"\x11AgentAccountUsage\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
+	"\x04plan\x18\x03 \x01(\tR\x04plan\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\x12-\n" +
+	"\x06limits\x18\x05 \x03(\v2\x15.mako.v2.AccountLimitR\x06limits\x12\x1d\n" +
+	"\acredits\x18\x06 \x01(\x01H\x00R\acredits\x88\x01\x01\x12\x1d\n" +
+	"\n" +
+	"fetched_at\x18\a \x01(\x03R\tfetchedAtB\n" +
+	"\n" +
+	"\b_credits\"\xac\x01\n" +
+	"\fAccountLimit\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x18\n" +
+	"\aminutes\x18\x03 \x01(\x03R\aminutes\x12\x12\n" +
+	"\x04used\x18\x04 \x01(\x01R\x04used\x12\x16\n" +
+	"\x06resets\x18\x05 \x01(\x03R\x06resets\x12\x1a\n" +
+	"\bdisabled\x18\x06 \x01(\bR\bdisabled\x12\x14\n" +
+	"\x05group\x18\a \x01(\tR\x05group\"\x8e\x01\n" +
+	"\rRewindSession\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x03 \x01(\tR\tmessageId\x12&\n" +
+	"\x0fuser_turn_index\x18\x04 \x01(\x05R\ruserTurnIndexB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_chat_proto_rawDescOnce sync.Once
@@ -1038,31 +1428,38 @@ func file_mako_v2_chat_proto_rawDescGZIP() []byte {
 	return file_mako_v2_chat_proto_rawDescData
 }
 
-var file_mako_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_mako_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_mako_v2_chat_proto_goTypes = []any{
-	(*ReadChat)(nil),    // 0: mako.v2.ReadChat
-	(*ChatMessage)(nil), // 1: mako.v2.ChatMessage
-	(*WatchChat)(nil),   // 2: mako.v2.WatchChat
-	(*ChatLive)(nil),    // 3: mako.v2.ChatLive
-	(*LiveBlock)(nil),   // 4: mako.v2.LiveBlock
-	(*Chat)(nil),        // 5: mako.v2.Chat
-	(*SubAgent)(nil),    // 6: mako.v2.SubAgent
-	(*Usage)(nil),       // 7: mako.v2.Usage
-	(*RateLimit)(nil),   // 8: mako.v2.RateLimit
-	(*Question)(nil),    // 9: mako.v2.Question
+	(*ReadChat)(nil),          // 0: mako.v2.ReadChat
+	(*ChatMessage)(nil),       // 1: mako.v2.ChatMessage
+	(*WatchChat)(nil),         // 2: mako.v2.WatchChat
+	(*ChatLive)(nil),          // 3: mako.v2.ChatLive
+	(*LiveBlock)(nil),         // 4: mako.v2.LiveBlock
+	(*Chat)(nil),              // 5: mako.v2.Chat
+	(*SubAgent)(nil),          // 6: mako.v2.SubAgent
+	(*Usage)(nil),             // 7: mako.v2.Usage
+	(*RateLimit)(nil),         // 8: mako.v2.RateLimit
+	(*ReadAccountUsage)(nil),  // 9: mako.v2.ReadAccountUsage
+	(*AccountUsage)(nil),      // 10: mako.v2.AccountUsage
+	(*AgentAccountUsage)(nil), // 11: mako.v2.AgentAccountUsage
+	(*AccountLimit)(nil),      // 12: mako.v2.AccountLimit
+	(*RewindSession)(nil),     // 13: mako.v2.RewindSession
+	(*Question)(nil),          // 14: mako.v2.Question
 }
 var file_mako_v2_chat_proto_depIdxs = []int32{
-	9, // 0: mako.v2.ChatMessage.questions:type_name -> mako.v2.Question
-	4, // 1: mako.v2.ChatLive.blocks:type_name -> mako.v2.LiveBlock
-	1, // 2: mako.v2.Chat.messages:type_name -> mako.v2.ChatMessage
-	7, // 3: mako.v2.Chat.usage:type_name -> mako.v2.Usage
-	6, // 4: mako.v2.Chat.agents:type_name -> mako.v2.SubAgent
-	8, // 5: mako.v2.Usage.limits:type_name -> mako.v2.RateLimit
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	14, // 0: mako.v2.ChatMessage.questions:type_name -> mako.v2.Question
+	4,  // 1: mako.v2.ChatLive.blocks:type_name -> mako.v2.LiveBlock
+	1,  // 2: mako.v2.Chat.messages:type_name -> mako.v2.ChatMessage
+	7,  // 3: mako.v2.Chat.usage:type_name -> mako.v2.Usage
+	6,  // 4: mako.v2.Chat.agents:type_name -> mako.v2.SubAgent
+	8,  // 5: mako.v2.Usage.limits:type_name -> mako.v2.RateLimit
+	11, // 6: mako.v2.AccountUsage.accounts:type_name -> mako.v2.AgentAccountUsage
+	12, // 7: mako.v2.AgentAccountUsage.limits:type_name -> mako.v2.AccountLimit
+	8,  // [8:8] is the sub-list for method output_type
+	8,  // [8:8] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_chat_proto_init() }
@@ -1072,13 +1469,14 @@ func file_mako_v2_chat_proto_init() {
 	}
 	file_mako_v2_session_proto_init()
 	file_mako_v2_chat_proto_msgTypes[1].OneofWrappers = []any{}
+	file_mako_v2_chat_proto_msgTypes[11].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_chat_proto_rawDesc), len(file_mako_v2_chat_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

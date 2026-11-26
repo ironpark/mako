@@ -149,6 +149,9 @@ public  final class Envelope extends
     AGENT_SYNC_STATE(160),
     RELAY_SPAWN_AGENT(161),
     RELAY_STOP_AGENT(162),
+    READ_ACCOUNT_USAGE(163),
+    ACCOUNT_USAGE(164),
+    REWIND_SESSION(165),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -287,6 +290,9 @@ public  final class Envelope extends
         case 160: return AGENT_SYNC_STATE;
         case 161: return RELAY_SPAWN_AGENT;
         case 162: return RELAY_STOP_AGENT;
+        case 163: return READ_ACCOUNT_USAGE;
+        case 164: return ACCOUNT_USAGE;
+        case 165: return REWIND_SESSION;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -6955,6 +6961,176 @@ public  final class Envelope extends
     }
   }
 
+  public static final int READ_ACCOUNT_USAGE_FIELD_NUMBER = 163;
+  /**
+   * <pre>
+   * Session-independent account usage/quotas and conversation rewind (revision 50).
+   * </pre>
+   *
+   * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+   */
+  @java.lang.Override
+  public boolean hasReadAccountUsage() {
+    return bodyCase_ == 163;
+  }
+  /**
+   * <pre>
+   * Session-independent account usage/quotas and conversation rewind (revision 50).
+   * </pre>
+   *
+   * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ReadAccountUsage getReadAccountUsage() {
+    if (bodyCase_ == 163) {
+       return (dev.ironpark.mako.v2.ReadAccountUsage) body_;
+    }
+    return dev.ironpark.mako.v2.ReadAccountUsage.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Session-independent account usage/quotas and conversation rewind (revision 50).
+   * </pre>
+   *
+   * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+   */
+  private void setReadAccountUsage(dev.ironpark.mako.v2.ReadAccountUsage value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 163;
+  }
+  /**
+   * <pre>
+   * Session-independent account usage/quotas and conversation rewind (revision 50).
+   * </pre>
+   *
+   * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+   */
+  private void mergeReadAccountUsage(dev.ironpark.mako.v2.ReadAccountUsage value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 163 &&
+        body_ != dev.ironpark.mako.v2.ReadAccountUsage.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ReadAccountUsage.newBuilder((dev.ironpark.mako.v2.ReadAccountUsage) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 163;
+  }
+  /**
+   * <pre>
+   * Session-independent account usage/quotas and conversation rewind (revision 50).
+   * </pre>
+   *
+   * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+   */
+  private void clearReadAccountUsage() {
+    if (bodyCase_ == 163) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int ACCOUNT_USAGE_FIELD_NUMBER = 164;
+  /**
+   * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAccountUsage() {
+    return bodyCase_ == 164;
+  }
+  /**
+   * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AccountUsage getAccountUsage() {
+    if (bodyCase_ == 164) {
+       return (dev.ironpark.mako.v2.AccountUsage) body_;
+    }
+    return dev.ironpark.mako.v2.AccountUsage.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+   */
+  private void setAccountUsage(dev.ironpark.mako.v2.AccountUsage value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 164;
+  }
+  /**
+   * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+   */
+  private void mergeAccountUsage(dev.ironpark.mako.v2.AccountUsage value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 164 &&
+        body_ != dev.ironpark.mako.v2.AccountUsage.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AccountUsage.newBuilder((dev.ironpark.mako.v2.AccountUsage) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 164;
+  }
+  /**
+   * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+   */
+  private void clearAccountUsage() {
+    if (bodyCase_ == 164) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int REWIND_SESSION_FIELD_NUMBER = 165;
+  /**
+   * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRewindSession() {
+    return bodyCase_ == 165;
+  }
+  /**
+   * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.RewindSession getRewindSession() {
+    if (bodyCase_ == 165) {
+       return (dev.ironpark.mako.v2.RewindSession) body_;
+    }
+    return dev.ironpark.mako.v2.RewindSession.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+   */
+  private void setRewindSession(dev.ironpark.mako.v2.RewindSession value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 165;
+  }
+  /**
+   * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+   */
+  private void mergeRewindSession(dev.ironpark.mako.v2.RewindSession value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 165 &&
+        body_ != dev.ironpark.mako.v2.RewindSession.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.RewindSession.newBuilder((dev.ironpark.mako.v2.RewindSession) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 165;
+  }
+  /**
+   * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+   */
+  private void clearRewindSession() {
+    if (bodyCase_ == 165) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -13550,6 +13726,174 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Session-independent account usage/quotas and conversation rewind (revision 50).
+     * </pre>
+     *
+     * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+     */
+    @java.lang.Override
+    public boolean hasReadAccountUsage() {
+      return instance.hasReadAccountUsage();
+    }
+    /**
+     * <pre>
+     * Session-independent account usage/quotas and conversation rewind (revision 50).
+     * </pre>
+     *
+     * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ReadAccountUsage getReadAccountUsage() {
+      return instance.getReadAccountUsage();
+    }
+    /**
+     * <pre>
+     * Session-independent account usage/quotas and conversation rewind (revision 50).
+     * </pre>
+     *
+     * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+     */
+    public Builder setReadAccountUsage(dev.ironpark.mako.v2.ReadAccountUsage value) {
+      copyOnWrite();
+      instance.setReadAccountUsage(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Session-independent account usage/quotas and conversation rewind (revision 50).
+     * </pre>
+     *
+     * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+     */
+    public Builder setReadAccountUsage(
+        dev.ironpark.mako.v2.ReadAccountUsage.Builder builderForValue) {
+      copyOnWrite();
+      instance.setReadAccountUsage(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Session-independent account usage/quotas and conversation rewind (revision 50).
+     * </pre>
+     *
+     * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+     */
+    public Builder mergeReadAccountUsage(dev.ironpark.mako.v2.ReadAccountUsage value) {
+      copyOnWrite();
+      instance.mergeReadAccountUsage(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Session-independent account usage/quotas and conversation rewind (revision 50).
+     * </pre>
+     *
+     * <code>.mako.v2.ReadAccountUsage read_account_usage = 163 [json_name = "readAccountUsage"];</code>
+     */
+    public Builder clearReadAccountUsage() {
+      copyOnWrite();
+      instance.clearReadAccountUsage();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAccountUsage() {
+      return instance.hasAccountUsage();
+    }
+    /**
+     * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AccountUsage getAccountUsage() {
+      return instance.getAccountUsage();
+    }
+    /**
+     * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+     */
+    public Builder setAccountUsage(dev.ironpark.mako.v2.AccountUsage value) {
+      copyOnWrite();
+      instance.setAccountUsage(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+     */
+    public Builder setAccountUsage(
+        dev.ironpark.mako.v2.AccountUsage.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAccountUsage(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+     */
+    public Builder mergeAccountUsage(dev.ironpark.mako.v2.AccountUsage value) {
+      copyOnWrite();
+      instance.mergeAccountUsage(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.AccountUsage account_usage = 164 [json_name = "accountUsage"];</code>
+     */
+    public Builder clearAccountUsage() {
+      copyOnWrite();
+      instance.clearAccountUsage();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRewindSession() {
+      return instance.hasRewindSession();
+    }
+    /**
+     * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.RewindSession getRewindSession() {
+      return instance.getRewindSession();
+    }
+    /**
+     * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+     */
+    public Builder setRewindSession(dev.ironpark.mako.v2.RewindSession value) {
+      copyOnWrite();
+      instance.setRewindSession(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+     */
+    public Builder setRewindSession(
+        dev.ironpark.mako.v2.RewindSession.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRewindSession(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+     */
+    public Builder mergeRewindSession(dev.ironpark.mako.v2.RewindSession value) {
+      copyOnWrite();
+      instance.mergeRewindSession(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RewindSession rewind_session = 165 [json_name = "rewindSession"];</code>
+     */
+    public Builder clearRewindSession() {
+      copyOnWrite();
+      instance.clearRewindSession();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -13693,24 +14037,28 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.AgentSyncState.class,
             dev.ironpark.mako.v2.RelaySpawnAgent.class,
             dev.ironpark.mako.v2.RelayStopAgent.class,
+            dev.ironpark.mako.v2.ReadAccountUsage.class,
+            dev.ironpark.mako.v2.AccountUsage.class,
+            dev.ironpark.mako.v2.RewindSession.class,
           };
           java.lang.String info =
-              "\u0000}\u0001\u0000\u0001\u00a2}\u0000\u0000\u0000\u0001\u0208\u0002\u000b\n<\u0000" +
-              "\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000\u0019" +
-              "<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <\u0000" +
-              "!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000*<\u0000" +
-              "+<\u0000,<\u0000-<\u0000.<\u0000/<\u00000<\u00001<\u00002<\u00003<\u00004<\u0000" +
-              "5<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000><\u0000" +
-              "?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000H<\u0000" +
-              "I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000R<\u0000" +
-              "S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000i<\u0000" +
-              "j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000x<\u0000y<\u0000z<\u0000" +
-              "{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0080<\u0000\u0082<\u0000\u0083<\u0000\u0084" +
-              "<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000\u0089<\u0000\u008a<\u0000" +
-              "\u008b<\u0000\u008c<\u0000\u008d<\u0000\u008e<\u0000\u008f<\u0000\u0090<\u0000\u0091" +
-              "<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000\u0097<\u0000" +
-              "\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000\u009d<\u0000\u009e" +
-              "<\u0000\u009f<\u0000\u00a0<\u0000\u00a1<\u0000\u00a2<\u0000";
+              "\u0000\u0080\u0001\u0000\u0001\u00a5\u0080\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
+              "\n<\u0000\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000" +
+              "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <" +
+              "\u0000!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000" +
+              "*<\u0000+<\u0000,<\u0000-<\u0000.<\u0000/<\u00000<\u00001<\u00002<\u00003<\u0000" +
+              "4<\u00005<\u00006<\u00007<\u00008<\u00009<\u0000:<\u0000;<\u0000<<\u0000=<\u0000" +
+              "><\u0000?<\u0000@<\u0000A<\u0000B<\u0000C<\u0000D<\u0000E<\u0000F<\u0000G<\u0000" +
+              "H<\u0000I<\u0000J<\u0000K<\u0000L<\u0000M<\u0000N<\u0000O<\u0000P<\u0000Q<\u0000" +
+              "R<\u0000S<\u0000T<\u0000Z<\u0000[<\u0000d<\u0000e<\u0000f<\u0000g<\u0000h<\u0000" +
+              "i<\u0000j<\u0000k<\u0000l<\u0000m<\u0000n<\u0000o<\u0000p<\u0000x<\u0000y<\u0000" +
+              "z<\u0000{<\u0000|<\u0000}<\u0000~<\u0000<\u0000\u0080<\u0000\u0082<\u0000\u0083" +
+              "<\u0000\u0084<\u0000\u0085<\u0000\u0086<\u0000\u0087<\u0000\u0088<\u0000\u0089<\u0000" +
+              "\u008a<\u0000\u008b<\u0000\u008c<\u0000\u008d<\u0000\u008e<\u0000\u008f<\u0000\u0090" +
+              "<\u0000\u0091<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000" +
+              "\u0097<\u0000\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000\u009d" +
+              "<\u0000\u009e<\u0000\u009f<\u0000\u00a0<\u0000\u00a1<\u0000\u00a2<\u0000\u00a3<\u0000" +
+              "\u00a4<\u0000\u00a5<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

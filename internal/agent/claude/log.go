@@ -95,6 +95,9 @@ func (d *decoder) Line(line []byte) []*protocol.ChatMessage {
 		if d.retyped(m) {
 			continue
 		}
+		if r.Type == "user" && r.UUID != "" && m.GetId() == "" {
+			m.Id = r.UUID
+		}
 		d.last = m
 		out = append(out, m)
 	}

@@ -46,9 +46,15 @@ func newCodexAppServerTransport(runDir, sessionID string) (*codexAppServerTransp
 	}, nil
 }
 
-func (t *codexAppServerTransport) waitReady(ctx context.Context, procDone <-chan struct{}, stderr io.Reader) (*codex.AppServerClient, string, error) {
+func (t *codexAppServerTransport) waitReady(ctx context.Context, procDone <-chan struct{}, stderr io.Reader, tail *stderrTail) (*codex.AppServerClient, string, error) {
 	if stderr != nil {
-		go func() { _, _ = io.Copy(io.Discard, stderr) }()
+		go func() {
+			if tail != nil {
+				_, _ = io.Copy(tail, stderr)
+			} else {
+				_, _ = io.Copy(io.Discard, stderr)
+			}
+		}()
 	}
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
@@ -65,6 +71,8 @@ func (t *codexAppServerTransport) waitReady(ctx context.Context, procDone <-chan
 		}
 		select {
 		case <-procDone:
+			// Give stderr reader a brief moment to drain final bytes on exit.
+			time.Sleep(25 * time.Millisecond)
 			if lastErr != nil {
 				return nil, "", fmt.Errorf("codex app-server exited before ready: %w", lastErr)
 			}

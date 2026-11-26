@@ -402,8 +402,11 @@ type AgentInfo struct {
 	AllowAgent     *bool                  `protobuf:"varint,8,opt,name=allow_agent,json=allowAgent,proto3,oneof" json:"allow_agent,omitempty"`          // Revision 39: allow AI models to spawn default (no-profile) agent via MCP
 	AllowTemplate  *bool                  `protobuf:"varint,9,opt,name=allow_template,json=allowTemplate,proto3,oneof" json:"allow_template,omitempty"` // Revision 39: allow prompt templates to run default (no-profile) agent
 	Spawnable      bool                   `protobuf:"varint,10,opt,name=spawnable,proto3" json:"spawnable,omitempty"`                                   // Revision 48: whether default (no-profile) agent can be spawned via MCP
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Revision 50: optional diagnostic note about the agent's runtime sign-in
+	// context on this node (e.g. agy SSH token file vs OS keyring).
+	SignInNote    string `protobuf:"bytes,11,opt,name=sign_in_note,json=signInNote,proto3" json:"sign_in_note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AgentInfo) Reset() {
@@ -504,6 +507,13 @@ func (x *AgentInfo) GetSpawnable() bool {
 		return x.Spawnable
 	}
 	return false
+}
+
+func (x *AgentInfo) GetSignInNote() string {
+	if x != nil {
+		return x.SignInNote
+	}
+	return ""
 }
 
 // AgentProfileInfo describes a configured agent profile for callers choosing
@@ -1751,7 +1761,7 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"link_error\x18\x15 \x01(\tR\tlinkError\x127\n" +
 	"\trelink_at\x18\x16 \x01(\v2\x1a.google.protobuf.TimestampR\brelinkAt\x12)\n" +
 	"\x10workspace_digest\x18\x17 \x01(\fR\x0fworkspaceDigest\x121\n" +
-	"\bprojects\x18\x18 \x03(\v2\x15.mako.v2.ProjectScopeR\bprojects\"\xe4\x02\n" +
+	"\bprojects\x18\x18 \x03(\v2\x15.mako.v2.ProjectScopeR\bprojects\"\x86\x03\n" +
 	"\tAgentInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bprofiles\x18\x02 \x03(\tR\bprofiles\x12\x12\n" +
@@ -1764,7 +1774,9 @@ const file_mako_v2_mesh_proto_rawDesc = "" +
 	"allowAgent\x88\x01\x01\x12*\n" +
 	"\x0eallow_template\x18\t \x01(\bH\x01R\rallowTemplate\x88\x01\x01\x12\x1c\n" +
 	"\tspawnable\x18\n" +
-	" \x01(\bR\tspawnableB\x0e\n" +
+	" \x01(\bR\tspawnable\x12 \n" +
+	"\fsign_in_note\x18\v \x01(\tR\n" +
+	"signInNoteB\x0e\n" +
 	"\f_allow_agentB\x11\n" +
 	"\x0f_allow_template\"\x9d\x02\n" +
 	"\x10AgentProfileInfo\x12\x12\n" +

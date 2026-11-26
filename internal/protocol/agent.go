@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 49
+const Revision = 50
+
+// RevisionAccountUsageAndRewind adds session-independent account quota
+// polling (ReadAccountUsage, AccountUsage), non-destructive conversation
+// rewind/fork (RewindSession), and AgentInfo.sign_in_note.
+const RevisionAccountUsageAndRewind = 50
 
 // RevisionPluginSurfacesAndWasm adds sidebar page and workspace tab block
 // slots (PluginBlock.icon, PluginOpen tab intents, WatchBlock/BlockUpdate/

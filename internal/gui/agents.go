@@ -565,7 +565,29 @@ func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 		commandHint = Tf("The program and any arguments it always needs; empty runs %s.", strings.Join(agentspec.Builtin[a.Agent], " "))
 	}
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
-	children := []ggui.Widget{
+	children := []ggui.Widget{}
+	agentName := a.Agent
+	signInNote := ggui.Derived(func() string {
+		for _, ag := range m.Conn.Get().Self.GetAgents() {
+			if ag.GetName() == agentName {
+				return ag.GetSignInNote()
+			}
+		}
+		return ""
+	})
+	children = append(children, ggui.View(signInNote, func(note string) ggui.Widget {
+		if note == "" {
+			return widget.Box()
+		}
+		return widget.Box(widget.Row(
+			icon("info").Size(14).Color(skin.Muted),
+			widget.Expanded(widget.Column(
+				widget.Text(T("Sign-in store")).Size(12).Weight(ggui.WeightMedium),
+				muted(widget.Text(note).Size(11.5).Selectable()),
+			).Gap(2).Stretch()),
+		).Gap(8).Align(widget.AlignStart)).Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(8, 10)
+	}))
+	children = append(children,
 		compactField(T("Command"), commandHint,
 			ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Command })).
 				Style(mono).Name(Tf("%s command", a.Agent))),
@@ -575,7 +597,7 @@ func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 		compactField(T("Environment"), T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a session starts; $$ is a $."),
 			ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Env })).
 				Multiline().Lines(2).Style(mono).Name(Tf("%s environment", a.Agent))),
-	}
+	)
 	if _, supportsYolo := agents.As[agent.YoloFlag](a.Agent); supportsYolo {
 		yoloSwitch := ui.Switch(m.agentBoolField(a.ID, func(d *agentDraft) *bool { return &d.Yolo }), "").
 			Name(Tf("%s YOLO", a.Agent))
