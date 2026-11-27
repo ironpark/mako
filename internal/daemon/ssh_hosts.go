@@ -118,7 +118,6 @@ func (m *sshManager) sync(hosts []config.SSHHost) {
 	}
 
 	var toStop []*sshEntry
-	var toStart []*sshEntry
 	changed := false
 
 	// Stop removed or modified entries.
@@ -160,7 +159,6 @@ func (m *sshManager) sync(hosts []config.SSHHost) {
 			e.link = protocol.LinkLinking
 		}
 		m.entries[id] = e
-		toStart = append(toStart, e)
 		changed = true
 		m.wg.Add(1)
 		go func(entry *sshEntry, ctx context.Context) {
