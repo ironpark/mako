@@ -11,8 +11,9 @@ mako connects your computers into a private mesh. Start Codex on a build box, re
 1. On each computer, build from the repository root with the Go version specified in [go.mod](go.mod). See the [build guide](DEVELOP.md#building) for details.
 
    ```sh
-   make build
-   ./bin/mako-gui
+   go install github.com/ironpark/ggui/cmd/ggui@latest
+   make app
+   ./bin/mako.app/Contents/MacOS/mako-gui
    ```
 
    By default, the desktop app uses an existing daemon or starts one inside the app. On a headless host, run `./bin/makod`.
