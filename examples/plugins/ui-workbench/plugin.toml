@@ -26,6 +26,22 @@ title = "Open Workbench Diff Review tab"
 id = "open-studio"
 title = "Open Workbench Component Studio tab"
 
+[[contributes.command]]
+id = "open-canvas"
+title = "Open Workbench Canvas Lab tab"
+
+[[contributes.command]]
+id = "open-timeline"
+title = "Open Workbench Timeline Lab tab"
+
+[[contributes.command]]
+id = "open-charts"
+title = "Open Workbench Charts Lab tab"
+
+[[contributes.command]]
+id = "open-graph"
+title = "Open Workbench Graph Lab tab"
+
 [contributes.settings]
 default_diff_mode = { type = "select", label = "Default diff mode", description = "Initial diff layout when opening a Diff Review tab.", options = ["unified", "split"], default = "unified" }
 default_table_style = { type = "select", label = "Default table style", description = "Row style for the Component Studio table.", options = ["striped", "compact"], default = "striped" }

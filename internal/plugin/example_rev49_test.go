@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -115,7 +116,9 @@ func (w *viewWatcher) until(desc string, ok func(*protocol.UiNode) bool) *protoc
 // left sidebar page, search + empty state, preview & kept custom workspace tabs,
 // unified/split diff + line comments, all new & enhanced Rev 49 components, and KO i18n.
 func TestUIWorkbenchExamplePlugin(t *testing.T) {
-	r := newRig(t, testLimits, nil)
+	lim := testLimits
+	lim.Events = 100
+	r := newRig(t, lim, nil)
 	files := map[string]string{}
 	for _, name := range []string{ManifestName, "main.js"} {
 		b, err := os.ReadFile(filepath.Join("../../examples/plugins/ui-workbench", name))
@@ -267,6 +270,204 @@ func TestUIWorkbenchExamplePlugin(t *testing.T) {
 		return findByKind(n, "skeleton") != nil
 	})
 
+	// Switch to Canvas tab (KO) & verify ui.canvas ops, pan/zoom, scene switch, and hitId selection.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: mainTabs.GetId(), Kind: protocol.UiChange, Value: "캔버스",
+	}); err != nil {
+		t.Fatalf("switch to canvas: %v", err)
+	}
+	canvasTree := tabW.until("canvas tab", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "demo-canvas") != nil
+	})
+	cvNode := findBySuffix(canvasTree, "demo-canvas")
+	if len(cvNode.GetCanvasCommands()) < 6 || !cvNode.GetCanvasPan() || !cvNode.GetCanvasZoom() {
+		t.Fatalf("unexpected demo-canvas node: cmds=%d pan=%v zoom=%v", len(cvNode.GetCanvasCommands()), cvNode.GetCanvasPan(), cvNode.GetCanvasZoom())
+	}
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: cvNode.GetId(), Kind: protocol.UiChange, Value: "node-gateway",
+	}); err != nil {
+		t.Fatalf("canvas hitId change: %v", err)
+	}
+	tabW.until("canvas inspector updated", func(n *protocol.UiNode) bool {
+		insp := findBySuffix(n, "canvas-inspector")
+		return insp != nil && hasText(insp, "node-gateway")
+	})
+	sceneRadio := findBySuffix(canvasTree, "canvas-scene")
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: sceneRadio.GetId(), Kind: protocol.UiChange, Value: "pipeline",
+	}); err != nil {
+		t.Fatalf("canvas scene change: %v", err)
+	}
+	canvasTree = tabW.until("canvas pipeline scene", func(n *protocol.UiNode) bool {
+		cv := findBySuffix(n, "demo-canvas")
+		if cv == nil {
+			return false
+		}
+		for _, cmd := range cv.GetCanvasCommands() {
+			if cmd.GetHitId() == "stage-plan" {
+				return true
+			}
+		}
+		return false
+	})
+	canvasReset := findBySuffix(canvasTree, "canvas-reset")
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: canvasReset.GetId(), Kind: protocol.UiTap,
+	}); err != nil {
+		t.Fatalf("canvas reset tap: %v", err)
+	}
+	tabW.until("canvas inspector cleared", func(n *protocol.UiNode) bool {
+		insp := findBySuffix(n, "canvas-inspector")
+		return insp != nil && !hasText(insp, "node-gateway")
+	})
+
+	// Switch to Timeline tab (KO) & verify ui.timeline lanes/spans and span selection.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: mainTabs.GetId(), Kind: protocol.UiChange, Value: "타임라인",
+	}); err != nil {
+		t.Fatalf("switch to timeline: %v", err)
+	}
+	timelineTree := tabW.until("timeline tab", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "demo-timeline") != nil
+	})
+	tlNode := findBySuffix(timelineTree, "demo-timeline")
+	if len(tlNode.GetTimelineLanes()) < 2 || tlNode.GetMaxHeight() <= 0 || tlNode.GetGrow() <= 0 {
+		t.Fatalf("unexpected demo-timeline node: lanes=%d maxH=%v grow=%v", len(tlNode.GetTimelineLanes()), tlNode.GetMaxHeight(), tlNode.GetGrow())
+	}
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: tlNode.GetId(), Kind: protocol.UiChange, Value: "sp-explore-1",
+	}); err != nil {
+		t.Fatalf("timeline span change: %v", err)
+	}
+	tabW.until("timeline inspector updated", func(n *protocol.UiNode) bool {
+		insp := findBySuffix(n, "timeline-inspector")
+		return insp != nil && hasText(insp, "sp-explore-1")
+	})
+
+	// Switch to Charts tab (KO) & verify area, stacked-bar, and heatmap charts + onChange payloads.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: mainTabs.GetId(), Kind: protocol.UiChange, Value: "차트",
+	}); err != nil {
+		t.Fatalf("switch to charts: %v", err)
+	}
+	chartsTree := tabW.until("charts tab", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "chart-area") != nil && findBySuffix(n, "chart-stacked") != nil && findBySuffix(n, "chart-heatmap") != nil
+	})
+	chArea := findBySuffix(chartsTree, "chart-area")
+	chStacked := findBySuffix(chartsTree, "chart-stacked")
+	chHeatmap := findBySuffix(chartsTree, "chart-heatmap")
+	for _, tc := range []struct {
+		node *protocol.UiNode
+		want string
+	}{
+		{chArea, "area"},
+		{chStacked, "stacked-bar"},
+		{chHeatmap, "heatmap"},
+	} {
+		if tc.node.GetChart() != tc.want || tc.node.GetMaxHeight() <= 0 || tc.node.GetGrow() <= 0 {
+			t.Fatalf("chart %s = {chart:%q maxH:%v grow:%v}, want %q with maxH>0 & grow>0", tc.node.GetId(), tc.node.GetChart(), tc.node.GetMaxHeight(), tc.node.GetGrow(), tc.want)
+		}
+	}
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: chArea.GetId(), Kind: protocol.UiChange, Value: `{"index":2,"label":"T3"}`,
+	}); err != nil {
+		t.Fatalf("chart area change: %v", err)
+	}
+	tabW.until("chart inspector area updated", func(n *protocol.UiNode) bool {
+		insp := findBySuffix(n, "chart-inspector")
+		return insp != nil && hasText(insp, "area: index #2 (T3)")
+	})
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: chHeatmap.GetId(), Kind: protocol.UiChange, Value: `{"row":1,"col":2,"series":"Wasm","label":"Wed","value":74}`,
+	}); err != nil {
+		t.Fatalf("chart heatmap change: %v", err)
+	}
+	tabW.until("chart inspector heatmap updated", func(n *protocol.UiNode) bool {
+		insp := findBySuffix(n, "chart-inspector")
+		return insp != nil && hasText(insp, "heatmap: Wasm / Wed [1,2] = 74")
+	})
+
+	// Switch to Graph tab (KO) & verify cards variant, minimap, layout switcher, doubleTap, and drop persistence.
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: mainTabs.GetId(), Kind: protocol.UiChange, Value: "그래프",
+	}); err != nil {
+		t.Fatalf("switch to graph: %v", err)
+	}
+	graphTree := tabW.until("graph tab", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "demo-graph") != nil
+	})
+	gNode := findBySuffix(graphTree, "demo-graph")
+	if gNode.GetVariant() != "cards" || !gNode.GetMinimap() || !gNode.GetDoubleTap() || !gNode.GetDrop() {
+		t.Fatalf("unexpected demo-graph flags: variant=%q minimap=%v doubleTap=%v drop=%v", gNode.GetVariant(), gNode.GetMinimap(), gNode.GetDoubleTap(), gNode.GetDrop())
+	}
+	layoutRadio := findBySuffix(graphTree, "graph-layout")
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: layoutRadio.GetId(), Kind: protocol.UiChange, Value: "hierarchy",
+	}); err != nil {
+		t.Fatalf("graph layout change: %v", err)
+	}
+	tabW.until("graph hierarchy layout", func(n *protocol.UiNode) bool {
+		g := findBySuffix(n, "demo-graph")
+		return g != nil && g.GetGraphLayout() == "hierarchy"
+	})
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: gNode.GetId(), Kind: protocol.UiDoubleTap, Value: "wb-lead",
+	}); err != nil {
+		t.Fatalf("graph doubleTap: %v", err)
+	}
+	tabW.until("graph double-tap recorded", func(n *protocol.UiNode) bool {
+		insp := findBySuffix(n, "graph-inspector")
+		return insp != nil && hasText(insp, "wb-lead")
+	})
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: gNode.GetId(), Kind: protocol.UiDrop, Value: `{"id":"wb-lead","x":180,"y":90}`,
+	}); err != nil {
+		t.Fatalf("graph drop: %v", err)
+	}
+	tabW.until("graph position pinned and double-tap recorded", func(n *protocol.UiNode) bool {
+		g := findBySuffix(n, "demo-graph")
+		insp := findBySuffix(n, "graph-inspector")
+		if g == nil || insp == nil || !hasText(insp, "wb-lead") {
+			return false
+		}
+		for _, gn := range g.GetGraphNodes() {
+			if gn.GetId() == "wb-lead" && gn.GetHasPos() && gn.GetX() == 180 && gn.GetY() == 90 {
+				return true
+			}
+		}
+		return false
+	})
+
+	// Reset pinned graph positions and verify hasPos clears.
+	graphReset := findBySuffix(graphTree, "graph-reset-pos")
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block: "plugin:ui-workbench/viewer", Instance: "diff-auth", Node: graphReset.GetId(), Kind: protocol.UiTap,
+	}); err != nil {
+		t.Fatalf("graph reset-pos tap: %v", err)
+	}
+	tabW.until("graph pins cleared", func(n *protocol.UiNode) bool {
+		g := findBySuffix(n, "demo-graph")
+		if g == nil {
+			return false
+		}
+		for _, gn := range g.GetGraphNodes() {
+			if gn.GetId() == "wb-lead" && gn.GetHasPos() {
+				return false
+			}
+		}
+		return true
+	})
+
+	// Unknown preset/section fallback recovers cleanly to default diff section.
+	fallbackW := watchViewForTest(t, t.Context(), r.m, "plugin:ui-workbench/viewer", "", "en", View{
+		Instance: "fallback-inst",
+		Params:   `{"preset":"nonexistent-preset","section":"unknown-section"}`,
+	})
+	fallbackW.until("unknown section fallback", func(n *protocol.UiNode) bool {
+		mt := findBySuffix(n, "main-tabs")
+		return mt != nil && mt.GetValue() == "Diff Review" && findByKind(n, "diff") != nil
+	})
+
 	// Tap Close button -> verifies close_tab intent with matching key.
 	closeBtn := findBySuffix(diffTree, "btn-close")
 	closeRes, err := r.m.Event(t.Context(), &protocol.BlockEvent{
@@ -277,6 +478,139 @@ func TestUIWorkbenchExamplePlugin(t *testing.T) {
 	}
 	if len(closeRes.GetOpen()) != 1 || closeRes.GetOpen()[0].GetKind() != "close_tab" || closeRes.GetOpen()[0].GetKey() != "diff-auth" {
 		t.Fatalf("unexpected closeTab intent: %+v", closeRes.GetOpen())
+	}
+}
+
+// TestUIWorkbenchStorageAndReloadResilience verifies that corrupted or
+// out-of-bounds persisted storage entries (graph-pos:*, comments:*, scratch:*)
+// recover cleanly without JS errors or uiblock rejections, and that saving a
+// new comment after reloading persisted comments advances commentSeq past
+// existing IDs (no duplicate key collision on "c1").
+func TestUIWorkbenchStorageAndReloadResilience(t *testing.T) {
+	base := t.TempDir()
+	storeDir := filepath.Join(base, "plugin-data", "ui-workbench")
+	if err := os.MkdirAll(storeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	seeded := map[string]string{
+		"graph-pos:huge":               `{"wb-lead":{"x":1e9,"y":1e9},"wb-router":{"x":1e308,"y":-1e308},"wb-explorer":{"x":null,"y":null},"wb-impl":{"x":[],"y":true},"wb-verify":{"x":120,"y":80}}`,
+		"comments:bad-elem:diff-auth":  `[null,"bad",123,[],{"id":"c1","line":1,"text":null},{"id":"c2","line":"bad","text":"nope"},{"id":"c3","line":0,"text":"zero"},{"id":"c4","line":2,"text":"valid\u001b\u202e note"},{"id":"c/bad#id","line":3,"text":"slash hash"},{"id":"c/bad#id","line":4,"text":"dup id"}]`,
+		"comments:only-bad:diff-auth":  `[null,"bad",{"id":"c1","line":1,"text":null}]`,
+		"comments:seq-inst:diff-auth":  `[{"id":"c1","line":1,"text":"existing comment"}]`,
+		"scratch:scratch-inst":         "line1\n\tline2\x00\u202e",
+	}
+	rawSeed, err := json.Marshal(seeded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(storeDir, "storage.json"), rawSeed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	lim := testLimits
+	lim.Events = 100
+	r := startRigIn(t, base, Config{Limits: lim})
+	files := map[string]string{}
+	for _, name := range []string{ManifestName, "main.js"} {
+		b, err := os.ReadFile(filepath.Join("../../examples/plugins/ui-workbench", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[name] = string(b)
+	}
+	r.write("ui-workbench", files)
+	r.state("ui-workbench", protocol.PluginWaiting)
+	r.grant("ui-workbench")
+
+	// 1. Explorer countAllNotes counts only valid normalized comments (3 + 1 = 4).
+	expW := watchViewForTest(t, t.Context(), r.m, "plugin:ui-workbench/explorer", "", "en", View{})
+	expTree := expW.until("explorer note count", func(n *protocol.UiNode) bool {
+		st := findBySuffix(n, "st-notes")
+		return st != nil && st.GetValue() == "4"
+	})
+	_ = expTree
+
+	// 2. Bug 1: Out-of-bounds / invalid-type graph-pos:* entries are discarded while valid ones survive.
+	graphW := watchViewForTest(t, t.Context(), r.m, "plugin:ui-workbench/viewer", "", "en", View{
+		Instance: "huge",
+		Params:   `{"preset":"graph-lab","section":"graph"}`,
+	})
+	graphTree := graphW.until("graph tab recovers from out-of-bounds coords", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "demo-graph") != nil
+	})
+	gNode := findBySuffix(graphTree, "demo-graph")
+	for _, gn := range gNode.GetGraphNodes() {
+		switch gn.GetId() {
+		case "wb-lead", "wb-router", "wb-explorer", "wb-impl":
+			if gn.GetHasPos() {
+				t.Fatalf("node %q should have rejected invalid persisted position, got (%v, %v)", gn.GetId(), gn.GetX(), gn.GetY())
+			}
+		case "wb-verify":
+			if !gn.GetHasPos() || gn.GetX() != 120 || gn.GetY() != 80 {
+				t.Fatalf("wb-verify expected valid persisted pos (120, 80), got hasPos=%v (%v, %v)", gn.GetHasPos(), gn.GetX(), gn.GetY())
+			}
+		}
+	}
+
+	// 3. Bug 2: Malformed comments:* elements and spoofing chars recover cleanly; scratch:* sanitizes cleanly.
+	badDiffW := watchViewForTest(t, t.Context(), r.m, "plugin:ui-workbench/viewer", "", "en", View{
+		Instance: "bad-elem",
+		Params:   `{"preset":"diff-auth","section":"diff"}`,
+	})
+	badDiffTree := badDiffW.until("diff tab recovers from malformed comment elements", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "diff-comments-card") != nil && hasText(n, "slash hash")
+	})
+	if findBySuffix(badDiffTree, "c4") == nil || findBySuffix(badDiffTree, "cbadid") == nil || findBySuffix(badDiffTree, "cbadid-2") == nil {
+		t.Fatalf("expected sanitized deduplicated comment keys c4, cbadid, cbadid-2")
+	}
+
+	onlyBadW := watchViewForTest(t, t.Context(), r.m, "plugin:ui-workbench/viewer", "", "en", View{
+		Instance: "only-bad",
+		Params:   `{"preset":"diff-auth","section":"diff"}`,
+	})
+	onlyBadTree := onlyBadW.until("diff tab recovers from all-invalid comment array", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "diff-comments-card") != nil && findByKind(n, "diff") != nil
+	})
+	if findBySuffix(onlyBadTree, "btn-clear-comments") != nil {
+		t.Fatalf("expected zero surviving comments on only-bad")
+	}
+
+	instW := watchViewForTest(t, t.Context(), r.m, "plugin:ui-workbench/viewer", "", "en", View{
+		Instance: "scratch-inst",
+		Params:   `{"preset":"instance-notes","section":"instance"}`,
+	})
+	instW.until("instance scratchpad recovers from control/spoofing chars", func(n *protocol.UiNode) bool {
+		sc := findBySuffix(n, "scratch-input")
+		return sc != nil && strings.Contains(sc.GetValue(), "line1\n\tline2")
+	})
+
+	// 4. Bug 3: Reloading persisted comments (c1) and saving a new comment generates c2 without colliding on c1.
+	seqW := watchViewForTest(t, t.Context(), r.m, "plugin:ui-workbench/viewer", "", "en", View{
+		Instance: "seq-inst",
+		Params:   `{"preset":"diff-auth","section":"diff"}`,
+	})
+	seqTree := seqW.until("reloaded c1 comment rendered", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "c1") != nil && hasText(n, "existing comment")
+	})
+	draftNode := findBySuffix(seqTree, "comment-draft")
+	saveBtn := findBySuffix(seqTree, "btn-save-comment")
+	if draftNode == nil || saveBtn == nil {
+		t.Fatal("missing comment-draft or btn-save-comment")
+	}
+	if _, err := r.m.Event(t.Context(), &protocol.BlockEvent{
+		Block:    "plugin:ui-workbench/viewer",
+		Instance: "seq-inst",
+		Node:     saveBtn.GetId(),
+		Kind:     protocol.UiTap,
+		Values:   map[string]string{draftNode.GetId(): "second comment"},
+	}); err != nil {
+		t.Fatalf("save comment after reload: %v", err)
+	}
+	seqTree = seqW.until("new comment saved as c2 without key collision", func(n *protocol.UiNode) bool {
+		return findBySuffix(n, "c1") != nil && findBySuffix(n, "c2") != nil && hasText(n, "second comment")
+	})
+	if !hasText(seqTree, "existing comment") {
+		t.Fatalf("expected existing comment c1 to remain visible after saving c2")
 	}
 }
 
