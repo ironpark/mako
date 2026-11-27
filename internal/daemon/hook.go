@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/protocol"
@@ -293,7 +294,20 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	name := s.Agent()
 	if msg.Kind == statusArg {
 		if line, ok := agents.As[agent.StatusLine](name); ok {
-			s.Report(line.Status(msg.Input))
+			u := line.Status(msg.Input)
+			// agy's statusLine reports cycle_mode ("auto", "accept-edits", "plan")
+			// even when --dangerously-skip-permissions is active for the session.
+			// Surface "bypassPermissions" unless the session is explicitly in plan mode.
+			if name == "agy" && agy.HasYoloFlag(s.Command()) {
+				mode := u.GetPermissionMode()
+				if mode != "plan" && (mode != "" || s.Reported().GetPermissionMode() != "plan") {
+					if u == nil {
+						u = &protocol.Usage{}
+					}
+					u.PermissionMode = "bypassPermissions"
+				}
+			}
+			s.Report(u)
 		}
 		if events, ok := agents.As[agent.StatusLineEvents](name); ok {
 			if ev, ok := events.StatusHookEvent(msg.Input); ok {

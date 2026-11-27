@@ -409,6 +409,42 @@ func (u *Usage) Merge(r *Usage) {
 	}
 }
 
+// Apply updates u with a newer live report r: every field r reports replaces
+// what u previously held, while fields r leaves out stay as they were.
+func (u *Usage) Apply(r *Usage) {
+	if r == nil {
+		return
+	}
+	if r.GetWindow() != 0 {
+		u.Window = r.GetWindow()
+	}
+	if r.GetInput() != 0 || r.GetOutput() != 0 {
+		u.Input = r.GetInput()
+		u.Output = r.GetOutput()
+	}
+	if r.GetCachedInput() != 0 {
+		u.CachedInput = r.GetCachedInput()
+	}
+	if r.GetContext() != 0 {
+		u.Context = r.GetContext()
+	}
+	if r.GetModel() != "" {
+		u.Model = r.GetModel()
+	}
+	if r.GetEffort() != "" {
+		u.Effort = r.GetEffort()
+	}
+	if r.GetPermissionMode() != "" {
+		u.PermissionMode = r.GetPermissionMode()
+	}
+	if r.GetCostUsd() > 0 {
+		u.CostUsd = r.GetCostUsd()
+	}
+	for _, l := range r.GetLimits() {
+		u.SetLimit(l)
+	}
+}
+
 // SetLimit records l in place of the limit of the same window, keeping
 // the shortest window first. It changes u's list, not the limits in it.
 func (u *Usage) SetLimit(l *RateLimit) {

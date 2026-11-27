@@ -19,7 +19,7 @@ type Agent struct {
 func New() *Agent {
 	return &Agent{
 		PromptFlag:  "--prompt-interactive",
-		ResumeFlags: []string{"--conversation"},
+		ResumeFlags: []string{"--conversation", "--resume", "-r"},
 		PickerFlags: []string{"--continue", "-c"},
 		// What starts the conversation, which a resumed one already has.
 		Inputs: strings.Fields("--prompt-interactive -i --print -p --prompt"),

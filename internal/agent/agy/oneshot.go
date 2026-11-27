@@ -19,6 +19,25 @@ func (*Agent) YoloFlags() []string {
 	return []string{"--dangerously-skip-permissions"}
 }
 
+// HasYoloFlag reports whether cmd enables --dangerously-skip-permissions as a CLI flag.
+func HasYoloFlag(cmd []string) bool {
+	a := New()
+	for i := 1; i < len(cmd); i++ {
+		arg := cmd[i]
+		if arg == "--" {
+			return false
+		}
+		if arg == "--dangerously-skip-permissions" || arg == "--dangerously-skip-permissions=true" {
+			return true
+		}
+		name, _, hasEq := strings.Cut(arg, "=")
+		if !hasEq && (slices.Contains(a.Values, name) || slices.Contains(a.Inputs, name) || slices.Contains(a.ResumeFlags, name)) {
+			i++
+		}
+	}
+	return false
+}
+
 // PrepareOneShot configures agy for a single non-interactive print run.
 func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, _ string) (agent.OneShotPrepared, error) {
 	cmd := slices.Clone(l.Command)

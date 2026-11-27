@@ -689,3 +689,82 @@ func TestServeHookDoesNotStallWhenSessionMuHeld(t *testing.T) {
 		t.Fatalf("session status = %s, want %s", got, protocol.AgentWorking)
 	}
 }
+
+func TestAgyStatusLineYoloPermissionModeAndLiveUpdates(t *testing.T) {
+	d := New(&config.Config{NodeID: "node"}, nil)
+
+	sendStatus := func(sessID string, seq int64, payload string) {
+		t.Helper()
+		client, server := net.Pipe()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			d.serveHook(t.Context(), server)
+		}()
+		if err := json.NewEncoder(client).Encode(hookMessage{
+			Session: sessID, Seq: seq, Kind: statusArg, Input: json.RawMessage(payload),
+		}); err != nil {
+			t.Fatal(err)
+		}
+		_ = client.Close()
+		<-done
+	}
+
+	// 1. agy started with --dangerously-skip-permissions surfaces bypassPermissions
+	// for auto / accept-edits / omitted startup mode, while preserving plan mode.
+	yoloSess, err := session.Start(session.Spec{
+		ID: "agy-yolo", NodeID: "node", Agent: "agy", Project: t.TempDir(),
+		Command: []string{"/bin/sh", "-c", "sleep 30", "agy", "--dangerously-skip-permissions"},
+		Cols:    80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = yoloSess.Close() })
+	d.sessions.add(yoloSess)
+
+	sendStatus(yoloSess.ID(), 1, `{"model":{"id":"Gemini 4 Neon","effort":"high"},"cycle_mode":"auto"}`)
+	if got := yoloSess.Reported().GetPermissionMode(); got != "bypassPermissions" {
+		t.Fatalf("agy YOLO auto mode = %q, want bypassPermissions", got)
+	}
+	// Switching to plan mode updates live reported mode to "plan".
+	sendStatus(yoloSess.ID(), 2, `{"model":{"id":"Gemini 4 Hydrogen","effort":"medium"},"cycle_mode":"plan"}`)
+	if r := yoloSess.Reported(); r.GetPermissionMode() != "plan" || r.GetModel() != "Gemini 4 Hydrogen" || r.GetEffort() != "medium" {
+		t.Fatalf("agy YOLO plan update = %+v, want plan / Gemini 4 Hydrogen / medium", r)
+	}
+	// An idle heartbeat omitting cycle_mode must not clobber plan mode.
+	sendStatus(yoloSess.ID(), 3, `{"model":{"id":"Gemini 4 Hydrogen"}}`)
+	if got := yoloSess.Reported().GetPermissionMode(); got != "plan" {
+		t.Fatalf("agy YOLO omitted cycle_mode in plan = %q, want plan", got)
+	}
+	// Switching back to accept-edits still runs under --dangerously-skip-permissions.
+	sendStatus(yoloSess.ID(), 4, `{"cycle_mode":"accept-edits"}`)
+	if got := yoloSess.Reported().GetPermissionMode(); got != "bypassPermissions" {
+		t.Fatalf("agy YOLO accept-edits mode = %q, want bypassPermissions", got)
+	}
+
+	// 2. Non-YOLO agy session reflects cycle_mode transitions faithfully.
+	normalSess, err := session.Start(session.Spec{
+		ID: "agy-normal", NodeID: "node", Agent: "agy", Project: t.TempDir(),
+		Command: []string{"/bin/sh", "-c", "sleep 30"},
+		Cols:    80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = normalSess.Close() })
+	d.sessions.add(normalSess)
+
+	sendStatus(normalSess.ID(), 1, `{"cycle_mode":"auto"}`)
+	if got := normalSess.Reported().GetPermissionMode(); got != "auto" {
+		t.Fatalf("non-YOLO agy auto = %q, want auto", got)
+	}
+	sendStatus(normalSess.ID(), 2, `{"cycle_mode":"accept-edits"}`)
+	if got := normalSess.Reported().GetPermissionMode(); got != "acceptEdits" {
+		t.Fatalf("non-YOLO agy accept-edits = %q, want acceptEdits", got)
+	}
+	sendStatus(normalSess.ID(), 3, `{"cycle_mode":"plan"}`)
+	if got := normalSess.Reported().GetPermissionMode(); got != "plan" {
+		t.Fatalf("non-YOLO agy plan = %q, want plan", got)
+	}
+}

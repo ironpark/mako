@@ -193,6 +193,9 @@ func (s *Session) ID() string { return s.spec.ID }
 // Agent is the agent the session runs, as its launch named it.
 func (s *Session) Agent() string { return s.spec.Agent }
 
+// Command is a copy of the resolved launch command the session started with.
+func (s *Session) Command() []string { return append([]string(nil), s.spec.Command...) }
+
 // Info snapshots the session metadata.
 func (s *Session) Info() *protocol.SessionInfo {
 	s.mu.Lock()
@@ -387,14 +390,14 @@ func (s *Session) reportStatusLocked(status protocol.AgentStatus, seq int64) boo
 
 // Report records what the agent's status line says of its tokens. What a
 // report leaves out, such as limits before the first reply, stays as the
-// last one said.
+// last one said; fields the newer report names replace the previous values.
 func (s *Session) Report(u *protocol.Usage) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.reported == nil {
 		s.reported = &protocol.Usage{}
 	}
-	s.reported.Merge(u)
+	s.reported.Apply(u)
 }
 
 // Reported is a copy of what the agent's status line has said of its

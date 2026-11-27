@@ -295,10 +295,45 @@ func TestHookEvents(t *testing.T) {
 
 // Resuming keeps the settings and drops what started the conversation.
 func TestResume(t *testing.T) {
-	got := New().Resume([]string{"agy", "--model", "m", "--settings", "/s.json", "--add-dir", "/a", "-i", "do it", "--continue"}, "c1")
-	want := []string{"agy", "--conversation", "c1", "--model", "m", "--settings", "/s.json", "--add-dir", "/a"}
+	a := New()
+	got := a.Resume([]string{"agy", "--dangerously-skip-permissions", "--model", "m", "--settings", "/s.json", "--add-dir", "/a", "-i", "do it", "--continue"}, "c1")
+	want := []string{"agy", "--conversation", "c1", "--dangerously-skip-permissions", "--model", "m", "--settings", "/s.json", "--add-dir", "/a"}
 	if !slices.Equal(got, want) {
-		t.Errorf("resume %q", got)
+		t.Errorf("resume %q, want %q", got, want)
+	}
+	// --resume and -r aliases are recognized and replaced on resume.
+	for _, flag := range []string{"--conversation", "--resume", "-r"} {
+		cmd := []string{"agy", flag, "old-id", "--dangerously-skip-permissions"}
+		if id := a.ArgumentID(cmd); id != "old-id" {
+			t.Errorf("%s: ArgumentID = %q, want old-id", flag, id)
+		}
+		if !a.Picks(cmd) {
+			t.Errorf("%s: Picks = false, want true", flag)
+		}
+		resumed := a.Resume(cmd, "new-id")
+		if wantR := []string{"agy", "--conversation", "new-id", "--dangerously-skip-permissions"}; !slices.Equal(resumed, wantR) {
+			t.Errorf("%s: Resume = %q, want %q", flag, resumed, wantR)
+		}
+	}
+}
+
+func TestHasYoloFlag(t *testing.T) {
+	cases := []struct {
+		cmd  []string
+		want bool
+	}{
+		{[]string{"agy"}, false},
+		{[]string{"agy", "--dangerously-skip-permissions"}, true},
+		{[]string{"agy", "--conversation", "c1", "--dangerously-skip-permissions", "--settings", `{}`}, true},
+		{[]string{"agy", "--dangerously-skip-permissions=true"}, true},
+		{[]string{"agy", "--dangerously-skip-permissions=false"}, false},
+		{[]string{"agy", "--prompt-interactive", "--dangerously-skip-permissions"}, false},
+		{[]string{"agy", "--", "--dangerously-skip-permissions"}, false},
+	}
+	for _, tc := range cases {
+		if got := HasYoloFlag(tc.cmd); got != tc.want {
+			t.Errorf("HasYoloFlag(%q) = %v, want %v", tc.cmd, got, tc.want)
+		}
 	}
 }
 

@@ -53,7 +53,7 @@ flowchart TB
 
 | 인터페이스 | 구현 파일 | 핵심 동작 |
 | --- | --- | --- |
-| `Driver`, `Launcher`, `Prompter`, `DirTaker`, `ModelFlag`, `EffortFlag` | `agy.go` (`agent.Flags`) | `--prompt-interactive`, `--conversation` 재개, `--add-dir`, `--model`, `--effort` |
+| `Driver`, `Launcher`, `Prompter`, `DirTaker`, `ModelFlag`, `EffortFlag` | `agy.go` (`agent.Flags`) | `--prompt-interactive`, `--conversation`/`--resume`/`-r` 재개, `--add-dir`, `--model`, `--effort` |
 | `ModelEffortNormalizer`, `ModelCatalog` | `catalog.go` | `agy models` 파싱(5분 캐시), 변형 ID(`*-high`)와 `--effort` 충돌 정규화 |
 | `YoloFlag`, `OneShot` | `oneshot.go` | `--dangerously-skip-permissions`, `--print --output-format json --json-schema` |
 | `MessageDeliverer` + 사이드카 | `sidecar.go`, `daemon/agent_cli.go` | `mako-bridge` 사이드카 + `agentapi send-message` 네이티브 푸시 |
@@ -149,7 +149,7 @@ Mako는 `agy.Agent.IsSubAgent(parentID, parentLog, childID, childLog)`로 3단�
 - **비파괴적 `--settings` 주입 (`attachSettingsStatusLine`)**: 디스크의 `settings.json`을 수정하지 않고, 실행 명령어에 `--settings '{"statusLine":{"type":"command","command":"...","enabled":true,"stack_with_default":true}}'`를 추가하거나 기존 `--settings`(파일 경로 또는 인라인 JSON)에 병합합니다(이미 `statusLine`이 있으면 존중).
 - **사용자 기존 `statusLine` 포워딩**: `UserStatusLine`이 `~/.gemini/antigravity-cli/settings.json`에서 활성화된 사용자 커맨드를 읽어 `runStatusLine`이 그 출력을 그대로 stdout에 중계합니다.
 - **사용량 & 쿼터 파싱 (`Status`)**:
-  - `context_window` (`total_input_tokens`, `total_output_tokens`, `context_window_size`, `current_usage` 또는 `used_percentage`/`remaining_percentage`), `model`(`display_name`/`id`, `effort`), `cycle_mode`(`auto`/`accept-edits`/`plan`), `cost.total_usd`를 파싱합니다.
+  - `context_window` (`total_input_tokens`, `total_output_tokens`, `context_window_size`, `current_usage` 또는 `used_percentage`/`remaining_percentage`), `model`(`display_name`/`id`, `effort`), `cycle_mode`(`auto`/`accept-edits`/`plan`), `cost.total_usd`를 파싱합니다. (`--dangerously-skip-permissions`로 시작된 세션은 `plan` 모드가 아닌 한 Mako UI에 `bypassPermissions`로 표시됩니다.)
   - `rate_limits`(`five_hour`, `seven_day`) 및 `quota`/`quotas` 맵에서 현재 모델 계열(`claude`/`gpt`/`gemini`)과 가장 잘 맞는 버킷(`5h`/`sprint`, `7d`/`week`, `24h`/`daily`)을 점수화해 Mako의 `RateLimit`으로 매핑합니다.
 - **실시간 상태 보강 (`StatusHookEvent`)**:
   - `tool_confirmation_pending == true` 또는 `agent_state == "reviewing"` → `agent.Waiting` (도구 승인 대기 감지)
