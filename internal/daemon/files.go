@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -171,6 +172,9 @@ func (d *Daemon) handleGitRun(ctx context.Context, stream *transport.Stream, env
 }
 
 func (d *Daemon) gitRunLocal(ctx context.Context, r *protocol.GitRun) (*protocol.GitResult, error) {
+	if r.GetOp() == protocol.GitOpAuth {
+		return d.gitAuthLocal(ctx, r)
+	}
 	if r.GetOp() == protocol.GitOpClone {
 		dest := mcp.ExpandHome(strings.TrimSpace(r.GetRoot()))
 		if err := absolute(dest); err != nil {
@@ -198,6 +202,38 @@ func (d *Daemon) gitRunLocal(ctx context.Context, r *protocol.GitRun) (*protocol
 		out, err := run(ctx, r)
 		return &protocol.GitResult{Output: out}, err
 	})
+}
+
+func (d *Daemon) gitAuthLocal(ctx context.Context, r *protocol.GitRun) (*protocol.GitResult, error) {
+	var req gitstat.HTTPSAuthRequest
+	if err := json.Unmarshal([]byte(r.GetMessage()), &req); err != nil {
+		return nil, errors.New("invalid HTTPS credential request")
+	}
+	targetURL := strings.TrimSpace(req.URL)
+	if targetURL == "" {
+		root := mcp.ExpandHome(strings.TrimSpace(r.GetRoot()))
+		if err := absolute(root); err != nil {
+			return nil, err
+		}
+		targetURL = gitstat.PrimaryHTTPSURL(root)
+	}
+	if !gitstat.IsHTTPURL(targetURL) {
+		return nil, errors.New("repository does not have an HTTP or HTTPS remote")
+	}
+	save := req.Save || r.GetForce()
+	if save {
+		if err := gitstat.ApproveHTTPSCredential(ctx, targetURL, req.Username, req.Password); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := gitstat.SetHTTPSCredential(targetURL, gitstat.HTTPSCredential{
+			Username: req.Username,
+			Password: req.Password,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return &protocol.GitResult{}, nil
 }
 
 func (d *Daemon) handleGitHubList(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {

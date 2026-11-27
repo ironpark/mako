@@ -3,6 +3,8 @@ package gitstat
 import (
 	"bytes"
 	"context"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,6 +134,61 @@ func RepoPath(url string) (host, path string) {
 		return "", ""
 	}
 	return strings.ToLower(ep.Host), strings.TrimSuffix(strings.Trim(ep.Path, "/"), ".git")
+}
+
+// HTTPSHost returns the normalized host (with non-default port, if any) of an
+// HTTP or HTTPS git remote URL: "github.com" for https://github.com/a/b.git
+// and https://github.com:443/a/b.git, "git.example.com:3000" for
+// https://git.example.com:3000/a/b.git, and "" for SSH, file, or invalid URLs.
+func HTTPSHost(rawURL string) string {
+	_, host := parseHTTPOrigin(rawURL)
+	return host
+}
+
+// HTTPSOrigin returns the normalized "scheme://host[:port]" origin of an HTTP
+// or HTTPS git remote URL, omitting default ports (:443 for https, :80 for
+// http). Returns "" for non-HTTP(S) or invalid URLs.
+func HTTPSOrigin(rawURL string) string {
+	scheme, host := parseHTTPOrigin(rawURL)
+	if scheme == "" || host == "" {
+		return ""
+	}
+	return scheme + "://" + host
+}
+
+// IsHTTPURL reports whether rawURL is an HTTP or HTTPS git remote URL.
+func IsHTTPURL(rawURL string) bool {
+	return HTTPSOrigin(rawURL) != ""
+}
+
+func parseHTTPOrigin(rawURL string) (scheme, host string) {
+	s := strings.TrimSpace(rawURL)
+	if s == "" {
+		return "", ""
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return "", ""
+	}
+	scheme = strings.ToLower(u.Scheme)
+	if scheme != "https" && scheme != "http" {
+		return "", ""
+	}
+	hostname := strings.ToLower(u.Hostname())
+	if hostname == "" {
+		return "", ""
+	}
+	port := u.Port()
+	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
+		port = ""
+	}
+	if port != "" {
+		return scheme, net.JoinHostPort(hostname, port)
+	}
+	if strings.Contains(hostname, ":") {
+		return scheme, "[" + hostname + "]"
+	}
+	return scheme, hostname
 }
 
 // Git runs git in root for what it does, returning all it printed, as the

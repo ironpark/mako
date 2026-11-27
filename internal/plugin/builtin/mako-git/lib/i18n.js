@@ -177,6 +177,17 @@ const en = {
   // Disclosure accessibility
   "Expand {title}": "Expand {title}",
   "Collapse {title}": "Collapse {title}",
+
+  // HTTPS authentication
+  "HTTPS authentication": "HTTPS authentication",
+  "Authenticate…": "Authenticate…",
+  "Sign in & retry": "Sign in & retry",
+  "Username (optional)": "Username (optional)",
+  "Password or token": "Password or token",
+  "Personal access token or password": "Personal access token or password",
+  "Save in Git credential store": "Save in Git credential store",
+  "Enter a password or personal access token.": "Enter a password or personal access token.",
+  "Leave username blank to use a personal access token. Credentials are not written to .git/config.": "Leave username blank to use a personal access token. Credentials are not written to .git/config.",
 };
 
 const ko = {
@@ -354,6 +365,17 @@ const ko = {
   // Disclosure accessibility
   "Expand {title}": "{title} 펼치기",
   "Collapse {title}": "{title} 접기",
+
+  // HTTPS authentication
+  "HTTPS authentication": "HTTPS 인증",
+  "Authenticate…": "인증…",
+  "Sign in & retry": "인증 후 재시도",
+  "Username (optional)": "사용자 이름 (선택)",
+  "Password or token": "비밀번호 또는 토큰",
+  "Personal access token or password": "개인 액세스 토큰 또는 비밀번호",
+  "Save in Git credential store": "Git 자격 증명 저장소에 저장",
+  "Enter a password or personal access token.": "비밀번호 또는 개인 액세스 토큰을 입력하세요.",
+  "Leave username blank to use a personal access token. Credentials are not written to .git/config.": "개인 액세스 토큰을 사용할 때는 사용자 이름을 비워 두세요. 자격 증명은 .git/config에 기록되지 않습니다.",
 };
 
 export const catalog = { en, ko };

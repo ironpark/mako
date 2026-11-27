@@ -1864,7 +1864,13 @@ var catalogKo = map[string]string{
 	"Choose a destination folder": "저장 위치를 선택하세요",
 	"Enter a valid Git repository URL (https://, ssh://, or git@host:owner/repo.git).": "올바른 Git 저장소 주소(https://, ssh:// 또는 git@host:owner/repo.git)를 입력하세요.",
 	"Tip: configure default project locations in Settings ▸ General.":                  "팁: 설정 ▸ 일반에서 기본 프로젝트 저장 위치를 미리 등록할 수 있습니다.",
-	"Manage…": "관리…",
+	"Manage…":              "관리…",
+	"HTTPS authentication": "HTTPS 인증",
+	"Optional if Git or gh is already signed in. Leave username blank to use a personal access token.": "Git 또는 gh에 이미 로그인되어 있으면 입력하지 않아도 됩니다. 개인 액세스 토큰을 사용할 때는 사용자 이름을 비워 두세요.",
+	"Username (optional)":               "사용자 이름 (선택)",
+	"Password or token":                 "비밀번호 또는 토큰",
+	"Personal access token or password": "개인 액세스 토큰 또는 비밀번호",
+	"Save in Git credential store":      "Git 자격 증명 저장소에 저장",
 
 	// Revision 49: sidebar plugin pages, custom plugin tabs & UI components
 	"Copy code":         "코드 복사",

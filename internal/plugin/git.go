@@ -15,6 +15,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/plugin/hostapi"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -62,6 +63,7 @@ var allowedGitOps = map[string]bool{
 	protocol.GitOpTag:          true,
 	protocol.GitOpContinue:     true,
 	protocol.GitOpAbort:        true,
+	protocol.GitOpAuth:         true,
 }
 
 type gitWatchKey struct {
@@ -474,6 +476,32 @@ func (h *host) GitRun(_ context.Context, req *hostapi.GitServiceRunRequest) (*ho
 		Rebase:  req.GetRebase(),
 		Force:   req.GetForce(),
 		Tag:     req.GetTag(),
+	}
+	if op == protocol.GitOpAuth {
+		// Restrict plugin-originated auth requests to the target repository's
+		// own HTTPS remote by stripping any caller-supplied URL, and execute
+		// synchronously so callers can validate and immediately retry sync ops
+		// inside the same user gesture.
+		var authReq gitstat.HTTPSAuthRequest
+		if err := json.Unmarshal([]byte(req.GetMessage()), &authReq); err != nil {
+			return nil, errors.New("invalid HTTPS credential request")
+		}
+		authReq.URL = ""
+		if req.GetForce() {
+			authReq.Save = true
+		}
+		sanitized, err := json.Marshal(authReq)
+		if err != nil {
+			return nil, err
+		}
+		runReq.Message = string(sanitized)
+		runReq.Force = authReq.Save
+		authCtx, cancel := context.WithTimeout(h.p.m.ctx, 15*time.Second)
+		defer cancel()
+		if _, err := gh.Run(authCtx, t, runReq, false); err != nil {
+			return nil, err
+		}
+		return &hostapi.GitServiceRunResponse{}, nil
 	}
 	jobID := "g" + nonce()
 	jobCtx, cancel := context.WithTimeout(h.p.m.ctx, gitRunTimeout)

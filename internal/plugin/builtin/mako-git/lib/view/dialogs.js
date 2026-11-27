@@ -33,6 +33,47 @@ export function renderDialog(s, ui, ctx) {
     });
   }
 
+  if (d.kind === "auth") {
+    const authKids = [
+      ui.text(t("Username (optional)"), { key: "dlg-auth-user-lbl", size: "small", weight: "medium" }),
+      ui.input(d.username || "", {
+        key: "dialog-auth-user",
+        placeholder: "x-access-token",
+        onChange: ["setAuthUsername"],
+        onSubmit: ["submitDialog"],
+      }),
+      ui.text(t("Password or token"), { key: "dlg-auth-pass-lbl", size: "small", weight: "medium" }),
+      ui.input(d.password || "", {
+        key: "dialog-auth-pass",
+        variant: "password",
+        placeholder: t("Personal access token or password"),
+        onChange: ["setAuthPassword"],
+        onSubmit: ["submitDialog"],
+      }),
+      ui.checkbox(d.save !== false ? "on" : "off", t("Save in Git credential store"), {
+        key: "dialog-auth-save",
+        onChange: ["toggleAuthSave"],
+      }),
+    ];
+    if (d.err) {
+      authKids.push(ui.text(sanitizeText(d.err, true), { key: "dlg-err", size: "small", tone: "danger" }));
+    }
+    authKids.push(ui.text(
+      t("Leave username blank to use a personal access token. Credentials are not written to .git/config."),
+      { key: "dlg-note", size: "small", tone: "muted" },
+    ));
+    authKids.push(ui.row([
+      ui.text("", { key: "dlg-spacer", grow: 1 }),
+      ui.button(t("Cancel"), { key: "dlg-cancel", variant: "outline", onTap: ["closeDialog"] }),
+      ui.button(t("Sign in & retry"), { key: "dlg-submit", variant: "primary", onTap: ["submitDialog"] }),
+    ], { key: "dlg-actions", gap: 8 }));
+
+    return ui.dialog(t("HTTPS authentication"), authKids, {
+      key: "git-dialog",
+      onChange: ["closeDialog"],
+    });
+  }
+
   let title = "";
   let fieldLabel = "";
   let placeholder = "";

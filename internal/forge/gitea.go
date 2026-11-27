@@ -113,6 +113,9 @@ func giteaAt(ctx context.Context, host string) string {
 // token is the password git keeps for host, which for a forge is a token,
 // "" for none. git asks no one: a credential it does not have is none.
 func token(ctx context.Context, host string) string {
+	if cred, ok := gitstat.GetHTTPSCredential("https://" + host); ok && cred.Password != "" {
+		return cred.Password
+	}
 	return tokens.get(host, func() string {
 		cmd := exec.CommandContext(ctx, "git", "credential", "fill")
 		cmd.Stdin = strings.NewReader("protocol=https\nhost=" + host + "\n\n")

@@ -3,6 +3,7 @@ package gui
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"image/color"
 	"path/filepath"
@@ -22,13 +23,17 @@ import (
 
 // cloneAsk is the state of the "Clone from Git URL" dialog.
 type cloneAsk struct {
-	Open    *ggui.StateValue[bool]
-	Node    *ggui.StateValue[string]
-	URL     *ggui.StateValue[string]
-	BaseDir *ggui.StateValue[string]
-	Folder  *ggui.StateValue[string]
-	Cloning *ggui.StateValue[bool]
-	Err     *ggui.StateValue[string]
+	Open      *ggui.StateValue[bool]
+	Node      *ggui.StateValue[string]
+	URL       *ggui.StateValue[string]
+	BaseDir   *ggui.StateValue[string]
+	Folder    *ggui.StateValue[string]
+	AuthOpen  *ggui.StateValue[bool]
+	Username  *ggui.StateValue[string]
+	Password  *ggui.StateValue[string]
+	SaveCreds *ggui.StateValue[bool]
+	Cloning   *ggui.StateValue[bool]
+	Err       *ggui.StateValue[string]
 
 	targetSpace string
 	gen         uint64
@@ -37,14 +42,25 @@ type cloneAsk struct {
 
 func newCloneAsk() *cloneAsk {
 	return &cloneAsk{
-		Open:    ggui.State(false),
-		Node:    ggui.State(""),
-		URL:     ggui.State(""),
-		BaseDir: ggui.State(""),
-		Folder:  ggui.State(""),
-		Cloning: ggui.State(false),
-		Err:     ggui.State(""),
+		Open:      ggui.State(false),
+		Node:      ggui.State(""),
+		URL:       ggui.State(""),
+		BaseDir:   ggui.State(""),
+		Folder:    ggui.State(""),
+		AuthOpen:  ggui.State(false),
+		Username:  ggui.State(""),
+		Password:  ggui.State(""),
+		SaveCreds: ggui.State(true),
+		Cloning:   ggui.State(false),
+		Err:       ggui.State(""),
 	}
+}
+
+func (c *cloneAsk) clearAuth() {
+	c.AuthOpen.Set(false)
+	c.Username.Set("")
+	c.Password.Set("")
+	c.SaveCreds.Set(true)
 }
 
 func (c *cloneAsk) stop() {
@@ -64,6 +80,7 @@ func (m *model) openCloneProject() {
 func (m *model) openCloneProjectIn(spaceID string) {
 	cl := m.Proj.Clone
 	cl.stop()
+	cl.clearAuth()
 	cl.targetSpace = spaceID
 	node := ggui.Peek(m.Conn).Self.GetId()
 	if filtered := ggui.Peek(m.Prefs).ProjectMachine; filtered != "" {
@@ -123,9 +140,20 @@ func (m *model) submitCloneProject() {
 	rawURL := strings.TrimSpace(ggui.Peek(cl.URL))
 	baseDir := strings.TrimSpace(ggui.Peek(cl.BaseDir))
 	folderOverride := strings.TrimSpace(ggui.Peek(cl.Folder))
+	username := strings.TrimSpace(ggui.Peek(cl.Username))
+	password := ggui.Peek(cl.Password)
+	saveCreds := ggui.Peek(cl.SaveCreds)
 	local := m.onThisMachine(node)
 	remoteID := m.remoteID(node)
 	targetSpace := cl.targetSpace
+
+	var cred *gitstat.HTTPSCredential
+	if gitstat.IsHTTPURL(rawURL) && password != "" {
+		cred = &gitstat.HTTPSCredential{
+			Username: username,
+			Password: password,
+		}
+	}
 
 	_, parsedOwner, parsedRemote, parseErr := gitstat.ParseGitURL(rawURL)
 	if parseErr != nil {
@@ -155,9 +183,13 @@ func (m *model) submitCloneProject() {
 			if errors.Is(err, context.Canceled) {
 				return
 			}
+			if gitstat.IsHTTPURL(rawURL) && gitstat.IsHTTPSAuthError(err.Error()) {
+				cl.AuthOpen.Set(true)
+			}
 			cl.Err.Set(nodeErr(err))
 			return
 		}
+		cl.clearAuth()
 		cl.Open.Set(false)
 		repo := discoveredRepo{
 			Path:   clonedPath,
@@ -190,26 +222,69 @@ func (m *model) submitCloneProject() {
 				if dialErr != nil {
 					err = dialErr
 				} else {
-					res, runErr := c.GitRun(ctx, &protocol.GitRun{
-						NodeId:  remoteID,
-						Root:    dest,
-						Op:      protocol.GitOpClone,
-						Message: rawURL,
-					})
-					if runErr != nil {
-						err = runErr
-					} else {
-						clonedPath = cmp.Or(strings.TrimSpace(res.GetOutput()), dest)
-						owner, remote = parsedOwner, parsedRemote
+					if cred != nil {
+						payload, _ := json.Marshal(gitstat.HTTPSAuthRequest{
+							URL:      rawURL,
+							Username: cred.Username,
+							Password: cred.Password,
+							Save:     saveCreds,
+						})
+						_, err = c.GitRun(ctx, &protocol.GitRun{
+							NodeId:  remoteID,
+							Op:      protocol.GitOpAuth,
+							Message: string(payload),
+							Force:   saveCreds,
+						})
+					}
+					if err == nil {
+						res, runErr := c.GitRun(ctx, &protocol.GitRun{
+							NodeId:  remoteID,
+							Root:    dest,
+							Op:      protocol.GitOpClone,
+							Message: rawURL,
+						})
+						if runErr != nil {
+							err = runErr
+						} else {
+							clonedPath = cmp.Or(strings.TrimSpace(res.GetOutput()), dest)
+							owner, remote = parsedOwner, parsedRemote
+						}
 					}
 				}
 			}
 		} else {
-			res, cloneErr := gitstat.CloneWithInfo(ctx, rawURL, dest)
+			res, cloneErr := gitstat.CloneWithOptions(ctx, rawURL, dest, gitstat.CloneOptions{
+				Credential:     cred,
+				SaveCredential: saveCreds,
+			})
 			if cloneErr != nil {
 				err = cloneErr
 			} else {
 				clonedPath, owner, remote = res.Path, res.Owner, res.Remote
+				if cred != nil && m.link != nil {
+					// Best-effort: keep the local daemon's in-memory credential
+					// cache in sync without blocking the clone completion UI.
+					credCopy := *cred
+					go func() {
+						syncCtx, syncCancel := context.WithTimeout(context.Background(), 2*time.Second)
+						defer syncCancel()
+						c, dialErr := m.link.client(syncCtx)
+						if dialErr != nil {
+							return
+						}
+						payload, _ := json.Marshal(gitstat.HTTPSAuthRequest{
+							URL:      rawURL,
+							Username: credCopy.Username,
+							Password: credCopy.Password,
+							Save:     saveCreds,
+						})
+						_, _ = c.GitRun(syncCtx, &protocol.GitRun{
+							Op:      protocol.GitOpAuth,
+							Message: string(payload),
+							Force:   saveCreds,
+						})
+					}()
+				}
 			}
 		}
 		if post != nil {
@@ -228,6 +303,7 @@ func cloneProjectDialog(m *model) ggui.Widget {
 	ggui.Watch(cl.Open, func(on bool) {
 		if was && !on {
 			cl.stop()
+			cl.clearAuth()
 		}
 		was = on
 	})
@@ -360,6 +436,37 @@ func cloneProjectForm(m *model) ggui.Widget {
 		).Gap(8).Justify(widget.JustifyEnd)
 	})
 
+	httpsAuthSection := ggui.Reactive(func() ggui.Widget {
+		if !gitstat.IsHTTPURL(cl.URL.Get()) {
+			return widget.Box()
+		}
+		open := cl.AuthOpen.Get()
+		chev := pick(open, "chevron-down", "chevron-right")
+		toggle := ui.ButtonOf(
+			widget.Row(
+				icon(chev).Size(12).Color(skin.Muted),
+				icon("lock").Size(12).Color(skin.Muted),
+				widget.Text(T("HTTPS authentication")).Size(12).Color(skin.Fg).NoWrap(),
+			).Gap(6).Align(widget.AlignCenter),
+			func() { cl.AuthOpen.Set(!open) },
+		).Ghost().Pad(4, 6).Radius(6).Name(T("HTTPS authentication"))
+		if !open {
+			return widget.Row(toggle, widget.Spacer()).Align(widget.AlignCenter)
+		}
+		body := widget.Box(widget.Column(
+			muted(widget.Text(T("Optional if Git or gh is already signed in. Leave username blank to use a personal access token.")).Size(11.5)),
+			ui.Field(T("Username (optional)"), ui.TextField(cl.Username).Placeholder("x-access-token").Name(T("Username (optional)")).
+				OnSubmit(func(string) { m.submitCloneProject() })),
+			ui.Field(T("Password or token"), ui.TextField(cl.Password).Password().Placeholder(T("Personal access token or password")).Name(T("Password or token")).
+				OnSubmit(func(string) { m.submitCloneProject() })),
+			ui.Checkbox(cl.SaveCreds, T("Save in Git credential store")),
+		).Gap(8).Stretch()).Pad(10, 12).Fill(skin.Surface1).Border(1, skin.Border).Radius(8)
+		return widget.Column(
+			widget.Row(toggle, widget.Spacer()).Align(widget.AlignCenter),
+			body,
+		).Gap(6).Stretch()
+	})
+
 	return widget.Column(
 		muted(widget.Text(T("Clone a Git repository into a local folder and add it to the sidebar.")).Size(12)),
 		ggui.If(multiNode, func() ggui.Widget {
@@ -369,6 +476,7 @@ func cloneProjectForm(m *model) ggui.Widget {
 		}),
 		ui.Field(T("Git URL"), ui.TextField(cl.URL).Placeholder("https://github.com/owner/repo.git").Name(T("Git URL")).
 			OnSubmit(func(string) { m.submitCloneProject() })),
+		httpsAuthSection,
 		ui.Field(T("Save location"), widget.Column(baseRow, savedLocations).Gap(6).Stretch()),
 		ui.Field(T("Folder name (optional)"), folderField),
 		preview,

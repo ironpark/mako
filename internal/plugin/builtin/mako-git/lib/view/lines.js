@@ -101,24 +101,34 @@ export function renderStatusLine(s, ui, ctx) {
     ], { key: "status-line", gap: 0 });
   }
   if (!s.note || !s.note.text) return null;
+  const noteRow = [
+    ui.text(sanitizeText(s.note.text, true), {
+      key: "note-text",
+      size: "small",
+      tone: s.note.err ? "danger" : "muted",
+      grow: 1,
+    }),
+  ];
+  if (s.note.authRetry) {
+    noteRow.push(ui.button(t("Authenticate…"), {
+      key: "note-auth",
+      icon: "lock",
+      variant: "outline",
+      size: "small",
+      onTap: ["askAuth"],
+    }));
+  }
+  noteRow.push(ui.button("", {
+    key: "note-dismiss",
+    icon: "x",
+    variant: "ghost",
+    size: "small",
+    placeholder: t("Dismiss"),
+    onTap: ["dismissNote"],
+  }));
   return ui.column([
     ui.card([
-      ui.row([
-        ui.text(sanitizeText(s.note.text, true), {
-          key: "note-text",
-          size: "small",
-          tone: s.note.err ? "danger" : "muted",
-          grow: 1,
-        }),
-        ui.button("", {
-          key: "note-dismiss",
-          icon: "x",
-          variant: "ghost",
-          size: "small",
-          placeholder: t("Dismiss"),
-          onTap: ["dismissNote"],
-        }),
-      ], { key: "note-row", gap: 6 }),
+      ui.row(noteRow, { key: "note-row", gap: 6 }),
     ], { key: "note-pad", variant: "ghost", gap: 0 }),
     ui.divider({ key: "note-div" }),
   ], { key: "status-line", gap: 0 });
