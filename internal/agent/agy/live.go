@@ -343,7 +343,7 @@ func findBottomComposerBox(lines []string) (top, bottom int) {
 		limit := max(0, b-12)
 		for t := b - 1; t >= limit; t-- {
 			if isHorizontalRule(lines[t]) {
-				if rulesMatchWidth(lines[t], lines[b]) && looksLikeComposerBody(lines[t+1 : b]) {
+				if rulesMatchWidth(lines[t], lines[b]) && looksLikeComposerBody(lines[t+1:b]) {
 					return t, b
 				}
 				break
