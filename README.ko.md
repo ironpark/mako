@@ -8,14 +8,21 @@ mako는 내 컴퓨터들을 비공개 메시 네트워크로 연결합니다. �
 
 ## 빠른 시작
 
-1. 각 컴퓨터에서 [go.mod](go.mod)에 지정된 Go 버전으로 저장소 루트에서 빌드합니다. 자세한 내용은 [빌드 가이드](DEVELOP.md#building)를 참고하세요.
+1. 각 컴퓨터에서 [go.mod](go.mod)에 지정된 Go 버전으로 저장소 루트에서 빌드합니다. 이 단계에서 `bin/mako`, `bin/makod`, `bin/mako-gui`가 만들어집니다. 자세한 내용은 [빌드 가이드](DEVELOP.md#building)를 참고하세요.
 
    ```sh
    make build
-   ./bin/mako-gui
    ```
 
-   기본 설정에서는 데스크톱 앱이 실행 중인 데몬에 연결하거나, 데몬이 없으면 앱 내부에서 시작합니다. 화면이 없는 서버에서는 `./bin/makod`를 실행하세요.
+   macOS에서는 ggui 명령을 설치하고 앱 번들을 빌드한 뒤, 번들 안의 데스크톱 앱을 실행합니다. 앱 번들로 실행해야 데스크톱 앱이 macOS 알림을 보낼 수 있습니다.
+
+   ```sh
+   go install github.com/ironpark/ggui/cmd/ggui@latest
+   make app
+   ./bin/mako.app/Contents/MacOS/mako-gui
+   ```
+
+   Linux와 Windows에서는 `./bin/mako-gui`를 실행하세요. 기본 설정에서는 데스크톱 앱이 실행 중인 데몬에 연결하거나, 데몬이 없으면 앱 내부에서 시작합니다. 화면이 없는 서버에서는 `./bin/makod`를 실행하세요.
 
 2. **설정 → 노드**에서 연결할 컴퓨터 옆의 **접근 요청**을 선택합니다. 상대 컴퓨터에서 **설정 → 접근**을 열고 **허용**을 누릅니다. 같은 로컬 네트워크나 Tailscale 네트워크에 있는 노드는 자동으로 검색됩니다. 상대 노드의 주소를 직접 설정할 수도 있습니다. [네트워크 설정](docs/usage.md#configuration)
 3. 탭 표시줄에서 에이전트를 선택해 세션을 시작합니다. 저장소 루트에서 CLI를 사용할 수도 있습니다.
