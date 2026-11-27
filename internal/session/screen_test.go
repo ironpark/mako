@@ -6,6 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/gostty"
+	"github.com/ironpark/gostty/input"
+
+	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/detect"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -150,5 +154,52 @@ func TestWorkOnScreenOutweighsAnEndedTurn(t *testing.T) {
 	s.screen.at = now.Add(-time.Second)
 	if status, _ := s.deriveLocked(now.Add(time.Minute), true); status != protocol.AgentDone {
 		t.Fatal("the screen's last turn outweighed its end")
+	}
+}
+
+// A question dialog answered via KeyedAnswers does not also populate
+// ScreenDialog, while non-question dialogs (such as permissions) still do.
+func TestKeyedQuestionSuppressesScreenDialog(t *testing.T) {
+	term, err := gostty.New(120, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+
+	s := &Session{
+		spec:   Spec{Agent: "agy", Cols: 120, Rows: 24},
+		state:  protocol.StateRunning,
+		term:   term,
+		screen: &screenWatch{rules: agy.New().ScreenRules(), state: detect.Blocked, visible: true},
+	}
+
+	_, _ = term.Write([]byte("Question 1/2: Pick color\r\n\r\n> 1. Red\r\n  2. Blue\r\n  3. Write-in...\r\n\r\n  ↑/↓ Navigate · → Next · enter Select · esc Skip\r\nesc to cancel"))
+	s.readDialogLocked()
+	if s.screen.dialog != nil {
+		t.Fatalf("expected nil ScreenDialog for agy ask_question, got %+v", s.screen.dialog)
+	}
+
+	// Non-question permission dialog still parses into ScreenDialog.
+	_, _ = term.Write([]byte("\x1b[2J\x1b[HRun this command?\r\n> 1. Yes, run command\r\n  2. No, cancel\r\n\r\n  ↑/↓ Navigate · tab Amend\r\nesc to cancel"))
+	s.readDialogLocked()
+	if s.screen.dialog == nil || len(s.screen.dialog.GetOptions()) != 2 {
+		t.Fatalf("expected ScreenDialog for agy permission prompt, got %+v", s.screen.dialog)
+	}
+}
+
+func TestEncodeKeysEncodesSpace(t *testing.T) {
+	term, err := gostty.New(80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	_, _ = term.Write([]byte("\x1b[>5u"))
+	s := &Session{state: protocol.StateRunning, term: term}
+	got, err := s.encodeKeys([]input.Key{input.KeyArrowDown, input.KeySpace, input.KeyEnter})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "\x1b[B \r" {
+		t.Fatalf("encodeKeys = %q, want %q", got, "\x1b[B \r")
 	}
 }

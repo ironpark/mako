@@ -61,6 +61,7 @@ flowchart TB
 | `StatusLine`, `StatusLineEvents` | `statusline.go` | `--settings` 인라인 statusLine 주입, 쿼터/토큰 + 실시간 대기/작업 상태 보강 |
 | `Screen`, `ScreenLive`, `ScreenLiveBaseline`, `ScreenLiveTurn`, `ScreenLiveStatus`, `ScreenLiveActivity` | `screen.go`, `live.go` | PTY 화면에서 실시간 응답(불릿·유니코드 테두리/무테두리 GFM 테이블 변환)·기준선·턴 앵커·스피너 라벨·Swarm/Agent/백그라운드 Task 행 추출 |
 | `Recaller` | `recall.go` | `/skills`·`/resume` 등 `Keyboard:` 모달/대체 화면 오버레이에서 `Esc`로 프롬프트 복귀 |
+| `KeyedAnswers` | `questions.go` | `ask_question` 다중 질문·복수 선택(`is_multi_select`)·`Write-in...` 폼 응답 키 시퀀스 입력 |
 | `Modes`, `Models` | `controls.go` | `shift+tab` 실행 모드 순환(`auto`/`acceptEdits`/`plan`, 기본 모드 및 스택 `statusLine` 허용), `/model`·`/effort` |
 | `Logs`, `Folders`, `Tools` | `log.go`, `tools.go` | `brain/<id>/.system_generated/logs/transcript_full.jsonl` + `history.jsonl`, `update_steps` → `ToolPlan` |
 | `SubAgents` | `subagents.go` | `.system_generated/subagents/*.json` + `swarm/members.json` 기반 워커 추적 |

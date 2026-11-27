@@ -93,7 +93,7 @@ type Profile struct {
 	Name string `json:"name"`
 	// Description explains when to choose this profile, including its
 	// specialties. It is discovery metadata, not a startup prompt.
-	Description string `json:"description,omitempty"`
+	Description string   `json:"description,omitempty"`
 	Args        []string `json:"args,omitempty"`
 	// ReplaceArgs replaces the agent's base Args with this profile's Args
 	// instead of appending after them.

@@ -155,3 +155,36 @@ func TestKeyedQuestionsShowAForm(t *testing.T) {
 		t.Fatal("the terminal did not show")
 	}
 }
+
+func TestAgyMultiQuestionShowsAllSteps(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	link := newFakeLink()
+	conn, err := newTermConn("s", link, 80, 24, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.conns["s"] = conn
+	m.Attached.Set([]string{"s"})
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "agy", State: protocol.StateRunning, Status: protocol.AgentWaiting, Caps: protocol.CapAnswerKeys}})
+	state := m.chatState("s")
+	state.result.Set(chatResult{Loaded: true, Chat: &protocol.Chat{Supported: true, Conversation: "c", Messages: []*protocol.ChatMessage{
+		{Role: "tool", Id: "1.0", Tool: "ask_question", Kind: protocol.ToolQuestion, Pending: true, Questions: []*protocol.Question{
+			{Question: "Pick color", Options: []*protocol.QuestionOption{{Label: "Red"}, {Label: "Blue"}}},
+			{Question: "Pick fruits", MultiSelect: true, Options: []*protocol.QuestionOption{{Label: "Apple"}, {Label: "Banana"}}},
+		}},
+	}}})
+	p := ggui.ProbeBuilder(func() ggui.Widget { return chatInput(m, "s", state) }, ggui.Sz(800, 500))
+	t.Cleanup(func() { p.Close(); close(link.in); conn.close() })
+	p.Frame()
+	if _, ok := p.Find("Blue"); !ok {
+		t.Fatal("first agy question did not show")
+	}
+	p.Tap("Blue")
+	p.Frame()
+	p.Tap("Next")
+	p.Frame()
+	if _, ok := p.Find("Banana"); !ok {
+		t.Fatal("second agy question did not show")
+	}
+}

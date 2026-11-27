@@ -39,6 +39,16 @@ var overlayView = detect.Rule{
 	},
 }
 
+// questionPromptGates match agy's ask_question choice dialog footers
+// (single-select, multi-select, write-in selection, and final Submit All).
+var questionPromptGates = []detect.Gate{
+	{Contains: []string{"navigate", "esc skip"}},
+	{Contains: []string{"enter select", "esc skip"}},
+	{Contains: []string{"space toggle", "esc skip"}},
+	{Contains: []string{"write-in", "esc skip"}},
+	{Regex: []string{`(?mi)^\s*(?:.*·\s*)?enter\s+submit\s+all(?:\s*·|\s*$)`}},
+}
+
 var screenRules = detect.MustCompile([]detect.Rule{
 	overlayView,
 	{
@@ -46,14 +56,9 @@ var screenRules = detect.MustCompile([]detect.Rule{
 		Contains: []string{"navigate", "tab amend"},
 	},
 	{
-		ID: "question_prompt", State: detect.Blocked, Priority: 290, Region: detect.Bottom(5),
-		Any: []detect.Gate{
-			{Contains: []string{"navigate", "esc skip"}},
-			{Contains: []string{"enter select", "esc skip"}},
-			{Contains: []string{"space toggle", "esc skip"}},
-			{Contains: []string{"write-in", "esc skip"}},
-			{Regex: []string{`(?mi)^\s*(?:.*·\s*)?enter\s+submit\s+all(?:\s*·|\s*$)`}},
-		},
+		// Bottom(8) tolerates a stacked custom statusLine below agy's footer.
+		ID: "question_prompt", State: detect.Blocked, Priority: 290, Region: detect.Bottom(8),
+		Any: questionPromptGates,
 	},
 	{
 		ID: "trust_prompt", State: detect.Blocked, Priority: 280, Region: detect.Bottom(10),

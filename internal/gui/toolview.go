@@ -119,11 +119,7 @@ func toolInputFor(m *model, tool, kind, args string, in map[string]any) []ggui.W
 		}
 		return append(rows, proseBlock(agent.Str(in, "prompt")))
 	case protocol.ToolQuestion:
-		rows := []ggui.Widget{proseBlock(agent.Str(in, "question"))}
-		if options := agent.List(in, "options"); len(options) > 0 {
-			rows = append(rows, fieldChips(map[string]any{"options": options}, "options"))
-		}
-		return rows
+		return toolQuestionRows(in)
 	}
 	if rows := swarmToolInput(tool, in); len(rows) > 0 {
 		return rows
@@ -968,6 +964,45 @@ func seqList(v any) string {
 		}
 	}
 	return strings.Join(parts, ", ")
+}
+
+// toolQuestionRows renders every question a question tool asked, along with
+// each question's options. Falls back to the legacy single-question fields
+// when the canonical questions list is absent.
+func toolQuestionRows(in map[string]any) []ggui.Widget {
+	qs := agent.Questions(in)
+	if len(qs) == 0 {
+		rows := []ggui.Widget{proseBlock(agent.Str(in, "question"))}
+		if options := agent.List(in, "options"); len(options) > 0 {
+			rows = append(rows, fieldChips(map[string]any{"options": options}, "options"))
+		}
+		return rows
+	}
+	var rows []ggui.Widget
+	for i, q := range qs {
+		if len(qs) > 1 {
+			title := fmt.Sprintf("%d/%d", i+1, len(qs))
+			if h := strings.TrimSpace(q.GetHeader()); h != "" {
+				title += " · " + h
+			}
+			rows = append(rows, toolLabel(title))
+		} else if h := strings.TrimSpace(q.GetHeader()); h != "" {
+			rows = append(rows, toolLabel(h))
+		}
+		rows = append(rows, proseBlock(q.GetQuestion()))
+		if opts := q.GetOptions(); len(opts) > 0 {
+			labels := make([]any, 0, len(opts))
+			for _, o := range opts {
+				if l := strings.TrimSpace(o.GetLabel()); l != "" {
+					labels = append(labels, l)
+				}
+			}
+			if len(labels) > 0 {
+				rows = append(rows, fieldChips(map[string]any{"options": labels}, "options"))
+			}
+		}
+	}
+	return rows
 }
 
 func formatShortDuration(secs int) string {
