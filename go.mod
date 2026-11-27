@@ -18,6 +18,7 @@ require (
 	github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291
 	github.com/ironpark/qngg v0.0.0-20261030173357-5bb022c263f0
 	github.com/ironpark/wasmtime-pure-go v0.0.0-20261027140914-a51037ed9202
+	github.com/kevinburke/ssh_config v1.2.0
 	github.com/klauspost/compress v1.20.3
 	github.com/libp2p/go-libp2p v0.51.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
@@ -72,7 +73,6 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
-	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/koron/go-ssdp v0.9.1 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
