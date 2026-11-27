@@ -2,6 +2,8 @@ package builtin_test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"log/slog"
@@ -13,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/plugin/builtin"
 	"github.com/ironpark/mako/internal/protocol"
@@ -579,6 +582,7 @@ type fakeGitScenarioHost struct {
 	status   *protocol.GitChanges
 	history  *protocol.GitHistory
 	watchCbs []func()
+	runFn    func(ctx context.Context, t plugin.GitTarget, r *protocol.GitRun, worktree bool) (string, error)
 }
 
 func (g *fakeGitScenarioHost) Allowed(plugin.GitTarget) bool { return true }
@@ -607,7 +611,10 @@ func (g *fakeGitScenarioHost) Log(_ context.Context, _ plugin.GitTarget, _ int, 
 func (g *fakeGitScenarioHost) Show(_ context.Context, _ plugin.GitTarget, hash string) (*protocol.GitCommitInfo, error) {
 	return &protocol.GitCommitInfo{Commit: &protocol.GitCommit{Hash: hash, Subject: "Init"}}, nil
 }
-func (g *fakeGitScenarioHost) Run(_ context.Context, _ plugin.GitTarget, _ *protocol.GitRun, _ bool) (string, error) {
+func (g *fakeGitScenarioHost) Run(ctx context.Context, t plugin.GitTarget, r *protocol.GitRun, worktree bool) (string, error) {
+	if g.runFn != nil {
+		return g.runFn(ctx, t, r, worktree)
+	}
 	return "", nil
 }
 func (g *fakeGitScenarioHost) Watch(ctx context.Context, _ plugin.GitTarget, changed func()) error {
@@ -783,5 +790,130 @@ func TestMakoGitForgeThrottleConflictCopyAndBaseContextMenu(t *testing.T) {
 	if findByKindAndText(fileMenu, "menu_item", "Discard changes…") != nil ||
 		findByKindAndText(fileMenu, "menu_item", "Add to .gitignore") != nil {
 		t.Fatalf("mutating items must be omitted in since-base mode: %+v", fileMenu.GetChildren())
+	}
+}
+
+func TestMakoGitHTTPSAuthDialogAndRetry(t *testing.T) {
+	var (
+		mu       sync.Mutex
+		authed   bool
+		authReq  gitstat.HTTPSAuthRequest
+		fetchCnt int
+	)
+	fg := &fakeGitScenarioHost{
+		status: &protocol.GitChanges{
+			Root:     "/tmp/https-repo",
+			Branch:   "main",
+			Upstream: "origin/main",
+			Branches: []string{"main"},
+		},
+		history: &protocol.GitHistory{
+			Current:     "abc1234",
+			Fingerprint: "fp-https",
+			Commits: []*protocol.GitCommit{
+				{Hash: "abc1234", Author: "Ada", Subject: "Initial"},
+			},
+		},
+		runFn: func(_ context.Context, _ plugin.GitTarget, r *protocol.GitRun, _ bool) (string, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			switch r.GetOp() {
+			case protocol.GitOpAuth:
+				if err := json.Unmarshal([]byte(r.GetMessage()), &authReq); err != nil {
+					return "", err
+				}
+				authed = true
+				return "", nil
+			case protocol.GitOpFetch:
+				fetchCnt++
+				if !authed {
+					return "", errors.New("fatal: could not read Username for 'https://git.example.com:3000': terminal prompts disabled")
+				}
+				return "Fetched origin", nil
+			default:
+				return "", nil
+			}
+		},
+	}
+
+	base := t.TempDir()
+	dir := filepath.Join(base, "plugins")
+	data := filepath.Join(base, "plugin-data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logs := &syncBuffer{}
+	m := plugin.New(plugin.Config{
+		Dir:     dir,
+		DataDir: data,
+		Poll:    50 * time.Millisecond,
+		Log:     slog.New(slog.NewTextHandler(io.MultiWriter(logs), &slog.HandlerOptions{Level: slog.LevelDebug})),
+		Limits:  plugin.Limits{CPU: 10 * time.Second, Wall: 20 * time.Second, Memory: 32 << 20, Updates: 20 * time.Millisecond},
+		Bundled: builtin.FS,
+		Git:     fg,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	doneCh := make(chan struct{})
+	go func() { defer close(doneCh); m.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		<-doneCh
+		if t.Failed() {
+			t.Logf("plugin manager log:\n%s", logs.String())
+		}
+	})
+	r := &testRig{t: t, m: m, cancel: cancel, done: doneCh, logs: logs}
+	r.waitPlugin("mako-git", func(p *protocol.PluginInfo) bool {
+		return p.GetBundled() && (p.GetState() == protocol.PluginReady || p.GetState() == protocol.PluginRunning)
+	})
+
+	scope := protocol.FolderScope(protocol.LocalScopeNode, "/tmp/https-repo")
+	w := r.watch(scope, "en", plugin.View{Standalone: false})
+	tree := w.until("initial toolbar rendered", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return findByKeySuffix(n, "op-fetch") != nil
+	})
+
+	// 1. Trigger Fetch -> fails with HTTPS auth error -> auth dialog opens with masked password input.
+	fetchItem := findByKeySuffix(tree, "op-fetch")
+	r.sendEvent(scope, fetchItem.GetId(), protocol.UiTap, "", nil)
+	tree = w.until("HTTPS auth dialog opens", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return findByKeySuffix(n, "dialog-auth-pass") != nil && findByKeySuffix(n, "note-auth") != nil
+	})
+	passNode := findByKeySuffix(tree, "dialog-auth-pass")
+	if passNode.GetVariant() != "password" {
+		t.Fatalf("dialog-auth-pass variant = %q, want password", passNode.GetVariant())
+	}
+
+	// 2. Submit credentials -> plugin sends sanitized GitOpAuth and immediately retries fetch.
+	submitBtn := findByKeySuffix(tree, "dlg-submit")
+	if submitBtn == nil {
+		t.Fatal("missing dlg-submit button in auth dialog")
+	}
+	userNode := findByKeySuffix(tree, "dialog-auth-user")
+	saveNode := findByKeySuffix(tree, "dialog-auth-save")
+	r.sendEvent(scope, submitBtn.GetId(), protocol.UiTap, "", map[string]string{
+		userNode.GetId(): "alice",
+		passNode.GetId(): "pat-secret-99",
+		saveNode.GetId(): "on",
+	})
+
+	tree = w.until("dialog closes and retry fetch succeeds", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		note := findByKeySuffix(n, "note-text")
+		return findByKeySuffix(n, "git-dialog") == nil && note != nil && note.GetText() == "Fetched origin"
+	})
+
+	mu.Lock()
+	defer mu.Unlock()
+	if !authed {
+		t.Fatal("expected GitOpAuth to be called")
+	}
+	if authReq.URL != "" {
+		t.Fatalf("plugin GitOpAuth must strip URL, got %q", authReq.URL)
+	}
+	if authReq.Username != "alice" || authReq.Password != "pat-secret-99" || !authReq.Save {
+		t.Fatalf("unexpected authReq: %+v", authReq)
+	}
+	if fetchCnt != 2 {
+		t.Fatalf("fetchCnt = %d, want 2 (initial fail + auto retry)", fetchCnt)
 	}
 }

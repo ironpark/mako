@@ -73,6 +73,9 @@ func gitCommand(ctx context.Context, root string, stdin []byte, args []string) *
 	if os.Getenv("GIT_SSH_COMMAND") == "" {
 		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
 	}
+	if isRemoteGitCommand(args) {
+		cmd.Env = appendHTTPSAuthEnv(cmd.Env, repoHTTPSOrigins(root, args), nil)
+	}
 	if stdin != nil {
 		cmd.Stdin = bytes.NewReader(stdin)
 	}

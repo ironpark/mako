@@ -523,6 +523,7 @@ const (
 	GitOpContinue     = "continue"      // the operation under way, its conflicts resolved
 	GitOpAbort        = "abort"         // the operation under way
 	GitOpClone        = "clone"         // clones Message (a git URL) into Root (destination folder)
+	GitOpAuth         = "auth"          // caches/approves HTTPS git credentials carried as JSON in Message
 )
 
 // What a ForgeList and a ForgeView are of.

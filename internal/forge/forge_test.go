@@ -1,6 +1,14 @@
 package forge
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"os/exec"
+	"testing"
+
+	"github.com/ironpark/mako/internal/gitstat"
+	"github.com/ironpark/mako/internal/protocol"
+)
 
 // A pull request's diff is read a file at a time, each line numbered on
 // its sides.
@@ -92,5 +100,61 @@ func TestGiteaReadsAsGitHub(t *testing.T) {
 	}
 	if reviewState("REQUEST_CHANGES") != "CHANGES_REQUESTED" || reviewState("COMMENT") != "COMMENTED" {
 		t.Error("review states")
+	}
+}
+
+func TestCustomPortHTTPSForgejoDetectionAndAuth(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	const wantTok = "forgejo-pat-999"
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/version":
+			w.Write([]byte(`{"version":"1.22.0"}`))
+		case "/api/forgejo/v1/version":
+			w.Write([]byte(`{"version":"9.0.0"}`))
+		case "/api/v1/repos/team/app/pulls":
+			if got := r.Header.Get("Authorization"); got != "token "+wantTok {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			w.Write([]byte(`[{"number":7,"title":"Custom port PR","state":"open","user":{"login":"ada"}}]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	origClient := hostClient
+	hostClient = srv.Client()
+	t.Cleanup(func() {
+		hostClient = origClient
+		gitstat.ClearHTTPSCredential(srv.URL)
+	})
+
+	root := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"remote", "add", "origin", srv.URL + "/team/app.git"},
+	} {
+		if out, err := exec.Command("git", append([]string{"-C", root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %s", args, out)
+		}
+	}
+
+	if err := gitstat.SetHTTPSCredential(srv.URL, gitstat.HTTPSCredential{Password: wantTok}); err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := List(t.Context(), &protocol.ForgeList{Root: root, Kind: protocol.ForgePR})
+	if err != nil {
+		t.Fatalf("List on custom-port Forgejo failed: %v", err)
+	}
+	if items.GetForge() != "forgejo" {
+		t.Fatalf("forge = %q, want forgejo", items.GetForge())
+	}
+	if len(items.GetItems()) != 1 || items.GetItems()[0].GetNumber() != 7 || items.GetItems()[0].GetTitle() != "Custom port PR" {
+		t.Fatalf("unexpected PR items: %+v", items.GetItems())
 	}
 }

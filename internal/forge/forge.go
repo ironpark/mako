@@ -37,6 +37,9 @@ type backend interface {
 func of(ctx context.Context, root string) (backend, error) {
 	if u := gitstat.FetchURL(root); u != "" {
 		host, path := gitstat.RepoPath(u)
+		if httpHost := gitstat.HTTPSHost(u); httpHost != "" {
+			host = httpHost
+		}
 		owner, repo, ok := ownerRepo(path)
 		switch {
 		case !ok:

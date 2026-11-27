@@ -73,6 +73,16 @@ type CloneResult struct {
 	AlreadyExisted bool
 }
 
+// CloneOptions configures optional behavior for CloneWithOptions.
+type CloneOptions struct {
+	// Credential overrides HTTPS authentication for the clone without writing
+	// secrets into the URL or .git/config.
+	Credential *HTTPSCredential
+	// SaveCredential persists Credential into Git's credential store after a
+	// successful clone (via `git credential approve`).
+	SaveCredential bool
+}
+
 // Clone clones rawURL into destDir, returning the canonical repository path.
 // If destDir already exists and is a git checkout of the same remote, Clone
 // reuses it rather than failing.
@@ -87,6 +97,12 @@ func Clone(ctx context.Context, rawURL, destDir string) (string, error) {
 // CloneWithInfo clones rawURL into destDir and returns canonical path and
 // remote metadata.
 func CloneWithInfo(ctx context.Context, rawURL, destDir string) (CloneResult, error) {
+	return CloneWithOptions(ctx, rawURL, destDir, CloneOptions{})
+}
+
+// CloneWithOptions clones rawURL into destDir using optional HTTPS
+// credentials and returns canonical path and remote metadata.
+func CloneWithOptions(ctx context.Context, rawURL, destDir string, opts CloneOptions) (CloneResult, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	_, parsedOwner, parsedRemote, err := ParseGitURL(rawURL)
 	if err != nil {
@@ -137,9 +153,20 @@ func CloneWithInfo(ctx context.Context, rawURL, destDir string) (CloneResult, er
 	if os.Getenv("GIT_SSH_COMMAND") == "" {
 		cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND=ssh -o BatchMode=yes")
 	}
+	if origin := HTTPSOrigin(rawURL); origin != "" {
+		cmd.Env = appendHTTPSAuthEnv(cmd.Env, []string{origin}, opts.Credential)
+	}
 	out, runErr := safeexec.CombinedOutput(cmd)
 	if runErr != nil {
 		return CloneResult{}, gitErr(runErr, string(out))
+	}
+
+	if opts.Credential != nil && opts.Credential.Password != "" && IsHTTPURL(rawURL) {
+		if opts.SaveCredential {
+			_ = ApproveHTTPSCredential(ctx, rawURL, opts.Credential.Username, opts.Credential.Password)
+		} else {
+			_ = SetHTTPSCredential(rawURL, *opts.Credential)
+		}
 	}
 
 	realPath := destDir

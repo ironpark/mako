@@ -47,6 +47,45 @@ function isTruthyCheck(val) {
   return val === "on" || val === true || val === "true";
 }
 
+function isHTTPSAuthError(msg) {
+  const s = String(msg || "").toLowerCase();
+  if (!s) return false;
+  return [
+    "could not read username",
+    "could not read password",
+    "terminal prompts disabled",
+    "authentication failed",
+    "invalid username or password",
+    "invalid username or token",
+    "credentials rejected",
+    "logon failed",
+    "returned error: 401",
+    "returned error: 403",
+    "http 401",
+    "http 403",
+    "http basic: access denied",
+  ].some((needle) => s.includes(needle));
+}
+
+function isRemoteSyncOp(op) {
+  return op === "fetch" || op === "pull" || op === "push" || op === "pull_request";
+}
+
+function busyLabelForOp(t, op) {
+  switch (op) {
+    case "fetch":
+      return t("Fetching…");
+    case "pull":
+      return t("Pulling…");
+    case "push":
+      return t("Pushing…");
+    case "pull_request":
+      return t("Opening a pull request…");
+    default:
+      return t("Loading…");
+  }
+}
+
 export function createActions(mako) {
   function getCtx() {
     return mako.blocks.context("panel");
@@ -239,7 +278,7 @@ export function createActions(mako) {
     },
 
     async pullRebase(s) {
-      await runGit(s, { op: "pull", rebase: true }, getCtx().t("Pulling…"));
+      await runGit(s, { op: "pull", rebase: true }, getCtx().t("Pulling…"), { rebase: true });
     },
 
     async push(s) {
@@ -253,7 +292,7 @@ export function createActions(mako) {
         pull_request: t("Opening a pull request…"),
         remove_worktree: t("Removing the worktree…"),
       };
-      await runGit(s, { op: String(op), worktree: true }, labels[op] || t("Loading…"));
+      await runGit(s, { op: String(op), worktree: true }, labels[op] || t("Loading…"), { worktree: true });
     },
 
     // Forge intents ----------------------------------------------------------
@@ -553,6 +592,35 @@ export function createActions(mako) {
     },
 
     // Dialog controls --------------------------------------------------------
+    askAuth(s) {
+      const retry = (s.note && s.note.authRetry) || { op: "fetch", rebase: false, worktree: false };
+      openDialog(s, {
+        kind: "auth",
+        username: "",
+        password: "",
+        save: true,
+        err: "",
+        retry,
+      });
+    },
+
+    setAuthUsername(s, val) {
+      if (!s.dialog || s.dialog.kind !== "auth") return;
+      s.dialog.username = String(val ?? "");
+      s.dialog.err = "";
+    },
+
+    setAuthPassword(s, val) {
+      if (!s.dialog || s.dialog.kind !== "auth") return;
+      s.dialog.password = String(val ?? "");
+      s.dialog.err = "";
+    },
+
+    toggleAuthSave(s, val) {
+      if (!s.dialog || s.dialog.kind !== "auth") return;
+      s.dialog.save = isTruthyCheck(val);
+    },
+
     setDialogValue(s, val) {
       if (!s.dialog) return;
       s.dialog.value = String(val ?? "");
@@ -566,8 +634,44 @@ export function createActions(mako) {
     async submitDialog(s, submittedVal) {
       if (!s.dialog) return;
       const d = s.dialog;
-      const t = getCtx().t;
+      const ctx = getCtx();
+      const t = ctx.t;
       const vals = mako.blocks.values("panel") || {};
+
+      if (d.kind === "auth") {
+        const username = String(vals["dialog-auth-user"] !== undefined ? vals["dialog-auth-user"] : (d.username || "")).trim();
+        const rawPass = vals["dialog-auth-pass"] !== undefined ? vals["dialog-auth-pass"] : (d.password || "");
+        const password = String(rawPass || "");
+        const save = vals["dialog-auth-save"] !== undefined ? isTruthyCheck(vals["dialog-auth-save"]) : d.save !== false;
+        d.username = username;
+        d.save = save;
+        if (!password) {
+          d.err = t("Enter a password or personal access token.");
+          return;
+        }
+        try {
+          await callGit(ctx, mako, "run", {
+            op: "auth",
+            message: JSON.stringify({ username, password, save }),
+            force: save,
+          });
+        } catch (err) {
+          d.password = "";
+          d.err = errMsg(err);
+          return;
+        }
+        const retry = d.retry || { op: "fetch", rebase: false, worktree: false };
+        closeDialog(s);
+        const req = { op: retry.op };
+        if (retry.rebase) req.rebase = true;
+        if (retry.worktree) req.worktree = true;
+        await runGit(s, req, busyLabelForOp(t, retry.op), {
+          rebase: Boolean(retry.rebase),
+          worktree: Boolean(retry.worktree),
+        });
+        return;
+      }
+
       const raw = submittedVal !== undefined
         ? submittedVal
         : (vals["dialog-input"] !== undefined ? vals["dialog-input"] : d.value);
@@ -635,7 +739,26 @@ export function createActions(mako) {
       setBusy(s, "");
     }
     if (!ev || !ev.ok) {
-      setNote(s, (ev && ev.error) || "Git operation failed", true);
+      const errText = (ev && ev.error) || "Git operation failed";
+      const op = (ev && ev.op) || meta.op || "";
+      if (isRemoteSyncOp(op) && isHTTPSAuthError(errText)) {
+        const retry = {
+          op,
+          rebase: Boolean(meta.rebase),
+          worktree: Boolean(meta.worktree),
+        };
+        setNote(s, errText, true, retry);
+        openDialog(s, {
+          kind: "auth",
+          username: "",
+          password: "",
+          save: true,
+          err: "",
+          retry,
+        });
+      } else {
+        setNote(s, errText, true);
+      }
     } else {
       setNote(s, lastLines(ev.output || "", 4), false);
       if (meta.clearCommit || ev.op === "commit") {

@@ -19,7 +19,7 @@ export function initialState() {
     message: "",
     amend: false,
     busy: "",
-    note: { text: "", err: false },
+    note: { text: "", err: false, authRetry: null },
     open: { changes: true, stashes: false, branches: false, history: true },
     closed: {},
     dialog: null,
@@ -51,6 +51,10 @@ export function openDialog(s, dlg) {
 }
 
 export function closeDialog(s) {
+  if (s.dialog && s.dialog.kind === "auth") {
+    s.dialog.password = "";
+    s.dialog.username = "";
+  }
   s.dialog = null;
 }
 
@@ -58,12 +62,12 @@ export function setBusy(s, label) {
   s.busy = String(label || "");
 }
 
-export function setNote(s, text, err = false) {
-  s.note = { text: String(text || ""), err: Boolean(err) };
+export function setNote(s, text, err = false, authRetry = null) {
+  s.note = { text: String(text || ""), err: Boolean(err), authRetry: authRetry || null };
 }
 
 export function clearNote(s) {
-  s.note = { text: "", err: false };
+  s.note = { text: "", err: false, authRetry: null };
 }
 
 export function resetForNewRepo(s, nextRoot) {
