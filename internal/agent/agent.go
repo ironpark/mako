@@ -338,6 +338,15 @@ type YoloFlag interface {
 	YoloFlags() []string
 }
 
+// PermissionFlag is an agent whose startup permission mode can be selected
+// without enabling YOLO. PermissionModes lists the canonical non-YOLO modes
+// supported at startup (e.g. "manual", "acceptEdits", "auto", "plan",
+// "dontAsk", "readOnly"), and WithPermission applies mode to l.
+type PermissionFlag interface {
+	PermissionModes() []string
+	WithPermission(l *Launch, mode string)
+}
+
 // OneShotRequest configures a single non-interactive prompt invocation.
 type OneShotRequest struct {
 	Prompt     string

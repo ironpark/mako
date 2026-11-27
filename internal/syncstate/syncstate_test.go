@@ -109,16 +109,23 @@ func TestAgentAndMCPSanitizationPreservesLocalEnv(t *testing.T) {
 	on := true
 	servers := []string{"mako"}
 	orig := agentspec.Agent{
-		Command: []string{"claude"},
-		Args:    []string{"--verbose"},
-		Env:     map[string]string{"ANTHROPIC_API_KEY": "secret-a"},
-		Yolo:    true,
-		Enabled: &on,
+		Command:    []string{"claude"},
+		Args:       []string{"--verbose"},
+		Env:        map[string]string{"ANTHROPIC_API_KEY": "secret-a"},
+		Model:      "claude-sonnet-4-6",
+		Effort:     "medium",
+		Permission: "acceptEdits",
+		Yolo:       true,
+		Enabled:    &on,
 		Profiles: []agentspec.Profile{
 			{
 				Name:           "fast",
 				Description:    "Quick helper",
 				Model:          "haiku",
+				Effort:         "low",
+				Permission:     "plan",
+				Args:           []string{"--strict"},
+				ReplaceArgs:    true,
 				Env:            map[string]string{"PROFILE_SECRET": "secret-p"},
 				ContextServers: &servers,
 			},
@@ -149,13 +156,22 @@ func TestAgentAndMCPSanitizationPreservesLocalEnv(t *testing.T) {
 	if merged.Profiles[0].Env["LOCAL_P"] != "keep-me" {
 		t.Fatalf("lost local profile env: %+v", merged.Profiles[0].Env)
 	}
-	if !merged.Yolo || merged.Profiles[0].Model != "haiku" {
-		t.Fatalf("synced fields not applied: %+v", merged)
+	if !merged.Yolo || merged.Model != "claude-sonnet-4-6" || merged.Effort != "medium" || merged.Permission != "acceptEdits" {
+		t.Fatalf("synced agent fields not applied: %+v", merged)
+	}
+	if p := merged.Profiles[0]; p.Model != "haiku" || p.Effort != "low" || p.Permission != "plan" || !p.ReplaceArgs {
+		t.Fatalf("synced profile fields not applied: %+v", p)
 	}
 
-	// Built-in default detection ignores env.
+	// Built-in default detection ignores env, but catches model/effort/permission.
 	if !IsDefaultAgent("claude", agentspec.Agent{Command: []string{"claude"}, Env: map[string]string{"A": "B"}}) {
 		t.Fatal("expected untouched built-in with local env to count as default")
+	}
+	if IsDefaultAgent("claude", agentspec.Agent{Command: []string{"claude"}, Permission: "plan"}) {
+		t.Fatal("built-in with custom permission should not count as default")
+	}
+	if IsDefaultAgent("claude", agentspec.Agent{Command: []string{"claude"}, Model: "opus"}) {
+		t.Fatal("built-in with custom model should not count as default")
 	}
 	if IsDefaultAgent("claude", orig) {
 		t.Fatal("customized built-in should not count as default")

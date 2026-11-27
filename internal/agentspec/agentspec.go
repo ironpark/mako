@@ -19,6 +19,15 @@ import (
 	"github.com/ironpark/mako/internal/agents"
 )
 
+// Canonical permission values shared by Agent and Profile configuration.
+const (
+	// PermissionDefault explicitly selects the agent's built-in normal mode
+	// without YOLO (used on profiles to override an agent-level permission/YOLO).
+	PermissionDefault = "default"
+	// PermissionYOLO bypasses permission prompts and sandboxing via agent.YoloFlag.
+	PermissionYOLO = "yolo"
+)
+
 // Agent is how a node launches one agent: its command, the flags and
 // environment every session of it gets, and named profiles that add their
 // own on top.
@@ -27,8 +36,15 @@ type Agent struct {
 	Args     []string          `json:"args,omitempty"`
 	Env      map[string]string `json:"env,omitempty"`
 	Profiles []Profile         `json:"profiles,omitempty"`
+	// Model is the default model its sessions start on; "" leaves the agent's own default.
+	Model string `json:"model,omitempty"`
+	// Effort is the default reasoning effort its sessions start with; "" leaves the agent's own default.
+	Effort string `json:"effort,omitempty"`
+	// Permission is the startup permission mode ("", "manual", "acceptEdits",
+	// "auto", "plan", "dontAsk", "readOnly", or "yolo").
+	Permission string `json:"permission,omitempty"`
 	// Yolo skips permission prompts and sandboxing when the agent's driver
-	// supports it.
+	// supports it. Synchronized with Permission == "yolo" for backward compatibility.
 	Yolo bool `json:"yolo,omitempty"`
 	// Enabled offers the agent to start sessions with, or not; unset, it
 	// is offered while its program is installed.
@@ -47,14 +63,28 @@ func (a Agent) AgentAllowed() bool { return a.AllowAgent == nil || *a.AllowAgent
 // TemplateAllowed reports whether prompt templates may execute this agent's default configuration.
 func (a Agent) TemplateAllowed() bool { return a.AllowTemplate == nil || *a.AllowTemplate }
 
-// EffectiveYolo reports whether agent name runs in YOLO mode, honoring both
-// the explicit Yolo switch and legacy standalone YOLO flags in Args.
-func (a Agent) EffectiveYolo(name string) bool {
-	if a.Yolo {
-		return true
+// EffectivePermission returns the agent's resolved startup permission mode,
+// honoring explicit Permission, Yolo, and legacy YOLO flags in Args.
+func (a Agent) EffectivePermission(name string) string {
+	if perm := strings.TrimSpace(a.Permission); perm != "" {
+		if perm == PermissionDefault {
+			return ""
+		}
+		return perm
 	}
-	_, lifted := LiftYoloArgs(name, a.Args)
-	return lifted
+	if a.Yolo {
+		return PermissionYOLO
+	}
+	if _, lifted := LiftYoloArgs(name, a.Args); lifted {
+		return PermissionYOLO
+	}
+	return ""
+}
+
+// EffectiveYolo reports whether agent name runs in YOLO mode, honoring
+// Permission, the explicit Yolo switch, and legacy standalone YOLO flags in Args.
+func (a Agent) EffectiveYolo(name string) bool {
+	return a.EffectivePermission(name) == PermissionYOLO
 }
 
 // Profile is a named set of flags and environment for an agent, such as a
@@ -63,8 +93,11 @@ type Profile struct {
 	Name string `json:"name"`
 	// Description explains when to choose this profile, including its
 	// specialties. It is discovery metadata, not a startup prompt.
-	Description string            `json:"description,omitempty"`
-	Args        []string          `json:"args,omitempty"`
+	Description string `json:"description,omitempty"`
+	Args        []string `json:"args,omitempty"`
+	// ReplaceArgs replaces the agent's base Args with this profile's Args
+	// instead of appending after them.
+	ReplaceArgs bool              `json:"replace_args,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
 	// Model is the model its sessions start on, by the name the agent's
 	// own model flag takes; "" leaves the agent's default. An agent mako
@@ -73,6 +106,10 @@ type Profile struct {
 	// Effort is the reasoning effort its sessions start with; "" leaves the
 	// agent's default. An agent without agent.EffortFlag ignores it.
 	Effort string `json:"effort,omitempty"`
+	// Permission overrides the agent's startup permission mode when non-empty
+	// ("default" resets to the agent's built-in default without YOLO; "yolo"
+	// enables YOLO; driver modes select that mode).
+	Permission string `json:"permission,omitempty"`
 	// Yolo overrides the agent's YOLO switch for this profile when set.
 	Yolo *bool `json:"yolo,omitempty"`
 	// ContextServers picks the MCP servers its sessions get, by ID, an
@@ -93,16 +130,45 @@ func (p Profile) AgentAllowed() bool { return p.AllowAgent == nil || *p.AllowAge
 // TemplateAllowed reports whether prompt templates may execute this profile.
 func (p Profile) TemplateAllowed() bool { return p.AllowTemplate == nil || *p.AllowTemplate }
 
-// EffectiveYolo reports whether profile p of agent name runs in YOLO mode:
-// p's explicit override wins, else any legacy YOLO flag in p.Args, else a's.
-func (p Profile) EffectiveYolo(name string, a Agent) bool {
+// EffectivePermission returns the profile's resolved startup permission mode
+// ("" for the agent's built-in default without extra flags, "yolo" for YOLO,
+// or a driver-specific mode).
+func (p Profile) EffectivePermission(name string, a Agent) string {
+	if perm := strings.TrimSpace(p.Permission); perm != "" {
+		if perm == PermissionDefault {
+			return ""
+		}
+		return perm
+	}
 	if p.Yolo != nil {
-		return *p.Yolo
+		if *p.Yolo {
+			return PermissionYOLO
+		}
+		return ""
 	}
 	if _, lifted := LiftYoloArgs(name, p.Args); lifted {
-		return true
+		return PermissionYOLO
 	}
-	return a.EffectiveYolo(name)
+	if p.ReplaceArgs {
+		if perm := strings.TrimSpace(a.Permission); perm != "" {
+			if perm == PermissionDefault {
+				return ""
+			}
+			return perm
+		}
+		if a.Yolo {
+			return PermissionYOLO
+		}
+		return ""
+	}
+	return a.EffectivePermission(name)
+}
+
+// EffectiveYolo reports whether profile p of agent name runs in YOLO mode:
+// p's explicit permission/Yolo override wins, else any legacy YOLO flag in
+// p.Args, else a's.
+func (p Profile) EffectiveYolo(name string, a Agent) bool {
+	return p.EffectivePermission(name, a) == PermissionYOLO
 }
 
 // UnmarshalJSON also reads an agent written as its command alone, as
@@ -285,9 +351,10 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 	}
 	maps.Copy(merged, env)
 
-	effectiveModel := cmp.Or(opts.Model, p.Model)
-	effectiveEffort := cmp.Or(opts.Effort, p.Effort)
+	effectiveModel := cmp.Or(opts.Model, p.Model, a.Model)
+	effectiveEffort := cmp.Or(opts.Effort, p.Effort, a.Effort)
 	var yoloDriver agent.YoloFlag
+	var permDriver agent.PermissionFlag
 	if e, ok := agents.Native(name, path); ok {
 		if norm, ok := e.Driver.(agent.ModelEffortNormalizer); ok {
 			effectiveModel, effectiveEffort = norm.NormalizeModelEffort(effectiveModel, effectiveEffort)
@@ -295,25 +362,37 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 		if yf, ok := e.Driver.(agent.YoloFlag); ok {
 			yoloDriver = yf
 		}
+		if pf, ok := e.Driver.(agent.PermissionFlag); ok {
+			permDriver = pf
+		}
 	}
 	agentArgs, profileArgs := a.Args, p.Args
-	var agentLifted, profileLifted bool
 	if yoloDriver != nil {
-		agentArgs, agentLifted = LiftYoloArgs(name, agentArgs)
-		profileArgs, profileLifted = LiftYoloArgs(name, profileArgs)
+		agentArgs, _ = LiftYoloArgs(name, agentArgs)
+		profileArgs, _ = LiftYoloArgs(name, profileArgs)
 	}
-	effectiveYolo := a.Yolo || agentLifted
-	if p.Yolo != nil {
-		effectiveYolo = *p.Yolo
-	} else if profileLifted {
-		effectiveYolo = true
+	var effectivePerm string
+	if profile != "" {
+		effectivePerm = p.EffectivePermission(name, a)
+	} else {
+		effectivePerm = a.EffectivePermission(name)
 	}
 	if opts.Yolo != nil {
-		effectiveYolo = *opts.Yolo
+		if *opts.Yolo {
+			effectivePerm = PermissionYOLO
+		} else if effectivePerm == PermissionYOLO {
+			effectivePerm = ""
+		}
 	}
 
 	command := append([]string{path}, a.Command[1:]...)
-	for _, arg := range slices.Concat(agentArgs, profileArgs) {
+	var combinedArgs []string
+	if profile != "" && p.ReplaceArgs {
+		combinedArgs = profileArgs
+	} else {
+		combinedArgs = slices.Concat(agentArgs, profileArgs)
+	}
+	for _, arg := range combinedArgs {
 		command = append(command, expand(arg, lookup))
 	}
 	command = append(command, modelArgs(name, path, effectiveModel)...)
@@ -322,8 +401,12 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 	launch := Launch{ContextServers: p.ContextServers,
 		Command: command,
 		Env:     merged}
-	if effectiveYolo && yoloDriver != nil {
-		yoloDriver.WithYolo(&launch.Launch)
+	if effectivePerm == PermissionYOLO {
+		if yoloDriver != nil {
+			yoloDriver.WithYolo(&launch.Launch)
+		}
+	} else if effectivePerm != "" && permDriver != nil {
+		permDriver.WithPermission(&launch.Launch, effectivePerm)
 	}
 	launch.Command = append(launch.Command, args...)
 	return launch, nil

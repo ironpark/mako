@@ -22,6 +22,23 @@ func (*Agent) YoloFlags() []string {
 	return []string{"--dangerously-bypass-approvals-and-sandbox", "--yolo"}
 }
 
+// PermissionModes lists Codex's startup permission modes (excluding YOLO).
+func (*Agent) PermissionModes() []string {
+	return []string{"readOnly", "acceptEdits", "auto"}
+}
+
+// WithPermission applies Codex's startup approval and sandbox flags for mode.
+func (*Agent) WithPermission(l *agent.Launch, mode string) {
+	switch mode {
+	case "readOnly":
+		l.Command = append(slices.Clone(l.Command), "-a", "on-request", "-s", "read-only")
+	case "acceptEdits":
+		l.Command = append(slices.Clone(l.Command), "-a", "on-request", "-s", "workspace-write")
+	case "auto":
+		l.Command = append(slices.Clone(l.Command), "--approve-for-me")
+	}
+}
+
 // PrepareOneShot configures Codex for a single non-interactive exec run.
 func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, tempDir string) (agent.OneShotPrepared, error) {
 	ownDir := false

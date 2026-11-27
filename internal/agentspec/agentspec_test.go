@@ -367,3 +367,165 @@ func TestResolveYoloAndOverrides(t *testing.T) {
 		t.Fatalf("legacy opencode opts.Yolo=false should strip --yolo and env: cmd=%q env=%v err=%v", l.Command, l.Env, err)
 	}
 }
+
+func TestResolveAgentDefaultsAndPermissionModes(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"claude", "codex", "agy"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+
+	agentsMap := map[string]Agent{
+		"claude": {
+			Model:      "claude-sonnet-4-6",
+			Effort:     "medium",
+			Permission: "acceptEdits",
+			Profiles: []Profile{
+				{Name: "inherit"},
+				{Name: "planner", Model: "claude-opus-4-6", Effort: "high", Permission: "plan"},
+				{Name: "manual", Permission: "manual"},
+				{Name: "auto", Permission: "auto"},
+				{Name: "dontask", Permission: "dontAsk"},
+				{Name: "yolo", Permission: PermissionYOLO},
+				{Name: "normal", Permission: PermissionDefault},
+			},
+		},
+		"codex": {
+			Model:      "gpt-5.4",
+			Effort:     "high",
+			Permission: "readOnly",
+			Profiles: []Profile{
+				{Name: "edit", Permission: "acceptEdits"},
+				{Name: "auto", Permission: "auto"},
+				{Name: "yolo", Permission: PermissionYOLO},
+				{Name: "normal", Permission: PermissionDefault},
+			},
+		},
+		"agy": {
+			Model:      "gemini-4-neon",
+			Effort:     "low",
+			Permission: "auto",
+			Profiles: []Profile{
+				{Name: "edit", Permission: "acceptEdits"},
+				{Name: "plan", Permission: "plan"},
+				{Name: "yolo", Permission: PermissionYOLO},
+			},
+		},
+	}
+
+	cases := []struct {
+		agent, profile string
+		wantArgs       string
+	}{
+		{"claude", "", "--model claude-sonnet-4-6 --effort medium --permission-mode acceptEdits"},
+		{"claude", "inherit", "--model claude-sonnet-4-6 --effort medium --permission-mode acceptEdits"},
+		{"claude", "planner", "--model claude-opus-4-6 --effort high --permission-mode plan"},
+		{"claude", "manual", "--model claude-sonnet-4-6 --effort medium --permission-mode default"},
+		{"claude", "auto", "--model claude-sonnet-4-6 --effort medium --permission-mode auto"},
+		{"claude", "dontask", "--model claude-sonnet-4-6 --effort medium --permission-mode dontAsk"},
+		{"claude", "yolo", "--model claude-sonnet-4-6 --effort medium --dangerously-skip-permissions"},
+		{"claude", "normal", "--model claude-sonnet-4-6 --effort medium"},
+		{"codex", "", `--model gpt-5.4 -c model_reasoning_effort="high" -a on-request -s read-only`},
+		{"codex", "edit", `--model gpt-5.4 -c model_reasoning_effort="high" -a on-request -s workspace-write`},
+		{"codex", "auto", `--model gpt-5.4 -c model_reasoning_effort="high" --approve-for-me`},
+		{"codex", "yolo", `--model gpt-5.4 -c model_reasoning_effort="high" --dangerously-bypass-approvals-and-sandbox`},
+		{"codex", "normal", `--model gpt-5.4 -c model_reasoning_effort="high"`},
+		{"agy", "", "--model gemini-4-neon --effort low --mode auto"},
+		{"agy", "edit", "--model gemini-4-neon --effort low --mode accept-edits"},
+		{"agy", "plan", "--model gemini-4-neon --effort low --mode plan"},
+		{"agy", "yolo", "--model gemini-4-neon --effort low --dangerously-skip-permissions"},
+	}
+	for _, tc := range cases {
+		l, err := Resolve(tc.agent, tc.profile, nil, nil, agentsMap)
+		if err != nil {
+			t.Fatalf("%s:%s: %v", tc.agent, tc.profile, err)
+		}
+		if got := strings.Join(l.Command[1:], " "); got != tc.wantArgs {
+			t.Fatalf("%s:%s = %q, want %q", tc.agent, tc.profile, got, tc.wantArgs)
+		}
+	}
+
+	// EffectiveYolo reflects Permission == "yolo".
+	if !agentsMap["claude"].Profiles[5].EffectiveYolo("claude", agentsMap["claude"]) {
+		t.Fatal("claude:yolo EffectiveYolo should be true")
+	}
+	if agentsMap["claude"].EffectiveYolo("claude") {
+		t.Fatal("claude acceptEdits EffectiveYolo should be false")
+	}
+
+	// Launch option Yolo=false does not drop non-YOLO permission modes, only YOLO.
+	no := false
+	l, err := ResolveWith("claude", "planner", nil, nil, ResolveOptions{Yolo: &no}, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != "--model claude-opus-4-6 --effort high --permission-mode plan" {
+		t.Fatalf("claude:planner with opts.Yolo=false = %q", got)
+	}
+	l, err = ResolveWith("claude", "yolo", nil, nil, ResolveOptions{Yolo: &no}, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(l.Command, "--dangerously-skip-permissions") {
+		t.Fatalf("claude:yolo with opts.Yolo=false kept skip-permissions: %q", l.Command)
+	}
+}
+
+func TestResolveProfileReplaceArgs(t *testing.T) {
+	onPath(t, "claude")
+	agentsMap := map[string]Agent{
+		"claude": {
+			Args:       []string{"--verbose", "--debug"},
+			Permission: "acceptEdits",
+			Profiles: []Profile{
+				{Name: "append", Args: []string{"--extra"}},
+				{Name: "overwrite", Args: []string{"--only-this"}, ReplaceArgs: true},
+				{Name: "clear", ReplaceArgs: true},
+			},
+		},
+	}
+
+	l, err := Resolve("claude", "append", []string{"req"}, nil, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != "--verbose --debug --extra --permission-mode acceptEdits req" {
+		t.Fatalf("append = %q", got)
+	}
+
+	l, err = Resolve("claude", "overwrite", []string{"req"}, nil, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != "--only-this --permission-mode acceptEdits req" {
+		t.Fatalf("overwrite = %q", got)
+	}
+
+	l, err = Resolve("claude", "clear", []string{"req"}, nil, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != "--permission-mode acceptEdits req" {
+		t.Fatalf("clear = %q", got)
+	}
+
+	// ReplaceArgs also replaces a legacy YOLO flag sitting in Agent.Args unless
+	// Agent.Permission or Agent.Yolo explicitly enabled it.
+	legacyReplace := map[string]Agent{
+		"claude": {
+			Args: []string{"--dangerously-skip-permissions", "--verbose"},
+			Profiles: []Profile{
+				{Name: "clean", Args: []string{"--quiet"}, ReplaceArgs: true},
+			},
+		},
+	}
+	l, err = Resolve("claude", "clean", nil, nil, legacyReplace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != "--quiet" {
+		t.Fatalf("legacy replace = %q, want --quiet", got)
+	}
+}

@@ -1902,4 +1902,18 @@ var catalogKo = map[string]string{
 	"Open session":     "세션 열기",
 	"Run subagent":     "서브에이전트 실행",
 	"Detail: %s":       "상세: %s",
+
+	// Agent & profile settings redesign
+	"Profiles": "프로필",
+	"No profiles yet. Add a profile to customize model, effort, permission, flags, or MCP servers.": "아직 프로필이 없습니다. 프로필을 추가해 모델, 추론 강도, 권한, 플래그 또는 MCP 서버를 개별 설정할 수 있습니다.",
+	"Permission":    "권한",
+	"%s permission": "%s 권한",
+	"Startup permission mode for sessions, including YOLO to bypass all confirmations.": "세션 시작 시 적용할 권한 모드입니다. 모든 확인을 건너뛰는 YOLO 모드를 포함합니다.",
+	"YOLO":                "YOLO",
+	"Advanced":            "세부 옵션",
+	"%s advanced options": "%s 세부 옵션",
+	"Append":              "추가",
+	"%s flags mode":       "%s 플래그 모드",
+	"Flags (%s)":          "플래그 (%s)",
+	"Replaces the agent's base flags instead of appending to them.": "에이전트 기본 플래그 뒤에 덧붙이지 않고 이 프로필의 플래그로 덮어씁니다.",
 }

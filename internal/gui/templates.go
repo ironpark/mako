@@ -621,8 +621,8 @@ func (h *guiTemplateHost) localAgentInfos() []*protocol.AgentInfo {
 			info.ProfileDetails = append(info.ProfileDetails, &protocol.AgentProfileInfo{
 				Name:          p.Name,
 				Description:   p.Description,
-				Model:         p.Model,
-				Effort:        p.Effort,
+				Model:         cmp.Or(p.Model, a.Model),
+				Effort:        cmp.Or(p.Effort, a.Effort),
 				Yolo:          y,
 				Spawnable:     hasServers && hasPrompter && agentMCPEnabled(p.ContextServers) && allowAgent,
 				AllowAgent:    &allowAgent,

@@ -122,7 +122,7 @@ func TestTheAgentsListUnfoldsOneAgent(t *testing.T) {
 	if _, ok := p.Semantics().Find(ggui.RoleButton, Tf("%s settings", "shell")); ok {
 		t.Fatal("the shell is listed among the agents")
 	}
-	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "claude")); ok {
+	if _, ok := p.Find(Tf("%s permission", "claude")); ok {
 		t.Fatal("an agent's settings show before it is opened")
 	}
 	click := func(name string) {
@@ -134,18 +134,24 @@ func TestTheAgentsListUnfoldsOneAgent(t *testing.T) {
 		p.Frame()
 	}
 	click("claude")
-	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "claude")); !ok {
+	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "claude")); ok {
+		t.Fatal("built-in agent should not expose fixed command input")
+	}
+	if _, ok := p.Find(Tf("%s permission", "claude")); !ok {
 		t.Fatalf("claude's settings did not unfold:\n%s", p.Semantics().String())
 	}
 	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s profile name", "claude")); !ok {
 		t.Fatal("claude's profile is not under it")
 	}
 	click("codex")
-	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "claude")); ok {
+	if _, ok := p.Find(Tf("%s permission", "claude")); ok {
 		t.Fatal("claude stayed open with codex opened")
 	}
-	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "codex")); !ok {
+	if _, ok := p.Find(Tf("%s permission", "codex")); !ok {
 		t.Fatal("codex's settings did not unfold")
+	}
+	if _, ok := p.Semantics().Find(ggui.RoleTextField, Tf("%s command", "codex")); ok {
+		t.Fatal("built-in codex should not expose fixed command input")
 	}
 }
 
@@ -221,19 +227,26 @@ func TestProfileCardShowsDynamicModelsAndEfforts(t *testing.T) {
 			if !ok {
 				t.Fatalf("missing effort selector for %s:\n%s", target, p.Semantics().String())
 			}
-			// Verify Model and Effort sit side-by-side cleanly inside the card without overflowing.
-			mr, er := modelNode.Rect, effortNode.Rect
-			if mr.Size.W < 100 || er.Size.W < 100 {
-				t.Fatalf("collapsed selector width: model=%+v effort=%+v", mr, er)
+			permNode, ok := p.Find(Tf("%s permission", target))
+			if !ok {
+				t.Fatalf("missing permission selector for %s:\n%s", target, p.Semantics().String())
+			}
+			// Verify Model, Effort, and Permission sit side-by-side in a single row cleanly inside the card without overflowing.
+			mr, er, pr := modelNode.Rect, effortNode.Rect, permNode.Rect
+			if mr.Size.W < 100 || er.Size.W < 100 || pr.Size.W < 100 {
+				t.Fatalf("collapsed selector width: model=%+v effort=%+v permission=%+v", mr, er, pr)
 			}
 			if mr.Origin.X+mr.Size.W > er.Origin.X {
 				t.Fatalf("model overlaps effort: model=%+v effort=%+v", mr, er)
 			}
-			if er.Origin.X+er.Size.W > cardW {
-				t.Fatalf("effort overflows card (%dpx): effort=%+v", cardW, er)
+			if er.Origin.X+er.Size.W > pr.Origin.X {
+				t.Fatalf("effort overlaps permission: effort=%+v permission=%+v", er, pr)
 			}
-			if mr.Origin.Y != er.Origin.Y {
-				t.Fatalf("model and effort misaligned vertically: model=%+v effort=%+v", mr, er)
+			if pr.Origin.X+pr.Size.W > cardW {
+				t.Fatalf("permission overflows card (%dpx): permission=%+v", cardW, pr)
+			}
+			if mr.Origin.Y != er.Origin.Y || er.Origin.Y != pr.Origin.Y {
+				t.Fatalf("model, effort, and permission misaligned vertically: model=%+v effort=%+v permission=%+v", mr, er, pr)
 			}
 		})
 	}
@@ -302,11 +315,22 @@ func TestYoloFlagsLiftAndRoundTrip(t *testing.T) {
 	}
 }
 
-func TestAgentEditorShowsYoloSwitch(t *testing.T) {
+func TestAgentEditorShowsUnifiedPermissionAndSeparatedCards(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(&config.Config{Agents: map[string]agentspec.Agent{
-		"claude": {Profiles: []agentspec.Profile{{Name: "p"}}},
+		"claude": {
+			Model:      "claude-sonnet-4-6",
+			Effort:     "medium",
+			Permission: "acceptEdits",
+			Profiles: []agentspec.Profile{
+				{Name: "p1", Permission: agentspec.PermissionYOLO},
+				{Name: "p2", Permission: "plan"},
+			},
+		},
 	}}, "")
+	m.AgentCatalogs.Set(map[string][]*protocol.AgentModel{
+		"claude": {{Id: "claude-sonnet-4-6", Name: "Sonnet 4.6", Efforts: []string{"low", "medium", "high"}}},
+	})
 	var claudeDraft agentDraft
 	var profiles []agentDraft
 	for _, r := range ggui.Peek(m.AgentDraft) {
@@ -318,14 +342,171 @@ func TestAgentEditorShowsYoloSwitch(t *testing.T) {
 			}
 		}
 	}
-	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(agentEditor(m, claudeDraft, profiles)) }, ggui.Sz(700, 900))
+	const width = 620
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return ggui.Provide(ggui.ReducedMotionKey, true, widget.Scroll(agentDetail(m, claudeDraft, profiles)))
+	}, ggui.Sz(width, 1800))
 	defer p.Close()
 	p.Frame()
-	if _, ok := p.Find(Tf("%s YOLO", "claude")); !ok {
-		t.Fatalf("missing YOLO switch for claude:\n%s", p.Semantics().String())
+
+	// Built-in agent has no Command input.
+	if _, ok := p.Find(Tf("%s command", "claude")); ok {
+		t.Fatal("built-in agent should not show command input")
 	}
-	if _, ok := p.Find(Tf("%s YOLO", "claude:p")); !ok {
-		t.Fatalf("missing YOLO override selector for claude:p:\n%s", p.Semantics().String())
+
+	// Base agent has Model, Effort, and Permission aligned on one horizontal row.
+	mNode, ok := p.Find(Tf("%s model", "claude"))
+	if !ok {
+		t.Fatalf("missing model selector for claude:\n%s", p.Semantics().String())
+	}
+	eNode, ok := p.Find(Tf("%s effort", "claude"))
+	if !ok {
+		t.Fatalf("missing effort selector for claude:\n%s", p.Semantics().String())
+	}
+	permNode, ok := p.Find(Tf("%s permission", "claude"))
+	if !ok {
+		t.Fatalf("missing permission selector for claude:\n%s", p.Semantics().String())
+	}
+	if mNode.Rect.Origin.Y != eNode.Rect.Origin.Y || eNode.Rect.Origin.Y != permNode.Rect.Origin.Y {
+		t.Fatalf("agent model/effort/permission misaligned: model=%+v effort=%+v perm=%+v", mNode.Rect, eNode.Rect, permNode.Rect)
+	}
+
+	// Separated profile cards render independently below the base agent card.
+	p1Perm, ok := p.Find(Tf("%s permission", "claude:p1"))
+	if !ok {
+		t.Fatalf("missing permission selector for claude:p1:\n%s", p.Semantics().String())
+	}
+	p2Perm, ok := p.Find(Tf("%s permission", "claude:p2"))
+	if !ok {
+		t.Fatalf("missing permission selector for claude:p2:\n%s", p.Semantics().String())
+	}
+	if !(permNode.Rect.Origin.Y < p1Perm.Rect.Origin.Y && p1Perm.Rect.Origin.Y < p2Perm.Rect.Origin.Y) {
+		t.Fatalf("expected base card then p1 card then p2 card vertically: base=%v p1=%v p2=%v", permNode.Rect.Origin.Y, p1Perm.Rect.Origin.Y, p2Perm.Rect.Origin.Y)
+	}
+	if _, ok := p.Find(Tf("Add %s profile", "claude")); !ok {
+		t.Fatalf("missing Add profile button:\n%s", p.Semantics().String())
+	}
+}
+
+func TestAdvancedOptionsCollapsedByDefaultAndFlagsOverwriteToggle(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(&config.Config{Agents: map[string]agentspec.Agent{
+		"claude": {
+			Args: []string{"--verbose"},
+			Profiles: []agentspec.Profile{
+				{Name: "clean", Args: []string{"--quiet"}},
+			},
+		},
+	}}, "")
+	var profile agentDraft
+	for _, r := range ggui.Peek(m.AgentDraft) {
+		if r.Agent == "claude" && r.IsProfile {
+			profile = r
+		}
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return ggui.Provide(ggui.ReducedMotionKey, true, widget.Scroll(profileCard(m, profile, ggui.TextStyle{})))
+	}, ggui.Sz(600, 1200))
+	defer p.Close()
+	p.Frame()
+
+	target := "claude:clean"
+	// Flags and Environment stay collapsed until Advanced is clicked.
+	if _, ok := p.Find(Tf("%s flags", target)); ok {
+		t.Fatal("flags input should be hidden while Advanced is collapsed")
+	}
+	if _, ok := p.Find(Tf("%s environment", target)); ok {
+		t.Fatal("environment input should be hidden while Advanced is collapsed")
+	}
+	advBtn, ok := p.Find(Tf("%s advanced options", target))
+	if !ok {
+		t.Fatalf("missing advanced options toggle:\n%s", p.Semantics().String())
+	}
+	p.Click(advBtn.Center())
+	p.Frame()
+
+	if _, ok := p.Find(Tf("%s flags", target)); !ok {
+		t.Fatalf("flags input missing after expanding Advanced:\n%s", p.Semantics().String())
+	}
+	if _, ok := p.Find(Tf("%s environment", target)); !ok {
+		t.Fatalf("environment input missing after expanding Advanced:\n%s", p.Semantics().String())
+	}
+	overwriteBtn, ok := p.Find(T("Overwrite"))
+	if !ok {
+		t.Fatalf("missing Overwrite toggle option:\n%s", p.Semantics().String())
+	}
+	p.Click(overwriteBtn.Center())
+	p.Frame()
+
+	got, err := applyAgents(ggui.Peek(m.AgentDraft))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got["claude"].Profiles[0].ReplaceArgs {
+		t.Fatalf("expected ReplaceArgs=true after clicking Overwrite, got %+v", got["claude"].Profiles[0])
+	}
+}
+
+func TestPermissionAndReplaceArgsRoundTrip(t *testing.T) {
+	in := map[string]agentspec.Agent{
+		"claude": {
+			Model:      "claude-sonnet-4-6",
+			Effort:     "medium",
+			Permission: "acceptEdits",
+			Args:       []string{"--verbose"},
+			Profiles: []agentspec.Profile{
+				{Name: "yolo", Permission: agentspec.PermissionYOLO, Args: []string{"--strict"}, ReplaceArgs: true},
+				{Name: "plan", Permission: "plan"},
+				{Name: "normal", Permission: agentspec.PermissionDefault},
+				{Name: "inherit"},
+			},
+		},
+		"codex": {
+			Model:      "gpt-5.4",
+			Effort:     "high",
+			Permission: "readOnly",
+			Profiles: []agentspec.Profile{
+				{Name: "auto", Permission: "auto", ReplaceArgs: true},
+			},
+		},
+	}
+	draft1 := draftAgents(in)
+	got, err := applyAgents(draft1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = nil
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	draft2 := draftAgents(got)
+	if !sameAgents(draft1, draft2) {
+		t.Fatalf("draft did not round-trip cleanly:\ndraft1=%+v\ndraft2=%+v", draft1, draft2)
+	}
+
+	cl := got["claude"]
+	if cl.Model != "claude-sonnet-4-6" || cl.Effort != "medium" || cl.Permission != "acceptEdits" || cl.Yolo {
+		t.Fatalf("claude = %+v", cl)
+	}
+	if p := cl.Profiles[0]; p.Permission != agentspec.PermissionYOLO || p.Yolo == nil || !*p.Yolo || !p.ReplaceArgs {
+		t.Fatalf("claude:yolo = %+v", p)
+	}
+	if p := cl.Profiles[1]; p.Permission != "plan" || p.Yolo == nil || *p.Yolo || p.ReplaceArgs {
+		t.Fatalf("claude:plan = %+v", p)
+	}
+	if p := cl.Profiles[2]; p.Permission != agentspec.PermissionDefault || p.Yolo == nil || *p.Yolo {
+		t.Fatalf("claude:normal = %+v", p)
+	}
+	if p := cl.Profiles[3]; p.Permission != "" || p.Yolo != nil {
+		t.Fatalf("claude:inherit = %+v", p)
+	}
+	cx := got["codex"]
+	if cx.Model != "gpt-5.4" || cx.Effort != "high" || cx.Permission != "readOnly" || !cx.Profiles[0].ReplaceArgs || cx.Profiles[0].Permission != "auto" {
+		t.Fatalf("codex = %+v", cx)
 	}
 }
 

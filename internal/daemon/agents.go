@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/json"
 	"io"
@@ -424,8 +425,8 @@ func (d *Daemon) agentInfo() []*protocol.AgentInfo {
 				details[j] = &protocol.AgentProfileInfo{
 					Name:          p.Name,
 					Description:   p.Description,
-					Model:         p.Model,
-					Effort:        p.Effort,
+					Model:         cmp.Or(p.Model, a.Model),
+					Effort:        cmp.Or(p.Effort, a.Effort),
 					Yolo:          yolo,
 					Spawnable:     hasServers && hasPrompter && d.agentMCPEnabled(p.ContextServers) && allowAgent,
 					AllowAgent:    &allowAgent,

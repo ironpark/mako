@@ -19,6 +19,23 @@ func (*Agent) YoloFlags() []string {
 	return []string{"--dangerously-skip-permissions"}
 }
 
+// PermissionModes lists agy's startup execution modes (excluding YOLO).
+func (*Agent) PermissionModes() []string {
+	return []string{"auto", "acceptEdits", "plan"}
+}
+
+// WithPermission adds --mode for supported agy startup modes.
+func (*Agent) WithPermission(l *agent.Launch, mode string) {
+	switch mode {
+	case "auto":
+		l.Command = append(slices.Clone(l.Command), "--mode", "auto")
+	case "acceptEdits":
+		l.Command = append(slices.Clone(l.Command), "--mode", "accept-edits")
+	case "plan":
+		l.Command = append(slices.Clone(l.Command), "--mode", "plan")
+	}
+}
+
 // HasYoloFlag reports whether cmd enables --dangerously-skip-permissions as a CLI flag.
 func HasYoloFlag(cmd []string) bool {
 	a := New()

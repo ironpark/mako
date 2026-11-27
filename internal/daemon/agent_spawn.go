@@ -68,6 +68,8 @@ func (d *Daemon) spawnablePresets() []spawnablePreset {
 			out = append(out, spawnablePreset{
 				Agent:  name,
 				Target: agentspec.Target(name, ""),
+				Model:  a.Model,
+				Effort: a.Effort,
 				Yolo:   a.EffectiveYolo(name),
 			})
 		}
@@ -80,8 +82,8 @@ func (d *Daemon) spawnablePresets() []spawnablePreset {
 				Profile:     p.Name,
 				Target:      agentspec.Target(name, p.Name),
 				Description: p.Description,
-				Model:       p.Model,
-				Effort:      p.Effort,
+				Model:       cmp.Or(p.Model, a.Model),
+				Effort:      cmp.Or(p.Effort, a.Effort),
 				Yolo:        p.EffectiveYolo(name, a),
 			})
 		}

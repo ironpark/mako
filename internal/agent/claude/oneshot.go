@@ -19,6 +19,21 @@ func (*Agent) YoloFlags() []string {
 	return []string{"--dangerously-skip-permissions"}
 }
 
+// PermissionModes lists Claude Code's startup permission modes (excluding YOLO).
+func (*Agent) PermissionModes() []string {
+	return []string{"manual", "acceptEdits", "auto", "plan", "dontAsk"}
+}
+
+// WithPermission adds --permission-mode for supported Claude Code startup modes.
+func (*Agent) WithPermission(l *agent.Launch, mode string) {
+	switch mode {
+	case "manual":
+		l.Command = append(slices.Clone(l.Command), "--permission-mode", "default")
+	case "acceptEdits", "auto", "plan", "dontAsk":
+		l.Command = append(slices.Clone(l.Command), "--permission-mode", mode)
+	}
+}
+
 // PrepareOneShot configures Claude Code for a single non-interactive print run.
 func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, _ string) (agent.OneShotPrepared, error) {
 	cmd := slices.Clone(l.Command)

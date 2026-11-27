@@ -23,7 +23,7 @@ import (
 )
 
 // agentDraft is one row of the agents page's draft: an agent's own
-// settings when Profile is "", else one of its profiles. Flags are edited
+// settings when IsProfile is false, else one of its profiles. Flags are edited
 // as a command line and the environment as NAME=value lines, so the row
 // stays comparable. ID keeps a row's editor in place while its name is
 // typed.
@@ -32,48 +32,66 @@ type agentDraft struct {
 	Agent, Profile     string
 	Description        string
 	Command, Args, Env string
+	ReplaceArgs        bool // profile: overwrite agent base flags instead of appending
 	// Enabled is "on" or "off" as the user set it, or "" for while the
 	// program is installed.
 	Enabled   string
-	Yolo      bool // bypass permission prompts when the agent supports it
 	IsProfile bool // a profile's name may be blank while it is typed
 	// PickServers gives a profile's sessions the MCP servers in Servers,
 	// one ID a line, rather than every one enabled.
 	PickServers   bool
 	Servers       string
-	Model         string // a profile's; "" for the agent's default
-	Effort        string // a profile's; "" for the agent's default
-	ProfileYolo   string // "", "on", or "off" (profile override of agent Yolo)
-	AllowAgent    bool   // profile: allow models/agents to spawn this profile via MCP
-	AllowTemplate bool   // profile: allow prompt templates to run this profile
+	Model         string // "" for default (agent) or inherit (profile)
+	Effort        string // "" for default (agent) or inherit (profile)
+	Permission    string // "", "default", driver mode, or "yolo"
+	AllowAgent    bool   // allow models/agents to spawn via MCP
+	AllowTemplate bool   // allow prompt templates to run
 }
 
 // draftAgents lays out cfg's agents for editing: every agent the node can
 // launch, built-ins included, each followed by its profiles.
-func draftAgents(agents map[string]agentspec.Agent) []agentDraft {
+func draftAgents(configured map[string]agentspec.Agent) []agentDraft {
 	var out []agentDraft
-	for _, name := range agentspec.Names(agents) {
-		a, _ := agentspec.Lookup(name, agents)
+	for _, name := range agentspec.Names(configured) {
+		a, _ := agentspec.Lookup(name, configured)
 		agentArgs, lifted := agentspec.LiftYoloArgs(name, a.Args)
-		d := agentDraft{ID: len(out) + 1, Agent: name,
+		agentPerm := strings.TrimSpace(a.Permission)
+		if agentPerm == agentspec.PermissionDefault {
+			agentPerm = ""
+		}
+		if agentPerm == "" && (a.Yolo || lifted) {
+			agentPerm = agentspec.PermissionYOLO
+		}
+		d := agentDraft{
+			ID: len(out) + 1, Agent: name,
 			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(agentArgs), Env: envText(a.Env),
-			Yolo: a.Yolo || lifted, AllowAgent: a.AgentAllowed(), AllowTemplate: a.TemplateAllowed()}
+			Model: a.Model, Effort: a.Effort, Permission: agentPerm,
+			AllowAgent: a.AgentAllowed(), AllowTemplate: a.TemplateAllowed(),
+		}
 		if a.Enabled != nil {
 			d.Enabled = pick(*a.Enabled, "on", "off")
 		}
 		out = append(out, d)
 		for _, p := range a.Profiles {
 			pArgs, pLifted := agentspec.LiftYoloArgs(name, p.Args)
-			var profYolo string
-			if p.Yolo != nil {
-				profYolo = pick(*p.Yolo, "on", "off")
-			} else if pLifted {
-				profYolo = "on"
+			profPerm := strings.TrimSpace(p.Permission)
+			if profPerm == "" {
+				if p.Yolo != nil {
+					if *p.Yolo {
+						profPerm = agentspec.PermissionYOLO
+					} else {
+						profPerm = agentspec.PermissionDefault
+					}
+				} else if pLifted {
+					profPerm = agentspec.PermissionYOLO
+				}
 			}
-			d := agentDraft{ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
-				Description: p.Description, Args: agentspec.JoinArgs(pArgs), Env: envText(p.Env),
-				Model: p.Model, Effort: p.Effort, ProfileYolo: profYolo,
-				AllowAgent: p.AgentAllowed(), AllowTemplate: p.TemplateAllowed()}
+			d := agentDraft{
+				ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
+				Description: p.Description, Args: agentspec.JoinArgs(pArgs), ReplaceArgs: p.ReplaceArgs, Env: envText(p.Env),
+				Model: p.Model, Effort: p.Effort, Permission: profPerm,
+				AllowAgent: p.AgentAllowed(), AllowTemplate: p.TemplateAllowed(),
+			}
 			if p.ContextServers != nil {
 				d.PickServers, d.Servers = true, strings.Join(*p.ContextServers, "\n")
 			}
@@ -118,7 +136,22 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			return nil, fmt.Errorf(T("%s, environment: %v"), r.Agent, err)
 		}
 		args, lifted := agentspec.LiftYoloArgs(r.Agent, args)
-		a := agentspec.Agent{Command: command, Args: args, Env: env, Yolo: r.Yolo || lifted}
+		perm := strings.TrimSpace(r.Permission)
+		if perm == agentspec.PermissionDefault {
+			perm = ""
+		}
+		if perm == "" && lifted {
+			perm = agentspec.PermissionYOLO
+		}
+		a := agentspec.Agent{
+			Command:    command,
+			Args:       args,
+			Env:        env,
+			Model:      strings.TrimSpace(r.Model),
+			Effort:     strings.TrimSpace(r.Effort),
+			Permission: perm,
+			Yolo:       perm == agentspec.PermissionYOLO,
+		}
 		if r.Enabled != "" {
 			on := r.Enabled == "on"
 			a.Enabled = &on
@@ -154,7 +187,20 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			return nil, fmt.Errorf(T("%s, environment: %v"), where, err)
 		}
 		args, lifted := agentspec.LiftYoloArgs(r.Agent, args)
-		p := agentspec.Profile{Name: r.Profile, Description: r.Description, Args: args, Env: env, Model: strings.TrimSpace(r.Model), Effort: strings.TrimSpace(r.Effort)}
+		perm := strings.TrimSpace(r.Permission)
+		if perm == "" && lifted {
+			perm = agentspec.PermissionYOLO
+		}
+		p := agentspec.Profile{
+			Name:        r.Profile,
+			Description: r.Description,
+			Args:        args,
+			ReplaceArgs: r.ReplaceArgs,
+			Env:         env,
+			Model:       strings.TrimSpace(r.Model),
+			Effort:      strings.TrimSpace(r.Effort),
+			Permission:  perm,
+		}
 		if !r.AllowAgent {
 			off := false
 			p.AllowAgent = &off
@@ -163,18 +209,15 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			off := false
 			p.AllowTemplate = &off
 		}
-		switch r.ProfileYolo {
-		case "on":
+		switch perm {
+		case agentspec.PermissionYOLO:
 			on := true
 			p.Yolo = &on
-		case "off":
+		case "":
+			// Inherit from agent.
+		default:
 			off := false
 			p.Yolo = &off
-		default:
-			if lifted {
-				on := true
-				p.Yolo = &on
-			}
 		}
 		if r.PickServers {
 			ids := lines(r.Servers)
@@ -364,6 +407,7 @@ func agentSettings(m *model) ggui.Widget {
 	// go; beside the list, on a wide page, the one open shows, or the
 	// first while none is.
 	open := ggui.State("")
+	advancedOpen := ggui.State(map[int]bool{})
 	shown := ggui.Derived(func() string {
 		rows := m.AgentDraft.Get()
 		o := open.Get()
@@ -415,7 +459,7 @@ func agentSettings(m *model) ggui.Widget {
 		list := func(inline bool) ggui.Widget {
 			var ready, missing []ggui.Widget
 			for _, g := range groups {
-				item := agentItem(m, open, shown, g.agent, g.profiles, inline)
+				item := agentItem(m, open, shown, advancedOpen, g.agent, g.profiles, inline)
 				if agentReady(g.agent) {
 					ready = append(ready, item)
 				} else {
@@ -434,7 +478,7 @@ func agentSettings(m *model) ggui.Widget {
 		detail := ggui.Key(shown, func(name string) ggui.Widget {
 			for _, g := range groups {
 				if g.agent.Agent == name {
-					return agentDetail(m, g.agent, g.profiles)
+					return agentDetailWithState(m, g.agent, g.profiles, advancedOpen)
 				}
 			}
 			return widget.Box()
@@ -498,26 +542,31 @@ func agentDraftGroups(rows []agentDraft) []agentEntry {
 	return out
 }
 
-// agentItem is an agent's line in the list: its glyph, its name, what it
-// runs and its profiles, and whether it is offered. Inline, tapped, it
-// unfolds its settings and its profiles under it; otherwise it is the one
-// shown beside the list.
-func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[string], a agentDraft, profiles []agentDraft, inline bool) ggui.Widget {
+// agentItem is an agent's line in the list: its glyph, its name, summary of
+// its profiles and mode, and whether it is offered. Inline, tapped, it unfolds
+// its settings and its profile cards under it; otherwise it is the one shown
+// beside the list.
+func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[string], advancedOpen *ggui.StateValue[map[int]bool], a agentDraft, profiles []agentDraft, inline bool) ggui.Widget {
 	name := a.Agent
 	offered := agentOffered(m, a.ID, name)
 	summary := ggui.Reactive(func() ggui.Widget {
 		d := m.agentRow(a.ID)
-		text := strings.TrimSpace(d.Command + " " + d.Args)
-		if d.Command == "" {
-			text = strings.TrimSpace(strings.Join(agentspec.Builtin[name], " ") + " " + d.Args)
+		var parts []string
+		if d.Model != "" {
+			parts = append(parts, modelName(d.Model))
+		}
+		if d.Permission != "" {
+			parts = append(parts, permissionOptionLabel(d.Permission, false))
 		}
 		if n := m.profileCount(name); n > 0 {
-			text += " · " + Tf("%d profiles", n)
+			parts = append(parts, Tf("%d profiles", n))
 		}
-		if d.Yolo {
-			text += " · YOLO"
+		if len(parts) == 0 {
+			if args := strings.TrimSpace(d.Args); args != "" {
+				parts = append(parts, args)
+			}
 		}
-		return widget.Text(text).Size(11.5).Color(skin.ExtraMuted).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()
+		return widget.Text(strings.Join(parts, " · ")).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()
 	})
 	label := []ggui.Widget{
 		agentGlyph(name, skin.Muted).Size(15),
@@ -541,31 +590,91 @@ func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[stri
 	return widget.Box(widget.Column(
 		head,
 		reveal(isOpen, func() ggui.Widget {
-			return widget.Padding(agentEditor(m, a, profiles), 6, 10, 10, 35)
+			return widget.Padding(agentEditorWithState(m, a, profiles, advancedOpen, false), 6, 10, 12, 24)
 		}),
 	).Stretch()).Pad(4, 8)
 }
 
-// agentDetail is the agent shown beside the list: its name over its
-// settings and its profiles.
+// agentDetail is the agent shown beside the list: a raised base-settings card
+// followed by separated cards for each profile.
 func agentDetail(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
-	return detailCard(widget.Row(
-		agentGlyph(a.Agent, skin.Muted).Size(18),
-		widget.Text(a.Agent).Size(16).Weight(ggui.WeightSemibold).NoWrap(),
-	).Gap(10).Align(widget.AlignCenter), agentEditor(m, a, profiles))
+	return agentDetailWithState(m, a, profiles, nil)
 }
 
-// agentEditor is an unfolded agent's settings: its command, flags and
-// environment, then its profiles, and what adds a profile or removes it.
+func agentDetailWithState(m *model, a agentDraft, profiles []agentDraft, advancedOpen *ggui.StateValue[map[int]bool]) ggui.Widget {
+	return agentEditorWithState(m, a, profiles, advancedOpen, true)
+}
+
+// agentEditor renders an agent's base settings card followed by its separated
+// per-profile cards.
 func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
+	return agentEditorWithState(m, a, profiles, nil, false)
+}
+
+func agentEditorWithState(m *model, a agentDraft, profiles []agentDraft, advancedOpen *ggui.StateValue[map[int]bool], wide bool) ggui.Widget {
 	m.ensureAgentCatalog(a.Agent)
 	_, builtin := agentspec.Builtin[a.Agent]
-	commandHint := T("The program and any arguments it always needs.")
-	if builtin {
-		commandHint = Tf("The program and any arguments it always needs; empty runs %s.", strings.Join(agentspec.Builtin[a.Agent], " "))
-	}
 	mono := ggui.TextStyle{Font: ggui.DefaultMonoFont()}
-	children := []ggui.Widget{}
+
+	baseBody := agentBaseBody(m, a, mono, !builtin, advancedOpen)
+	var baseCard ggui.Widget
+	if wide {
+		headItems := []ggui.Widget{
+			agentGlyph(a.Agent, skin.Muted).Size(18),
+			widget.Text(a.Agent).Size(16).Weight(ggui.WeightSemibold).NoWrap(),
+			widget.Spacer(),
+		}
+		if !builtin {
+			id := a.ID
+			headItems = append(headItems, ui.Button(T("Remove agent"), func() { m.removeAgentRow(id) }).Ghost().Name(Tf("Remove %s", a.Agent)))
+		}
+		baseCard = detailCard(widget.Row(headItems...).Gap(10).Align(widget.AlignCenter), baseBody)
+	} else {
+		if !builtin {
+			id := a.ID
+			baseBody = widget.Column(
+				baseBody,
+				widget.Row(widget.Spacer(), ui.Button(T("Remove agent"), func() { m.removeAgentRow(id) }).Ghost().Name(Tf("Remove %s", a.Agent))),
+			).Gap(10).Stretch()
+		}
+		baseCard = widget.Box(baseBody).Fill(skin.Surface0).Border(1, skin.Border).Radius(10).Pad(14, 16)
+	}
+
+	cards := []ggui.Widget{baseCard}
+
+	// Profiles section header + separated per-profile cards.
+	profileHeadItems := []ggui.Widget{
+		widget.Text(T("Profiles")).Size(13).Weight(ggui.WeightSemibold).Color(skin.Muted),
+	}
+	if len(profiles) > 0 {
+		profileHeadItems = append(profileHeadItems,
+			widget.Box(widget.Text(strconv.Itoa(len(profiles))).Size(11).Color(skin.Muted)).
+				Fill(skin.Surface2).Radius(999).Pad(1, 7),
+		)
+	}
+	profileHeadItems = append(profileHeadItems,
+		widget.Spacer(),
+		ui.ButtonOf(widget.Row(icon("plus").Size(14), widget.Text(T("Add profile")).Size(12.5)).Gap(6),
+			func() { m.addProfile(a.Agent) }).Outline().Pad(5, 10).Radius(7).Name(Tf("Add %s profile", a.Agent)),
+	)
+	cards = append(cards, widget.Box(widget.Row(profileHeadItems...).Gap(8).Align(widget.AlignCenter)).Pad(4, 2, 0, 2))
+
+	if len(profiles) == 0 {
+		emptyFill := pick(wide, skin.Surface1, skin.Surface0)
+		cards = append(cards, widget.Box(
+			muted(widget.Text(T("No profiles yet. Add a profile to customize model, effort, permission, flags, or MCP servers.")).Size(12)),
+		).Fill(emptyFill).Border(1, skin.Border).Radius(10).Pad(14, 16))
+	} else {
+		for _, p := range profiles {
+			cards = append(cards, profileCardWithState(m, p, mono, advancedOpen, wide))
+		}
+	}
+
+	return widget.Column(cards...).Gap(12).Stretch()
+}
+
+func agentBaseBody(m *model, a agentDraft, mono ggui.TextStyle, showCommand bool, advancedOpen *ggui.StateValue[map[int]bool]) ggui.Widget {
+	var children []ggui.Widget
 	agentName := a.Agent
 	signInNote := ggui.Derived(func() string {
 		for _, ag := range m.Conn.Get().Self.GetAgents() {
@@ -587,45 +696,14 @@ func agentEditor(m *model, a agentDraft, profiles []agentDraft) ggui.Widget {
 			).Gap(2).Stretch()),
 		).Gap(8).Align(widget.AlignStart)).Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(8, 10)
 	}))
+	if rowCtrl := modelEffortPermissionRow(m, a, a.Agent, mono, false); rowCtrl != nil {
+		children = append(children, rowCtrl)
+	}
 	children = append(children,
-		compactField(T("Command"), commandHint,
-			ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Command })).
-				Style(mono).Name(Tf("%s command", a.Agent))),
-		compactField(T("Flags"), T("Added to every session of it, before a profile's. Quote as in a shell."),
-			ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Args })).
-				Style(mono).Placeholder("--flag value").Name(Tf("%s flags", a.Agent))),
-		compactField(T("Environment"), T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a session starts; $$ is a $."),
-			ui.TextField(m.agentField(a.ID, func(d *agentDraft) *string { return &d.Env })).
-				Multiline().Lines(2).Style(mono).Name(Tf("%s environment", a.Agent))),
+		executionSwitches(m, a.ID, a.Agent, false),
+		advancedOptionsSection(m, a, a.Agent, mono, false, showCommand, advancedOpen),
 	)
-	if _, supportsYolo := agents.As[agent.YoloFlag](a.Agent); supportsYolo {
-		yoloSwitch := ui.Switch(m.agentBoolField(a.ID, func(d *agentDraft) *bool { return &d.Yolo }), "").
-			Name(Tf("%s YOLO", a.Agent))
-		yoloRow := widget.Box(widget.Row(
-			icon("shield-alert").Size(15).Color(skin.DotWaiting),
-			widget.Expanded(widget.Column(
-				widget.Text(T("YOLO mode")).Size(13).Weight(ggui.WeightMedium),
-				muted(widget.Text(T("Bypass permission prompts and sandbox confirmations automatically.")).Size(11.5)),
-			).Gap(2).Stretch()),
-			yoloSwitch,
-		).Gap(10).Align(widget.AlignCenter)).Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(10, 12)
-		children = append(children, yoloRow)
-	}
-	children = append(children, executionSwitches(m, a.ID, a.Agent, false))
-	for _, p := range profiles {
-		children = append(children, profileCard(m, p, mono))
-	}
-	actions := []ggui.Widget{
-		ui.ButtonOf(widget.Row(icon("plus").Size(14), widget.Text(T("Add profile")).Size(13)).Gap(6),
-			func() { m.addProfile(a.Agent) }).Ghost().Pad(6, 10).Radius(7).Name(Tf("Add %s profile", a.Agent)),
-		widget.Spacer(),
-	}
-	if !builtin {
-		id := a.ID
-		actions = append(actions, ui.Button(T("Remove agent"), func() { m.removeAgentRow(id) }).Ghost().Name(Tf("Remove %s", a.Agent)))
-	}
-	children = append(children, widget.Row(actions...).Gap(8))
-	return widget.Column(children...).Gap(10).Stretch()
+	return widget.Column(children...).Gap(12).Stretch()
 }
 
 // compactField is a field under its label, its hint as the label's
@@ -701,10 +779,16 @@ func draftInstalled(d agentDraft) bool {
 	return agentspec.Agent{Command: command}.Installed()
 }
 
-// profileCard is a profile of an unfolded agent: its name, which removes
-// it beside, what it is for, its flags and environment over the agent's,
-// and the MCP servers its sessions get.
+// profileCard is a standalone separated card for one agent profile: its name
+// and delete action in the header, description, a single row for Model /
+// Effort / Permission (including YOLO), execution switches, MCP server
+// selection, and a collapsible Advanced section for Flags (with Append /
+// Overwrite mode) and Environment.
 func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
+	return profileCardWithState(m, p, mono, nil, true)
+}
+
+func profileCardWithState(m *model, p agentDraft, mono ggui.TextStyle, advancedOpen *ggui.StateValue[map[int]bool], raised bool) ggui.Widget {
 	id := p.ID
 	target := p.Agent + ":" + p.Profile
 	nameField := ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Profile })).
@@ -717,43 +801,144 @@ func profileCard(m *model, p agentDraft, mono ggui.TextStyle) ggui.Widget {
 		ui.ButtonOf(icon("trash-2").Size(14), func() { m.removeAgentRow(id) }).Ghost().Pad(6).Radius(6).
 			Name(Tf("Remove %s", target)),
 	).Gap(8).Align(widget.AlignCenter)
-	return widget.Box(widget.Column(
-		head,
+
+	body := []ggui.Widget{
 		compactField(T("Description"), T("Describe its specialties and when to choose it. Agents use this to select a profile when delegating work."),
 			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Description })).
 				Multiline().Lines(2).Placeholder(T("For example: Reviews Go concurrency, cancellation and race conditions.")).
 				Name(Tf("%s description", target))),
-		profileModelAndEffort(m, p, target, mono),
-		profileYoloRow(m, id, p.Agent, target),
+	}
+	if rowCtrl := modelEffortPermissionRow(m, p, target, mono, true); rowCtrl != nil {
+		body = append(body, rowCtrl)
+	}
+	body = append(body,
 		executionSwitches(m, id, target, true),
-		compactField(T("Flags"), T("Added after the agent's own."),
-			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
-				Style(mono).Placeholder("--flag value").Name(Tf("%s flags", target))),
-		compactField(T("Environment"), T("NAME=value lines over the agent's own, which $NAME reads."),
-			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Env })).
-				Multiline().Lines(2).Style(mono).Name(Tf("%s environment", target))),
 		profileServers(m, id, target),
-	).Gap(10).Stretch()).Border(1, skin.Border).Radius(8).Pad(10, 12)
+		advancedOptionsSection(m, p, target, mono, true, false, advancedOpen),
+	)
+
+	fill := pick(raised, skin.Surface1, skin.Surface0)
+	return widget.Box(widget.Column(
+		head,
+		hline(),
+		widget.Column(body...).Gap(12).Stretch(),
+	).Gap(12).Stretch()).Fill(fill).Border(1, skin.Border).Radius(10).Pad(16, 20)
 }
 
-func profileYoloRow(m *model, id int, agentName, target string) ggui.Widget {
-	if _, ok := agents.As[agent.YoloFlag](agentName); !ok {
-		return widget.Box()
-	}
-	ctrl := widget.Box(ui.Select(m.agentField(id, func(d *agentDraft) *string { return &d.ProfileYolo })).
-		Options([]string{"", "on", "off"}).
-		Format(func(v string) string {
-			switch v {
-			case "on":
-				return T("Enabled")
-			case "off":
-				return T("Disabled")
-			default:
-				return T("Inherit from agent")
+// advancedOptionsSection collapses Flags (with Append/Overwrite mode on
+// profiles) and Environment behind a compact disclosure toggle.
+func advancedOptionsSection(m *model, rowDraft agentDraft, target string, mono ggui.TextStyle, isProfile, showCommand bool, openMap *ggui.StateValue[map[int]bool]) ggui.Widget {
+	id := rowDraft.ID
+	var isOpen ggui.Readable[bool]
+	var toggle func()
+	if openMap != nil {
+		isOpen = ggui.Map(openMap, func(cur map[int]bool) bool { return cur[id] })
+		toggle = func() {
+			next := maps.Clone(ggui.Peek(openMap))
+			if next == nil {
+				next = map[int]bool{}
 			}
-		}).
-		Name(Tf("%s YOLO", target))).Width(200)
-	return compactField(T("YOLO mode"), T("Override the agent's YOLO setting for this profile."), ctrl)
+			next[id] = !next[id]
+			openMap.Set(next)
+		}
+	} else {
+		local := ggui.State(false)
+		isOpen = local
+		toggle = func() { local.Set(!ggui.Peek(local)) }
+	}
+
+	summary := ggui.Reactive(func() ggui.Widget {
+		d := m.agentRow(id)
+		var parts []string
+		if isProfile && d.ReplaceArgs {
+			parts = append(parts, Tf("Flags (%s)", T("Overwrite")))
+		} else if strings.TrimSpace(d.Args) != "" {
+			parts = append(parts, T("Flags"))
+		}
+		if strings.TrimSpace(d.Env) != "" {
+			parts = append(parts, T("Environment"))
+		}
+		if len(parts) == 0 {
+			return widget.Box()
+		}
+		return widget.Text(strings.Join(parts, " · ")).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis()
+	})
+
+	head := ui.ButtonOf(widget.Row(
+		icon("sliders-horizontal").Size(13).Color(skin.Muted),
+		widget.Text(T("Advanced")).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
+		widget.Expanded(summary),
+		chevron(isOpen, 13, skin.ExtraMuted),
+	).Gap(8).Align(widget.AlignCenter), toggle).Ghost().Pad(9, 12).Radius(8).Name(Tf("%s advanced options", target))
+
+	body := reveal(isOpen, func() ggui.Widget {
+		var fields []ggui.Widget
+		if showCommand {
+			fields = append(fields, compactField(T("Command"), T("The program and any arguments it always needs."),
+				ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Command })).
+					Style(mono).Name(Tf("%s command", target))))
+		}
+
+		flagsInput := ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Args })).
+			Style(mono).Placeholder("--flag value").Name(Tf("%s flags", target))
+		if isProfile {
+			flagsMode := ggui.Bind(func() string {
+				if m.agentRow(id).ReplaceArgs {
+					return "overwrite"
+				}
+				return "append"
+			}, func(v string) {
+				rows := slices.Clone(ggui.Peek(m.AgentDraft))
+				for i := range rows {
+					if rows[i].ID == id {
+						rows[i].ReplaceArgs = v == "overwrite"
+					}
+				}
+				m.AgentDraft.Set(rows)
+			})
+			modeToggle := ui.ToggleGroup(flagsMode).Options([]string{"append", "overwrite"}).
+				Format(func(v string) string {
+					if v == "overwrite" {
+						return T("Overwrite")
+					}
+					return T("Append")
+				}).Name(Tf("%s flags mode", target))
+			flagsHint := ggui.Reactive(func() ggui.Widget {
+				hint := T("Added after the agent's own.")
+				if m.agentRow(id).ReplaceArgs {
+					hint = T("Replaces the agent's base flags instead of appending to them.")
+				}
+				return muted(widget.Text(hint).Size(11.5))
+			})
+			fields = append(fields, widget.Column(
+				widget.Row(
+					widget.Text(T("Flags")).Size(12).Color(skin.Muted),
+					widget.Spacer(),
+					modeToggle,
+				).Gap(8).Align(widget.AlignCenter),
+				flagsInput,
+				flagsHint,
+			).Gap(5).Stretch())
+		} else {
+			fields = append(fields, compactField(T("Flags"), T("Added to every session of it, before a profile's. Quote as in a shell."), flagsInput))
+		}
+
+		envHint := T("One per line as NAME=value, added to the daemon's. $NAME, ${NAME} and a leading ~ expand when a session starts; $$ is a $.")
+		if isProfile {
+			envHint = T("NAME=value lines over the agent's own, which $NAME reads.")
+		}
+		fields = append(fields, compactField(T("Environment"), envHint,
+			ui.TextField(m.agentField(id, func(d *agentDraft) *string { return &d.Env })).
+				Multiline().Lines(2).Style(mono).Name(Tf("%s environment", target))))
+
+		return widget.Column(
+			hline(),
+			widget.Box(widget.Column(fields...).Gap(10).Stretch()).Pad(10, 12, 12, 12),
+		).Stretch()
+	})
+
+	return widget.Box(widget.Column(head, body).Stretch()).
+		Fill(skin.Surface0).Border(1, skin.Border).Radius(8)
 }
 
 func executionSwitches(m *model, id int, target string, isProfile bool) ggui.Widget {
@@ -998,23 +1183,63 @@ func localAgentCatalog(ctx context.Context, agentName string, isolate bool, conf
 	return nil, nil
 }
 
-// profileModelAndEffort is the model and reasoning effort a profile's
-// sessions start with.
-func profileModelAndEffort(m *model, p agentDraft, target string, mono ggui.TextStyle) ggui.Widget {
-	entry, _ := agents.Lookup(p.Agent)
+// permissionOptionLabel formats a startup permission value for the Permission
+// dropdown (including YOLO).
+func permissionOptionLabel(mode string, isProfile bool) string {
+	switch mode {
+	case "":
+		if isProfile {
+			return T("Inherit from agent")
+		}
+		return T("The agent's default")
+	case agentspec.PermissionDefault:
+		return T("The agent's default")
+	case "manual":
+		return T("Ask first")
+	case agentspec.PermissionYOLO:
+		return T("YOLO")
+	default:
+		return modeLabel(mode)
+	}
+}
+
+// modelEffortPermissionRow lays out Model, Effort, and Permission (including
+// YOLO) in a single aligned horizontal row.
+func modelEffortPermissionRow(m *model, rowDraft agentDraft, target string, mono ggui.TextStyle, isProfile bool) ggui.Widget {
+	entry, _ := agents.Lookup(rowDraft.Agent)
 	modelFlag, okModel := entry.Driver.(agent.ModelFlag)
 	hasModel := okModel && modelFlag.ModelArgs("x") != nil
 	effortFlag, okEffort := entry.Driver.(agent.EffortFlag)
 	hasEffort := okEffort && effortFlag.EffortArgs("high") != nil
-	if !hasModel && !hasEffort {
-		return widget.Box()
+	permFlag, okPerm := entry.Driver.(agent.PermissionFlag)
+	var permModes []string
+	if okPerm {
+		permModes = permFlag.PermissionModes()
+	}
+	_, hasYolo := entry.Driver.(agent.YoloFlag)
+	hasPerm := len(permModes) > 0 || hasYolo
+	if !hasModel && !hasEffort && !hasPerm {
+		return nil
 	}
 	_, hasCatalog := entry.Driver.(agent.ModelCatalog)
 
+	defaultLabel := T("The agent's default")
+	if isProfile {
+		defaultLabel = T("Inherit from agent")
+	}
+
+	// Uniform label header height so all three selectors align on the exact same Y.
+	fieldCol := func(labelWidget, ctrl ggui.Widget) ggui.Widget {
+		return widget.Column(
+			widget.Box(labelWidget).Height(20),
+			ctrl,
+		).Gap(4).Stretch()
+	}
+
 	return ggui.Reactive(func() ggui.Widget {
-		catalog := m.AgentCatalogs.Get()[p.Agent]
-		loading := m.AgentCatalogLoading.Get()[p.Agent]
-		row := m.agentRow(p.ID)
+		catalog := m.AgentCatalogs.Get()[rowDraft.Agent]
+		loading := m.AgentCatalogLoading.Get()[rowDraft.Agent]
+		row := m.agentRow(rowDraft.ID)
 		if row.ID == 0 {
 			return widget.Box()
 		}
@@ -1028,16 +1253,17 @@ func profileModelAndEffort(m *model, p agentDraft, target string, mono ggui.Text
 			}
 		}
 
-		var modelCol, effortCol ggui.Widget
+		var cols []ggui.Widget
+
 		if hasModel {
 			hint := T("The model its sessions start on, over the agent's default and any its flags name.")
 			var modelCtrl ggui.Widget
 			if len(models) == 0 {
-				modelBind := m.agentField(p.ID, func(d *agentDraft) *string { return &d.Model })
-				modelCtrl = ui.TextField(modelBind).Style(mono).Placeholder(T("The agent's default")).Name(Tf("%s model", target))
+				modelBind := m.agentField(rowDraft.ID, func(d *agentDraft) *string { return &d.Model })
+				modelCtrl = ui.TextField(modelBind).Style(mono).Placeholder(defaultLabel).Name(Tf("%s model", target))
 			} else {
 				options := []string{""}
-				labels := map[string]string{"": T("The agent's default")}
+				labels := map[string]string{"": defaultLabel}
 				var overflow []string
 				for _, am := range models {
 					id := am.GetId()
@@ -1065,11 +1291,11 @@ func profileModelAndEffort(m *model, p agentDraft, target string, mono ggui.Text
 					labels[row.Model] = row.Model
 				}
 				modelBind := ggui.Bind(func() string {
-					return m.agentRow(p.ID).Model
+					return m.agentRow(rowDraft.ID).Model
 				}, func(v string) {
 					rows := slices.Clone(ggui.Peek(m.AgentDraft))
 					for i := range rows {
-						if rows[i].ID == p.ID {
+						if rows[i].ID == rowDraft.ID {
 							rows[i].Model = v
 							if v != "" {
 								if found := findAgentModel(models, v); found != nil {
@@ -1089,48 +1315,83 @@ func profileModelAndEffort(m *model, p agentDraft, target string, mono ggui.Text
 					return s
 				}).Name(Tf("%s model", target))
 			}
-			var ctrlRow ggui.Widget = modelCtrl
-			if hasCatalog {
-				refreshBtn := ui.Tooltip(ui.ButtonOf(icon("refresh-cw").Size(13).Color(skin.Muted), func() {
-					m.loadAgentCatalog(p.Agent, true)
-				}).Ghost().Pad(6).Radius(6).BindDisabled(ggui.Const(loading)).Name(Tf("Refresh %s models", p.Agent)), T("Refresh models"))
-				ctrlRow = widget.Row(widget.Expanded(modelCtrl), refreshBtn).Gap(4).Align(widget.AlignCenter)
+
+			labelItems := []ggui.Widget{
+				ui.Tooltip(widget.Text(T("Model")).Size(12).Color(skin.Muted), hint),
+				widget.Spacer(),
 			}
-			modelCol = compactField(T("Model"), hint, ctrlRow)
+			if hasCatalog {
+				refreshBtn := ui.Tooltip(ui.ButtonOf(icon("refresh-cw").Size(12).Color(skin.Muted), func() {
+					m.loadAgentCatalog(rowDraft.Agent, true)
+				}).Ghost().Pad(2, 4).Radius(5).BindDisabled(ggui.Const(loading)).Name(Tf("Refresh %s models", rowDraft.Agent)), T("Refresh models"))
+				labelItems = append(labelItems, refreshBtn)
+			}
+			modelCol := fieldCol(widget.Row(labelItems...).Gap(4).Align(widget.AlignCenter), modelCtrl)
+			if !hasEffort && !hasPerm {
+				cols = append(cols, widget.Box(modelCol).MaxWidth(280))
+			} else {
+				cols = append(cols, widget.Expanded(modelCol))
+			}
 		}
 
 		if hasEffort {
-			efforts := effortChoices(models, row.Model, entry.Driver)
+			effortModel := row.Model
+			if isProfile && effortModel == "" {
+				for _, r := range m.AgentDraft.Get() {
+					if !r.IsProfile && r.Agent == rowDraft.Agent {
+						effortModel = r.Model
+						break
+					}
+				}
+			}
+			efforts := effortChoices(models, effortModel, entry.Driver)
 			if len(efforts) > 0 || row.Effort != "" {
 				options := append([]string{""}, efforts...)
 				if row.Effort != "" && !slices.Contains(options, row.Effort) {
 					options = append(options, row.Effort)
 				}
-				effortBind := m.agentField(p.ID, func(d *agentDraft) *string { return &d.Effort })
+				effortBind := m.agentField(rowDraft.ID, func(d *agentDraft) *string { return &d.Effort })
 				effortHint := T("The reasoning effort its sessions start with, over the agent's default.")
 				effortCtrl := ui.Select(effortBind).Options(options).Format(func(s string) string {
 					if s == "" {
-						return T("The agent's default")
+						return defaultLabel
 					}
 					return capitalized(s)
 				}).Name(Tf("%s effort", target))
-				effortCol = compactField(T("Effort"), effortHint, effortCtrl)
+				effortLabel := widget.Row(ui.Tooltip(widget.Text(T("Effort")).Size(12).Color(skin.Muted), effortHint)).Align(widget.AlignCenter)
+				cols = append(cols, widget.Box(fieldCol(effortLabel, effortCtrl)).Width(132))
 			}
 		}
 
-		switch {
-		case modelCol != nil && effortCol != nil:
-			return widget.Row(
-				widget.Expanded(modelCol),
-				widget.Box(effortCol).Width(180),
-			).Gap(12).Align(widget.AlignStart)
-		case modelCol != nil:
-			return widget.Box(modelCol).MaxWidth(280)
-		case effortCol != nil:
-			return widget.Box(effortCol).Width(180)
-		default:
+		if hasPerm {
+			options := []string{""}
+			if isProfile {
+				options = append(options, agentspec.PermissionDefault)
+			}
+			for _, pm := range permModes {
+				if !slices.Contains(options, pm) {
+					options = append(options, pm)
+				}
+			}
+			if hasYolo {
+				options = append(options, agentspec.PermissionYOLO)
+			}
+			if row.Permission != "" && !slices.Contains(options, row.Permission) {
+				options = append(options, row.Permission)
+			}
+			permHint := T("Startup permission mode for sessions, including YOLO to bypass all confirmations.")
+			permBind := m.agentField(rowDraft.ID, func(d *agentDraft) *string { return &d.Permission })
+			permCtrl := ui.Select(permBind).Options(options).Format(func(s string) string {
+				return permissionOptionLabel(s, isProfile)
+			}).Name(Tf("%s permission", target))
+			permLabel := widget.Row(ui.Tooltip(widget.Text(T("Permission")).Size(12).Color(skin.Muted), permHint)).Align(widget.AlignCenter)
+			cols = append(cols, widget.Box(fieldCol(permLabel, permCtrl)).Width(156))
+		}
+
+		if len(cols) == 0 {
 			return widget.Box()
 		}
+		return widget.Row(cols...).Gap(10).Align(widget.AlignStart)
 	})
 }
 
