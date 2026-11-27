@@ -327,4 +327,43 @@ func TestResolveYoloAndOverrides(t *testing.T) {
 	if !lifted || !slices.Equal(cleaned, []string{"-m", "o3"}) {
 		t.Fatalf("codex lifted=%v cleaned=%q", lifted, cleaned)
 	}
+
+	// Legacy standalone YOLO flags in config Args are honored by EffectiveYolo
+	// and cleanly overridden when a profile or launch turns YOLO off.
+	legacy := map[string]Agent{
+		"claude": {
+			Args: []string{"--verbose", "--dangerously-skip-permissions"},
+			Profiles: []Profile{
+				{Name: "inherit"},
+				{Name: "safe", Yolo: &no},
+			},
+		},
+		"opencode": {
+			Args: []string{"--yolo"},
+		},
+	}
+	if !legacy["claude"].EffectiveYolo("claude") || !legacy["claude"].Profiles[0].EffectiveYolo("claude", legacy["claude"]) || legacy["claude"].Profiles[1].EffectiveYolo("claude", legacy["claude"]) {
+		t.Fatalf("unexpected EffectiveYolo for legacy claude config")
+	}
+	l, err = Resolve("claude", "inherit", nil, nil, legacy)
+	if err != nil || !slices.Equal(l.Command[1:], []string{"--verbose", "--dangerously-skip-permissions"}) {
+		t.Fatalf("legacy claude inherit = %q, %v", l.Command, err)
+	}
+	l, err = Resolve("claude", "safe", nil, nil, legacy)
+	if err != nil || !slices.Equal(l.Command[1:], []string{"--verbose"}) {
+		t.Fatalf("legacy claude safe should strip flag: %q, %v", l.Command, err)
+	}
+	l, err = ResolveWith("claude", "", nil, nil, ResolveOptions{Yolo: &no}, legacy)
+	if err != nil || !slices.Equal(l.Command[1:], []string{"--verbose"}) {
+		t.Fatalf("legacy claude opts.Yolo=false should strip flag: %q, %v", l.Command, err)
+	}
+	t.Setenv("OPENCODE_CONFIG_CONTENT", "")
+	l, err = Resolve("opencode", "", nil, nil, legacy)
+	if err != nil || slices.Contains(l.Command, "--yolo") || !strings.Contains(l.Env["OPENCODE_CONFIG_CONTENT"], `"*":"allow"`) {
+		t.Fatalf("legacy opencode --yolo should lift to env config: cmd=%q env=%v err=%v", l.Command, l.Env, err)
+	}
+	l, err = ResolveWith("opencode", "", nil, nil, ResolveOptions{Yolo: &no}, legacy)
+	if err != nil || slices.Contains(l.Command, "--yolo") || l.Env["OPENCODE_CONFIG_CONTENT"] != "" {
+		t.Fatalf("legacy opencode opts.Yolo=false should strip --yolo and env: cmd=%q env=%v err=%v", l.Command, l.Env, err)
+	}
 }

@@ -68,16 +68,12 @@ func (d *Daemon) spawnablePresets() []spawnablePreset {
 			out = append(out, spawnablePreset{
 				Agent:  name,
 				Target: agentspec.Target(name, ""),
-				Yolo:   a.Yolo,
+				Yolo:   a.EffectiveYolo(name),
 			})
 		}
 		for _, p := range a.Profiles {
 			if !p.AgentAllowed() || !d.agentMCPEnabled(p.ContextServers) {
 				continue
-			}
-			yolo := a.Yolo
-			if p.Yolo != nil {
-				yolo = *p.Yolo
 			}
 			out = append(out, spawnablePreset{
 				Agent:       name,
@@ -86,7 +82,7 @@ func (d *Daemon) spawnablePresets() []spawnablePreset {
 				Description: p.Description,
 				Model:       p.Model,
 				Effort:      p.Effort,
-				Yolo:        yolo,
+				Yolo:        p.EffectiveYolo(name, a),
 			})
 		}
 	}

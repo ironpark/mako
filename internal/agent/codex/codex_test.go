@@ -81,13 +81,19 @@ func TestSplitRemoteLaunch(t *testing.T) {
 	if !slices.Equal(got.ServerArgs, wantServer) {
 		t.Fatalf("ServerArgs = %q\nwant %q", got.ServerArgs, wantServer)
 	}
-	// Permission overrides must stay off TUIArgs because `codex --remote ... resume` rejects them.
+	// Permission overrides must stay off TUIArgs because `codex --remote ... resume` rejects them,
+	// while NewTUIArgs carries them for brand-new `codex --remote` sessions so `thread/start`
+	// does not default `sandbox` to "read-only".
 	wantTUI := []string{
 		"--model", "gpt-6.2-sol",
 		"-C", "/work/proj",
 	}
 	if !slices.Equal(got.TUIArgs, wantTUI) {
 		t.Fatalf("TUIArgs = %q\nwant %q", got.TUIArgs, wantTUI)
+	}
+	wantNewTUI := []string{"--dangerously-bypass-approvals-and-sandbox"}
+	if !slices.Equal(got.NewTUIArgs, wantNewTUI) {
+		t.Fatalf("NewTUIArgs = %q\nwant %q", got.NewTUIArgs, wantNewTUI)
 	}
 	if got.Model != "gpt-6.2-sol" || got.ApprovalPolicy != "never" || got.Sandbox != "danger-full-access" || got.Cwd != "/work/proj" {
 		t.Fatalf("extracted settings = %+v", got)
@@ -110,6 +116,9 @@ func TestSplitRemoteLaunch(t *testing.T) {
 	if len(resumed.TUIArgs) != 0 {
 		t.Fatalf("resumed TUIArgs = %q, want empty", resumed.TUIArgs)
 	}
+	if !slices.Equal(resumed.NewTUIArgs, []string{"-a", "on-request", "-s", "workspace-write"}) {
+		t.Fatalf("resumed NewTUIArgs = %q", resumed.NewTUIArgs)
+	}
 	wantResumedServer := []string{
 		"-c", `model_reasoning_effort="low"`,
 		"-c", `approval_policy="on-request"`,
@@ -119,7 +128,8 @@ func TestSplitRemoteLaunch(t *testing.T) {
 		t.Fatalf("resumed ServerArgs = %q\nwant %q", resumed.ServerArgs, wantResumedServer)
 	}
 
-	// --approve-for-me moves to app-server config (guardian_subagent + workspace-write) and stays off TUIArgs.
+	// --approve-for-me moves to app-server config (guardian_subagent + workspace-write),
+	// stays off TUIArgs for resume, and propagates via NewTUIArgs for new sessions.
 	afm := SplitRemoteLaunch([]string{"codex", "--approve-for-me", "--", "-fix-me"})
 	if afm.SkipRemote || afm.Sandbox != "workspace-write" || !afm.HasPrompt || afm.Prompt != "-fix-me" {
 		t.Fatalf("approve-for-me + dash prompt = %+v", afm)
@@ -127,12 +137,26 @@ func TestSplitRemoteLaunch(t *testing.T) {
 	if len(afm.TUIArgs) != 0 {
 		t.Fatalf("approve-for-me TUIArgs = %q, want empty", afm.TUIArgs)
 	}
+	if !slices.Equal(afm.NewTUIArgs, []string{"--approve-for-me"}) {
+		t.Fatalf("approve-for-me NewTUIArgs = %q", afm.NewTUIArgs)
+	}
 	wantAfmServer := []string{
 		"-c", `sandbox_mode="workspace-write"`,
 		"-c", `approvals_reviewer="guardian_subagent"`,
 	}
 	if !slices.Equal(afm.ServerArgs, wantAfmServer) {
 		t.Fatalf("approve-for-me ServerArgs = %q\nwant %q", afm.ServerArgs, wantAfmServer)
+	}
+
+	// --full-auto translates to -a/-s in NewTUIArgs (newer Codex CLIs removed --full-auto),
+	// and a later --yolo overrides an earlier --approve-for-me cleanly.
+	fa := SplitRemoteLaunch([]string{"codex", "--full-auto"})
+	if !slices.Equal(fa.NewTUIArgs, []string{"-a", "on-request", "-s", "workspace-write"}) {
+		t.Fatalf("full-auto NewTUIArgs = %q", fa.NewTUIArgs)
+	}
+	override := SplitRemoteLaunch([]string{"codex", "--approve-for-me", "--yolo"})
+	if !slices.Equal(override.NewTUIArgs, []string{"--dangerously-bypass-approvals-and-sandbox"}) {
+		t.Fatalf("approve-for-me + yolo NewTUIArgs = %q", override.NewTUIArgs)
 	}
 
 	// Non-TUI subcommands, pickers, worktree, help/version, and explicit --remote skip managed app-server.

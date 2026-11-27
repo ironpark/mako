@@ -394,7 +394,7 @@ func (d *Daemon) agentInfo() []*protocol.AgentInfo {
 		info := &protocol.AgentInfo{
 			Name:          name,
 			Profiles:      a.ProfileNames(),
-			Yolo:          a.Yolo,
+			Yolo:          a.EffectiveYolo(name),
 			AllowAgent:    &allowAgent,
 			AllowTemplate: &allowTemplate,
 		}
@@ -418,10 +418,7 @@ func (d *Daemon) agentInfo() []*protocol.AgentInfo {
 		if len(a.Profiles) > 0 {
 			details := make([]*protocol.AgentProfileInfo, len(a.Profiles))
 			for j, p := range a.Profiles {
-				yolo := a.Yolo
-				if p.Yolo != nil {
-					yolo = *p.Yolo
-				}
+				yolo := p.EffectiveYolo(name, a)
 				allowAgent := p.AgentAllowed()
 				allowTemplate := p.TemplateAllowed()
 				details[j] = &protocol.AgentProfileInfo{

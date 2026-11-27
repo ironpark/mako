@@ -599,7 +599,7 @@ func (h *guiTemplateHost) localAgentInfos() []*protocol.AgentInfo {
 		info := &protocol.AgentInfo{
 			Name:          name,
 			Profiles:      a.ProfileNames(),
-			Yolo:          a.Yolo,
+			Yolo:          a.EffectiveYolo(name),
 			AllowAgent:    &allowAgent,
 			AllowTemplate: &allowTemplate,
 		}
@@ -615,10 +615,7 @@ func (h *guiTemplateHost) localAgentInfos() []*protocol.AgentInfo {
 			}
 		}
 		for _, p := range a.Profiles {
-			y := a.Yolo
-			if p.Yolo != nil {
-				y = *p.Yolo
-			}
+			y := p.EffectiveYolo(name, a)
 			allowAgent := p.AgentAllowed()
 			allowTemplate := p.TemplateAllowed()
 			info.ProfileDetails = append(info.ProfileDetails, &protocol.AgentProfileInfo{

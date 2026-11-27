@@ -73,10 +73,11 @@ flowchart TB
 - **서버(`codex app-server`)로 이동하는 옵션**:
   - `-c` / `--config`, `--enable`, `--disable`, `--strict-config` (MCP 서버·훅·설정 오버라이드가 실제 턴 실행 측에 적용되도록)
   - `--add-dir <dir>` → `-c sandbox_workspace_write.writable_roots=[...]`
-  - 권한/샌드박스 플래그(`-a`, `-s`, `--full-auto`, `--approve-for-me`, `--yolo`, `--dangerously-bypass-approvals-and-sandbox`) → `-c approval_policy=...`, `-c sandbox_mode=...`, `-c approvals_reviewer=...` (`codex --remote ... resume`이 해당 플래그를 거부하기 때문)
+  - 권한/샌드박스 플래그(`-a`, `-s`, `--full-auto`, `--approve-for-me`, `--yolo`, `--dangerously-bypass-approvals-and-sandbox`) → 서버에는 `-c approval_policy=...`, `-c sandbox_mode=...`, `-c approvals_reviewer=...`로 전달합니다.
   - `MAKO_SESSION` 환경변수를 서버 프로세스에도 주입해 서버가 실행하는 훅이 올바른 세션으로 라우팅되도록 합니다.
 - **TUI(`codex --remote`)에 유지되는 옵션**:
   - `--remote <addr>`, `--model`, `-C`/`--cd`, `-p`/`--profile`, `-i`/`--image`, 재개 시 `resume <threadID>`, 선택적 프롬프트(`--` 구분자 뒤에 배치해 `-`로 시작하는 프롬프트 오파싱 방지)
+  - 신규 세션(`NewTUIArgs`)에는 권한/샌드박스 플래그(`--dangerously-bypass-approvals-and-sandbox`, `--approve-for-me`, `-a`/`-s`)도 함께 전달해 TUI의 `thread/start`가 서버의 `sandbox_mode`를 `read-only`로 덮어쓰지 않도록 합니다. 재개 세션(`resume`)에서는 `codex --remote ... resume`이 권한 오버라이드를 거부하므로 제외하고 `thread/resume` RPC로 적용합니다.
   - `--no-daemon`은 `--remote`와 충돌하므로 제거합니다.
 
 ### 3.3 OS별 전송 계층 및 보안

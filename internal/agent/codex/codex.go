@@ -112,7 +112,8 @@ func jsonString(v any) string {
 type RemoteLaunchSplit struct {
 	Program        string
 	ServerArgs     []string // -c, --enable, --disable, --strict-config, plus writable_roots from --add-dir
-	TUIArgs        []string // TUI-safe flags (no --no-daemon, no --add-dir, no server -c, no resume <id>)
+	TUIArgs        []string // TUI-safe flags for both new and resumed `codex --remote` sessions
+	NewTUIArgs     []string // permission/sandbox flags for brand-new `codex --remote` sessions (rejected by `resume`)
 	Model          string   // -m / --model (forwarded to thread/start & TUI)
 	ApprovalPolicy string   // -a / --ask-for-approval, or "never" for YOLO
 	Sandbox        string   // -s / --sandbox, or "danger-full-access" for YOLO
@@ -245,6 +246,7 @@ func SplitRemoteLaunch(command []string) RemoteLaunchSplit {
 		case "--dangerously-bypass-approvals-and-sandbox", "--yolo":
 			out.ApprovalPolicy = "never"
 			out.Sandbox = "danger-full-access"
+			approvalsReviewer = ""
 		case "-p", "--profile", "--local-provider", "-i", "--image":
 			if v, ok := nextVal(); ok {
 				out.TUIArgs = append(out.TUIArgs, name, v)
@@ -262,6 +264,31 @@ func SplitRemoteLaunch(command []string) RemoteLaunchSplit {
 	}
 	if approvalsReviewer != "" {
 		out.ServerArgs = append(out.ServerArgs, "-c", "approvals_reviewer="+tomlString(approvalsReviewer))
+	}
+	// Brand-new `codex --remote` sessions send an explicit `sandbox` field in
+	// `thread/start` from the TUI's own CLI/local config (defaulting to
+	// "read-only" in untrusted or isolated homes), overriding the server's
+	// `-c sandbox_mode=...`. Forward permission/sandbox flags to brand-new TUI
+	// launches via NewTUIArgs, while keeping them off TUIArgs because
+	// `codex --remote ... resume` rejects permission overrides.
+	switch {
+	case approvalsReviewer == "guardian_subagent":
+		out.NewTUIArgs = append(out.NewTUIArgs, "--approve-for-me")
+		if out.ApprovalPolicy != "" {
+			out.NewTUIArgs = append(out.NewTUIArgs, "-a", out.ApprovalPolicy)
+		}
+		if out.Sandbox != "" && out.Sandbox != "workspace-write" {
+			out.NewTUIArgs = append(out.NewTUIArgs, "-s", out.Sandbox)
+		}
+	case out.ApprovalPolicy == "never" && out.Sandbox == "danger-full-access":
+		out.NewTUIArgs = append(out.NewTUIArgs, "--dangerously-bypass-approvals-and-sandbox")
+	default:
+		if out.ApprovalPolicy != "" {
+			out.NewTUIArgs = append(out.NewTUIArgs, "-a", out.ApprovalPolicy)
+		}
+		if out.Sandbox != "" {
+			out.NewTUIArgs = append(out.NewTUIArgs, "-s", out.Sandbox)
+		}
 	}
 	if len(addDirs) > 0 {
 		out.ServerArgs = append(out.ServerArgs, "-c", "sandbox_workspace_write.writable_roots="+jsonString(addDirs))

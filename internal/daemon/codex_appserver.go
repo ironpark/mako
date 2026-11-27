@@ -683,10 +683,10 @@ func (d *Daemon) prepareCodexAppServer(
 
 	// Build the rewritten `--remote` TUI command:
 	// - Resumed session: `codex --remote <addr> [auth...] resume [TUI_FLAGS...] [--] <threadID> [PROMPT]`
-	// - New session:     `codex --remote <addr> [auth...] [TUI_FLAGS...] [--] [PROMPT]`
+	// - New session:     `codex --remote <addr> [auth...] [TUI_FLAGS...] [NEW_TUI_FLAGS...] [--] [PROMPT]`
 	// Place `--` before positional args when a prompt is present so prompts starting
 	// with `-` (e.g. `-fix-me`) are never misparsed as CLI flags.
-	tuiCmd := make([]string, 0, 6+len(tr.extraTUIArgs)+len(split.TUIArgs))
+	tuiCmd := make([]string, 0, 6+len(tr.extraTUIArgs)+len(split.TUIArgs)+len(split.NewTUIArgs))
 	tuiCmd = append(tuiCmd, split.Program, "--remote", remoteAddr)
 	tuiCmd = append(tuiCmd, tr.extraTUIArgs...)
 	if targetID != "" {
@@ -699,6 +699,7 @@ func (d *Daemon) prepareCodexAppServer(
 		}
 	} else {
 		tuiCmd = append(tuiCmd, split.TUIArgs...)
+		tuiCmd = append(tuiCmd, split.NewTUIArgs...)
 		if split.HasPrompt {
 			tuiCmd = append(tuiCmd, "--", split.Prompt)
 		}

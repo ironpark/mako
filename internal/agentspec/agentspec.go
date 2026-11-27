@@ -47,6 +47,16 @@ func (a Agent) AgentAllowed() bool { return a.AllowAgent == nil || *a.AllowAgent
 // TemplateAllowed reports whether prompt templates may execute this agent's default configuration.
 func (a Agent) TemplateAllowed() bool { return a.AllowTemplate == nil || *a.AllowTemplate }
 
+// EffectiveYolo reports whether agent name runs in YOLO mode, honoring both
+// the explicit Yolo switch and legacy standalone YOLO flags in Args.
+func (a Agent) EffectiveYolo(name string) bool {
+	if a.Yolo {
+		return true
+	}
+	_, lifted := LiftYoloArgs(name, a.Args)
+	return lifted
+}
+
 // Profile is a named set of flags and environment for an agent, such as a
 // claude that runs another model or with another account's key.
 type Profile struct {
@@ -82,6 +92,18 @@ func (p Profile) AgentAllowed() bool { return p.AllowAgent == nil || *p.AllowAge
 
 // TemplateAllowed reports whether prompt templates may execute this profile.
 func (p Profile) TemplateAllowed() bool { return p.AllowTemplate == nil || *p.AllowTemplate }
+
+// EffectiveYolo reports whether profile p of agent name runs in YOLO mode:
+// p's explicit override wins, else any legacy YOLO flag in p.Args, else a's.
+func (p Profile) EffectiveYolo(name string, a Agent) bool {
+	if p.Yolo != nil {
+		return *p.Yolo
+	}
+	if _, lifted := LiftYoloArgs(name, p.Args); lifted {
+		return true
+	}
+	return a.EffectiveYolo(name)
+}
 
 // UnmarshalJSON also reads an agent written as its command alone, as
 // configurations did before agents had flags and profiles.
@@ -265,21 +287,33 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 
 	effectiveModel := cmp.Or(opts.Model, p.Model)
 	effectiveEffort := cmp.Or(opts.Effort, p.Effort)
+	var yoloDriver agent.YoloFlag
 	if e, ok := agents.Native(name, path); ok {
 		if norm, ok := e.Driver.(agent.ModelEffortNormalizer); ok {
 			effectiveModel, effectiveEffort = norm.NormalizeModelEffort(effectiveModel, effectiveEffort)
 		}
+		if yf, ok := e.Driver.(agent.YoloFlag); ok {
+			yoloDriver = yf
+		}
 	}
-	effectiveYolo := a.Yolo
+	agentArgs, profileArgs := a.Args, p.Args
+	var agentLifted, profileLifted bool
+	if yoloDriver != nil {
+		agentArgs, agentLifted = LiftYoloArgs(name, agentArgs)
+		profileArgs, profileLifted = LiftYoloArgs(name, profileArgs)
+	}
+	effectiveYolo := a.Yolo || agentLifted
 	if p.Yolo != nil {
 		effectiveYolo = *p.Yolo
+	} else if profileLifted {
+		effectiveYolo = true
 	}
 	if opts.Yolo != nil {
 		effectiveYolo = *opts.Yolo
 	}
 
 	command := append([]string{path}, a.Command[1:]...)
-	for _, arg := range slices.Concat(a.Args, p.Args) {
+	for _, arg := range slices.Concat(agentArgs, profileArgs) {
 		command = append(command, expand(arg, lookup))
 	}
 	command = append(command, modelArgs(name, path, effectiveModel)...)
@@ -288,12 +322,8 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 	launch := Launch{ContextServers: p.ContextServers,
 		Command: command,
 		Env:     merged}
-	if effectiveYolo {
-		if e, ok := agents.Native(name, path); ok {
-			if yf, ok := e.Driver.(agent.YoloFlag); ok {
-				yf.WithYolo(&launch.Launch)
-			}
-		}
+	if effectiveYolo && yoloDriver != nil {
+		yoloDriver.WithYolo(&launch.Launch)
 	}
 	launch.Command = append(launch.Command, args...)
 	return launch, nil

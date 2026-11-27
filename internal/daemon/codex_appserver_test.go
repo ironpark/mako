@@ -670,6 +670,7 @@ func TestCodexLiveAppServerSmoke(t *testing.T) {
 				program,
 				"-c", `model_reasoning_effort="low"`,
 				"--model", models[0].ID,
+				"--dangerously-bypass-approvals-and-sandbox",
 				"--add-dir", projDir,
 				"--no-daemon",
 				"--",
@@ -694,7 +695,7 @@ func TestCodexLiveAppServerSmoke(t *testing.T) {
 		t.Fatalf("new session prematurely bound convID=%q", convID)
 	}
 	joined := strings.Join(launch.Command, " ")
-	if !strings.Contains(joined, "--remote") || strings.Contains(joined, " resume ") || strings.Contains(joined, "--no-daemon") || strings.Contains(joined, "--add-dir") || !strings.Contains(joined, " -- -fix-me") {
+	if !strings.Contains(joined, "--remote") || strings.Contains(joined, " resume ") || strings.Contains(joined, "--no-daemon") || strings.Contains(joined, "--add-dir") || !strings.Contains(joined, "--dangerously-bypass-approvals-and-sandbox -- -fix-me") {
 		t.Fatalf("unexpected rewritten TUI command: %q", launch.Command)
 	}
 	t.Logf("live bridge ready: cmd=%q", launch.Command)

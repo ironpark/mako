@@ -323,3 +323,50 @@ func TestSetDecisionConfigSyncsExternalDiskEdits(t *testing.T) {
 		t.Fatalf("d.decisionConfig() = %+v", dec)
 	}
 }
+
+func TestAgentInfoAndSpawnPresetsReportLegacyYoloArgs(t *testing.T) {
+	on, off := true, false
+	d := New(&config.Config{
+		NodeID: "n1",
+		Agents: map[string]agentspec.Agent{
+			"claude": {
+				Command: []string{"claude"},
+				Args:    []string{"--dangerously-skip-permissions"},
+				Enabled: &on,
+				Profiles: []agentspec.Profile{
+					{Name: "inherit"},
+					{Name: "safe", Yolo: &off},
+				},
+			},
+		},
+	}, nil)
+
+	var claudeInfoYolo, inheritInfoYolo, safeInfoYolo bool
+	for _, ai := range d.agentInfo() {
+		if ai.GetName() != "claude" {
+			continue
+		}
+		claudeInfoYolo = ai.GetYolo()
+		for _, p := range ai.GetProfileDetails() {
+			switch p.GetName() {
+			case "inherit":
+				inheritInfoYolo = p.GetYolo()
+			case "safe":
+				safeInfoYolo = p.GetYolo()
+			}
+		}
+	}
+	if !claudeInfoYolo || !inheritInfoYolo || safeInfoYolo {
+		t.Fatalf("agentInfo YOLO = (agent:%v, inherit:%v, safe:%v), want (true, true, false)", claudeInfoYolo, inheritInfoYolo, safeInfoYolo)
+	}
+
+	gotPreset := map[string]bool{}
+	for _, p := range d.spawnablePresets() {
+		if p.Agent == "claude" {
+			gotPreset[p.Target] = p.Yolo
+		}
+	}
+	if !gotPreset["claude"] || !gotPreset["claude:inherit"] || gotPreset["claude:safe"] {
+		t.Fatalf("spawnablePresets YOLO = %+v, want claude=true inherit=true safe=false", gotPreset)
+	}
+}
