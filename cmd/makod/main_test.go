@@ -10,12 +10,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 func TestMain(m *testing.M) {
@@ -349,5 +351,91 @@ func TestMakodHookDispatch(t *testing.T) {
 	}
 	if _, err := os.Stat(env.sockPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected no daemon socket %q to be created, stat err = %v", env.sockPath, err)
+	}
+}
+
+func TestMakodSanitizesInheritedSessionEnvOnStartup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix shell test")
+	}
+	outFile := filepath.Join(t.TempDir(), "env.txt")
+	cfgJSON := `{"node_id":"makod-sanitize-node","name":"sanitize","shell":{"command":["/bin/sh"]},"p2p":{"disabled":true},"discovery":{"mdns":false,"tailscale":false}}`
+	env := setupMakodEnv(t, cfgJSON)
+
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	cmdEnv, err := helperEnv(env, []string{"makod"}, false)
+	if err != nil {
+		t.Fatalf("helperEnv: %v", err)
+	}
+	cmdEnv = append(cmdEnv,
+		"CODEX_THREAD_ID=leaked-parent-thread",
+		"CLAUDECODE=1",
+		"ANTIGRAVITY_CONVERSATION_ID=leaked-parent-agy",
+		"MAKO_AGENT_MCP_TOKEN=leaked-parent-token",
+		"MAKO_KEEP_AMBIENT=preserved",
+	)
+
+	var outBuf, errBuf bytes.Buffer
+	cmd := exec.Command(exe)
+	cmd.Env = cmdEnv
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start makod: %v", err)
+	}
+	waitCh := make(chan error, 1)
+	done := make(chan struct{})
+	go func() {
+		waitCh <- cmd.Wait()
+		close(done)
+	}()
+	t.Cleanup(func() {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		_ = cmd.Process.Kill()
+		<-done
+	})
+
+	c := dialUntilReady(t, env.sockPath, done, waitCh, &errBuf)
+	defer c.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err = c.Open(ctx, &protocol.OpenSession{
+		Agent:   "shell",
+		Project: t.TempDir(),
+		Args: []string{"-c",
+			`printf 'codex=%s\ncc=%s\nagy=%s\ntok=%s\nkeep=%s\n' "$CODEX_THREAD_ID" "$CLAUDECODE" "$ANTIGRAVITY_CONVERSATION_ID" "$MAKO_AGENT_MCP_TOKEN" "$MAKO_KEEP_AMBIENT" > ` + outFile + `.tmp && mv ` + outFile + `.tmp ` + outFile,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Open shell session: %v", err)
+	}
+
+	deadline := time.Now().Add(5 * time.Second)
+	var body []byte
+	for time.Now().Before(deadline) {
+		body, err = os.ReadFile(outFile)
+		if err == nil && len(body) > 0 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	want := "codex=\ncc=\nagy=\ntok=\nkeep=preserved\n"
+	if string(body) != want {
+		t.Fatalf("session env output = %q, want %q", string(body), want)
+	}
+
+	_ = cmd.Process.Signal(os.Interrupt)
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for makod shutdown")
 	}
 }

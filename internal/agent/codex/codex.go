@@ -50,6 +50,7 @@ func (*Agent) EffortArgs(effort string) []string {
 // may list.
 func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) (func(), error) {
 	flags := []string{l.Command[0]}
+	hasLoopbackHTTP := false
 	for _, s := range servers {
 		key := "mcp_servers." + tomlKey(s.ID)
 		if s.URL != "" {
@@ -58,6 +59,9 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) 
 				env := tokenEnv(s.ID)
 				l.SetEnv(env, s.BearerToken)
 				flags = append(flags, "-c", key+".bearer_token_env_var="+jsonString(env))
+			}
+			if agent.IsLoopbackURL(s.URL) {
+				hasLoopbackHTTP = true
 			}
 			continue
 		}
@@ -73,6 +77,9 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) 
 			}
 			flags = append(flags, "-c", key+".env={"+strings.Join(kv, ",")+"}")
 		}
+	}
+	if hasLoopbackHTTP {
+		agent.EnsureLocalProxyBypass(l)
 	}
 	l.Command = append(flags, l.Command[1:]...)
 	return func() {}, nil

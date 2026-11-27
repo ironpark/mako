@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/daemon"
 	"github.com/ironpark/mako/internal/shellenv"
@@ -23,6 +24,9 @@ func main() {
 	// Started by launchd or systemd rather than a terminal, it takes the
 	// login shell's PATH, to find the agents it runs.
 	shellenv.Load()
+	// Strip session-scoped variables inherited from a parent agent terminal so
+	// they cannot leak into unrelated sessions launched by this daemon.
+	agent.SanitizeProcessEnv()
 	var (
 		listen  = flag.String("listen", "", "libp2p listen address, host:port (default from config)")
 		name    = flag.String("name", "", "node name (default from config)")

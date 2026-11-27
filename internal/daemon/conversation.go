@@ -47,7 +47,9 @@ func probed(ctx context.Context, program string, args []string, question string,
 	}
 	check, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	out, err := safeexec.Output(exec.CommandContext(check, program, args...))
+	cmd := exec.CommandContext(check, program, args...)
+	cmd.Env = agent.SanitizeEnv(os.Environ())
+	out, err := safeexec.Output(cmd)
 	value := err == nil && accept(string(out))
 	optionalFlags.Store(key, value)
 	return value

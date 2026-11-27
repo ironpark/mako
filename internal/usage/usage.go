@@ -9,13 +9,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
 )
@@ -88,9 +88,7 @@ func (c *Collector) runCommand(ctx context.Context, bin string, args []string, e
 		return c.RunCommand(ctx, bin, args, env)
 	}
 	cmd := exec.CommandContext(ctx, bin, args...)
-	if len(env) > 0 {
-		cmd.Env = mergeEnv(os.Environ(), env)
-	}
+	cmd.Env = agent.BuildChildEnv(os.Environ(), env)
 	return safeexec.Output(cmd)
 }
 
@@ -199,26 +197,6 @@ func userHome(env map[string]string) string {
 	}
 	h, _ := os.UserHomeDir()
 	return h
-}
-
-func mergeEnv(base []string, overrides map[string]string) []string {
-	out := make([]string, 0, len(base)+len(overrides))
-	for _, kv := range base {
-		k, _, _ := strings.Cut(kv, "=")
-		if _, replaced := overrides[k]; replaced {
-			continue
-		}
-		out = append(out, kv)
-	}
-	keys := make([]string, 0, len(overrides))
-	for k := range overrides {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	for _, k := range keys {
-		out = append(out, k+"="+overrides[k])
-	}
-	return out
 }
 
 func sha256Hex(s string) string {

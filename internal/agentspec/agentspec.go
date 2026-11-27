@@ -334,6 +334,9 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 		if v, ok := merged[name]; ok {
 			return v
 		}
+		if agent.IsSessionScopedEnv(name) {
+			return ""
+		}
 		return os.Getenv(name)
 	}
 	for _, layer := range []map[string]string{a.Env, p.Env} {

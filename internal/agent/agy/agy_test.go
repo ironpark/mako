@@ -435,6 +435,22 @@ func TestWithServers(t *testing.T) {
 	if after["mcpServers"]["user-tool"] == nil || after["mcpServers"]["mako"] == nil {
 		t.Fatalf("expected user-tool and mako preserved, got: %s", body)
 	}
+
+	// A loopback HTTP serverUrl adds NO_PROXY and no_proxy bypass while keeping existing entries.
+	t.Setenv("NO_PROXY", "internal.corp")
+	t.Setenv("no_proxy", "")
+	l3 := &agent.Launch{Command: []string{"agy"}, Env: map[string]string{"HOME": home}}
+	cleanup3, err := a.WithServers(l3, []agent.Server{
+		{ID: "local-http", URL: "http://localhost:8123/mcp"},
+	}, t.TempDir(), "s3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanup3()
+	wantProxy := "internal.corp,127.0.0.1,localhost,::1"
+	if l3.Env["NO_PROXY"] != wantProxy || l3.Env["no_proxy"] != wantProxy {
+		t.Fatalf("loopback HTTP server proxy bypass = %v, want %q in both", l3.Env, wantProxy)
+	}
 }
 
 func TestScreenModeAndControls(t *testing.T) {

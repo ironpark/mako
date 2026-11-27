@@ -43,6 +43,35 @@ func TestServerAtAURLKeepsItsTokenOffTheCommandLine(t *testing.T) {
 	}
 }
 
+func TestLoopbackHTTPServerSetsProxyBypass(t *testing.T) {
+	t.Setenv("NO_PROXY", "")
+	t.Setenv("no_proxy", "corp.local,127.0.0.1")
+
+	l := agent.Launch{Command: []string{"codex"}}
+	if _, err := New().WithServers(&l, []agent.Server{{ID: "mako", URL: "http://127.0.0.1:9/mcp", BearerToken: "secret"}}, t.TempDir(), "s1"); err != nil {
+		t.Fatal(err)
+	}
+	want := "corp.local,127.0.0.1,localhost,::1"
+	if l.Env["NO_PROXY"] != want || l.Env["no_proxy"] != want {
+		t.Fatalf("proxy bypass env = %v, want %q in both NO_PROXY and no_proxy", l.Env, want)
+	}
+
+	// Stdio-only and remote HTTPS servers do not touch NO_PROXY/no_proxy.
+	l2 := agent.Launch{Command: []string{"codex"}}
+	if _, err := New().WithServers(&l2, []agent.Server{
+		{ID: "local", Command: "node"},
+		{ID: "remote", URL: "https://mcp.example.com/mcp"},
+	}, t.TempDir(), "s2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := l2.Env["NO_PROXY"]; ok {
+		t.Fatalf("non-loopback servers unexpectedly set NO_PROXY: %v", l2.Env)
+	}
+	if _, ok := l2.Env["no_proxy"]; ok {
+		t.Fatalf("non-loopback servers unexpectedly set no_proxy: %v", l2.Env)
+	}
+}
+
 func TestSplitRemoteLaunch(t *testing.T) {
 	cmd := []string{
 		"/usr/local/bin/codex",

@@ -111,6 +111,9 @@ func (d *Daemon) withContextServers(ctx context.Context, launch *agentspec.Launc
 		d.log.Warn("mcp: servers not given to the session", "session", session, "err", err)
 		return func() {}
 	}
+	if agent.HasLoopbackURL(servers) {
+		agent.EnsureLocalProxyBypass(&launch.Launch)
+	}
 	if hasAgentMCP {
 		d.projectAgents.setRefresh(session, func(rctx context.Context, info *protocol.SessionInfo) {
 			a, _ := agentspec.Lookup(info.GetAgent(), d.agents())

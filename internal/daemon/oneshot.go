@@ -5,12 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strings"
 	"time"
 
@@ -181,7 +179,7 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 
 	cmd := exec.CommandContext(runCtx, launch.Command[0], launch.Command[1:]...)
 	cmd.Dir = workDir
-	cmd.Env = mergeEnv(os.Environ(), launch.Env)
+	cmd.Env = agent.BuildChildEnv(os.Environ(), launch.Env)
 	if prep.Stdin != "" {
 		cmd.Stdin = strings.NewReader(prep.Stdin)
 	}
@@ -212,23 +210,4 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 		return nil, fmt.Errorf("%s output parse failed: %w", agentName, err)
 	}
 	return &protocol.AgentPromptResult{Output: out, Format: format}, nil
-}
-
-func mergeEnv(base []string, overrides map[string]string) []string {
-	if len(overrides) == 0 {
-		return base
-	}
-	merged := make(map[string]string, len(base)+len(overrides))
-	for _, entry := range base {
-		if k, v, ok := strings.Cut(entry, "="); ok {
-			merged[k] = v
-		}
-	}
-	maps.Copy(merged, overrides)
-	out := make([]string, 0, len(merged))
-	for k, v := range merged {
-		out = append(out, k+"="+v)
-	}
-	slices.Sort(out)
-	return out
 }

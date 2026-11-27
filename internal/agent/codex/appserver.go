@@ -753,9 +753,7 @@ func QueryModelsStdio(ctx context.Context, program string, env map[string]string
 		return nil, errors.New("codex: empty program")
 	}
 	cmd := exec.CommandContext(ctx, program, "app-server", "--stdio")
-	if len(env) > 0 {
-		cmd.Env = mergeProcessEnv(os.Environ(), env)
-	}
+	cmd.Env = mergeProcessEnv(os.Environ(), env)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -1051,9 +1049,7 @@ func RewindThreadStdio(ctx context.Context, program string, env map[string]strin
 		return RewindThreadResult{}, errors.New("codex rewind: empty program")
 	}
 	cmd := exec.CommandContext(ctx, program, "app-server", "--stdio")
-	if len(env) > 0 {
-		cmd.Env = mergeProcessEnv(os.Environ(), env)
-	}
+	cmd.Env = mergeProcessEnv(os.Environ(), env)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return RewindThreadResult{}, err
@@ -1228,16 +1224,5 @@ func rewindThreadStdioConn(ctx context.Context, r io.Reader, w io.Writer, opts R
 }
 
 func mergeProcessEnv(base []string, overrides map[string]string) []string {
-	out := make([]string, 0, len(base)+len(overrides))
-	for _, kv := range base {
-		k, _, _ := strings.Cut(kv, "=")
-		if _, replaced := overrides[k]; replaced {
-			continue
-		}
-		out = append(out, kv)
-	}
-	for k, v := range overrides {
-		out = append(out, k+"="+v)
-	}
-	return out
+	return agent.BuildChildEnv(base, overrides)
 }

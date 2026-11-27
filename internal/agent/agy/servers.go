@@ -41,6 +41,7 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) 
 		return nil, err
 	}
 	entries := make(map[string]map[string]any, len(servers))
+	hasLoopbackHTTP := false
 	for _, s := range servers {
 		if s.ID == "" {
 			continue
@@ -70,6 +71,9 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) 
 				entry["headers"] = map[string]string{"Authorization": "Bearer " + s.BearerToken}
 			}
 			entries[s.ID] = entry
+			if agent.IsLoopbackURL(s.URL) {
+				hasLoopbackHTTP = true
+			}
 		case s.Command != "":
 			entry := map[string]any{
 				"command":  s.Command,
@@ -87,6 +91,9 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, _, _ string) 
 	}
 	if err := writeMCPConfig(path, entries); err != nil {
 		return nil, err
+	}
+	if hasLoopbackHTTP {
+		agent.EnsureLocalProxyBypass(l)
 	}
 	return func() {}, nil
 }

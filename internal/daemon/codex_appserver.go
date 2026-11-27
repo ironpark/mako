@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agent/codex"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
@@ -708,6 +709,9 @@ func (d *Daemon) prepareCodexAppServer(
 	for k, v := range tr.extraTUIEnv {
 		launch.SetEnv(k, v)
 	}
+	if agent.IsLoopbackURL(remoteAddr) {
+		agent.EnsureLocalProxyBypass(&launch.Launch)
+	}
 
 	d.log.Info("codex app-server ready", "session", sessionID, "thread", threadID, "remote", remoteAddr)
 	return bridge, bridge.Close
@@ -1206,16 +1210,5 @@ func applyThreadMetadata(u *protocol.Usage, model, effort string, rawApproval, r
 }
 
 func mergeEnvSlice(base []string, overrides map[string]string) []string {
-	out := make([]string, 0, len(base)+len(overrides))
-	for _, kv := range base {
-		k, _, _ := strings.Cut(kv, "=")
-		if _, replaced := overrides[k]; replaced {
-			continue
-		}
-		out = append(out, kv)
-	}
-	for k, v := range overrides {
-		out = append(out, k+"="+v)
-	}
-	return out
+	return agent.BuildChildEnv(base, overrides)
 }

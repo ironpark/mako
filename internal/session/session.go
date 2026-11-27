@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	goruntime "runtime"
 	"strings"
@@ -152,10 +153,7 @@ func Start(spec Spec) (*Session, error) {
 	var token [16]byte
 	_, _ = rand.Read(token[:])
 	scope := hex.EncodeToString(token[:])
-	env := append(terminalEnv(os.Environ()), "MAKO_SESSION="+spec.ID, scopeEnv+"="+scope)
-	for k, v := range spec.Env {
-		env = append(env, k+"="+v)
-	}
+	env := sessionEnv(os.Environ(), spec.ID, scope, spec.Env)
 
 	p, err := startProc(spec.Command, spec.Project, env, spec.Cols, spec.Rows)
 	if err != nil {
@@ -1036,6 +1034,17 @@ func (s *Session) pushLocked(chunk []byte) {
 			delete(s.subs, id)
 		}
 	}
+}
+
+// sessionEnv builds a child session's environment from the daemon's ambient
+// environment with terminal identity reset, inherited session-scoped variables
+// stripped, and this session's identity and explicit overrides applied.
+func sessionEnv(ambient []string, sessionID, scope string, overrides map[string]string) []string {
+	merged := make(map[string]string, len(overrides)+2)
+	merged["MAKO_SESSION"] = sessionID
+	merged[scopeEnv] = scope
+	maps.Copy(merged, overrides)
+	return agent.BuildChildEnv(terminalEnv(ambient), merged)
 }
 
 // terminalEnv is the daemon's environment as a session's program sees it:

@@ -57,6 +57,7 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, dir, session 
 	cfg := struct {
 		Servers map[string]any `json:"mcpServers"`
 	}{map[string]any{}}
+	hasLoopbackHTTP := false
 	for _, s := range servers {
 		switch {
 		case s.URL != "":
@@ -65,6 +66,9 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, dir, session 
 				srv.Headers = map[string]string{"Authorization": "Bearer " + s.BearerToken}
 			}
 			cfg.Servers[s.ID] = srv
+			if agent.IsLoopbackURL(s.URL) {
+				hasLoopbackHTTP = true
+			}
 		case s.Command != "":
 			cfg.Servers[s.ID] = stdio{Type: "stdio", Command: s.Command, Args: s.ArgList(), Env: s.Env}
 		}
@@ -79,6 +83,9 @@ func (*Agent) WithServers(l *agent.Launch, servers []agent.Server, dir, session 
 	path := filepath.Join(dir, "mcp-"+session+".json")
 	if err := fsutil.Write(path, b); err != nil {
 		return nil, err
+	}
+	if hasLoopbackHTTP {
+		agent.EnsureLocalProxyBypass(l)
 	}
 	// The = form, as the flag takes any number of values otherwise and
 	// would swallow the arguments after it.

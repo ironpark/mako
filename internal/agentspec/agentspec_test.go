@@ -529,3 +529,54 @@ func TestResolveProfileReplaceArgs(t *testing.T) {
 		t.Fatalf("legacy replace = %q, want --quiet", got)
 	}
 }
+
+func TestResolveDoesNotExpandAmbientSessionScopedEnv(t *testing.T) {
+	t.Setenv("CODEX_THREAD_ID", "leaked-thread")
+	t.Setenv("MAKO_SESSION", "leaked-session")
+	t.Setenv("MAKO_TEST_SAFE_VAR", "safe-val")
+
+	agents := map[string]Agent{
+		"sh": {
+			Command: []string{"sh"},
+			Args:    []string{"--thread", "$CODEX_THREAD_ID", "--safe", "$MAKO_TEST_SAFE_VAR"},
+			Env: map[string]string{
+				"FROM_LEAK": "$MAKO_SESSION",
+				"FROM_SAFE": "$MAKO_TEST_SAFE_VAR",
+			},
+			Profiles: []Profile{
+				{
+					Name: "explicit",
+					Env: map[string]string{
+						"CODEX_THREAD_ID": "from-profile",
+					},
+				},
+			},
+		},
+	}
+
+	l, err := Resolve("sh", "", nil, map[string]string{"MAKO_SESSION": "explicit-req"}, agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"--thread", "", "--safe", "safe-val"}; !slices.Equal(l.Command[1:], want) {
+		t.Fatalf("command args = %q, want %q", l.Command[1:], want)
+	}
+	if l.Env["FROM_LEAK"] != "" {
+		t.Fatalf("FROM_LEAK expanded ambient session var: %q", l.Env["FROM_LEAK"])
+	}
+	if l.Env["FROM_SAFE"] != "safe-val" {
+		t.Fatalf("FROM_SAFE = %q, want safe-val", l.Env["FROM_SAFE"])
+	}
+	if l.Env["MAKO_SESSION"] != "explicit-req" {
+		t.Fatalf("explicit request env lost: %v", l.Env)
+	}
+
+	// Explicit value in profile env is still preserved and available to profile args expansion.
+	l2, err := Resolve("sh", "explicit", nil, nil, agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l2.Env["CODEX_THREAD_ID"] != "from-profile" {
+		t.Fatalf("profile explicit CODEX_THREAD_ID = %q, want from-profile", l2.Env["CODEX_THREAD_ID"])
+	}
+}

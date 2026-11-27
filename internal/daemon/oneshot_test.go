@@ -171,3 +171,56 @@ printf 'proj=%s;mode=%s;node=%s;prof=%s;parent=%s' "$AGENT_MAKO_PROJECT" "$AGENT
 		t.Fatalf("output = %q, want %q", res.GetOutput(), want)
 	}
 }
+
+func TestRunAgentPromptSanitizesInheritedSessionEnv(t *testing.T) {
+	t.Setenv("CODEX_THREAD_ID", "leaked-thread")
+	t.Setenv("CLAUDECODE", "1")
+	t.Setenv("CLAUDE_CODE_SESSION_ID", "leaked-claude-sess")
+	t.Setenv("ANTIGRAVITY_CONVERSATION_ID", "leaked-agy")
+	t.Setenv("MAKO_SESSION", "leaked-mako-sess")
+	t.Setenv("MAKO_SCOPE", "leaked-scope")
+	t.Setenv("MAKO_LIVE_TOKEN", "leaked-live")
+	t.Setenv("MAKO_AGENT_MCP_TOKEN", "leaked-mcp")
+	t.Setenv("AGENT_MAKO_PARENT", "leaked-parent")
+	t.Setenv("AGENT_MAKO_PROFILE", "leaked-profile")
+	t.Setenv("MAKO_TEST_NON_SESSION", "keep-me")
+
+	binDir := t.TempDir()
+	workDir := t.TempDir()
+	claudeBin := filepath.Join(binDir, "claude")
+	script := `#!/bin/sh
+cat >/dev/null
+printf 'codex=%s;cc=%s;ccs=%s;agy=%s;ms=%s;scope=%s;live=%s;mcp=%s;parent=%s;prof=%s;keep=%s;explicit=%s' \
+  "$CODEX_THREAD_ID" "$CLAUDECODE" "$CLAUDE_CODE_SESSION_ID" "$ANTIGRAVITY_CONVERSATION_ID" \
+  "$MAKO_SESSION" "$MAKO_SCOPE" "$MAKO_LIVE_TOKEN" "$MAKO_AGENT_MCP_TOKEN" \
+  "$AGENT_MAKO_PARENT" "$AGENT_MAKO_PROFILE" "$MAKO_TEST_NON_SESSION" "$EXPLICIT_PROFILE_VAR"
+`
+	if err := os.WriteFile(claudeBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	d := meshDaemonWith(t, "oneshot-sanitize", func(cfg *config.Config) {
+		on := true
+		cfg.Agents = map[string]agentspec.Agent{
+			"claude": {
+				Command: []string{claudeBin},
+				Enabled: &on,
+				Env:     map[string]string{"EXPLICIT_PROFILE_VAR": "from-agent"},
+			},
+		}
+	})
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	res, err := c.RunAgentPrompt(ctx, &protocol.RunAgentPrompt{
+		Agent: "claude", Project: workDir, Prompt: "hi",
+	})
+	if err != nil {
+		t.Fatalf("RunAgentPrompt: %v", err)
+	}
+	want := "codex=;cc=;ccs=;agy=;ms=;scope=;live=;mcp=;parent=;prof=;keep=keep-me;explicit=from-agent"
+	if res.GetOutput() != want {
+		t.Fatalf("output = %q, want %q", res.GetOutput(), want)
+	}
+}

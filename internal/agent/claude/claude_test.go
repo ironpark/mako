@@ -75,3 +75,38 @@ func TestServerAtAURLIsReachedOverHTTP(t *testing.T) {
 		t.Fatalf("server %v", got)
 	}
 }
+
+func TestLoopbackHTTPServerSetsProxyBypass(t *testing.T) {
+	t.Setenv("NO_PROXY", "corp.internal")
+	t.Setenv("no_proxy", "extra.local,corp.internal")
+
+	dir := t.TempDir()
+	l := agent.Launch{Command: []string{"claude"}}
+	cleanup, err := New().WithServers(&l, []agent.Server{{ID: "mako", URL: "http://127.0.0.1:9999/mcp", BearerToken: "tok"}}, dir, "s-bypass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	want := "corp.internal,extra.local,127.0.0.1,localhost,::1"
+	if l.Env["NO_PROXY"] != want || l.Env["no_proxy"] != want {
+		t.Fatalf("proxy bypass env = %v, want %q in both NO_PROXY and no_proxy", l.Env, want)
+	}
+
+	// Stdio-only and remote HTTPS servers must not inject loopback proxy bypass.
+	l2 := agent.Launch{Command: []string{"claude"}}
+	cleanup2, err := New().WithServers(&l2, []agent.Server{
+		{ID: "gh", Command: "/bin/gh-mcp"},
+		{ID: "remote", URL: "https://mcp.example.com/mcp"},
+	}, dir, "s-no-bypass")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup2()
+	if _, ok := l2.Env["NO_PROXY"]; ok {
+		t.Fatalf("non-loopback servers unexpectedly set NO_PROXY: %v", l2.Env)
+	}
+	if _, ok := l2.Env["no_proxy"]; ok {
+		t.Fatalf("non-loopback servers unexpectedly set no_proxy: %v", l2.Env)
+	}
+}
