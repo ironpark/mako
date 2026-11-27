@@ -1001,6 +1001,20 @@ func (s *Session) PlainTextUnwrapped() (string, error) {
 	})
 }
 
+// StyledTextUnwrapped renders the active screen and scrollback with SGR style
+// sequences preserved and soft-wrapped rows joined back into logical lines.
+func (s *Session) StyledTextUnwrapped() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited {
+		return s.finalStyled.GetText(), nil
+	}
+	return s.term.FormatString(gostty.FormatOptions{
+		Format: gostty.FormatterFormatVt,
+		Unwrap: true,
+	})
+}
+
 // replayedModes are the DEC private modes a program sets that a terminal
 // fed its screen must have too: how its keys and the mouse are encoded,
 // and what it is told of. A TUI that asked for the mouse otherwise gets

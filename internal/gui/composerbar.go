@@ -68,7 +68,7 @@ func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[b
 		left = append(left, ui.Tooltip(ui.ButtonOf(icon("square-terminal").Size(16).Color(skin.Muted), state.inTerminal).
 			Ghost().Pad(5).Radius(15).Name(T("Type in the terminal")).BindDisabled(disabled), T("Type in the terminal")))
 	}
-	return widget.Row(append(left, mode, widget.Spacer(), model, button)...).Gap(6).Align(widget.AlignCenter)
+	return widget.Row(append(left, mode, ghostAcceptChip(m, id, state, disabled), widget.Spacer(), model, button)...).Gap(6).Align(widget.AlignCenter)
 }
 
 // roundButton is the composer's main button: a light disc with glyph.

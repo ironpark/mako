@@ -12,7 +12,7 @@ public interface LiveBlockOrBuilder extends
 
   /**
    * <pre>
-   * the block's, within the model's response
+   * the block's, within the model's response; -1 for a suggestion
    * </pre>
    *
    * <code>int32 index = 1 [json_name = "index"];</code>
@@ -22,8 +22,10 @@ public interface LiveBlockOrBuilder extends
 
   /**
    * <pre>
-   * kind is text; thinking, whose words are not sent; or tool, whose text
-   * is its arguments as JSON as far as they have streamed.
+   * kind is text; thinking, whose words are not sent; tool, whose text
+   * is its arguments as JSON as far as they have streamed; or suggestion,
+   * whose text is what the agent suggests the user send next, for the
+   * composer to show while the agent waits.
    * </pre>
    *
    * <code>string kind = 2 [json_name = "kind"];</code>
@@ -32,8 +34,10 @@ public interface LiveBlockOrBuilder extends
   java.lang.String getKind();
   /**
    * <pre>
-   * kind is text; thinking, whose words are not sent; or tool, whose text
-   * is its arguments as JSON as far as they have streamed.
+   * kind is text; thinking, whose words are not sent; tool, whose text
+   * is its arguments as JSON as far as they have streamed; or suggestion,
+   * whose text is what the agent suggests the user send next, for the
+   * composer to show while the agent waits.
    * </pre>
    *
    * <code>string kind = 2 [json_name = "kind"];</code>

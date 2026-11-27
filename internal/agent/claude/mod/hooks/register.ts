@@ -8,6 +8,9 @@ import type { Register } from 'claude-code'
 //    strict FIFO order via $.prompt.submit, and acknowledges each batch only
 //    after delivery succeeds (retrying on turn.complete if interrupted).
 // 3. Live subagent status bar ($.ui.status) and /mako status command.
+// 4. Prompt suggestion forwarding: observes prompt.suggest and forwards
+//    Claude Code's inline ghost text suggestions to Mako's composer, clearing
+//    them on prompt.submit and turn.start.
 
 // The pieces gathered between sends, at most this long apart.
 const BATCH_MS = 60
@@ -54,6 +57,10 @@ let delivering = false
 let waitingForTurnComplete = false
 let lastChildStatus = ''
 let liveCreds: Creds | null = null
+// Suggestion updates go out one at a time, in order, so a clear sent as a
+// turn starts can never land before the suggestion it replaces.
+let suggestionQueue: Promise<unknown> = Promise.resolve()
+let lastSuggestion = ''
 
 async function readCreds($: any): Promise<Creds | null> {
   const session = await $.env.get('MAKO_SESSION')
@@ -82,6 +89,32 @@ function updateChildStatus($: any, nextStatus: string) {
   } catch {
     // Non-interactive surface or unavailable status bar.
   }
+}
+
+async function postSuggestion($: any, creds: Creds, text: string) {
+  try {
+    await $.http.fetch('http://mako/suggestion', {
+      method: 'POST',
+      body: JSON.stringify({
+        session: creds.session,
+        token: creds.token,
+        text,
+      }),
+      socketPath: creds.socket,
+    })
+  } catch {
+    // Non-fatal if the daemon socket is temporarily unreachable.
+  }
+}
+
+// setSuggestion queues text, "" to clear, as the session's suggestion,
+// unless it is the one last queued.
+function setSuggestion($: any, creds: Creds, text: string) {
+  if (text === lastSuggestion) {
+    return
+  }
+  lastSuggestion = text
+  suggestionQueue = suggestionQueue.then(() => postSuggestion($, creds, text))
 }
 
 async function ackMessages($: any, creds: Creds, ackThrough: number) {
@@ -233,6 +266,7 @@ export const register: Register = on => {
       submittedThrough = 0
       deliverQueue = []
       lastChildStatus = ''
+      lastSuggestion = ''
       scheduleNextPoll($, 100)
       try {
         await $.command.register({
@@ -262,6 +296,34 @@ export const register: Register = on => {
       pollTimer = null
     }
     return next(e)
+  })
+
+  on('turn.start', async ($, e, next) => {
+    const creds = liveCreds ?? (await readCreds($))
+    if (creds) {
+      setSuggestion($, creds, '')
+    }
+    return next(e)
+  })
+
+  on('prompt.submit', async ($, e, next) => {
+    const creds = liveCreds ?? (await readCreds($))
+    if (creds) {
+      setSuggestion($, creds, '')
+    }
+    return next(e)
+  })
+
+  on('prompt.suggest', async ($, e, next) => {
+    const res = await next(e)
+    const creds = liveCreds ?? (await readCreds($))
+    if (creds && res?.isShown !== false) {
+      const text = typeof e?.text === 'string' ? e.text.trim() : ''
+      if (text) {
+        setSuggestion($, creds, text)
+      }
+    }
+    return res
   })
 
   on('turn.complete', async ($, e, next) => {

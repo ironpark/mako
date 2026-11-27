@@ -72,6 +72,8 @@ func (m *model) followChat(id, agent string, state *chatState, read func(then fu
 		cancel()
 		state.follow = chatFollow{}
 		state.live.Set(nil)
+		state.suggestion.Set("")
+		state.dismissedSuggestion.Set("")
 	}
 }
 
@@ -93,9 +95,29 @@ func pollChat(state *chatState) bool {
 	return true
 }
 
+// splitLiveBlocks separates reply streaming blocks from any inline ghost text
+// suggestion block carried on the same ChatLive frame.
+func splitLiveBlocks(blocks []*protocol.LiveBlock) (reply []*protocol.LiveBlock, suggestion string) {
+	for _, b := range blocks {
+		if b.GetKind() == protocol.LiveKindSuggestion {
+			suggestion = strings.TrimSpace(b.GetText())
+			continue
+		}
+		reply = append(reply, b)
+	}
+	return reply, suggestion
+}
+
 // tookLive shows what the node said of the chat: a log that grew is read,
-// and the reply streaming waits for the read.
+// and the reply streaming waits for the read. Ghost text suggestions update
+// immediately so the composer stays responsive without waiting on log reads.
 func tookLive(state *chatState, l *protocol.ChatLive, read func(then func())) {
+	reply, suggestion := splitLiveBlocks(l.GetBlocks())
+	// A dismissal holds only while the agent offers the same suggestion.
+	if suggestion != ggui.Peek(state.dismissedSuggestion) {
+		state.dismissedSuggestion.Set("")
+	}
+	state.suggestion.Set(suggestion)
 	f := &state.follow
 	// A log that grows again while it is read is read again: the read out
 	// may have gone before it grew, and its last message would wait for
@@ -112,10 +134,10 @@ func tookLive(state *chatState, l *protocol.ChatLive, read func(then func())) {
 		})
 	}
 	if f.waiting > 0 {
-		f.held = l.GetBlocks()
+		f.held = reply
 		return
 	}
-	state.live.Set(l.GetBlocks())
+	state.live.Set(reply)
 }
 
 // withLive is the turns logged, then those of the reply streaming: built

@@ -363,6 +363,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	case agent.ToolDone:
 		s.ReportToolDone(msg.Seq)
 	case agent.Prompted:
+		d.live.clearSuggestion(msg.Session)
 		if !s.ReportStatus(protocol.AgentWorking, msg.Seq) {
 			return
 		}
@@ -384,6 +385,9 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		d.refreshActivity(s)
 		s.ReportStatus(protocol.AgentDone, msg.Seq)
 	case agent.Ended, agent.Idle:
+		if ev.Kind == agent.Ended {
+			d.live.clearSuggestion(msg.Session)
+		}
 		s.ReportStatus(protocol.AgentIdle, msg.Seq)
 		if ev.AuthError != nil {
 			s.ReportAuthError(ev.AuthError, msg.Seq)

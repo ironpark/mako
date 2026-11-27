@@ -79,6 +79,11 @@ type chatState struct {
 	// session's node says while the chat follows it (followChat).
 	live   *ggui.StateValue[[]*protocol.LiveBlock]
 	follow chatFollow
+	// suggestion is the agent CLI's inline ghost text prompt suggestion
+	// (e.g. Claude Code's post-turn suggestion), and dismissedSuggestion is
+	// one the user explicitly dismissed with Escape.
+	suggestion          *ggui.StateValue[string]
+	dismissedSuggestion *ggui.StateValue[string]
 	// afterRead runs once a read lands that went out after it was asked
 	// for; reread asks for one more read, the one out having gone first.
 	afterRead []func()
@@ -96,15 +101,17 @@ func (m *model) chatState(id string) *chatState {
 
 func newChatState() *chatState {
 	return &chatState{
-		result:    ggui.State(chatResult{}).WithEqual(deepEqual),
-		older:     ggui.State(chatPages{}).WithEqual(deepEqual),
-		draft:     ggui.State(""),
-		attached:  ggui.State[[]string](nil).WithEqual(slices.Equal[[]string]),
-		tools:     ggui.State(map[string]bool{}).WithEqual(maps.Equal),
-		menu:      newCommandMenu(),
-		templates: newTemplateMenu(),
-		agent:     ggui.State(""),
-		live:      ggui.State[[]*protocol.LiveBlock](nil).WithEqual(deepEqual),
+		result:              ggui.State(chatResult{}).WithEqual(deepEqual),
+		older:               ggui.State(chatPages{}).WithEqual(deepEqual),
+		draft:               ggui.State(""),
+		attached:            ggui.State[[]string](nil).WithEqual(slices.Equal[[]string]),
+		tools:               ggui.State(map[string]bool{}).WithEqual(maps.Equal),
+		menu:                newCommandMenu(),
+		templates:           newTemplateMenu(),
+		agent:               ggui.State(""),
+		live:                ggui.State[[]*protocol.LiveBlock](nil).WithEqual(deepEqual),
+		suggestion:          ggui.State(""),
+		dismissedSuggestion: ggui.State(""),
 		pending: ggui.State[[]pendingMessage](nil).WithEqual(func(a, b []pendingMessage) bool {
 			return slices.Equal(a, b)
 		}),

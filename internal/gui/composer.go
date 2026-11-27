@@ -111,6 +111,9 @@ func (m *model) sendPrompt(id string, state *chatState, draft, prompt string) {
 		m.setComposerDraft(id, "")
 		state.attached.Set(nil)
 	}
+	// What the agent suggested answers the turn just sent no longer.
+	state.suggestion.Set("")
+	state.dismissedSuggestion.Set("")
 }
 
 // composerHistory is how many sent messages a session's composer keeps.

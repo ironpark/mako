@@ -68,16 +68,19 @@ message WatchChat {
 message ChatLive {
   bool logged = 1; // the log grew: what a ReadChat finds changed
   // blocks are the reply the agent is writing, streamed and not yet
-  // logged, in order; none when there is none.
+  // logged, in order; none when there is none. A suggestion block, when
+  // the agent has one, comes first and is no part of the reply.
   repeated LiveBlock blocks = 2;
 }
 
 // LiveBlock is one block of a reply streaming: text, or a tool call
-// begun.
+// begun; or the agent's prompt suggestion.
 message LiveBlock {
-  int32 index = 1; // the block's, within the model's response
-  // kind is text; thinking, whose words are not sent; or tool, whose text
-  // is its arguments as JSON as far as they have streamed.
+  int32 index = 1; // the block's, within the model's response; -1 for a suggestion
+  // kind is text; thinking, whose words are not sent; tool, whose text
+  // is its arguments as JSON as far as they have streamed; or suggestion,
+  // whose text is what the agent suggests the user send next, for the
+  // composer to show while the agent waits.
   string kind = 2;
   string text = 3;
   string tool = 4; // a tool call's tool

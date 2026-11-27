@@ -31,6 +31,7 @@ type screenLivePoller struct {
 	turn     agent.ScreenLiveTurn
 	status   agent.ScreenLiveStatus
 	activity agent.ScreenLiveActivity
+	ghost    agent.ScreenGhost
 	logs     agent.Logs
 	gen      uint64
 
@@ -43,6 +44,9 @@ type screenLivePoller struct {
 	awaitingReply   bool
 	lastEmitted     string
 	lastStatus      string
+	lastGhost       string
+	ghostOutputs    uint64
+	hasGhostScan    bool
 	wasWorking      bool
 	idleOutputs     uint64
 	hasIdleBaseline bool
@@ -53,15 +57,27 @@ type screenLivePoller struct {
 	step            string
 }
 
-func screenLivePollerFactory(hub *liveHub, s *session.Session) func(gen uint64) func(size func() int64) (bool, int64) {
-	driver, ok := agents.As[agent.ScreenLive](s.Agent())
-	if !ok {
-		return nil
+// screenPollerFactory makes the per-tick screen poller of session s: one
+// that reads an agent's in-flight reply off the screen (agent.ScreenLive),
+// its ghost text suggestion (agent.ScreenGhost), or both. It returns nil
+// when the agent does neither, and reports whether the poller reads the
+// reply, which makes the look-out a screen-live one.
+func screenPollerFactory(hub *liveHub, s *session.Session) (func(gen uint64) func(size func() int64) (bool, int64), bool) {
+	driver, hasLive := agents.As[agent.ScreenLive](s.Agent())
+	ghost, hasGhost := agents.As[agent.ScreenGhost](s.Agent())
+	if !hasLive && !hasGhost {
+		return nil, false
 	}
-	baseline, _ := driver.(agent.ScreenLiveBaseline)
-	turn, _ := driver.(agent.ScreenLiveTurn)
-	status, _ := driver.(agent.ScreenLiveStatus)
-	activity, _ := driver.(agent.ScreenLiveActivity)
+	var baseline agent.ScreenLiveBaseline
+	var turn agent.ScreenLiveTurn
+	var status agent.ScreenLiveStatus
+	var activity agent.ScreenLiveActivity
+	if hasLive {
+		baseline, _ = driver.(agent.ScreenLiveBaseline)
+		turn, _ = driver.(agent.ScreenLiveTurn)
+		status, _ = driver.(agent.ScreenLiveStatus)
+		activity, _ = driver.(agent.ScreenLiveActivity)
+	}
 	logs, _ := agents.As[agent.Logs](s.Agent())
 	return func(gen uint64) func(size func() int64) (bool, int64) {
 		p := &screenLivePoller{
@@ -72,11 +88,12 @@ func screenLivePollerFactory(hub *liveHub, s *session.Session) func(gen uint64) 
 			turn:     turn,
 			status:   status,
 			activity: activity,
+			ghost:    ghost,
 			logs:     logs,
 			gen:      gen,
 		}
 		return p.tick
-	}
+	}, hasLive
 }
 
 // tick inspects the session once per liveTick. When working, it checks the log
@@ -96,16 +113,34 @@ func (p *screenLivePoller) tick(size func() int64) (checked bool, logSize int64)
 			if p.lastEmitted != "" || p.lastStatus != "" {
 				p.clear()
 			}
+			p.clearGhost()
 			p.wasWorking = false
 			p.lastOutputs = 0
 			p.hadLog = false
 			return false, 0
 		}
 		outputs := p.s.Outputs()
-		needScan := !p.hasIdleBaseline || outputs != p.idleOutputs || p.lastEmitted != "" || p.wasWorking
+		wasWorking := p.wasWorking
 		p.wasWorking = false
 		p.lastOutputs = 0
 		p.hadLog = false
+		if p.ghost != nil && !p.hub.hasNativeSuggestion(p.s.ID()) {
+			if !p.hasGhostScan || outputs != p.ghostOutputs || wasWorking {
+				p.ghostOutputs = outputs
+				p.hasGhostScan = true
+				if styled, err := p.s.StyledTextUnwrapped(); err == nil {
+					got := p.ghost.ExtractGhost(styled)
+					if got != p.lastGhost {
+						p.lastGhost = got
+						p.hub.setSuggestionForGen(p.gen, p.s.ID(), got)
+					}
+				}
+			}
+		}
+		if p.driver == nil {
+			return false, 0
+		}
+		needScan := !p.hasIdleBaseline || outputs != p.idleOutputs || p.lastEmitted != "" || wasWorking
 		if !needScan {
 			return false, 0
 		}
@@ -159,6 +194,10 @@ func (p *screenLivePoller) tick(size func() int64) (checked bool, logSize int64)
 		return false, 0
 	}
 	p.wasWorking = true
+	p.clearGhost()
+	if p.driver == nil {
+		return false, 0
+	}
 
 	outputs := p.s.Outputs()
 	logPath := p.s.TranscriptPath()
@@ -298,6 +337,14 @@ func (p *screenLivePoller) clear() {
 	_ = p.hub.takeForGen(p.gen, livePost{Session: p.s.ID(), Step: p.step})
 	p.lastEmitted = ""
 	p.lastStatus = ""
+}
+
+func (p *screenLivePoller) clearGhost() {
+	p.hasGhostScan = false
+	if p.lastGhost != "" {
+		p.lastGhost = ""
+		p.hub.setSuggestionForGen(p.gen, p.s.ID(), "")
+	}
 }
 
 // lastLoggedAssistantText returns the latest logged assistant message text from
