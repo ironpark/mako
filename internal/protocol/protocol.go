@@ -456,6 +456,9 @@ const (
 	// CodeNoPlugin is a block of a plugin the node does not have, which
 	// asking again will not change until the plugin is installed.
 	CodeNoPlugin = "no_plugin"
+	// CodeAuthError is a provider authentication failure on the host (e.g.
+	// expired OAuth session), separate from Mako node access.
+	CodeAuthError = "auth_error"
 )
 
 // HasFeature reports whether a node speaks a protocol extension.

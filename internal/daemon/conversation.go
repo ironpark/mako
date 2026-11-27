@@ -325,6 +325,7 @@ func (d *Daemon) refreshActivity(s *session.Session) {
 	info := s.Info()
 	if activity, err := conv.activity.Read(info, path); err == nil {
 		s.ReportActivity(info.GetConversationId(), activity.Status, activity.At, activity.Said, activity.Agents)
+		s.ReportLogAuthError(info.GetConversationId(), activity.AuthError, activity.AuthErrorAt, activity.AuthClearedAt)
 		if len(activity.Tasks) > 0 || d.codexBridge(s.ID()) == nil {
 			s.ReportTasks(info.GetConversationId(), activity.Tasks)
 		}

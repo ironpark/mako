@@ -189,6 +189,26 @@ type LogStatus interface {
 	StatusEvent(line []byte) (protocol.AgentStatus, time.Time)
 }
 
+// LogAuthEvent describes a provider authentication failure or recovery
+// observed on a single line of an agent's native conversation log.
+type LogAuthEvent struct {
+	// AuthError is non-nil when the line records an explicit top-level
+	// provider authentication failure (never quoted conversation text or
+	// subagent/sidechain noise).
+	AuthError *protocol.AuthError
+	// Cleared is true when the line records a subsequent successful top-level
+	// assistant reply or turn that supersedes an earlier failure.
+	Cleared bool
+	// At is the record's timestamp; zero if the record carries none.
+	At time.Time
+}
+
+// LogAuthErrors is an optional capability for Logs drivers whose native logs
+// record structured provider authentication failures and subsequent recoveries.
+type LogAuthErrors interface {
+	AuthErrorEvent(line []byte) LogAuthEvent
+}
+
 // Screen is an agent whose state shows on its screen: its rules read the
 // dialogs it asks in, which no hook may tell of, and the prompt it waits
 // at once a turn ended unreported.

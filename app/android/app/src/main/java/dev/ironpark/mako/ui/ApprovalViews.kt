@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Checklist
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Button
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import dev.ironpark.mako.R
 import dev.ironpark.mako.v2.Approval
 import dev.ironpark.mako.v2.ApprovalOption
+import dev.ironpark.mako.v2.AuthError
 import dev.ironpark.mako.v2.ScreenDialog
 import dev.ironpark.mako.v2.SessionInfo
 import org.json.JSONObject
@@ -329,6 +331,42 @@ internal fun WaitCard(icon: ImageVector, title: String, onTerminal: () -> Unit, 
                 }
             }
             Column(Modifier.padding(end = 8.dp), content = content)
+        }
+    }
+}
+
+/**
+ * AuthErrorCard surfaces a provider OAuth / authentication failure on the host
+ * with actionable re-login guidance and a copy button for the login command.
+ */
+@Composable
+internal fun AuthErrorCard(err: AuthError, onTerminal: () -> Unit, onCopyCommand: (String) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    WaitCard(Icons.Outlined.Lock, err.summary.ifEmpty { stringResource(R.string.auth_error_title) }, onTerminal = onTerminal) {
+        if (err.guidance.isNotEmpty()) Text(
+            err.guidance,
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
+        if (err.command.isNotEmpty()) {
+            Surface(
+                color = colors.surfaceContainerHighest,
+                shape = RoundedCornerShape(10.dp),
+                border = MakoColors.cardBorderStroke,
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            ) {
+                Text(
+                    err.command,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(10.dp),
+                )
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End) {
+                OutlinedButton(onClick = { onCopyCommand(err.command) }, modifier = Modifier.pressScale()) {
+                    Text(stringResource(R.string.copy_command))
+                }
+            }
         }
     }
 }

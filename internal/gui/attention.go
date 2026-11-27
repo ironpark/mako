@@ -39,6 +39,8 @@ func (m *model) dotOf(s *protocol.SessionInfo) dotState {
 		return dotDone // put to sleep before it was looked at
 	case s.GetState() == protocol.StateExited || s.GetState() == protocol.StateStopped:
 		return dotRest
+	case s.GetAuthError() != nil:
+		return dotError
 	case s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting:
 		return dotWaiting
 	// Work its terminal reports, as the daemon read it: not as this
@@ -106,7 +108,7 @@ func (m *model) noteStatus(next []*protocol.SessionInfo) {
 			m.noteAttention(old, known, s, func(on bool) { set(s.GetId(), on) })
 			continue
 		}
-		if !known || !attends(s) || (old.GetStatus() == s.GetStatus() && proto.Equal(old.GetStatusAt(), s.GetStatusAt()) && old.GetApproval().GetId() == s.GetApproval().GetId()) {
+		if !known || !attends(s) || (old.GetStatus() == s.GetStatus() && proto.Equal(old.GetStatusAt(), s.GetStatusAt()) && old.GetApproval().GetId() == s.GetApproval().GetId() && protocol.Same(old.GetAuthError(), s.GetAuthError())) {
 			continue
 		}
 		if m.inView(s.GetId()) {
@@ -182,7 +184,7 @@ func (m *model) see(s *protocol.SessionInfo) {
 
 // attends reports whether a session's state asks for the user.
 func attends(s *protocol.SessionInfo) bool {
-	return s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting || s.GetStatus() == protocol.AgentDone
+	return s.GetAuthError() != nil || s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting || s.GetStatus() == protocol.AgentDone
 }
 
 // seen clears the marks of the sessions in view.
@@ -209,7 +211,7 @@ func (m *model) seen() {
 
 // announce tells the desktop what a session out of view did.
 func (m *model) announce(s *protocol.SessionInfo) {
-	if (s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting) && m.window != nil && !ggui.Peek(m.window.Focused()) {
+	if (s.GetAuthError() != nil || s.GetApproval() != nil || s.GetStatus() == protocol.AgentWaiting) && m.window != nil && !ggui.Peek(m.window.Focused()) {
 		m.window.RequestAttention()
 	}
 	if !ggui.Peek(m.Prefs).Notify {
@@ -218,6 +220,8 @@ func (m *model) announce(s *protocol.SessionInfo) {
 	title := sessionTitle(s, ggui.Peek(m.Titles)[s.GetId()])
 	var body string
 	switch {
+	case s.GetAuthError() != nil:
+		body = cmp.Or(s.GetAuthError().GetSummary(), T("Provider authentication failed"))
 	case s.GetApproval() != nil:
 		body = Tf("Asks to run %s", strings.TrimSpace(s.GetApproval().GetTool()+" "+s.GetApproval().GetDetail()))
 	case s.GetStatus() == protocol.AgentWaiting:
@@ -289,7 +293,7 @@ func followAttention(m *model) {
 	ggui.Effect(func() ggui.Cleanup {
 		n := 0
 		for _, s := range m.Sessions.Get() {
-			if m.Unread.Get()[s.GetId()] || s.GetApproval() != nil {
+			if m.Unread.Get()[s.GetId()] || s.GetApproval() != nil || s.GetAuthError() != nil {
 				n++
 			}
 		}
@@ -309,7 +313,7 @@ func asksNow(s *protocol.SessionInfo) bool {
 	if s.GetState() != protocol.StateRunning {
 		return false
 	}
-	return s.GetApproval() != nil || s.GetDialog() != nil || s.GetStatus() == protocol.AgentWaiting
+	return s.GetAuthError() != nil || s.GetApproval() != nil || s.GetDialog() != nil || s.GetStatus() == protocol.AgentWaiting
 }
 
 // waitingCount is how many sessions wait on the user.

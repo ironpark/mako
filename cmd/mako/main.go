@@ -427,15 +427,34 @@ func listSessions(ctx context.Context, c *client.Client) error {
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "SESSION\tNODE\tAGENT\tNAME\tPROJECT\tSTATE\tUPTIME")
+	var authSessions []*protocol.SessionInfo
 	for _, s := range sessions {
 		name := s.GetName()
 		if name == "" {
 			name = "-"
 		}
+		state := string(s.GetState())
+		if s.GetAuthError() != nil {
+			state += " (auth required)"
+			authSessions = append(authSessions, s)
+		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			s.GetId(), short(s.GetNodeId()), agentspec.Target(s.GetAgent(), s.GetProfile()), name, s.GetProject(), s.GetState(), ago(protocol.TimeOf(s.GetStartedAt())))
+			s.GetId(), short(s.GetNodeId()), agentspec.Target(s.GetAgent(), s.GetProfile()), name, s.GetProject(), state, ago(protocol.TimeOf(s.GetStartedAt())))
 	}
-	return w.Flush()
+	if err := w.Flush(); err != nil {
+		return err
+	}
+	if len(authSessions) > 0 {
+		fmt.Println()
+		for _, s := range authSessions {
+			ae := s.GetAuthError()
+			fmt.Printf("auth required [%s %s]: %s\n", s.GetId(), s.GetAgent(), ae.GetSummary())
+			if ae.GetGuidance() != "" {
+				fmt.Printf("  %s\n", ae.GetGuidance())
+			}
+		}
+	}
+	return nil
 }
 
 func runAgent(ctx context.Context, c *client.Client, nodeID, project, target string, extra, devices []string) error {

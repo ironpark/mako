@@ -140,6 +140,7 @@ const (
 	dotWorking                 // its program at work
 	dotWaiting                 // its agent asks the user something
 	dotDone                    // its agent finished a turn the user has not seen
+	dotError                   // its agent hit a provider auth error
 )
 
 // activityDot is a session's status in the sidebar: grey at rest; a soft
@@ -168,6 +169,8 @@ func (d *activityDot) Paint(dst *ggui.Canvas, r ggui.Rect) {
 	center := ggui.Pt(r.Origin.X+r.Size.W/2, r.Origin.Y+r.Size.H/2)
 	var c uitheme.Color
 	switch d.state() {
+	case dotError:
+		c = skin.DotDown
 	case dotWorking:
 		c = skin.DotRunning
 	case dotWaiting:

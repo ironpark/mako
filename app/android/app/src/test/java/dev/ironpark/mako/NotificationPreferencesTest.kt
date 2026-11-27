@@ -2,6 +2,7 @@ package dev.ironpark.mako
 
 import com.google.protobuf.Timestamp
 import dev.ironpark.mako.v2.Approval
+import dev.ironpark.mako.v2.AuthError
 import dev.ironpark.mako.v2.BackgroundTask
 import dev.ironpark.mako.v2.Node
 import dev.ironpark.mako.v2.SessionInfo
@@ -212,5 +213,27 @@ class NotificationPreferencesTest {
         // Reply from a different session run (startedAt mismatch) does not overwrite.
         val otherRun = rawReply.toBuilder().setStartedAt(Timestamp.newBuilder().setSeconds(2000)).setSeenSeq(9).build()
         assertSame(enriched, mergeSeenSession(enriched, otherRun))
+    }
+
+    @Test fun authErrorNotifiesAsWaitingAndCancelsWhenCleared() {
+        val tracker = NoticeTracker()
+        val authErr = AuthError.newBuilder()
+            .setKind("oauth_expired")
+            .setProvider("claude")
+            .setSummary("Claude Code login expired on the host")
+            .setCommand("claude auth login")
+            .build()
+        tracker.update(listOf(numbered("working", 0, 0)))
+
+        val failed = numbered("idle", 2, 0).toBuilder().setAuthError(authErr).build()
+        assertEquals(NoticeKind.Waiting, tracker.update(listOf(failed)).single().kind)
+
+        // Seen on desktop cancels the phone alert.
+        val seen = failed.toBuilder().setSeenSeq(2).build()
+        assertNull(tracker.update(listOf(seen)).single().kind)
+
+        // Clearing auth error on retry also leaves no pending notice.
+        val recovered = numbered("working", 2, 2)
+        assertTrue(tracker.update(listOf(recovered)).isEmpty())
     }
 }

@@ -33,16 +33,17 @@ import (
 
 // published is what recomputeLocked last made of a session's evidence.
 type published struct {
-	status   protocol.AgentStatus
-	at       time.Time
-	approval string // the ID of the approval held, "" for none
+	status    protocol.AgentStatus
+	at        time.Time
+	approval  string              // the ID of the approval held, "" for none
+	authError *protocol.AuthError // active provider auth failure, nil for none
 
-	// seq numbers the changes to status and approval; attention is the
-	// seq of the last that asks for the user: a turn done, a request for
-	// an answer. seen is the attention the user has looked at, as a
-	// front-end says with See. A front-end shows the session unread while
-	// attention is past seen, and tells the user of each attention it
-	// had not seen before.
+	// seq numbers the changes to status, approval, and authError; attention
+	// is the seq of the last that asks for the user: a turn done, a request
+	// for an answer, or a provider authentication failure. seen is the
+	// attention the user has looked at, as a front-end says with See. A
+	// front-end shows the session unread while attention is past seen, and
+	// tells the user of each attention it had not seen before.
 	seq, attention, seen uint64
 
 	turns  uint64 // turns ended: work that went idle or done
@@ -88,13 +89,17 @@ func (s *Session) recomputeLocked(now time.Time) {
 	}
 	status, at := s.deriveLocked(now, true)
 	approval := s.approval.GetId()
+	authErr := s.authError
+	if s.state == protocol.StateExited {
+		authErr = nil
+	}
 	p := &s.pub
-	if status == p.status && approval == p.approval {
+	if status == p.status && approval == p.approval && authErrorEqual(authErr, p.authError) {
 		p.at = at // renewed evidence of the same: no change to tell
 		return
 	}
-	prev, prevApproval := p.status, p.approval
-	p.status, p.at, p.approval = status, at, approval
+	prev, prevApproval, prevAuthErr := p.status, p.approval, p.authError
+	p.status, p.at, p.approval, p.authError = status, at, approval, authErr
 	p.seq++
 	switch {
 	case protocol.AtWork(status):
@@ -103,11 +108,26 @@ func (s *Session) recomputeLocked(now time.Time) {
 		p.turns++
 		p.inTurn = false
 	}
+	authAttention := authErr != nil && !authErrorEqual(authErr, prevAuthErr)
 	if asks := status == protocol.AgentWaiting && (prev != protocol.AgentWaiting || approval != prevApproval && approval != ""); asks ||
-		status == protocol.AgentDone && prev != protocol.AgentDone {
+		status == protocol.AgentDone && prev != protocol.AgentDone || authAttention {
 		p.attention = p.seq
 	}
 	s.changedLocked()
+}
+
+// authErrorEqual compares two AuthErrors by their user-visible classification
+// and guidance, ignoring DetectedAt so duplicate reports of the same failure
+// do not spam state_seq or attention notifications.
+func authErrorEqual(a, b *protocol.AuthError) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.GetKind() == b.GetKind() &&
+		a.GetProvider() == b.GetProvider() &&
+		a.GetSummary() == b.GetSummary() &&
+		a.GetGuidance() == b.GetGuidance() &&
+		a.GetCommand() == b.GetCommand()
 }
 
 // deriveLocked is what the evidence says the agent is doing, and since

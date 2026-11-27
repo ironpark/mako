@@ -77,7 +77,7 @@ fun SessionInfo.label(): String = name.ifEmpty { title.ifEmpty { agent } }.trimS
 fun baseName(path: String): String = path.trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\')
 
 /** Whether the session's agent waits for the user, one way or another. */
-fun SessionInfo.needsYou(): Boolean = hasApproval() || status == "waiting"
+fun SessionInfo.needsYou(): Boolean = (hasAuthError() && !ended()) || hasApproval() || status == "waiting"
 
 /** Whether the session's program has ended, or not begun again. */
 fun SessionInfo.ended(): Boolean = state == "exited" || state == "stopped"
@@ -86,6 +86,7 @@ fun SessionInfo.ended(): Boolean = state == "exited" || state == "stopped"
 fun SessionInfo.working(): Boolean = status == "working" && state == "running"
 
 fun SessionInfo.statusColor(): Color = when {
+    hasAuthError() && !ended() -> StatusColors.Approval
     hasApproval() -> StatusColors.Approval
     ended() -> StatusColors.Idle
     status == "working" -> StatusColors.Working
@@ -96,6 +97,7 @@ fun SessionInfo.statusColor(): Color = when {
 
 @Composable
 fun SessionInfo.statusText(): String = when {
+    hasAuthError() && !ended() -> stringResource(R.string.status_auth_error)
     hasApproval() -> stringResource(R.string.status_approval)
     state == "exited" -> stringResource(R.string.status_exited)
     state == "stopped" -> stringResource(R.string.status_stopped)

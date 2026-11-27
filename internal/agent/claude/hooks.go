@@ -143,10 +143,20 @@ func loadSettingsJSON(raw string, env map[string]string) (map[string]any, bool) 
 	return doc, true
 }
 
+// hookInput extends agent.HookInput with Claude-specific StopFailure fields.
+type hookInput struct {
+	agent.HookInput
+	Error                string          `json:"error"`
+	ErrorType            string          `json:"error_type"`
+	ErrorMessage         string          `json:"error_message"`
+	ErrorDetails         json.RawMessage `json:"error_details"`
+	LastAssistantMessage string          `json:"last_assistant_message"`
+}
+
 // Event also reads a Notification, by which Claude says it asks the user
-// something.
+// something, and StopFailure, which may report a provider authentication error.
 func (*Agent) Event(input []byte) (agent.Event, bool) {
-	var in agent.HookInput
+	var in hookInput
 	if json.Unmarshal(input, &in) != nil || in.Event == "" {
 		return agent.Event{}, false
 	}
@@ -172,7 +182,12 @@ func (*Agent) Event(input []byte) (agent.Event, bool) {
 		return agent.Event{Kind: agent.Waiting, SessionID: in.SessionID}, true
 	}
 	if in.Event == "StopFailure" {
-		return agent.Event{Kind: agent.Idle, SessionID: in.SessionID}, true
+		return agent.Event{
+			Kind:       agent.Idle,
+			SessionID:  in.SessionID,
+			Transcript: in.TranscriptPath,
+			AuthError:  classifyStopFailure(in.Error, in.ErrorType, in.ErrorMessage, in.ErrorDetails, in.LastAssistantMessage),
+		}, true
 	}
 	return in.Base()
 }

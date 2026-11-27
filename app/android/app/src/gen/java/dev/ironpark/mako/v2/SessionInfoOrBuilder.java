@@ -619,4 +619,27 @@ public interface SessionInfoOrBuilder extends
    */
   com.google.protobuf.ByteString
       getParentNodeIdBytes();
+
+  /**
+   * <pre>
+   * auth_error is the provider authentication failure that ended the
+   * session's last turn on its host, such as an expired OAuth login; unset
+   * otherwise and cleared once a later turn starts or succeeds (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+   * @return Whether the authError field is set.
+   */
+  boolean hasAuthError();
+  /**
+   * <pre>
+   * auth_error is the provider authentication failure that ended the
+   * session's last turn on its host, such as an expired OAuth login; unset
+   * otherwise and cleared once a later turn starts or succeeds (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+   * @return The authError.
+   */
+  dev.ironpark.mako.v2.AuthError getAuthError();
 }

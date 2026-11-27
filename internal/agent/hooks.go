@@ -37,6 +37,9 @@ type Event struct {
 	// Suggestions are what else than once the agent offers to allow an
 	// Approval with, as it writes them.
 	Suggestions json.RawMessage
+	// AuthError is non-nil when a failure hook (such as Claude's StopFailure)
+	// reports a top-level provider authentication failure on the host.
+	AuthError *protocol.AuthError
 }
 
 // ApprovalTimeout is how long an agent waits on the hook for an approval:

@@ -1619,6 +1619,7 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 	if !b.isCurrentEpoch(epoch) {
 		return
 	}
+	defer d.observeCodexAuthNotification(s, b, n, epoch)
 	switch n.Method {
 	case "thread/started":
 		var p codex.ThreadStartedNotification

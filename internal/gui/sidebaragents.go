@@ -88,7 +88,7 @@ var (
 // once it finished a turn, though seen.
 func (m *model) statusOf(s *protocol.SessionInfo) agentStatus {
 	switch m.dotOf(s) {
-	case dotWaiting:
+	case dotError, dotWaiting:
 		return agentWaiting
 	case dotWorking:
 		return agentWorking

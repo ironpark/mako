@@ -160,7 +160,7 @@ func familyMarks(m *model, kids []*protocol.SessionInfo) ggui.Widget {
 		id   string
 		rank int
 	}
-	order := map[dotState]int{dotWaiting: 0, dotWorking: 1, dotDone: 2, dotRest: 3}
+	order := map[dotState]int{dotError: 0, dotWaiting: 1, dotWorking: 2, dotDone: 3, dotRest: 4}
 	ranked := ggui.Untrack(func() []kid {
 		out := make([]kid, len(kids))
 		for i, k := range kids {

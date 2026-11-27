@@ -2302,6 +2302,83 @@ public  final class SessionInfo extends
 
   }
 
+  public static final int AUTH_ERROR_FIELD_NUMBER = 42;
+  private dev.ironpark.mako.v2.AuthError authError_;
+  /**
+   * <pre>
+   * auth_error is the provider authentication failure that ended the
+   * session's last turn on its host, such as an expired OAuth login; unset
+   * otherwise and cleared once a later turn starts or succeeds (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAuthError() {
+    return ((bitField0_ & 0x00000400) != 0);
+  }
+  /**
+   * <pre>
+   * auth_error is the provider authentication failure that ended the
+   * session's last turn on its host, such as an expired OAuth login; unset
+   * otherwise and cleared once a later turn starts or succeeds (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AuthError getAuthError() {
+    return authError_ == null ? dev.ironpark.mako.v2.AuthError.getDefaultInstance() : authError_;
+  }
+  /**
+   * <pre>
+   * auth_error is the provider authentication failure that ended the
+   * session's last turn on its host, such as an expired OAuth login; unset
+   * otherwise and cleared once a later turn starts or succeeds (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+   */
+  private void setAuthError(dev.ironpark.mako.v2.AuthError value) {
+    java.util.Objects.requireNonNull(value);
+    authError_ = value;
+    bitField0_ |= 0x00000400;
+  }
+  /**
+   * <pre>
+   * auth_error is the provider authentication failure that ended the
+   * session's last turn on its host, such as an expired OAuth login; unset
+   * otherwise and cleared once a later turn starts or succeeds (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeAuthError(dev.ironpark.mako.v2.AuthError value) {
+    java.util.Objects.requireNonNull(value);
+    if (authError_ != null &&
+        authError_ != dev.ironpark.mako.v2.AuthError.getDefaultInstance()) {
+      authError_ =
+        dev.ironpark.mako.v2.AuthError.newBuilder(authError_).mergeFrom(value).buildPartial();
+    } else {
+      authError_ = value;
+    }
+    bitField0_ |= 0x00000400;
+  }
+  /**
+   * <pre>
+   * auth_error is the provider authentication failure that ended the
+   * session's last turn on its host, such as an expired OAuth login; unset
+   * otherwise and cleared once a later turn starts or succeeds (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+   */
+  private void clearAuthError() {
+    authError_ = null;
+    bitField0_ = (bitField0_ & ~0x00000400);
+  }
+
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -4757,6 +4834,89 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * auth_error is the provider authentication failure that ended the
+     * session's last turn on its host, such as an expired OAuth login; unset
+     * otherwise and cleared once a later turn starts or succeeds (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAuthError() {
+      return instance.hasAuthError();
+    }
+    /**
+     * <pre>
+     * auth_error is the provider authentication failure that ended the
+     * session's last turn on its host, such as an expired OAuth login; unset
+     * otherwise and cleared once a later turn starts or succeeds (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AuthError getAuthError() {
+      return instance.getAuthError();
+    }
+    /**
+     * <pre>
+     * auth_error is the provider authentication failure that ended the
+     * session's last turn on its host, such as an expired OAuth login; unset
+     * otherwise and cleared once a later turn starts or succeeds (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+     */
+    public Builder setAuthError(dev.ironpark.mako.v2.AuthError value) {
+      copyOnWrite();
+      instance.setAuthError(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * auth_error is the provider authentication failure that ended the
+     * session's last turn on its host, such as an expired OAuth login; unset
+     * otherwise and cleared once a later turn starts or succeeds (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+     */
+    public Builder setAuthError(
+        dev.ironpark.mako.v2.AuthError.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAuthError(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * auth_error is the provider authentication failure that ended the
+     * session's last turn on its host, such as an expired OAuth login; unset
+     * otherwise and cleared once a later turn starts or succeeds (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+     */
+    public Builder mergeAuthError(dev.ironpark.mako.v2.AuthError value) {
+      copyOnWrite();
+      instance.mergeAuthError(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * auth_error is the provider authentication failure that ended the
+     * session's last turn on its host, such as an expired OAuth login; unset
+     * otherwise and cleared once a later turn starts or succeeds (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.AuthError auth_error = 42 [json_name = "authError"];</code>
+     */
+    public Builder clearAuthError() {  copyOnWrite();
+      instance.clearAuthError();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -4816,15 +4976,16 @@ public  final class SessionInfo extends
             "attentionSeq_",
             "seenSeq_",
             "parentNodeId_",
+            "authError_",
           };
           java.lang.String info =
-              "\u0000)\u0000\u0001\u0001))\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0000*\u0000\u0001\u0001**\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
               "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208\u000b\u000b" +
               "\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011\u0208\u0012" +
               "\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004\u0017\u1009" +
               "\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208\u001d\u0007" +
               "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003#\u1009\b$\u1009\t%\u0208&\u0003" +
-              "\'\u0003(\u0003)\u0208";
+              "\'\u0003(\u0003)\u0208*\u1009\n";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

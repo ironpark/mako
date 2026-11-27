@@ -34,6 +34,15 @@ func (s *Session) SetConversation(id, path string) {
 		s.agentsWorking = false
 		s.childHooks, s.childLogs = nil, nil
 		s.lastMessage = time.Time{}
+		// Only clear on a switch between two bound conversations (e.g. /clear,
+		// /resume, or thread switch). Initial binding from "" -> id must not
+		// wipe an auth error reported on the session's first turn before the
+		// transcript file materialized on disk.
+		if s.conversationID != "" && s.authError != nil {
+			s.authError = nil
+			s.authErrorSeq = max(time.Now().UnixNano(), s.authErrorSeq+1)
+			s.recomputeLocked(time.Now())
+		}
 	}
 	s.conversationID, s.transcriptPath = id, path
 }

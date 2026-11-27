@@ -128,6 +128,11 @@ type Session struct {
 	// reported is what the agent's status line last said of its tokens:
 	// the context window and the account's limits; guarded by mu.
 	reported *protocol.Usage
+	// authError is the active provider authentication failure on this
+	// session's host, ordered by authErrorSeq so stale hooks or log scans
+	// cannot resurrect a cleared failure; guarded by mu.
+	authError    *protocol.AuthError
+	authErrorSeq int64
 }
 
 // staleWork is how long an agent said to be working may print nothing
@@ -261,6 +266,7 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Bells:          s.bells,
 		Dialog:         s.dialogLocked(),
 		Controls:       controls(s.spec.Agent),
+		AuthError:      proto.CloneOf(s.pub.authError),
 	}
 }
 
@@ -419,8 +425,102 @@ func (s *Session) reportStatusLocked(status protocol.AgentStatus, seq int64) boo
 	}
 	s.status = status
 	s.statusSeq = seq
+	if (status == protocol.AgentWorking || status == protocol.AgentDone) && seq > s.authErrorSeq {
+		s.authErrorSeq = seq
+		s.authError = nil
+	}
 	s.recomputeLocked(time.Now())
 	return true
+}
+
+// ReportAuthError records a provider authentication failure on this session's
+// host, ordered by seq so stale hooks or log scans cannot overwrite a newer
+// recovery.
+func (s *Session) ReportAuthError(err *protocol.AuthError, seq int64) bool {
+	if err == nil || err.GetKind() == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited || seq <= s.authErrorSeq {
+		return false
+	}
+	e := proto.CloneOf(err)
+	if e.DetectedAt == nil {
+		e.DetectedAt = protocol.Time(time.Now())
+	}
+	s.authError = e
+	s.authErrorSeq = seq
+	s.recomputeLocked(time.Now())
+	return true
+}
+
+// ClearAuthError clears an active provider authentication failure when a newer
+// turn starts or succeeds, and advances authErrorSeq so older log records
+// cannot resurrect the cleared failure.
+func (s *Session) ClearAuthError(seq int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if seq <= s.authErrorSeq {
+		return false
+	}
+	s.authErrorSeq = seq
+	if s.authError == nil {
+		return false
+	}
+	s.authError = nil
+	s.recomputeLocked(time.Now())
+	return true
+}
+
+// ClearAuthErrorNow clears an active provider authentication failure
+// immediately (for example, when the user submits a retry prompt). It is a
+// no-op when no auth error is active so it does not race with log timestamps
+// of an in-flight failure.
+func (s *Session) ClearAuthErrorNow() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.authError == nil {
+		return false
+	}
+	s.authError = nil
+	s.authErrorSeq = max(time.Now().UnixNano(), s.authErrorSeq+1)
+	s.recomputeLocked(time.Now())
+	return true
+}
+
+// ReportLogAuthError reconciles provider authentication failures and
+// recoveries found in the bound conversation log. Historical errors written
+// before this session process started are ignored.
+func (s *Session) ReportLogAuthError(id string, err *protocol.AuthError, errAt, clearedAt time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited || s.conversationID != id {
+		return
+	}
+	if err != nil && err.GetKind() != "" && !errAt.IsZero() && !errAt.Before(s.started) {
+		seq := errAt.UnixNano()
+		if seq > s.authErrorSeq {
+			e := proto.CloneOf(err)
+			if e.DetectedAt == nil {
+				e.DetectedAt = protocol.Time(errAt)
+			}
+			s.authError = e
+			s.authErrorSeq = seq
+			s.recomputeLocked(time.Now())
+		}
+		return
+	}
+	if !clearedAt.IsZero() && !clearedAt.Before(s.started) {
+		seq := clearedAt.UnixNano()
+		if seq > s.authErrorSeq {
+			s.authErrorSeq = seq
+			if s.authError != nil {
+				s.authError = nil
+				s.recomputeLocked(time.Now())
+			}
+		}
+	}
 }
 
 // Report records what the agent's status line says of its tokens. What a

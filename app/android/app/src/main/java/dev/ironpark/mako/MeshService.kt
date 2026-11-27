@@ -157,8 +157,21 @@ class MeshService : Service() {
         return notice.build()
     }
 
-    private fun turnNotice(s: SessionInfo): Notification =
-        NotificationCompat.Builder(this, AGENTS)
+    private fun turnNotice(s: SessionInfo): Notification {
+        if (s.hasAuthError()) {
+            val title = s.authError.summary.ifEmpty { getString(R.string.auth_error_title) }
+            val body = s.authError.guidance.ifEmpty { s.title.ifEmpty { s.project } }
+            return NotificationCompat.Builder(this, AGENTS)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle("${sessionLabel(s)}: $title")
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setContentIntent(MainActivity.openSession(this, s))
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .build()
+        }
+        return NotificationCompat.Builder(this, AGENTS)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(
                 getString(if (s.status == "waiting") R.string.notice_waiting else R.string.notice_done, sessionLabel(s))
@@ -167,6 +180,7 @@ class MeshService : Service() {
             .setContentIntent(MainActivity.openSession(this, s))
             .setAutoCancel(true)
             .build()
+    }
 
     private fun sessionLabel(s: SessionInfo): String =
         "${s.label()} · ${mako.mesh.nodeName(s.nodeId)}"

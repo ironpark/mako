@@ -100,10 +100,16 @@ func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *
 			return s.Info(), nil
 		}
 		if d.deliverNativeUserPrompt(ctx, s, r.GetText(), r.GetKeys()) {
+			if strings.TrimSpace(r.GetText()) != "" {
+				s.ClearAuthErrorNow()
+			}
 			return s.Info(), nil
 		}
 		if err := s.Send(r.GetText(), r.GetKeys()); err != nil {
 			return nil, err
+		}
+		if strings.TrimSpace(r.GetText()) != "" {
+			s.ClearAuthErrorNow()
 		}
 		return s.Info(), nil
 	})

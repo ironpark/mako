@@ -154,3 +154,101 @@ func TestActivityReadsTheCommandsALogSays(t *testing.T) {
 		t.Fatalf("read on: %q", got)
 	}
 }
+
+func TestActivityTracksAndClearsAuthErrors(t *testing.T) {
+	t.Run("claude transcript auth error and recovery", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "c.jsonl")
+		info := &protocol.SessionInfo{Agent: "claude", ConversationId: "c"}
+		base := time.Now().UTC().Truncate(time.Second)
+		at := func(d time.Duration) string { return base.Add(d).Format(time.RFC3339Nano) }
+
+		// Quoted user text must never set AuthError.
+		writeLog(t, path, `{"type":"user","sessionId":"c","cwd":"/p","timestamp":"`+at(0)+`","message":{"role":"user","content":"Failed to authenticate: OAuth session expired and could not be refreshed"}}`+"\n")
+		var activity Activity
+		got, err := activity.Read(info, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.AuthError != nil {
+			t.Fatalf("quoted user text triggered auth error: %+v", got.AuthError)
+		}
+
+		// Top-level assistant authentication_failed sets AuthError.
+		appendLine := func(line string) {
+			t.Helper()
+			f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = f.WriteString(line + "\n")
+			f.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		appendLine(`{"type":"assistant","timestamp":"` + at(time.Second) + `","error":"authentication_failed","isApiErrorMessage":true,"message":{"model":"<synthetic>","role":"assistant","content":[{"type":"text","text":"Failed to authenticate: OAuth session expired and could not be refreshed."}]}}`)
+		got, err = activity.Read(info, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.AuthError == nil || got.AuthError.GetKind() != protocol.AuthErrorOAuthExpired || !got.AuthErrorAt.Equal(base.Add(time.Second)) {
+			t.Fatalf("expected oauth_expired at +1s, got %+v", got)
+		}
+
+		// Synthetic assistant message must not clear AuthError.
+		appendLine(`{"type":"assistant","timestamp":"` + at(2*time.Second) + `","message":{"model":"<synthetic>","role":"assistant","content":[{"type":"text","text":"Still waiting"}]}}`)
+		got, err = activity.Read(info, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.AuthError == nil {
+			t.Fatal("synthetic assistant message cleared auth error")
+		}
+
+		// Normal model reply clears AuthError and records AuthClearedAt.
+		appendLine(`{"type":"assistant","timestamp":"` + at(3*time.Second) + `","message":{"model":"claude-sonnet-4-6","role":"assistant","content":[{"type":"text","text":"Recovered!"}]}}`)
+		got, err = activity.Read(info, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.AuthError != nil || !got.AuthClearedAt.Equal(base.Add(3*time.Second)) {
+			t.Fatalf("expected auth error cleared at +3s, got %+v", got)
+		}
+	})
+
+	t.Run("codex rollout auth error and recovery", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "rollout.jsonl")
+		info := &protocol.SessionInfo{Agent: "codex", ConversationId: "c"}
+		base := time.Now().UTC().Truncate(time.Second)
+		at := func(d time.Duration) string { return base.Add(d).Format(time.RFC3339Nano) }
+
+		writeLog(t, path,
+			`{"type":"session_meta","payload":{"id":"c","cwd":"/p"}}`+"\n"+
+				`{"type":"event_msg","timestamp":"`+at(time.Second)+`","payload":{"type":"error","codex_error_info":"unauthorized","message":"Your access token could not be refreshed because your refresh token was expired."}}`+"\n")
+		var activity Activity
+		got, err := activity.Read(info, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.AuthError == nil || got.AuthError.GetKind() != protocol.AuthErrorOAuthExpired {
+			t.Fatalf("expected codex oauth_expired, got %+v", got)
+		}
+
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = f.WriteString(`{"type":"event_msg","timestamp":"` + at(2*time.Second) + `","payload":{"type":"task_started"}}` + "\n")
+		f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err = activity.Read(info, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.AuthError != nil || !got.AuthClearedAt.Equal(base.Add(2*time.Second)) {
+			t.Fatalf("expected codex auth error cleared on task_started, got %+v", got)
+		}
+	})
+}

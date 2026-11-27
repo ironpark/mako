@@ -2,6 +2,7 @@ package dev.ironpark.mako.ui
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -81,6 +82,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import dev.ironpark.mako.Mesh
 import dev.ironpark.mako.R
 import dev.ironpark.mako.term.TermSession
+import dev.ironpark.mako.v2.AuthError
 import dev.ironpark.mako.v2.ChatMessage
 import dev.ironpark.mako.v2.Question
 import dev.ironpark.mako.v2.ScreenDialog
@@ -205,7 +207,9 @@ internal fun SessionScreen(
     }
     val act = actor()
 
-    // Preserve last dialog/approval snapshot so cardExit collapses smoothly instead of snapping empty.
+    // Preserve last dialog/approval/auth-error snapshot so cardExit collapses smoothly instead of snapping empty.
+    var lastAuthError by remember(node, id) { mutableStateOf<AuthError?>(null) }
+    if (session != null && session.hasAuthError()) lastAuthError = session.authError
     var lastDialog by remember(node, id) { mutableStateOf<ScreenDialog?>(null) }
     if (session != null && session.hasDialog()) lastDialog = session.dialog
     var lastApprovalSession by remember(node, id) { mutableStateOf<SessionInfo?>(null) }
@@ -288,6 +292,25 @@ internal fun SessionScreen(
                             { onAgents(session.project) }
                         } else null,
                     )
+                }
+                val showAuthError = session != null && session.hasAuthError()
+                AnimatedVisibility(
+                    visible = showAuthError,
+                    enter = MakoMotion.cardEnter,
+                    exit = MakoMotion.cardExit,
+                ) {
+                    val activeAuthError = if (showAuthError) session.authError else lastAuthError
+                    if (activeAuthError != null) {
+                        AuthErrorCard(
+                            activeAuthError,
+                            onTerminal = { if (showAuthError) question = true },
+                            onCopyCommand = { cmd ->
+                                context.getSystemService(ClipboardManager::class.java)
+                                    ?.setPrimaryClip(ClipData.newPlainText("command", cmd))
+                                Toast.makeText(context, context.getString(R.string.command_copied), Toast.LENGTH_SHORT).show()
+                            },
+                        )
+                    }
                 }
                 val showDialog = session != null && !session.hasApproval() && session.hasDialog()
                 AnimatedVisibility(

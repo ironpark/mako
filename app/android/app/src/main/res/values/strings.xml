@@ -371,4 +371,8 @@
     <string name="block_scope_needs_project_detail">Add a project on this computer to use this panel.</string>
     <string name="block_scope_needs_session">This panel requires a running session on %1$s.</string>
     <string name="block_scope_needs_session_detail">Start a session on this computer to use this panel.</string>
+    <string name="status_auth_error">Auth required</string>
+    <string name="auth_error_title">Provider authentication failed</string>
+    <string name="copy_command">Copy command</string>
+    <string name="command_copied">Command copied</string>
 </resources>

@@ -111,6 +111,8 @@ func hiddenFilesToggle(m *model) ggui.Widget {
 // statusLabel names what a session's agent is doing, as its hooks said.
 func statusLabel(s *protocol.SessionInfo) string {
 	switch {
+	case s.GetAuthError() != nil:
+		return T("Authentication required")
 	case s.GetApproval() != nil:
 		return Tf("Waiting for approval: %s", s.GetApproval().GetTool())
 	case s.GetStatus() == protocol.AgentWorking:

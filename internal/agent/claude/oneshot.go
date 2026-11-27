@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // WithYolo adds the CLI flag that bypasses all permission checks.
@@ -66,6 +67,12 @@ func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, _ str
 				}
 				if json.Unmarshal(stdout, &env) == nil {
 					if env.IsError {
+						if authErr := ClassifyOneShotError(stdout, stderr); authErr != nil {
+							return "", &protocol.CodedError{
+								Code:    protocol.CodeAuthError,
+								Message: authErr.GetSummary() + ". " + authErr.GetGuidance(),
+							}
+						}
 						msg := strings.TrimSpace(env.Result)
 						if msg == "" {
 							msg = strings.Join(env.Errors, "; ")

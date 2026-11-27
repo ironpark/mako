@@ -121,7 +121,7 @@ func (d *Daemon) loadSessions(dir string) error {
 	for id, entry := range saved.Sessions {
 		entry.Info.Id, entry.Info.NodeId = id, nodeID
 		entry.Info.State, entry.Info.Busy, entry.Info.ExitCode = protocol.StateStopped, false, nil
-		entry.Info.Status, entry.Info.StatusAt, entry.Info.Approval = "", nil, nil
+		entry.Info.Status, entry.Info.StatusAt, entry.Info.Approval, entry.Info.AuthError = "", nil, nil, nil
 		entry.Info.Caps = agents.Caps(entry.Info.GetAgent())
 		saved.Sessions[id] = entry
 	}
@@ -742,7 +742,7 @@ func (d *Daemon) sleepSession(id string) (*protocol.SessionInfo, error) {
 	next.Info = proto.CloneOf(info)
 	next.Info.Command = nil // as a start saves it: no ephemeral paths or secrets
 	next.Info.State, next.Info.Busy, next.Info.Idle, next.Info.ExitCode = protocol.StateStopped, false, false, nil
-	next.Info.Tasks, next.Info.Dialog = nil, nil
+	next.Info.Tasks, next.Info.Dialog, next.Info.AuthError = nil, nil, nil
 	d.saved[id] = next
 	if err := d.saveSessionsLocked(); err != nil {
 		d.saved[id] = entry

@@ -1930,4 +1930,11 @@ var catalogKo = map[string]string{
 	"%s flags mode":       "%s 플래그 모드",
 	"Flags (%s)":          "플래그 (%s)",
 	"Replaces the agent's base flags instead of appending to them.": "에이전트 기본 플래그 뒤에 덧붙이지 않고 이 프로필의 플래그로 덮어씁니다.",
+
+	// Revision 51: Provider OAuth / auth error detection
+	"Provider authentication failed": "공급자 인증에 실패했습니다",
+	"Authentication required":        "인증 필요",
+	"Copy command":                   "명령어 복사",
+	"Command copied":                 "명령어를 복사했습니다",
+	"Run %s on the host":             "호스트에서 %s 실행",
 }

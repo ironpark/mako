@@ -356,6 +356,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		if !s.ReportStatus(protocol.AgentIdle, msg.Seq) {
 			return
 		}
+		s.ClearAuthError(msg.Seq)
 		if err := d.reportConversation(s, msg.Seq, ev); err != nil {
 			d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
 		}
@@ -384,6 +385,9 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.ReportStatus(protocol.AgentDone, msg.Seq)
 	case agent.Ended, agent.Idle:
 		s.ReportStatus(protocol.AgentIdle, msg.Seq)
+		if ev.AuthError != nil {
+			s.ReportAuthError(ev.AuthError, msg.Seq)
+		}
 	case agent.ChildStarted, agent.ChildStopped:
 		s.ReportSubagent(ev.SessionID, ev.AgentID, ev.Kind == agent.ChildStarted, msg.Seq)
 	case agent.Approval:

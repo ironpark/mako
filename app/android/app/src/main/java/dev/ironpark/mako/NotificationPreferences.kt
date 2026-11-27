@@ -42,6 +42,7 @@ internal class NotificationPreferences(private val preferences: SharedPreference
 
 internal fun SessionInfo.noticeKind(): NoticeKind? = when {
     hasApproval() && approval.id.isNotEmpty() -> NoticeKind.Approval
+    hasAuthError() && state == "running" -> NoticeKind.Waiting
     status == "waiting" -> NoticeKind.Waiting
     status == "done" -> NoticeKind.Done
     else -> null

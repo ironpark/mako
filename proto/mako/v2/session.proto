@@ -151,6 +151,33 @@ message SessionInfo {
   // parent_node_id is the node of parent_session_id when that session is on
   // another node; "" when the parent is on the same node (revision 48).
   string parent_node_id = 41;
+  // auth_error is the provider authentication failure that ended the
+  // session's last turn on its host, such as an expired OAuth login; unset
+  // otherwise and cleared once a later turn starts or succeeds (revision 51).
+  AuthError auth_error = 42;
+}
+
+// AuthError is a provider authentication failure reported by a session's
+// agent on its host, separate from Mako node trust/pairing. Its summary and
+// guidance are fixed, safe instructions that never copy raw provider error
+// details, credentials, or endpoint URLs.
+message AuthError {
+  // kind classifies the failure: "oauth_expired" (host OAuth login expired
+  // and could not be refreshed) or "provider_auth" (provider credentials or
+  // configuration were rejected, e.g. API key, custom endpoint, or OAuth).
+  string kind = 1;
+  // provider names the agent/provider on the host (e.g. "claude", "codex").
+  string provider = 2;
+  // summary is a short, safe headline for status bars and notifications.
+  string summary = 3;
+  // guidance is actionable re-login and non-retry guidance for the host
+  // machine, noting Mako did not automatically retry the turn.
+  string guidance = 4;
+  // command is the suggested host CLI re-login command (e.g. "claude auth login",
+  // "codex login"), or "" when none applies.
+  string command = 5;
+  // detected_at is when the failure was observed on the session's node.
+  google.protobuf.Timestamp detected_at = 6;
 }
 
 // AgentControls are the permission modes, models and efforts a session's

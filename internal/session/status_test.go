@@ -305,3 +305,154 @@ func TestAToolsEndNeverRevivesAnEndedTurn(t *testing.T) {
 		t.Fatal("a tool's end revived a turn done")
 	}
 }
+
+func TestAuthErrorLifecycleAndOrdering(t *testing.T) {
+	started := time.Unix(1_700_000_000, 0)
+	s := &Session{state: protocol.StateRunning, started: started, conversationID: "conv-1"}
+
+	oauthErr := &protocol.AuthError{
+		Kind:     protocol.AuthErrorOAuthExpired,
+		Provider: "claude",
+		Summary:  "Claude Code login expired on the host",
+		Guidance: "Run `claude auth login` on the host machine.",
+		Command:  "claude auth login",
+	}
+	providerErr := &protocol.AuthError{
+		Kind:     protocol.AuthErrorProviderAuth,
+		Provider: "claude",
+		Summary:  "Claude provider authentication failed on the host",
+		Guidance: "Check credentials.",
+		Command:  "claude auth login",
+	}
+
+	// Historical log error from before this session process started is ignored.
+	s.ReportLogAuthError("conv-1", oauthErr, started.Add(-time.Minute), time.Time{})
+	if pubOf(s).authError != nil {
+		t.Fatal("historical auth error before session start was accepted")
+	}
+
+	// Wrong conversation ID is ignored.
+	s.ReportLogAuthError("other", oauthErr, started.Add(time.Second), time.Time{})
+	if pubOf(s).authError != nil {
+		t.Fatal("auth error for another conversation was accepted")
+	}
+
+	// Reporting an auth error publishes it, bumps state_seq and attention_seq, and fires Changed.
+	changed := s.Changed()
+	seq1 := started.Add(2 * time.Second).UnixNano()
+	if !s.ReportAuthError(oauthErr, seq1) {
+		t.Fatal("ReportAuthError rejected fresh error")
+	}
+	select {
+	case <-changed:
+	default:
+		t.Fatal("ReportAuthError did not notify Changed")
+	}
+	pub := pubOf(s)
+	if pub.authError.GetKind() != protocol.AuthErrorOAuthExpired || pub.attention == 0 || pub.seq == 0 {
+		t.Fatalf("after ReportAuthError: %+v", pub)
+	}
+	firstSeq, firstAtt := pub.seq, pub.attention
+
+	// Duplicate identical auth error at higher seq must not re-bump state_seq or attention_seq.
+	seq2 := started.Add(3 * time.Second).UnixNano()
+	if !s.ReportAuthError(oauthErr, seq2) {
+		t.Fatal("ReportAuthError should accept higher seq")
+	}
+	pub = pubOf(s)
+	if pub.seq != firstSeq || pub.attention != firstAtt {
+		t.Fatalf("duplicate auth error bumped seqs: got (%d,%d), want (%d,%d)", pub.seq, pub.attention, firstSeq, firstAtt)
+	}
+
+	// AgentIdle (e.g. StopFailure itself) must NOT clear an active auth error.
+	s.ReportStatus(protocol.AgentIdle, seq2+1)
+	if pubOf(s).authError == nil {
+		t.Fatal("AgentIdle cleared active auth error")
+	}
+
+	// Changing error kind bumps state_seq and attention_seq again.
+	seq3 := seq2 + 10
+	s.ReportAuthError(providerErr, seq3)
+	pub = pubOf(s)
+	if pub.authError.GetKind() != protocol.AuthErrorProviderAuth || pub.seq <= firstSeq || pub.attention <= firstAtt {
+		t.Fatalf("changed auth error did not bump seqs: %+v", pub)
+	}
+
+	// AgentWorking at higher seq automatically clears AuthError.
+	seq4 := seq3 + 10
+	s.ReportStatus(protocol.AgentWorking, seq4)
+	if pubOf(s).authError != nil {
+		t.Fatal("AgentWorking did not clear AuthError")
+	}
+
+	// Stale seq cannot resurrect cleared AuthError.
+	if s.ReportAuthError(oauthErr, seq3) || pubOf(s).authError != nil {
+		t.Fatal("stale seq resurrected cleared AuthError")
+	}
+
+	// Log auth error at newer timestamp sets it; AgentDone clears it.
+	logErrAt := started.Add(10 * time.Second)
+	s.ReportLogAuthError("conv-1", oauthErr, logErrAt, time.Time{})
+	if pubOf(s).authError == nil {
+		t.Fatal("ReportLogAuthError did not set newer auth error")
+	}
+	s.ReportStatus(protocol.AgentDone, logErrAt.Add(time.Second).UnixNano())
+	if pubOf(s).authError != nil {
+		t.Fatal("AgentDone did not clear AuthError")
+	}
+
+	// SetConversation from "" -> id (initial binding) preserves an early auth error.
+	fresh := &Session{state: protocol.StateRunning, started: started}
+	fresh.ReportAuthError(oauthErr, started.Add(time.Second).UnixNano())
+	fresh.SetConversation("conv-1", "/tmp/conv-1.jsonl")
+	if pubOf(fresh).authError == nil {
+		t.Fatal("initial SetConversation wiped early auth error")
+	}
+
+	// SetConversation to a different bound conversation clears AuthError.
+	s.ReportAuthError(oauthErr, logErrAt.Add(2*time.Second).UnixNano())
+	if pubOf(s).authError == nil {
+		t.Fatal("expected auth error before conversation switch")
+	}
+	s.SetConversation("conv-2", "/tmp/conv-2.jsonl")
+	if pubOf(s).authError != nil {
+		t.Fatal("SetConversation did not clear AuthError")
+	}
+
+	// ClearAuthErrorNow clears active error and blocks older log re-reads.
+	nowSeq := time.Now().Add(time.Second).UnixNano()
+	if !s.ReportAuthError(oauthErr, nowSeq) {
+		t.Fatal("ReportAuthError rejected error after conversation switch")
+	}
+	if !s.ClearAuthErrorNow() || pubOf(s).authError != nil {
+		t.Fatal("ClearAuthErrorNow did not clear active error")
+	}
+	if s.ClearAuthErrorNow() {
+		t.Fatal("ClearAuthErrorNow should be a no-op when no error is active")
+	}
+	if s.ReportAuthError(oauthErr, nowSeq+1) || pubOf(s).authError != nil {
+		t.Fatal("older seq resurrected error after ClearAuthErrorNow")
+	}
+
+	// Exited session ignores ReportAuthError.
+	s.state = protocol.StateExited
+	if s.ReportAuthError(oauthErr, time.Now().Add(time.Hour).UnixNano()) {
+		t.Fatal("exited session accepted ReportAuthError")
+	}
+
+	// Verify Info() clones AuthError cleanly on a started session.
+	live, err := Start(Spec{ID: "auth-info", Command: []string{"/bin/cat"}, Cols: 40, Rows: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer live.Close()
+	live.ReportAuthError(oauthErr, time.Now().UnixNano())
+	got := live.Info().GetAuthError()
+	if got == nil || got.GetKind() != protocol.AuthErrorOAuthExpired {
+		t.Fatalf("live Info().GetAuthError() = %+v", got)
+	}
+	got.Summary = "mutated"
+	if live.Info().GetAuthError().GetSummary() == "mutated" {
+		t.Fatal("Info() returned uncloned AuthError pointer")
+	}
+}

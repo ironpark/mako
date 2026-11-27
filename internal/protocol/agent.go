@@ -29,7 +29,18 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 50
+const Revision = 51
+
+// RevisionAuthError adds SessionInfo.auth_error (field 42) and AuthError for
+// surfacing host provider OAuth expiration and authentication failures with
+// actionable re-login guidance.
+const RevisionAuthError = 51
+
+// Kinds of a SessionInfo.AuthError.
+const (
+	AuthErrorOAuthExpired = "oauth_expired"
+	AuthErrorProviderAuth = "provider_auth"
+)
 
 // RevisionAccountUsageAndRewind adds session-independent account quota
 // polling (ReadAccountUsage, AccountUsage), non-destructive conversation

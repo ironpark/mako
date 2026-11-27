@@ -192,6 +192,12 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 		if runCtx.Err() != nil {
 			return nil, runCtx.Err()
 		}
+		if authErr := classifyOneShotAuthError(agentName, stdout.buf.Bytes(), stderr.buf.Bytes()); authErr != nil {
+			return nil, &protocol.CodedError{
+				Code:    protocol.CodeAuthError,
+				Message: authErr.GetSummary() + ". " + authErr.GetGuidance(),
+			}
+		}
 		snippet := strings.TrimSpace(stderr.buf.String())
 		if snippet == "" {
 			snippet = strings.TrimSpace(stdout.buf.String())
