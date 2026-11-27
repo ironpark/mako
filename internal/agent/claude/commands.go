@@ -22,6 +22,7 @@ var builtins = []agent.Command{
 	{Name: "doctor", Description: "Diagnose and verify the installation and settings"},
 	{Name: "exit", Description: "Exit the REPL"},
 	{Name: "export", Description: "Export the current conversation to a file or the clipboard", Args: "[filename]"},
+	{Name: "goal", Description: "Set or clear a session goal", Args: "[objective|clear]"},
 	{Name: "help", Description: "Show help and the available commands"},
 	{Name: "hooks", Description: "Manage hook configurations for tool events"},
 	{Name: "ide", Description: "Manage IDE integrations and show status"},

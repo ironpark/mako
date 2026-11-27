@@ -31,6 +31,8 @@ Usage:
   mako attach <session-id>          attach to a running session
   mako kill <session-id>            terminate a session
   mako rename <session-id> [name]   name a session (no name clears it)
+  mako goal <session-id> [set <objective...>|clear]
+                                     view, set, or clear a session's goal
   mako agents                       list agents and profiles this node can launch
 
 Projects:
@@ -249,6 +251,8 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 		}
 		_, err := c.Rename(ctx, &protocol.RenameSession{SessionId: args[1], NodeId: nodeID, Name: strings.Join(args[2:], " ")})
 		return err
+	case "goal":
+		return goalCmd(ctx, c, nodeID, args[1:])
 	case "plugins":
 		return plugins(ctx, c, args[1:])
 	case "projects":
@@ -499,6 +503,70 @@ func short(id string) string {
 		return id[:8]
 	}
 	return id
+}
+
+func goalCmd(ctx context.Context, c *client.Client, nodeID string, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("goal needs a session ID")
+	}
+	sessionID := args[0]
+	if len(args) == 1 {
+		sessions, err := c.Sessions(ctx)
+		if err != nil {
+			return err
+		}
+		for _, s := range sessions {
+			if s.GetId() != sessionID {
+				continue
+			}
+			printGoalStatus(s.GetGoal())
+			return nil
+		}
+		return fmt.Errorf("unknown session %q", sessionID)
+	}
+	var err error
+	if nodeID, err = sessionNode(ctx, c, nodeID, sessionID); err != nil {
+		return err
+	}
+	action := strings.ToLower(args[1])
+	req := &protocol.GoalAction{NodeId: nodeID, SessionId: sessionID, Action: action}
+	switch action {
+	case protocol.GoalActionSet, protocol.GoalActionEdit:
+		if len(args) < 3 {
+			return fmt.Errorf("goal %s needs an objective", action)
+		}
+		req.Objective = strings.Join(args[2:], " ")
+	case protocol.GoalActionClear:
+	default:
+		return fmt.Errorf("unknown goal action %q (use set, edit, or clear)", args[1])
+	}
+	info, err := c.GoalAction(ctx, req)
+	if err != nil {
+		return err
+	}
+	printGoalStatus(info.GetGoal())
+	return nil
+}
+
+func printGoalStatus(g *protocol.GoalStatus) {
+	if g == nil {
+		fmt.Println("no goal")
+		return
+	}
+	switch g.GetStatus() {
+	case protocol.GoalActive:
+		if ps := g.GetProviderStatus(); ps != "" && ps != protocol.GoalActive {
+			fmt.Printf("active (%s): %s\n", ps, g.GetText())
+			return
+		}
+		fmt.Printf("active: %s\n", g.GetText())
+	default:
+		if r := g.GetReason(); r != "" {
+			fmt.Printf("%s (%s)\n", g.GetStatus(), r)
+			return
+		}
+		fmt.Println(g.GetStatus())
+	}
 }
 
 func ago(t time.Time) string {

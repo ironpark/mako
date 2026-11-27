@@ -155,6 +155,11 @@ message SessionInfo {
   // session's last turn on its host, such as an expired OAuth login; unset
   // otherwise and cleared once a later turn starts or succeeds (revision 51).
   AuthError auth_error = 42;
+  // goal is the tracked long-running goal of the session's agent, as
+  // reported by Claude Code transcript attachments or Codex app-server
+  // notifications; unset when none has been observed or once the session
+  // has ended (revision 51).
+  GoalStatus goal = 43;
 }
 
 // AuthError is a provider authentication failure reported by a session's
@@ -178,6 +183,46 @@ message AuthError {
   string command = 5;
   // detected_at is when the failure was observed on the session's node.
   google.protobuf.Timestamp detected_at = 6;
+}
+
+// GoalStatus is the tracked long-running goal state of a session.
+message GoalStatus {
+  // source names the provider that reported this goal: "claude" or "codex".
+  string source = 1;
+  // status is the normalized lifecycle state: "active", "inactive", or
+  // "unavailable".
+  string status = 2;
+  // reason further qualifies an inactive or unavailable state: "completed",
+  // "cleared", "none", "malformed", or "unsupported".
+  string reason = 3;
+  // text is the goal objective / condition while active.
+  string text = 4;
+  // provider_status is the provider's native status while active (for Codex:
+  // "active", "paused", "blocked", "usageLimited", "budgetLimited").
+  string provider_status = 5;
+  // observed_at is when the daemon observed this goal state.
+  google.protobuf.Timestamp observed_at = 6;
+  // source_session_id is the native conversation or thread ID that emitted
+  // this goal state.
+  string source_session_id = 7;
+  // source_revision deduplicates updates (Claude attachment uuid or Codex
+  // goal updatedAt timestamp).
+  string source_revision = 8;
+  // can_edit and can_clear advertise whether GoalAction may edit/set or
+  // clear the goal on this session.
+  bool can_edit = 9;
+  bool can_clear = 10;
+}
+
+// GoalAction sets, edits, or clears a session's tracked agent goal. The
+// reply is its SessionInfo (revision 51).
+message GoalAction {
+  string node_id = 1;
+  string session_id = 2;
+  // action is "set", "edit", or "clear".
+  string action = 3;
+  // objective is the goal text when action is "set" or "edit".
+  string objective = 4;
 }
 
 // AgentControls are the permission modes, models and efforts a session's

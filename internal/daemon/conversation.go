@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/session"
@@ -328,6 +329,16 @@ func (d *Daemon) refreshActivity(s *session.Session) {
 		s.ReportLogAuthError(info.GetConversationId(), activity.AuthError, activity.AuthErrorAt, activity.AuthClearedAt)
 		if len(activity.Tasks) > 0 || d.codexBridge(s.ID()) == nil {
 			s.ReportTasks(info.GetConversationId(), activity.Tasks)
+		}
+		if activity.Goal != nil {
+			goal := proto.CloneOf(activity.Goal)
+			if goal.GetStatus() == protocol.GoalActive {
+				if _, ok := agents.As[agent.GoalCommands](info.GetAgent()); ok {
+					goal.CanEdit = true
+					goal.CanClear = true
+				}
+			}
+			s.ReportGoal(info.GetConversationId(), goal)
 		}
 		d.loggedCommands.set(s.ID(), info.GetAgent(), activity.Commands)
 	}

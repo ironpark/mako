@@ -642,4 +642,29 @@ public interface SessionInfoOrBuilder extends
    * @return The authError.
    */
   dev.ironpark.mako.v2.AuthError getAuthError();
+
+  /**
+   * <pre>
+   * goal is the tracked long-running goal of the session's agent, as
+   * reported by Claude Code transcript attachments or Codex app-server
+   * notifications; unset when none has been observed or once the session
+   * has ended (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+   * @return Whether the goal field is set.
+   */
+  boolean hasGoal();
+  /**
+   * <pre>
+   * goal is the tracked long-running goal of the session's agent, as
+   * reported by Claude Code transcript attachments or Codex app-server
+   * notifications; unset when none has been observed or once the session
+   * has ended (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+   * @return The goal.
+   */
+  dev.ironpark.mako.v2.GoalStatus getGoal();
 }

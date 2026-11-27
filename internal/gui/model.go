@@ -88,7 +88,11 @@ type model struct {
 	RenameOpen          *ggui.StateValue[bool]
 	RenameText          *ggui.StateValue[string]
 	RenameErr           *ggui.StateValue[string]
-	renaming            string                   // the session RenameOpen names
+	renaming            string // the session RenameOpen names
+	GoalOpen            *ggui.StateValue[bool]
+	GoalText            *ggui.StateValue[string]
+	GoalErr             *ggui.StateValue[string]
+	goalSession         string                   // the session GoalOpen edits
 	FindOpen            *ggui.StateValue[bool]   // the find bar is over the selected session; see find.go
 	FindText            *ggui.StateValue[string] // the words it finds
 	findFocus           bool                     // the find bar's field takes the focus as it is painted
@@ -321,6 +325,9 @@ func newModel(cfg *config.Config, addr string) *model {
 		RenameOpen:          ggui.State(false),
 		RenameText:          ggui.State(""),
 		RenameErr:           ggui.State(""),
+		GoalOpen:            ggui.State(false),
+		GoalText:            ggui.State(""),
+		GoalErr:             ggui.State(""),
 		FindOpen:            ggui.State(false),
 		FindText:            ggui.State(""),
 		SearchQuery:         ggui.State(""),

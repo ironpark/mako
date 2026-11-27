@@ -116,6 +116,7 @@ type Session struct {
 	childHooks    map[string]childStatus
 	childLogs     []*protocol.SubAgent
 	tasks         []*protocol.BackgroundTask // its agent's in the background, as its log says
+	goal          *protocol.GoalStatus       // its agent's tracked goal, guarded by mu
 	approval      *protocol.Approval
 	approvalDone  chan struct{}
 	lastMessage   time.Time // when the conversation last said something, as its log has it
@@ -267,6 +268,7 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Dialog:         s.dialogLocked(),
 		Controls:       controls(s.spec.Agent),
 		AuthError:      proto.CloneOf(s.pub.authError),
+		Goal:           s.goalLocked(),
 	}
 }
 
@@ -346,6 +348,57 @@ func (s *Session) tasksLocked() []*protocol.BackgroundTask {
 		return nil
 	}
 	return s.tasks
+}
+
+// ReportGoal records the goal state observed from conversation id's log,
+// notifying listeners when the goal changes. Reports for another conversation
+// or after exit are ignored.
+func (s *Session) ReportGoal(id string, goal *protocol.GoalStatus) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited || (id != "" && s.conversationID != id) {
+		return
+	}
+	if protocol.SameGoal(s.goal, goal) {
+		return
+	}
+	s.goal = proto.CloneOf(goal)
+	s.changedLocked()
+}
+
+// ReportBridgeGoal records the goal state observed from a live agent bridge
+// (such as Codex app-server) and notifies listeners when it changes.
+func (s *Session) ReportBridgeGoal(goal *protocol.GoalStatus) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited {
+		return
+	}
+	if protocol.SameGoal(s.goal, goal) {
+		return
+	}
+	s.goal = proto.CloneOf(goal)
+	s.changedLocked()
+}
+
+// ClearGoal drops the session's tracked goal (for example when switching to a
+// fresh conversation/thread) and notifies listeners if one was set.
+func (s *Session) ClearGoal() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.goal == nil {
+		return
+	}
+	s.goal = nil
+	s.changedLocked()
+}
+
+// goalLocked is the goal Info reports: none once the session has ended.
+func (s *Session) goalLocked() *protocol.GoalStatus {
+	if s.state == protocol.StateExited || s.goal == nil {
+		return nil
+	}
+	return proto.CloneOf(s.goal)
 }
 
 // shown is the command as Info reports it.
@@ -1149,6 +1202,7 @@ func (s *Session) pump() {
 		if req == nil || closing {
 			s.state = protocol.StateExited
 			s.clearApprovalLocked()
+			s.goal = nil
 			s.exitCode = &exitCode
 			s.progress = activity.Progress{}
 			for id, sub := range s.subs {
@@ -1175,6 +1229,7 @@ func (s *Session) pump() {
 			s.restarting = false
 			s.state = protocol.StateExited
 			s.clearApprovalLocked()
+			s.goal = nil
 			s.exitCode = &exitCode
 			s.progress = activity.Progress{}
 			for id, sub := range s.subs {

@@ -36,6 +36,10 @@ const Revision = 51
 // actionable re-login guidance.
 const RevisionAuthError = 51
 
+// RevisionGoalStatus adds unified Claude + Codex goal status tracking on
+// SessionInfo.goal (field 43) and goal control via GoalAction (Envelope 166).
+const RevisionGoalStatus = 51
+
 // Kinds of a SessionInfo.AuthError.
 const (
 	AuthErrorOAuthExpired = "oauth_expired"
@@ -369,6 +373,49 @@ const (
 	// the log says no end.
 	TaskStopped = "stopped"
 )
+
+// Normalized states, reasons, and actions for GoalStatus and GoalAction.
+const (
+	GoalActive      = "active"
+	GoalInactive    = "inactive"
+	GoalUnavailable = "unavailable"
+
+	GoalReasonNone        = "none"
+	GoalReasonCleared     = "cleared"
+	GoalReasonCompleted   = "completed"
+	GoalReasonMalformed   = "malformed"
+	GoalReasonUnsupported = "unsupported"
+
+	GoalActionSet   = "set"
+	GoalActionEdit  = "edit"
+	GoalActionClear = "clear"
+)
+
+// Active reports whether g describes an active goal with an objective.
+func (g *GoalStatus) Active() bool {
+	return g != nil && g.GetStatus() == GoalActive && strings.TrimSpace(g.GetText()) != ""
+}
+
+// SameGoal reports whether a and b represent the same goal state, ignoring
+// ObservedAt so duplicate notifications or repeated log reads for the same
+// revision do not cause redundant session updates.
+func SameGoal(a, b *GoalStatus) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.GetSource() == b.GetSource() &&
+		a.GetStatus() == b.GetStatus() &&
+		a.GetReason() == b.GetReason() &&
+		a.GetText() == b.GetText() &&
+		a.GetProviderStatus() == b.GetProviderStatus() &&
+		a.GetSourceSessionId() == b.GetSourceSessionId() &&
+		a.GetSourceRevision() == b.GetSourceRevision() &&
+		a.GetCanEdit() == b.GetCanEdit() &&
+		a.GetCanClear() == b.GetCanClear()
+}
 
 // RunningTasks is how many of a session's background tasks run.
 func (x *SessionInfo) RunningTasks() int {

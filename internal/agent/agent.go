@@ -444,6 +444,36 @@ type BackgroundTasks interface {
 	TaskEvents(line []byte) []TaskEvent
 }
 
+// LogGoals is a driver whose conversation log records goal status updates
+// (such as Claude Code's goal_status transcript attachments).
+type LogGoals interface {
+	GoalEvent(line []byte) (GoalEvent, bool)
+}
+
+// GoalEvent is a single goal status record parsed from an agent's log.
+type GoalEvent struct {
+	Source     string    // provider name (e.g. "claude")
+	Revision   string    // deduplication key (e.g. attachment uuid)
+	SessionID  string    // native conversation ID on the record
+	Timestamp  time.Time // record timestamp, if present
+	Met        bool
+	Condition  string
+	Sentinel   bool
+	Reason     string // evaluator detail; omitted from synced SessionInfo.Goal
+	Iterations int
+	DurationMs int64
+	Tokens     int64
+}
+
+// GoalCommands is an agent whose long-running goal can be updated or cleared
+// through slash commands submitted at its prompt (such as Claude Code's
+// `/goal <objective>` and `/goal clear`).
+type GoalCommands interface {
+	GoalCommandName() string
+	GoalSetCommand(objective string) string
+	GoalClearCommand() string
+}
+
 // TaskEvent is what one line of a log says of a background task.
 type TaskEvent struct {
 	Kind   TaskEventKind

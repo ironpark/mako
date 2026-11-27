@@ -567,7 +567,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	session := widget.Column(
 		widget.Expanded(widget.Stack(feed, newTurnRail(m, find, turns), &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
 			usageOverlay(m, id, chatUsage, viewChip(m, id, group)), findBar(m, id, find.finder())).Expand()),
-		authErrorCard(m, id), approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), planProgress(m, id, state), liveActivityCard(m, id, state), runningAgents(m, id, state), runningTasks(m, id), chatInput(m, id, state),
+		authErrorCard(m, id), approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), planProgress(m, id, state), liveActivityCard(m, id, state), runningAgents(m, id, state), runningTasks(m, id), goalBanner(m, id), chatInput(m, id, state),
 	).Stretch()
 	// A subagent opened shows its conversation in place of the session's,
 	// which is built once and kept, scroll and draft and all, to come back

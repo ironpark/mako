@@ -1937,4 +1937,15 @@ var catalogKo = map[string]string{
 	"Copy command":                   "명령어 복사",
 	"Command copied":                 "명령어를 복사했습니다",
 	"Run %s on the host":             "호스트에서 %s 실행",
+
+	// Goal status banner and dialog
+	"Goal":                                  "목표",
+	"Paused":                                "일시 중지됨",
+	"Usage limited":                         "사용량 제한",
+	"Budget limited":                        "예산 제한",
+	"Edit goal":                             "목표 편집",
+	"Clear goal":                            "목표 해제",
+	"Goal objective":                        "목표 내용",
+	"Describe the objective to work toward": "달성할 목표를 입력하세요",
+	"Goal objective cannot be empty":        "목표 내용을 입력하세요",
 }

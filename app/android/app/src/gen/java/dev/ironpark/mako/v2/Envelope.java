@@ -152,6 +152,7 @@ public  final class Envelope extends
     READ_ACCOUNT_USAGE(163),
     ACCOUNT_USAGE(164),
     REWIND_SESSION(165),
+    GOAL_ACTION(166),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -293,6 +294,7 @@ public  final class Envelope extends
         case 163: return READ_ACCOUNT_USAGE;
         case 164: return ACCOUNT_USAGE;
         case 165: return REWIND_SESSION;
+        case 166: return GOAL_ACTION;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -7131,6 +7133,76 @@ public  final class Envelope extends
     }
   }
 
+  public static final int GOAL_ACTION_FIELD_NUMBER = 166;
+  /**
+   * <pre>
+   * Unified agent goal status control (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+   */
+  @java.lang.Override
+  public boolean hasGoalAction() {
+    return bodyCase_ == 166;
+  }
+  /**
+   * <pre>
+   * Unified agent goal status control (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.GoalAction getGoalAction() {
+    if (bodyCase_ == 166) {
+       return (dev.ironpark.mako.v2.GoalAction) body_;
+    }
+    return dev.ironpark.mako.v2.GoalAction.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Unified agent goal status control (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+   */
+  private void setGoalAction(dev.ironpark.mako.v2.GoalAction value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 166;
+  }
+  /**
+   * <pre>
+   * Unified agent goal status control (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+   */
+  private void mergeGoalAction(dev.ironpark.mako.v2.GoalAction value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 166 &&
+        body_ != dev.ironpark.mako.v2.GoalAction.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.GoalAction.newBuilder((dev.ironpark.mako.v2.GoalAction) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 166;
+  }
+  /**
+   * <pre>
+   * Unified agent goal status control (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+   */
+  private void clearGoalAction() {
+    if (bodyCase_ == 166) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -13894,6 +13966,78 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Unified agent goal status control (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+     */
+    @java.lang.Override
+    public boolean hasGoalAction() {
+      return instance.hasGoalAction();
+    }
+    /**
+     * <pre>
+     * Unified agent goal status control (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.GoalAction getGoalAction() {
+      return instance.getGoalAction();
+    }
+    /**
+     * <pre>
+     * Unified agent goal status control (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+     */
+    public Builder setGoalAction(dev.ironpark.mako.v2.GoalAction value) {
+      copyOnWrite();
+      instance.setGoalAction(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Unified agent goal status control (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+     */
+    public Builder setGoalAction(
+        dev.ironpark.mako.v2.GoalAction.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGoalAction(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Unified agent goal status control (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+     */
+    public Builder mergeGoalAction(dev.ironpark.mako.v2.GoalAction value) {
+      copyOnWrite();
+      instance.mergeGoalAction(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Unified agent goal status control (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+     */
+    public Builder clearGoalAction() {
+      copyOnWrite();
+      instance.clearGoalAction();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -14040,9 +14184,10 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.ReadAccountUsage.class,
             dev.ironpark.mako.v2.AccountUsage.class,
             dev.ironpark.mako.v2.RewindSession.class,
+            dev.ironpark.mako.v2.GoalAction.class,
           };
           java.lang.String info =
-              "\u0000\u0080\u0001\u0000\u0001\u00a5\u0080\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
+              "\u0000\u0081\u0001\u0000\u0001\u00a6\u0081\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
               "\n<\u0000\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000" +
               "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <" +
               "\u0000!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000" +
@@ -14058,7 +14203,7 @@ public  final class Envelope extends
               "<\u0000\u0091<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000" +
               "\u0097<\u0000\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000\u009d" +
               "<\u0000\u009e<\u0000\u009f<\u0000\u00a0<\u0000\u00a1<\u0000\u00a2<\u0000\u00a3<\u0000" +
-              "\u00a4<\u0000\u00a5<\u0000";
+              "\u00a4<\u0000\u00a5<\u0000\u00a6<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

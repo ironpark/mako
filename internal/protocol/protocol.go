@@ -142,6 +142,7 @@ const (
 	TypeReadAccountUsage      Type = "read_account_usage"
 	TypeAccountUsage          Type = "account_usage"
 	TypeRewindSession         Type = "rewind_session"
+	TypeGoalAction            Type = "goal_action"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

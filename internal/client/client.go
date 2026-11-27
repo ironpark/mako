@@ -498,6 +498,11 @@ func (c *Client) ConfigureAgent(ctx context.Context, req *protocol.ConfigureAgen
 	return request[*protocol.SessionInfo](ctx, c, protocol.TypeConfigureAgent, req)
 }
 
+// GoalAction sets, edits, or clears a session's tracked agent goal.
+func (c *Client) GoalAction(ctx context.Context, req *protocol.GoalAction) (*protocol.SessionInfo, error) {
+	return request[*protocol.SessionInfo](ctx, c, protocol.TypeGoalAction, req)
+}
+
 // Sleep stops the program of a session whose agent rests, to resume it
 // when it is next attached, and returns the session as it is now.
 func (c *Client) Sleep(ctx context.Context, req *protocol.SleepSession) (*protocol.SessionInfo, error) {

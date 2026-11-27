@@ -67,6 +67,7 @@ func window(m *model) ggui.Widget {
 		pluginAgentBar(m),
 		folderPickerDialog(m),
 		renameDialog(m),
+		goalDialog(m),
 		projectDialogs(m),
 		fileDialogs(m),
 		tunnelDialog(m),

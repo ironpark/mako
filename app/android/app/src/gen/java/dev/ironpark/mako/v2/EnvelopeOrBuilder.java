@@ -1590,5 +1590,24 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.RewindSession getRewindSession();
 
+  /**
+   * <pre>
+   * Unified agent goal status control (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+   * @return Whether the goalAction field is set.
+   */
+  boolean hasGoalAction();
+  /**
+   * <pre>
+   * Unified agent goal status control (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalAction goal_action = 166 [json_name = "goalAction"];</code>
+   * @return The goalAction.
+   */
+  dev.ironpark.mako.v2.GoalAction getGoalAction();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

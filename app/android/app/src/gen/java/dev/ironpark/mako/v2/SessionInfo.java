@@ -2379,6 +2379,88 @@ public  final class SessionInfo extends
     bitField0_ = (bitField0_ & ~0x00000400);
   }
 
+  public static final int GOAL_FIELD_NUMBER = 43;
+  private dev.ironpark.mako.v2.GoalStatus goal_;
+  /**
+   * <pre>
+   * goal is the tracked long-running goal of the session's agent, as
+   * reported by Claude Code transcript attachments or Codex app-server
+   * notifications; unset when none has been observed or once the session
+   * has ended (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+   */
+  @java.lang.Override
+  public boolean hasGoal() {
+    return ((bitField0_ & 0x00000800) != 0);
+  }
+  /**
+   * <pre>
+   * goal is the tracked long-running goal of the session's agent, as
+   * reported by Claude Code transcript attachments or Codex app-server
+   * notifications; unset when none has been observed or once the session
+   * has ended (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.GoalStatus getGoal() {
+    return goal_ == null ? dev.ironpark.mako.v2.GoalStatus.getDefaultInstance() : goal_;
+  }
+  /**
+   * <pre>
+   * goal is the tracked long-running goal of the session's agent, as
+   * reported by Claude Code transcript attachments or Codex app-server
+   * notifications; unset when none has been observed or once the session
+   * has ended (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+   */
+  private void setGoal(dev.ironpark.mako.v2.GoalStatus value) {
+    java.util.Objects.requireNonNull(value);
+    goal_ = value;
+    bitField0_ |= 0x00000800;
+  }
+  /**
+   * <pre>
+   * goal is the tracked long-running goal of the session's agent, as
+   * reported by Claude Code transcript attachments or Codex app-server
+   * notifications; unset when none has been observed or once the session
+   * has ended (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+   */
+  @java.lang.SuppressWarnings("ReferenceEquality")
+  private void mergeGoal(dev.ironpark.mako.v2.GoalStatus value) {
+    java.util.Objects.requireNonNull(value);
+    if (goal_ != null &&
+        goal_ != dev.ironpark.mako.v2.GoalStatus.getDefaultInstance()) {
+      goal_ =
+        dev.ironpark.mako.v2.GoalStatus.newBuilder(goal_).mergeFrom(value).buildPartial();
+    } else {
+      goal_ = value;
+    }
+    bitField0_ |= 0x00000800;
+  }
+  /**
+   * <pre>
+   * goal is the tracked long-running goal of the session's agent, as
+   * reported by Claude Code transcript attachments or Codex app-server
+   * notifications; unset when none has been observed or once the session
+   * has ended (revision 51).
+   * </pre>
+   *
+   * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+   */
+  private void clearGoal() {
+    goal_ = null;
+    bitField0_ = (bitField0_ & ~0x00000800);
+  }
+
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -4917,6 +4999,95 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * goal is the tracked long-running goal of the session's agent, as
+     * reported by Claude Code transcript attachments or Codex app-server
+     * notifications; unset when none has been observed or once the session
+     * has ended (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+     */
+    @java.lang.Override
+    public boolean hasGoal() {
+      return instance.hasGoal();
+    }
+    /**
+     * <pre>
+     * goal is the tracked long-running goal of the session's agent, as
+     * reported by Claude Code transcript attachments or Codex app-server
+     * notifications; unset when none has been observed or once the session
+     * has ended (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.GoalStatus getGoal() {
+      return instance.getGoal();
+    }
+    /**
+     * <pre>
+     * goal is the tracked long-running goal of the session's agent, as
+     * reported by Claude Code transcript attachments or Codex app-server
+     * notifications; unset when none has been observed or once the session
+     * has ended (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+     */
+    public Builder setGoal(dev.ironpark.mako.v2.GoalStatus value) {
+      copyOnWrite();
+      instance.setGoal(value);
+      return this;
+      }
+    /**
+     * <pre>
+     * goal is the tracked long-running goal of the session's agent, as
+     * reported by Claude Code transcript attachments or Codex app-server
+     * notifications; unset when none has been observed or once the session
+     * has ended (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+     */
+    public Builder setGoal(
+        dev.ironpark.mako.v2.GoalStatus.Builder builderForValue) {
+      copyOnWrite();
+      instance.setGoal(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * goal is the tracked long-running goal of the session's agent, as
+     * reported by Claude Code transcript attachments or Codex app-server
+     * notifications; unset when none has been observed or once the session
+     * has ended (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+     */
+    public Builder mergeGoal(dev.ironpark.mako.v2.GoalStatus value) {
+      copyOnWrite();
+      instance.mergeGoal(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * goal is the tracked long-running goal of the session's agent, as
+     * reported by Claude Code transcript attachments or Codex app-server
+     * notifications; unset when none has been observed or once the session
+     * has ended (revision 51).
+     * </pre>
+     *
+     * <code>.mako.v2.GoalStatus goal = 43 [json_name = "goal"];</code>
+     */
+    public Builder clearGoal() {  copyOnWrite();
+      instance.clearGoal();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -4977,15 +5148,16 @@ public  final class SessionInfo extends
             "seenSeq_",
             "parentNodeId_",
             "authError_",
+            "goal_",
           };
           java.lang.String info =
-              "\u0000*\u0000\u0001\u0001**\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0000+\u0000\u0001\u0001++\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
               "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208\u000b\u000b" +
               "\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011\u0208\u0012" +
               "\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004\u0017\u1009" +
               "\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208\u001d\u0007" +
               "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003#\u1009\b$\u1009\t%\u0208&\u0003" +
-              "\'\u0003(\u0003)\u0208*\u1009\n";
+              "\'\u0003(\u0003)\u0208*\u1009\n+\u1009\u000b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

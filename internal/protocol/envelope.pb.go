@@ -168,6 +168,7 @@ type Envelope struct {
 	//	*Envelope_ReadAccountUsage
 	//	*Envelope_AccountUsage
 	//	*Envelope_RewindSession
+	//	*Envelope_GoalAction
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1358,6 +1359,15 @@ func (x *Envelope) GetRewindSession() *RewindSession {
 	return nil
 }
 
+func (x *Envelope) GetGoalAction() *GoalAction {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_GoalAction); ok {
+			return x.GoalAction
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1886,6 +1896,11 @@ type Envelope_RewindSession struct {
 	RewindSession *RewindSession `protobuf:"bytes,165,opt,name=rewind_session,json=rewindSession,proto3,oneof"`
 }
 
+type Envelope_GoalAction struct {
+	// Unified agent goal status control (revision 51).
+	GoalAction *GoalAction `protobuf:"bytes,166,opt,name=goal_action,json=goalAction,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -2138,6 +2153,8 @@ func (*Envelope_AccountUsage) isEnvelope_Body() {}
 
 func (*Envelope_RewindSession) isEnvelope_Body() {}
 
+func (*Envelope_GoalAction) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -2207,7 +2224,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\xc78\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\x809\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -2359,7 +2376,9 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\x10relay_stop_agent\x18\xa2\x01 \x01(\v2\x17.mako.v2.RelayStopAgentH\x00R\x0erelayStopAgent\x12J\n" +
 	"\x12read_account_usage\x18\xa3\x01 \x01(\v2\x19.mako.v2.ReadAccountUsageH\x00R\x10readAccountUsage\x12=\n" +
 	"\raccount_usage\x18\xa4\x01 \x01(\v2\x15.mako.v2.AccountUsageH\x00R\faccountUsage\x12@\n" +
-	"\x0erewind_session\x18\xa5\x01 \x01(\v2\x16.mako.v2.RewindSessionH\x00R\rrewindSessionB\x06\n" +
+	"\x0erewind_session\x18\xa5\x01 \x01(\v2\x16.mako.v2.RewindSessionH\x00R\rrewindSession\x127\n" +
+	"\vgoal_action\x18\xa6\x01 \x01(\v2\x13.mako.v2.GoalActionH\x00R\n" +
+	"goalActionB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2507,6 +2526,7 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*ReadAccountUsage)(nil),      // 124: mako.v2.ReadAccountUsage
 	(*AccountUsage)(nil),          // 125: mako.v2.AccountUsage
 	(*RewindSession)(nil),         // 126: mako.v2.RewindSession
+	(*GoalAction)(nil),            // 127: mako.v2.GoalAction
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2635,11 +2655,12 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	124, // 123: mako.v2.Envelope.read_account_usage:type_name -> mako.v2.ReadAccountUsage
 	125, // 124: mako.v2.Envelope.account_usage:type_name -> mako.v2.AccountUsage
 	126, // 125: mako.v2.Envelope.rewind_session:type_name -> mako.v2.RewindSession
-	126, // [126:126] is the sub-list for method output_type
-	126, // [126:126] is the sub-list for method input_type
-	126, // [126:126] is the sub-list for extension type_name
-	126, // [126:126] is the sub-list for extension extendee
-	0,   // [0:126] is the sub-list for field type_name
+	127, // 126: mako.v2.Envelope.goal_action:type_name -> mako.v2.GoalAction
+	127, // [127:127] is the sub-list for method output_type
+	127, // [127:127] is the sub-list for method input_type
+	127, // [127:127] is the sub-list for extension type_name
+	127, // [127:127] is the sub-list for extension extendee
+	0,   // [0:127] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2786,6 +2807,7 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_ReadAccountUsage)(nil),
 		(*Envelope_AccountUsage)(nil),
 		(*Envelope_RewindSession)(nil),
+		(*Envelope_GoalAction)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

@@ -203,6 +203,9 @@ message Envelope {
     ReadAccountUsage read_account_usage = 163;
     AccountUsage account_usage = 164;
     RewindSession rewind_session = 165;
+
+    // Unified agent goal status control (revision 51).
+    GoalAction goal_action = 166;
   }
 }
 

@@ -1855,3 +1855,264 @@ func TestCodexAbortIdleFallsBackToPTYAndDiscoversTurnViaThreadRead(t *testing.T)
 		t.Fatalf("discovered TurnInterrupt = %+v, want th-disc / turn-discovered", got)
 	}
 }
+
+func TestCodexAbortStaleEpochGoalAndAuthNotificationsIgnored(t *testing.T) {
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	s, err := session.Start(session.Spec{
+		ID: "codex-stale-goal-auth", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+		Command: testSleepCommand(), Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	b := newCodexBridge(t.Context(), s.ID(), nil, nil, nil, nil)
+	defer b.Close()
+	b.mu.Lock()
+	b.epoch = 2
+	b.tid = "th-ep2"
+	b.bound = true
+	b.mu.Unlock()
+
+	emit := func(epoch uint64, method string, params any) {
+		t.Helper()
+		raw, err := json.Marshal(params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d.handleCodexNotification(s, b, codex.Notification{
+			Method:      method,
+			Params:      raw,
+			EmittedAtMs: time.Now().UnixMilli(),
+		}, epoch)
+	}
+
+	// Establish active goal and auth error on epoch 2.
+	emit(2, "thread/goal/updated", map[string]any{
+		"threadId": "th-ep2",
+		"goal": map[string]any{
+			"threadId":  "th-ep2",
+			"objective": "epoch-2 objective",
+			"status":    "active",
+			"updatedAt": 1781690000,
+		},
+	})
+	emit(2, "error", map[string]any{
+		"threadId":  "th-ep2",
+		"turnId":    "turn-ep2",
+		"willRetry": false,
+		"error": map[string]any{
+			"codexErrorInfo": "unauthorized",
+			"message":        "Your access token could not be refreshed.",
+		},
+	})
+	if got := s.Info().GetGoal(); got == nil || got.GetText() != "epoch-2 objective" {
+		t.Fatalf("epoch-2 goal = %v, want epoch-2 objective", got)
+	}
+	if ae := s.Info().GetAuthError(); ae == nil || ae.GetKind() != protocol.AuthErrorOAuthExpired {
+		t.Fatalf("epoch-2 authError = %v, want oauth_expired", ae)
+	}
+
+	// Stale epoch 1 notifications must not overwrite or clear epoch 2 goal or auth error.
+	emit(1, "thread/goal/updated", map[string]any{
+		"threadId": "th-ep2",
+		"goal": map[string]any{
+			"threadId":  "th-ep2",
+			"objective": "stale epoch-1 objective",
+			"status":    "active",
+			"updatedAt": 1781690099,
+		},
+	})
+	emit(1, "thread/goal/cleared", map[string]any{"threadId": "th-ep2"})
+	emit(1, "account/login/completed", map[string]any{"loginId": "l-stale", "success": true})
+	emit(1, "turn/completed", map[string]any{
+		"threadId": "th-ep2",
+		"turn":     map[string]any{"id": "turn-ep1", "status": "completed"},
+	})
+
+	if got := s.Info().GetGoal(); got == nil || got.GetText() != "epoch-2 objective" {
+		t.Fatalf("stale epoch 1 corrupted epoch 2 goal: %v", got)
+	}
+	if ae := s.Info().GetAuthError(); ae == nil || ae.GetKind() != protocol.AuthErrorOAuthExpired {
+		t.Fatalf("stale epoch 1 corrupted epoch 2 authError: %v", ae)
+	}
+}
+
+func TestCodexAbortRestartPropagatesAndClearsGoal(t *testing.T) {
+	t.Run("resumed thread propagates goal and supports post-restart goal RPCs", func(t *testing.T) {
+		srv1 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			if method == "thread/read" {
+				reply(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "th-goal-r"}}})
+			}
+		})
+		var setCalls atomic.Int32
+		srv2 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "thread/read":
+				reply(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "th-goal-r"}}})
+			case "thread/resume":
+				reply(map[string]any{
+					"id": id,
+					"result": map[string]any{
+						"thread": map[string]any{
+							"id": "th-goal-r",
+							"goal": map[string]any{
+								"threadId":  "th-goal-r",
+								"objective": "resumed goal objective",
+								"status":    "active",
+								"updatedAt": 1781691000,
+							},
+						},
+					},
+				})
+			case "thread/goal/set":
+				setCalls.Add(1)
+				var p codex.ThreadGoalSetParams
+				_ = json.Unmarshal(params, &p)
+				obj := ""
+				if p.Objective != nil {
+					obj = *p.Objective
+				}
+				reply(map[string]any{
+					"id": id,
+					"result": map[string]any{
+						"goal": map[string]any{
+							"threadId":  p.ThreadID,
+							"objective": obj,
+							"status":    "active",
+							"updatedAt": 1781691005,
+						},
+					},
+				})
+			case "thread/backgroundTerminals/list":
+				reply(map[string]any{"id": id, "result": map[string]any{"data": []any{}}})
+			}
+		})
+
+		c1, err := codex.DialAppServerWS(t.Context(), srv1.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := session.Start(session.Spec{
+			ID: "codex-restart-goal-ok", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		d.sessions.add(s)
+
+		b := newCodexBridge(t.Context(), s.ID(), c1, nil, nil, nil)
+		b.setThread("th-goal-r", true)
+		b.restartServer = func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error) {
+			c2, err := codex.DialAppServerWS(ctx, srv2.wsURL(), "")
+			if err != nil {
+				return nil, err
+			}
+			res, err := resumeCodexThread(ctx, c2, codex.ThreadResumeParams{ThreadID: prevThreadID, ExcludeTurns: true})
+			if err != nil {
+				_ = c2.Close()
+				return nil, err
+			}
+			var initGoal *protocol.GoalStatus
+			if res.Thread.Goal != nil {
+				initGoal = codex.MapThreadGoal(res.Thread.Goal, res.Thread.ID, true, true, time.Now())
+			}
+			return &codexRestartOutcome{
+				client:        c2,
+				threadID:      res.Thread.ID,
+				resumedThread: true,
+				initGoal:      initGoal,
+				tuiCmd:        testSleepCommand(),
+			}, nil
+		}
+		d.attachCodexBridge(s, b)
+		defer b.Close()
+
+		srv1.sendNotification(t, "turn/started", map[string]any{
+			"threadId": "th-goal-r", "turn": map[string]any{"id": "t1", "status": "inProgress"},
+		})
+		waitFor(t, "turn did not start", func() bool { return s.Info().GetStatus() == protocol.AgentWorking })
+
+		res := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: 40 * time.Millisecond})
+		if !res.ForcedRestart || !res.ResumedThread || res.Err != nil {
+			t.Fatalf("abort result = %+v, want forced restart + resumed", res)
+		}
+		if got := s.Info().GetGoal(); got == nil || got.GetText() != "resumed goal objective" || !got.GetCanEdit() {
+			t.Fatalf("post-restart goal = %v, want resumed goal objective (editable)", got)
+		}
+
+		// Subsequent setGoal uses the swapped client safely under -race.
+		if err := b.setGoal(t.Context(), s, "updated post-restart goal"); err != nil {
+			t.Fatalf("post-restart setGoal: %v", err)
+		}
+		if setCalls.Load() != 1 || s.Info().GetGoal().GetText() != "updated post-restart goal" {
+			t.Fatalf("setCalls=%d goal=%v", setCalls.Load(), s.Info().GetGoal())
+		}
+	})
+
+	t.Run("failed thread resume clears previous goal", func(t *testing.T) {
+		srv1 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			if method == "thread/read" {
+				reply(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "th-goal-fail"}}})
+			}
+		})
+		srv2 := startMockCodexWSServer(t, nil)
+
+		c1, err := codex.DialAppServerWS(t.Context(), srv1.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := session.Start(session.Spec{
+			ID: "codex-restart-goal-clear", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		d.sessions.add(s)
+
+		b := newCodexBridge(t.Context(), s.ID(), c1, nil, nil, nil)
+		b.setThread("th-goal-fail", true)
+		b.restartServer = func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error) {
+			c2, err := codex.DialAppServerWS(ctx, srv2.wsURL(), "")
+			if err != nil {
+				return nil, err
+			}
+			return &codexRestartOutcome{
+				client:        c2,
+				resumedThread: false,
+				tuiCmd:        testSleepCommand(),
+			}, nil
+		}
+		d.attachCodexBridge(s, b)
+		defer b.Close()
+
+		s.ReportBridgeGoal(&protocol.GoalStatus{
+			Source:          "codex",
+			Status:          protocol.GoalActive,
+			Text:            "old thread goal",
+			SourceSessionId: "th-goal-fail",
+			SourceRevision:  "1",
+		})
+		srv1.sendNotification(t, "turn/started", map[string]any{
+			"threadId": "th-goal-fail", "turn": map[string]any{"id": "t1", "status": "inProgress"},
+		})
+		waitFor(t, "turn did not start", func() bool { return s.Info().GetStatus() == protocol.AgentWorking })
+
+		res := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: 40 * time.Millisecond})
+		if !res.ForcedRestart || res.ResumedThread || res.Err != nil {
+			t.Fatalf("abort result = %+v, want forced restart with resumed=false", res)
+		}
+		if got := s.Info().GetGoal(); got != nil {
+			t.Fatalf("stale goal survived failed thread resume: %v", got)
+		}
+	})
+}

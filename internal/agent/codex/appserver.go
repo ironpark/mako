@@ -117,6 +117,7 @@ type ThreadInfo struct {
 	HistoryMode     string              `json:"historyMode,omitempty"` // "legacy" or "paginated"
 	Turns           []ThreadTurnSummary `json:"turns,omitempty"`
 	Status          ThreadStatus        `json:"status,omitempty"`
+	Goal            *ThreadGoal         `json:"goal,omitempty"`
 }
 
 // IsSubagent reports whether this thread belongs to a subagent rather than
@@ -352,6 +353,80 @@ type ThreadTokenUsageNotification struct {
 
 type AccountRateLimitsUpdatedNotification struct {
 	RateLimits RateLimitSnapshot `json:"rateLimits"`
+}
+
+// ThreadGoal is a Codex thread's tracked long-running goal state.
+type ThreadGoal struct {
+	ThreadID        string `json:"threadId,omitempty"`
+	ThreadIDSnake   string `json:"thread_id,omitempty"`
+	Objective       string `json:"objective"`
+	Status          string `json:"status"` // active, paused, blocked, usageLimited, budgetLimited, complete
+	TokenBudget     *int64 `json:"tokenBudget,omitempty"`
+	TokensUsed      int64  `json:"tokensUsed,omitempty"`
+	TimeUsedSeconds int64  `json:"timeUsedSeconds,omitempty"`
+	CreatedAt       int64  `json:"createdAt,omitempty"`
+	UpdatedAt       int64  `json:"updatedAt,omitempty"`
+}
+
+// ResolvedThreadID returns the thread ID carried on g in either camelCase or snake_case.
+func (g *ThreadGoal) ResolvedThreadID() string {
+	if g == nil {
+		return ""
+	}
+	if id := strings.TrimSpace(g.ThreadID); id != "" {
+		return id
+	}
+	return strings.TrimSpace(g.ThreadIDSnake)
+}
+
+type ThreadGoalUpdatedNotification struct {
+	ThreadID      string      `json:"threadId,omitempty"`
+	ThreadIDSnake string      `json:"thread_id,omitempty"`
+	TurnID        *string     `json:"turnId,omitempty"`
+	Goal          *ThreadGoal `json:"goal,omitempty"`
+}
+
+// ResolvedThreadID returns the thread ID carried by the notification or its nested goal.
+func (n ThreadGoalUpdatedNotification) ResolvedThreadID() string {
+	if id := strings.TrimSpace(n.ThreadID); id != "" {
+		return id
+	}
+	if id := strings.TrimSpace(n.ThreadIDSnake); id != "" {
+		return id
+	}
+	return n.Goal.ResolvedThreadID()
+}
+
+type ThreadGoalClearedNotification struct {
+	ThreadID      string `json:"threadId,omitempty"`
+	ThreadIDSnake string `json:"thread_id,omitempty"`
+}
+
+// ResolvedThreadID returns the thread ID carried by the cleared notification.
+func (n ThreadGoalClearedNotification) ResolvedThreadID() string {
+	if id := strings.TrimSpace(n.ThreadID); id != "" {
+		return id
+	}
+	return strings.TrimSpace(n.ThreadIDSnake)
+}
+
+type ThreadGoalSetParams struct {
+	ThreadID    string  `json:"threadId"`
+	Objective   *string `json:"objective,omitempty"`
+	Status      *string `json:"status,omitempty"`
+	TokenBudget *int64  `json:"tokenBudget,omitempty"`
+}
+
+type ThreadGoalSetResult struct {
+	Goal *ThreadGoal `json:"goal,omitempty"`
+}
+
+type ThreadGoalClearParams struct {
+	ThreadID string `json:"threadId"`
+}
+
+type ThreadGoalClearResult struct {
+	Cleared *bool `json:"cleared,omitempty"`
 }
 
 // ModelListParams requests available models from codex app-server.
@@ -830,6 +905,18 @@ func (c *AppServerClient) RateLimitsRead(ctx context.Context) (RateLimitsReadRes
 func (c *AppServerClient) ModelList(ctx context.Context, params ModelListParams) (ModelListResult, error) {
 	var res ModelListResult
 	err := c.Call(ctx, "model/list", params, &res)
+	return res, err
+}
+
+func (c *AppServerClient) ThreadGoalSet(ctx context.Context, params ThreadGoalSetParams) (ThreadGoalSetResult, error) {
+	var res ThreadGoalSetResult
+	err := c.Call(ctx, "thread/goal/set", params, &res)
+	return res, err
+}
+
+func (c *AppServerClient) ThreadGoalClear(ctx context.Context, threadID string) (ThreadGoalClearResult, error) {
+	var res ThreadGoalClearResult
+	err := c.Call(ctx, "thread/goal/clear", ThreadGoalClearParams{ThreadID: threadID}, &res)
 	return res, err
 }
 

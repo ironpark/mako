@@ -24,6 +24,7 @@ type Activity struct {
 	at     time.Time
 	said   time.Time // when the latest prompt or reply was written
 	tasks  backgroundTasks
+	goal   goalTracker
 	// commands are those the log says the agent takes
 	// (agent.LoggedCommands), in the order first said.
 	commands []agent.Command
@@ -39,6 +40,7 @@ type ActivityState struct {
 	Said   time.Time
 	Agents []*protocol.SubAgent
 	Tasks  []*protocol.BackgroundTask // see backgroundTasks
+	Goal   *protocol.GoalStatus       // see goalTracker
 	// Commands are those the log says the agent takes, beside the files
 	// that say others: see agent.LoggedCommands.
 	Commands []agent.Command
@@ -59,6 +61,7 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 		a.calls = map[string]*protocol.ChatMessage{}
 		a.status, a.at, a.said = "", time.Time{}, time.Time{}
 		a.tasks = backgroundTasks{}
+		a.goal = goalTracker{}
 		a.commands = nil
 		a.authErr, a.authAt, a.authClearedAt = nil, time.Time{}, time.Time{}
 	}
@@ -68,8 +71,10 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 	}
 	events, hasStatus := logs.(agent.LogStatus)
 	tasks, hasTasks := logs.(agent.BackgroundTasks)
+	goals, hasGoals := logs.(agent.LogGoals)
 	commands, hasCommands := logs.(agent.LoggedCommands)
 	authLogs, hasAuth := logs.(agent.LogAuthErrors)
+	convID := info.GetConversationId()
 	a.tail.Read(path, reset, func(line []byte) {
 		if hasCommands {
 			for _, c := range commands.LogCommands(line) {
@@ -83,6 +88,11 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 		if hasTasks {
 			for _, ev := range tasks.TaskEvents(line) {
 				a.tasks.take(ev)
+			}
+		}
+		if hasGoals {
+			if ev, ok := goals.GoalEvent(line); ok {
+				a.goal.take(ev, convID)
 			}
 		}
 		if hasStatus {
@@ -143,6 +153,7 @@ func (a *Activity) Read(info *protocol.SessionInfo, path string) (ActivityState,
 		Said:          a.said,
 		Agents:        a.subs.Read(path, a.list),
 		Tasks:         a.tasks.list(),
+		Goal:          a.goal.snapshot(),
 		Commands:      slices.Clone(a.commands),
 		AuthError:     proto.CloneOf(a.authErr),
 		AuthErrorAt:   a.authAt,

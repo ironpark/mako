@@ -24,6 +24,7 @@ import (
 	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -213,6 +214,7 @@ type codexRestartOutcome struct {
 	cleanupFiles  func()
 	userAgent     string
 	initUsage     *protocol.Usage
+	initGoal      *protocol.GoalStatus
 	threadID      string
 	threadPath    string
 	resumedThread bool
@@ -249,6 +251,8 @@ type codexBridge struct {
 	ignored         map[string]bool // ephemeral / subagent thread IDs to ignore
 	abandoned       map[string]bool // previous top-level thread IDs switched away from
 	initUsage       *protocol.Usage
+	initGoal        *protocol.GoalStatus
+	goalUnsupported bool
 	lastSeq         int64
 	activeTurn      string          // active liveHub step label
 	activeTurnID    string          // server-assigned turn ID when known
@@ -690,6 +694,140 @@ func (b *codexBridge) listBackgroundTerminals(client *codex.AppServerClient, tid
 	return client.ThreadBackgroundTerminalsList(tctx, tid)
 }
 
+func (b *codexBridge) resolveThreadID(ctx context.Context, client *codex.AppServerClient) (string, error) {
+	tid := b.threadID()
+	if tid == "" && client != nil {
+		// On a brand-new session where the TUI creates the thread, ThreadLoadedList
+		// can discover the active thread even before the thread/started notification
+		// has been processed by runCodexBridge.
+		if res, err := client.ThreadLoadedList(ctx); err == nil && len(res.Data) == 1 && res.Data[0] != "" {
+			b.mu.Lock()
+			if b.tid == "" && !b.ignored[res.Data[0]] {
+				b.tid = res.Data[0]
+			}
+			tid = b.tid
+			b.mu.Unlock()
+		}
+	}
+	if tid == "" {
+		return "", errors.New("codex app-server: no active thread")
+	}
+	return tid, nil
+}
+
+func (b *codexBridge) goalActionCapabilities() (canEdit, canClear bool) {
+	b.mu.Lock()
+	supported := !b.goalUnsupported
+	b.mu.Unlock()
+	return supported, supported
+}
+
+func (b *codexBridge) markGoalUnsupported(s *session.Session) {
+	b.mu.Lock()
+	b.goalUnsupported = true
+	b.mu.Unlock()
+	if s == nil {
+		return
+	}
+	if cur := s.Info().GetGoal(); cur != nil && cur.Active() && (cur.GetCanEdit() || cur.GetCanClear()) {
+		cur.CanEdit = false
+		cur.CanClear = false
+		s.ReportBridgeGoal(cur)
+	}
+}
+
+func isCodexGoalUnsupportedError(err error) bool {
+	if codex.IsMethodNotFound(err) {
+		return true
+	}
+	var rpcErr *codex.RPCError
+	if errors.As(err, &rpcErr) {
+		msg := strings.ToLower(rpcErr.Message)
+		return strings.Contains(msg, "unknown method") || strings.Contains(msg, "method not found") || strings.Contains(msg, "unsupported")
+	}
+	return false
+}
+
+// setGoal updates or sets the active Codex thread's goal via `thread/goal/set`.
+func (b *codexBridge) setGoal(ctx context.Context, s *session.Session, objective string) error {
+	if ctx == nil {
+		ctx = b.ctx
+	}
+	tctx, cancel := context.WithTimeout(ctx, codexRPCTimeout)
+	defer cancel()
+
+	if err := b.waitAbort(tctx); err != nil {
+		return err
+	}
+	client := b.currentClient()
+	if client == nil {
+		return errors.New("codex app-server: disconnected")
+	}
+	if canEdit, _ := b.goalActionCapabilities(); !canEdit {
+		return &protocol.CodedError{Code: protocol.CodeUnsupported, Message: "this Codex version does not support thread goal RPCs"}
+	}
+	tid, err := b.resolveThreadID(tctx, client)
+	if err != nil {
+		return err
+	}
+	res, err := client.ThreadGoalSet(tctx, codex.ThreadGoalSetParams{
+		ThreadID:  tid,
+		Objective: &objective,
+	})
+	if err != nil {
+		if isCodexGoalUnsupportedError(err) {
+			b.markGoalUnsupported(s)
+			return &protocol.CodedError{Code: protocol.CodeUnsupported, Message: "this Codex version does not support thread goal RPCs"}
+		}
+		return err
+	}
+	if s != nil && res.Goal != nil {
+		canEdit, canClear := b.goalActionCapabilities()
+		if goal := codex.MapThreadGoal(res.Goal, tid, canEdit, canClear, time.Now()); goal != nil {
+			s.ReportBridgeGoal(goal)
+		}
+	}
+	return nil
+}
+
+// clearGoal clears the active Codex thread's goal via `thread/goal/clear`.
+func (b *codexBridge) clearGoal(ctx context.Context, s *session.Session) error {
+	if ctx == nil {
+		ctx = b.ctx
+	}
+	tctx, cancel := context.WithTimeout(ctx, codexRPCTimeout)
+	defer cancel()
+
+	if err := b.waitAbort(tctx); err != nil {
+		return err
+	}
+	client := b.currentClient()
+	if client == nil {
+		return errors.New("codex app-server: disconnected")
+	}
+	if _, canClear := b.goalActionCapabilities(); !canClear {
+		return &protocol.CodedError{Code: protocol.CodeUnsupported, Message: "this Codex version does not support thread goal RPCs"}
+	}
+	tid, err := b.resolveThreadID(tctx, client)
+	if err != nil {
+		return err
+	}
+	res, err := client.ThreadGoalClear(tctx, tid)
+	if err != nil {
+		if isCodexGoalUnsupportedError(err) {
+			b.markGoalUnsupported(s)
+			return &protocol.CodedError{Code: protocol.CodeUnsupported, Message: "this Codex version does not support thread goal RPCs"}
+		}
+		return err
+	}
+	if s != nil && (res.Cleared == nil || *res.Cleared) {
+		if goal := codex.MapGoalCleared(codex.ThreadGoalClearedNotification{ThreadID: tid}, tid, time.Now()); goal != nil {
+			s.ReportBridgeGoal(goal)
+		}
+	}
+	return nil
+}
+
 // deliverMessage injects text into the active Codex thread via `thread/queue/add`
 // (which immediately starts a turn if idle and auto-drains FIFO after the current
 // turn if busy), falling back to `turn/start` on `-32600` (e.g. ephemeral thread
@@ -712,26 +850,13 @@ func (b *codexBridge) deliverMessage(ctx context.Context, text string) error {
 		return errors.New("codex app-server: disconnected")
 	}
 
-	tid := b.threadID()
-	if tid == "" {
-		// On a brand-new session where the TUI creates the thread, ThreadLoadedList
-		// can discover the active thread even before the thread/started notification
-		// has been processed by runCodexBridge.
-		if res, err := client.ThreadLoadedList(tctx); err == nil && len(res.Data) == 1 && res.Data[0] != "" {
-			b.mu.Lock()
-			if b.tid == "" && !b.ignored[res.Data[0]] {
-				b.tid = res.Data[0]
-			}
-			tid = b.tid
-			b.mu.Unlock()
-		}
-	}
-	if tid == "" {
-		return errors.New("codex app-server: no active thread")
+	tid, err := b.resolveThreadID(tctx, client)
+	if err != nil {
+		return err
 	}
 
 	input := []codex.UserInput{{Type: "text", Text: text}}
-	_, err := client.ThreadQueueAdd(tctx, codex.ThreadQueueAddParams{
+	_, err = client.ThreadQueueAdd(tctx, codex.ThreadQueueAddParams{
 		ThreadID:            tid,
 		ClientUserMessageID: conversationUUID(),
 		Input:               input,
@@ -909,6 +1034,7 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 		threadID      string
 		threadPath    string
 		resumedThread bool
+		initGoal      *protocol.GoalStatus
 	)
 	if prevThreadID != "" {
 		cwd := cmp.Or(cfg.split.Cwd, cfg.project)
@@ -928,6 +1054,9 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 			threadPath = res.Thread.Path
 			resumedThread = threadID != ""
 			applyThreadMetadata(initUsage, res.Model, res.ReasoningEffort, res.ApprovalPolicy, res.Sandbox)
+			if res.Thread.Goal != nil && threadID != "" {
+				initGoal = codex.MapThreadGoal(res.Thread.Goal, threadID, true, true, time.Now())
+			}
 		}
 	}
 
@@ -954,6 +1083,7 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 		cleanupFiles:  started.tr.cleanupFiles,
 		userAgent:     started.initRes.UserAgent,
 		initUsage:     initUsage,
+		initGoal:      initGoal,
 		threadID:      threadID,
 		threadPath:    threadPath,
 		resumedThread: resumedThread,
@@ -1063,6 +1193,9 @@ func (d *Daemon) prepareCodexAppServer(
 		if !initUsage.IsZero() {
 			bridge.initUsage = initUsage
 		}
+		if res.Thread.Goal != nil {
+			bridge.initGoal = codex.MapThreadGoal(res.Thread.Goal, threadID, true, true, time.Now())
+		}
 		*conversationID = threadID
 		if threadPath != "" && *transcriptPath == "" {
 			if _, err := os.Stat(threadPath); err == nil {
@@ -1105,6 +1238,7 @@ func (d *Daemon) attachCodexBridge(s *session.Session, b *codexBridge) {
 	b.mu.Lock()
 	b.ensureInitLocked()
 	initUsage := b.initUsage
+	initGoal := b.initGoal
 	b.mu.Unlock()
 
 	d.codexMu.Lock()
@@ -1116,6 +1250,9 @@ func (d *Daemon) attachCodexBridge(s *session.Session, b *codexBridge) {
 
 	if initUsage != nil && !initUsage.IsZero() {
 		s.Report(initUsage)
+	}
+	if initGoal != nil {
+		s.ReportBridgeGoal(initGoal)
 	}
 	go d.runCodexBridge(s, b)
 	if b.threadID() != "" {
@@ -1515,8 +1652,23 @@ func (d *Daemon) forceRestartCodexBridge(s *session.Session, b *codexBridge) (bo
 		if exited != nil {
 			b.watchProcessExit(exited, gen)
 		}
-		if outcome.initUsage != nil && !outcome.initUsage.IsZero() && s != nil {
-			s.Report(outcome.initUsage)
+		if s != nil {
+			if outcome.initUsage != nil && !outcome.initUsage.IsZero() {
+				s.Report(outcome.initUsage)
+			}
+			if outcome.resumedThread && outcome.threadID != "" {
+				if outcome.initGoal != nil {
+					goal := proto.CloneOf(outcome.initGoal)
+					if goal.Active() {
+						canEdit, canClear := b.goalActionCapabilities()
+						goal.CanEdit = canEdit
+						goal.CanClear = canClear
+					}
+					s.ReportBridgeGoal(goal)
+				}
+			} else {
+				s.ClearGoal()
+			}
 		}
 		return outcome.tuiCmd, outcome.tuiEnv, nil
 	}
@@ -1660,6 +1812,15 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		b.fgItems = map[string]bool{}
 		b.fgProcesses = map[string]bool{}
 		b.mu.Unlock()
+		if b.isCurrentEpoch(epoch) {
+			s.ClearGoal()
+			if p.Thread.Goal != nil {
+				canEdit, canClear := b.goalActionCapabilities()
+				if goal := codex.MapThreadGoal(p.Thread.Goal, p.Thread.ID, canEdit, canClear, time.Now()); goal != nil {
+					s.ReportBridgeGoal(goal)
+				}
+			}
+		}
 		d.maybeBindCodexThread(s, b, epoch)
 		b.scheduleBackgroundRefresh(s)
 
@@ -1904,6 +2065,53 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 			s.Report(u)
 		}
 
+	case "thread/goal/updated":
+		var p codex.ThreadGoalUpdatedNotification
+		if json.Unmarshal(n.Params, &p) != nil {
+			return
+		}
+		b.mu.Lock()
+		sameEpoch := b.epoch == epoch
+		curTID := b.tid
+		b.mu.Unlock()
+		if !sameEpoch || curTID == "" {
+			return
+		}
+		if tid := p.ResolvedThreadID(); tid != "" && tid != curTID {
+			return
+		}
+		observed := time.Now()
+		if n.EmittedAtMs > 0 {
+			observed = time.UnixMilli(n.EmittedAtMs)
+		}
+		canEdit, canClear := b.goalActionCapabilities()
+		if goal := codex.MapGoalUpdated(p, curTID, canEdit, canClear, observed); goal != nil && b.isCurrentEpoch(epoch) {
+			s.ReportBridgeGoal(goal)
+		}
+
+	case "thread/goal/cleared":
+		var p codex.ThreadGoalClearedNotification
+		if json.Unmarshal(n.Params, &p) != nil {
+			return
+		}
+		b.mu.Lock()
+		sameEpoch := b.epoch == epoch
+		curTID := b.tid
+		b.mu.Unlock()
+		if !sameEpoch || curTID == "" {
+			return
+		}
+		if tid := p.ResolvedThreadID(); tid != "" && tid != curTID {
+			return
+		}
+		observed := time.Now()
+		if n.EmittedAtMs > 0 {
+			observed = time.UnixMilli(n.EmittedAtMs)
+		}
+		if goal := codex.MapGoalCleared(p, curTID, observed); goal != nil && b.isCurrentEpoch(epoch) {
+			s.ReportBridgeGoal(goal)
+		}
+
 	default:
 		if n.Method == "codex/event" || strings.HasPrefix(n.Method, "codex/event/") {
 			var p struct {
@@ -2021,6 +2229,15 @@ func (d *Daemon) maybeSwitchCodexThread(s *session.Session, b *codexBridge, thre
 	b.fgItems = map[string]bool{}
 	b.fgProcesses = map[string]bool{}
 	b.mu.Unlock()
+	if b.isCurrentEpoch(epoch) {
+		s.ClearGoal()
+		if res.Thread.Goal != nil {
+			canEdit, canClear := b.goalActionCapabilities()
+			if goal := codex.MapThreadGoal(res.Thread.Goal, threadID, canEdit, canClear, time.Now()); goal != nil {
+				s.ReportBridgeGoal(goal)
+			}
+		}
+	}
 	b.scheduleBackgroundRefresh(s)
 	return true
 }
@@ -2051,6 +2268,12 @@ func (d *Daemon) trySubscribeCodexThread(s *session.Session, b *codexBridge, thr
 	applyThreadMetadata(u, res.Model, res.ReasoningEffort, res.ApprovalPolicy, res.Sandbox)
 	if !u.IsZero() && s != nil {
 		s.Report(u)
+	}
+	if res.Thread.Goal != nil && s != nil && b.isCurrentEpoch(epoch) && b.threadID() == threadID {
+		canEdit, canClear := b.goalActionCapabilities()
+		if goal := codex.MapThreadGoal(res.Thread.Goal, threadID, canEdit, canClear, time.Now()); goal != nil {
+			s.ReportBridgeGoal(goal)
+		}
 	}
 }
 

@@ -59,6 +59,7 @@ type Daemon struct {
 	codexMu       sync.Mutex
 	codexBridges  map[string]*codexBridge
 	codexStartup  codexStartupCoordinator
+	goalActions   goalActionGuard
 	conversations conversations
 	approvals     approvals
 	layouts       windowLayouts // the window layouts' changes staged here, and what is node-local of them; see layouts.go
@@ -504,6 +505,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleReadAccountUsage(ctx, stream, env)
 	case protocol.TypeRewindSession:
 		return d.handleRewindSession(ctx, stream, env)
+	case protocol.TypeGoalAction:
+		return d.handleGoalAction(ctx, stream, env)
 	case protocol.TypeInspectAgentHome:
 		return d.handleInspectAgentHome(ctx, stream, env)
 	case protocol.TypeMigrateAgentHome:
