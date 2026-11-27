@@ -113,8 +113,14 @@ func (m *model) openAddSSHHost(onSaved func(nodeID string)) {
 	a.HasMakod.Set(false)
 	a.Err.Set("")
 	a.Open.Set(true)
+	m.scanSSHConfig()
+}
 
-	// Scan ~/.ssh/config off the UI goroutine.
+// scanSSHConfig reads ~/.ssh/config off the UI goroutine into the dialog's
+// ConfigHosts, for the import chips and for a connection name that names
+// one of its Host aliases.
+func (m *model) scanSSHConfig() {
+	a := m.SSH
 	post := m.post
 	go func() {
 		found := sshremote.DiscoverConfigHosts()
@@ -160,6 +166,20 @@ func (m *model) openEditSSHHost(h config.SSHHost) {
 	a.HasMakod.Set(hasMakod)
 	a.Err.Set("")
 	a.Open.Set(true)
+	m.scanSSHConfig()
+}
+
+// sshTarget is the SSH target the dialog connects to: the Host field, or,
+// when that is empty, the connection name if ~/.ssh/config declares it as
+// a Host alias. OpenSSH then applies that alias's settings itself.
+func sshTarget(name, host string, found []sshremote.ConfigHost) string {
+	if host = strings.TrimSpace(host); host != "" {
+		return host
+	}
+	if ch, ok := sshremote.FindConfigHost(found, name); ok {
+		return ch.Alias
+	}
+	return ""
 }
 
 func (a *sshHostAsk) fillFromConfig(ch sshremote.ConfigHost) {
@@ -203,10 +223,16 @@ func (a *sshHostAsk) buildHost() (config.SSHHost, error) {
 	if id == "" {
 		id = config.NewSSHHostID()
 	}
+	name, host := ggui.Peek(a.Name), ggui.Peek(a.Host)
+	found := ggui.Peek(a.ConfigHosts)
+	if strings.TrimSpace(host) == "" && found == nil {
+		// The scan has not landed yet: read the file now.
+		found = sshremote.DiscoverConfigHosts()
+	}
 	h := config.SSHHost{
 		ID:           id,
-		Name:         strings.TrimSpace(ggui.Peek(a.Name)),
-		Host:         strings.TrimSpace(ggui.Peek(a.Host)),
+		Name:         strings.TrimSpace(name),
+		Host:         sshTarget(name, host, found),
 		User:         strings.TrimSpace(ggui.Peek(a.User)),
 		Port:         port,
 		IdentityFile: strings.TrimSpace(ggui.Peek(a.IdentityFile)),
@@ -513,11 +539,23 @@ func sshHostForm(m *model, submitLabel string) ggui.Widget {
 		ui.TextField(a.Name).Placeholder("gpu-box").Name(T("Connection name")),
 	).Gap(4).Stretch()
 
+	// A connection name that is a ~/.ssh/config Host alias is the target
+	// when Host is left empty, and Host's hint says so.
+	alias := ggui.Derived(func() string { return sshTarget(a.Name.Get(), "", a.ConfigHosts.Get()) })
+	hostField := ggui.View(alias, func(alias string) ggui.Widget {
+		hint := T("user@host or ~/.ssh/config alias")
+		if alias != "" {
+			hint = Tf("%s (from ~/.ssh/config)", alias)
+		}
+		return ui.TextField(a.Host).Style(mono).Placeholder(hint).Name(T("Host")).
+			OnSubmit(func(string) { m.submitSSHHost() })
+	})
+	noTarget := ggui.Derived(func() bool { return sshTarget(a.Name.Get(), a.Host.Get(), a.ConfigHosts.Get()) == "" })
+
 	hostPortRow := widget.Row(
 		widget.Expanded(widget.Column(
 			fieldLabel(T("Host")),
-			ui.TextField(a.Host).Style(mono).Placeholder(T("user@host or ~/.ssh/config alias")).Name(T("Host")).
-				OnSubmit(func(string) { m.submitSSHHost() }),
+			hostField,
 		).Gap(4).Stretch()),
 		widget.Box(widget.Column(
 			fieldLabel(T("Port")),
@@ -577,7 +615,7 @@ func sshHostForm(m *model, submitLabel string) ggui.Widget {
 	})
 
 	canAction := ggui.Derived(func() bool {
-		return !a.Testing.Get() && !a.Installing.Get() && strings.TrimSpace(a.Host.Get()) != ""
+		return !a.Testing.Get() && !a.Installing.Get() && !noTarget.Get()
 	})
 
 	installBtn := ui.ButtonOf(ggui.Reactive(func() ggui.Widget {
@@ -660,7 +698,7 @@ func sshHostForm(m *model, submitLabel string) ggui.Widget {
 		testBtn,
 		widget.Spacer(),
 		ui.Button(T("Cancel"), func() { a.Open.Set(false) }).Outline(),
-		ui.Button(submitLabel, m.submitSSHHost).BindDisabled(ggui.Map(a.Host, func(s string) bool { return strings.TrimSpace(s) == "" })),
+		ui.Button(submitLabel, m.submitSSHHost).BindDisabled(noTarget),
 	).Gap(8)
 
 	return widget.Column(

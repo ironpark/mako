@@ -118,3 +118,44 @@ func TestSSHHostDialogFillAndSave(t *testing.T) {
 		t.Fatalf("sshHostForm missing Install makod button:\n%s", dp.Semantics().String())
 	}
 }
+
+// A connection name alone is enough when ~/.ssh/config declares it as a Host
+// alias: the alias becomes the target, and OpenSSH applies its settings.
+func TestSSHHostDialogNameOnlyUsesConfigAlias(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	cfg := config.Default()
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	m := newModel(cfg, "")
+	m.openAddSSHHost(nil)
+	m.SSH.ConfigHosts.Set([]sshremote.ConfigHost{{Alias: "dev-gpu", HostName: "10.0.0.9", User: "ubuntu"}})
+
+	p := ggui.ProbeBuilder(func() ggui.Widget { return sshHostForm(m, T("Add host")) }, ggui.Sz(560, 620))
+	defer p.Close()
+	addEnabled := func() bool {
+		p.Frame()
+		n, ok := p.Semantics().Find(ggui.RoleButton, T("Add host"))
+		if !ok {
+			t.Fatalf("sshHostForm missing Add host button:\n%s", p.Semantics().String())
+		}
+		return !n.Disabled
+	}
+
+	m.SSH.Name.Set("not-in-config")
+	if addEnabled() {
+		t.Fatal("Add host is enabled for a name that ~/.ssh/config does not declare and no Host")
+	}
+	m.SSH.Name.Set("dev-gpu")
+	if !addEnabled() {
+		t.Fatal("Add host is disabled for a ~/.ssh/config alias as the connection name")
+	}
+	m.submitSSHHost()
+	if ggui.Peek(m.SSH.Open) {
+		t.Fatalf("dialog remained open with err=%q", ggui.Peek(m.SSH.Err))
+	}
+	hosts := ggui.Peek(m.SSHHosts)
+	if len(hosts) != 1 || hosts[0].Name != "dev-gpu" || hosts[0].Host != "dev-gpu" || hosts[0].User != "" {
+		t.Fatalf("saved hosts = %+v, want one with Name and Host dev-gpu and no User", hosts)
+	}
+}

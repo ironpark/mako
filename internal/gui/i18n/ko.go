@@ -1976,6 +1976,7 @@ var catalogKo = map[string]string{
 	"Identity file":                    "인증 키 파일",
 	"user@host or ~/.ssh/config alias": "user@host 또는 ~/.ssh/config 별칭",
 	"From ~/.ssh/config":               "~/.ssh/config에서 가져오기",
+	"%s (from ~/.ssh/config)":          "%s (~/.ssh/config)",
 	"Advanced options":                 "고급 옵션",
 	"Connection mode":                  "연결 방식",
 	"Remote daemon":                    "원격 데몬",

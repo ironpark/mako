@@ -54,6 +54,28 @@ func (c ConfigHost) Summary() string {
 	return host
 }
 
+// FindConfigHost returns the Host alias in hosts that name selects. Like
+// OpenSSH, it matches without regard to case, but an exact match wins.
+func FindConfigHost(hosts []ConfigHost, name string) (ConfigHost, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ConfigHost{}, false
+	}
+	fold := -1
+	for i, h := range hosts {
+		if h.Alias == name {
+			return h, true
+		}
+		if fold < 0 && strings.EqualFold(h.Alias, name) {
+			fold = i
+		}
+	}
+	if fold >= 0 {
+		return hosts[fold], true
+	}
+	return ConfigHost{}, false
+}
+
 // DiscoverConfigHosts reads the current user's ~/.ssh/config (and any Include
 // directives) and returns all concrete Host aliases in declaration order.
 func DiscoverConfigHosts() []ConfigHost {

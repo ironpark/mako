@@ -305,3 +305,19 @@ exec /bin/sh -c "$*"
 		}
 	}
 }
+
+func TestFindConfigHost(t *testing.T) {
+	hosts := []ConfigHost{{Alias: "GPU-Box"}, {Alias: "gpu-box"}, {Alias: "dev-mac"}}
+	for _, tc := range []struct{ name, want string }{
+		{"gpu-box", "gpu-box"},   // an exact match wins over an earlier case-folded one
+		{"GPU-BOX", "GPU-Box"},   // case-folded, like OpenSSH
+		{" dev-mac ", "dev-mac"}, // trimmed
+		{"other", ""},
+		{"", ""},
+	} {
+		got, ok := FindConfigHost(hosts, tc.name)
+		if ok != (tc.want != "") || got.Alias != tc.want {
+			t.Errorf("FindConfigHost(%q) = (%q, %v), want %q", tc.name, got.Alias, ok, tc.want)
+		}
+	}
+}
