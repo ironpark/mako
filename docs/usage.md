@@ -79,6 +79,15 @@ mako allow <node>             # let in a machine that asked
   from a file's or a diff's tab at its line.
 - **Command palette** (⌘K), **go to file** (⌘P), and English and Korean
   interfaces with light and dark themes.
+- **Remote SSH hosts.** Connect to any Linux or macOS server over OpenSSH
+  directly from the New Session **Environment** picker (**Add SSH host…**) or
+  **Settings ▸ Nodes**. Mako reads your `~/.ssh/config` aliases (including
+  `Include`, `ProxyJump`, and your SSH agent), tests connectivity and detects
+  installed agents, and automatically tunnels to a remote `makod` when
+  installed — or falls back to **Direct SSH** mode with zero remote
+  installation required (supporting remote sessions, folder browsing, file
+  editing, project search, git status/diff/history, and `localhost` port
+  forwarding).
 - **Prompt templates.** Type `//` in Chat's composer to pick one of your
   [prompt templates](#prompt-templates) by name; Tab completes it, and
   Enter sends the prompt it makes from the arguments after it.

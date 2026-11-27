@@ -16,6 +16,35 @@ type routed interface {
 	GetNodeId() string
 }
 
+func (d *Daemon) isDirectSSH(nodeID string) bool {
+	return d.ssh != nil && d.ssh.isDirect(nodeID)
+}
+
+// serveWithDirect is serve, also routing direct-SSH nodes to local work (while
+// daemon-tunneled SSH nodes still forward through peerStream).
+func serveWithDirect[Req routed, Reply proto.Message](d *Daemon, ctx context.Context, stream *transport.Stream, env *protocol.Envelope,
+	replyType protocol.Type, work func(Req) (Reply, error)) error {
+	req, err := protocol.Body[Req](env)
+	if err != nil {
+		return err
+	}
+	var reply Reply
+	if d.local(req.GetNodeId()) || d.isDirectSSH(req.GetNodeId()) {
+		reply, err = work(req)
+	} else {
+		if within := transport.Within(env); within > 0 {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, within)
+			defer cancel()
+		}
+		reply, err = forward[Reply](ctx, d, env.Type(), req)
+	}
+	if err != nil {
+		return err
+	}
+	return stream.Send(replyType, env.GetId(), reply)
+}
+
 // serve answers a request this node's own work answers, or a peer does for
 // another node: the decode, forward and reply every routed request shares.
 func serve[Req routed, Reply proto.Message](d *Daemon, ctx context.Context, stream *transport.Stream, env *protocol.Envelope,
@@ -62,7 +91,11 @@ func forward[R proto.Message](ctx context.Context, d *Daemon, typ protocol.Type,
 		return zero, err
 	}
 	defer stream.Close()
-	return transport.Ask[R](ctx, stream, typ, req)
+	wireReq := req
+	if d.ssh != nil && d.ssh.isDaemonTunnel(req.GetNodeId()) {
+		wireReq = clearRoutedNodeID(req)
+	}
+	return transport.Ask[R](ctx, stream, typ, wireReq)
 }
 
 // open sends req to the node it names, as forward does, and keeps the
@@ -74,7 +107,11 @@ func open[R proto.Message](ctx context.Context, d *Daemon, typ protocol.Type, re
 	if err != nil {
 		return zero, nil, err
 	}
-	reply, err := transport.CallContext[R](ctx, stream, typ, req)
+	wireReq := req
+	if d.ssh != nil && d.ssh.isDaemonTunnel(req.GetNodeId()) {
+		wireReq = clearRoutedNodeID(req)
+	}
+	reply, err := transport.CallContext[R](ctx, stream, typ, wireReq)
 	if err != nil {
 		stream.Close()
 		return zero, nil, err

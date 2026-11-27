@@ -211,12 +211,23 @@ func (d *Daemon) handleAccess(ctx context.Context, stream *transport.Stream, env
 	if fromPeer {
 		return errors.New("access is for this node's own front-ends")
 	}
-	if d.p2p == nil {
-		return errors.New("the mesh is off on this node")
-	}
 	r, err := protocol.Body[*protocol.Access](env)
 	if err != nil {
 		return err
+	}
+	// SSH host reconnect works even when libp2p is disabled.
+	if r.GetOp() == "relink" && config.IsSSHNodeID(r.GetNodeId()) && d.ssh != nil {
+		if err := d.ssh.reconnect(r.GetNodeId()); err != nil {
+			return err
+		}
+		info := &protocol.AccessInfo{}
+		if d.p2p != nil {
+			info = d.accessInfo()
+		}
+		return stream.Send(protocol.TypeAccessInfo, env.GetId(), info)
+	}
+	if d.p2p == nil {
+		return errors.New("the mesh is off on this node")
 	}
 	joined, err := d.changeAccess(ctx, r)
 	if err != nil {

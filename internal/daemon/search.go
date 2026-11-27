@@ -17,6 +17,7 @@ import (
 
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
+	"github.com/ironpark/mako/internal/sshremote"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -32,8 +33,17 @@ const (
 )
 
 func (d *Daemon) handleSearch(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSearchResult,
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeSearchResult,
 		func(r *protocol.Search) (*protocol.SearchResult, error) {
+			if d.isDirectSSH(r.GetNodeId()) {
+				host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+				if err != nil {
+					return nil, err
+				}
+				ctx, cancel := context.WithTimeout(ctx, searchTimeout)
+				defer cancel()
+				return sshremote.Search(ctx, host, ctrl, home, r)
+			}
 			if err := absolute(r.GetRoot()); err != nil {
 				return nil, err
 			}

@@ -119,10 +119,16 @@ func (d *Daemon) loadSessions(dir string) error {
 		saved.Sessions = map[string]savedSession{}
 	}
 	for id, entry := range saved.Sessions {
-		entry.Info.Id, entry.Info.NodeId = id, nodeID
+		entryNode := nodeID
+		if config.IsSSHNodeID(entry.Request.GetNodeId()) {
+			entryNode = entry.Request.GetNodeId()
+		}
+		entry.Info.Id, entry.Info.NodeId = id, entryNode
 		entry.Info.State, entry.Info.Busy, entry.Info.ExitCode = protocol.StateStopped, false, nil
 		entry.Info.Status, entry.Info.StatusAt, entry.Info.Approval, entry.Info.AuthError = "", nil, nil, nil
-		entry.Info.Caps = agents.Caps(entry.Info.GetAgent())
+		if !config.IsSSHNodeID(entryNode) {
+			entry.Info.Caps = agents.Caps(entry.Info.GetAgent())
+		}
 		saved.Sessions[id] = entry
 	}
 	d.saved, d.sessionPath = saved.Sessions, path
@@ -173,6 +179,13 @@ func (d *Daemon) listSessions() []*protocol.SessionInfo {
 // branch, the repository, its owner and remote, and its stamp. A
 // front-end places a session by them, in its project's section.
 func (d *Daemon) withHead(info *protocol.SessionInfo) *protocol.SessionInfo {
+	if config.IsSSHNodeID(info.GetNodeId()) {
+		if d.ssh != nil {
+			h := d.ssh.gitHead(info.GetNodeId(), info.GetProject())
+			info.Branch, info.Repo, info.Owner, info.Remote, info.GitStamp = h.branch, h.repo, h.owner, h.remote, h.stamp
+		}
+		return info
+	}
 	h := d.heads.of(info.GetProject())
 	info.Branch, info.Repo, info.Owner, info.Remote, info.GitStamp = h.branch, h.repo, h.owner, h.remote, h.stamp
 	return info
@@ -331,6 +344,9 @@ func (d *Daemon) attachSession(ctx context.Context, id string) (*session.Session
 		return s, nil
 	case !ok:
 		return nil, fmt.Errorf("unknown session %q", id)
+	}
+	if config.IsSSHNodeID(saved.Request.GetNodeId()) && d.isDirectSSH(saved.Request.GetNodeId()) {
+		return d.startDirectSSHSession(ctx, id, saved.Request, saved.ParentID)
 	}
 	return d.startSession(ctx, id, saved.Request)
 }

@@ -130,6 +130,7 @@ func cloneConfig(c *config.Config) *config.Config {
 	out.Workspace = cloneWorkspace(c.Workspace)
 	out.Decision = cloneDecision(c.Decision)
 	out.ProjectDirs = slices.Clone(c.ProjectDirs)
+	out.SSHHosts = config.CloneSSHHosts(c.SSHHosts)
 	return &out
 }
 
@@ -157,6 +158,7 @@ type agentFile struct {
 	workspace   config.Workspace
 	decision    config.Decision
 	projectDirs []string
+	sshHosts    []config.SSHHost
 }
 
 func (f *agentFile) setFromConfigLocked(c *config.Config) {
@@ -167,6 +169,7 @@ func (f *agentFile) setFromConfigLocked(c *config.Config) {
 	f.workspace = cloneWorkspace(c.Workspace)
 	f.decision = cloneDecision(c.Decision)
 	f.projectDirs = config.NormalizeProjectDirs(c.ProjectDirs)
+	f.sshHosts = config.NormalizeSSHHosts(c.SSHHosts)
 	f.read = true
 }
 
@@ -179,6 +182,7 @@ func (d *Daemon) syncConfigFromAgentFileLocked(f *agentFile) {
 		c.Workspace = cloneWorkspace(f.workspace)
 		c.Decision = cloneDecision(f.decision)
 		c.ProjectDirs = slices.Clone(f.projectDirs)
+		c.SSHHosts = config.CloneSSHHosts(f.sshHosts)
 	})
 }
 
@@ -314,6 +318,7 @@ type followedConfig struct {
 	workspace   config.Workspace
 	decision    config.Decision
 	projectDirs []string
+	sshHosts    []config.SSHHost
 }
 
 func (d *Daemon) followed() followedConfig {
@@ -322,7 +327,7 @@ func (d *Daemon) followed() followedConfig {
 	if !f.read {
 		f.setFromConfigLocked(d.config())
 	}
-	now := followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision, projectDirs: f.projectDirs}
+	now := followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision, projectDirs: f.projectDirs, sshHosts: f.sshHosts}
 	reloaded := false
 	if f.path != "" {
 		fi, err := os.Stat(f.path)
@@ -349,7 +354,7 @@ func (d *Daemon) followed() followedConfig {
 							f.setFromConfigLocked(&file)
 							f.sum, f.hasSum, f.hasBadSum = sum, true, false
 							d.syncConfigFromAgentFileLocked(f)
-							now = followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision, projectDirs: f.projectDirs}
+							now = followedConfig{agents: f.agents, isolateHome: f.isolateHome, shell: f.shell, servers: f.servers, workspace: f.workspace, decision: f.decision, projectDirs: f.projectDirs, sshHosts: f.sshHosts}
 							reloaded = true
 							d.log.Info("configuration reloaded", "path", f.path)
 						}
@@ -370,6 +375,9 @@ func (d *Daemon) followed() followedConfig {
 }
 
 func (d *Daemon) onConfigReloaded() {
+	if d.ssh != nil {
+		d.ssh.sync(d.config().SSHHosts)
+	}
 	if d.syncsAgents() {
 		d.captureLocalAgentConfig()
 	}

@@ -27,6 +27,9 @@ func (d *Daemon) hello() *protocol.Hello {
 // way. A node that lets this one in nowhere along a chain cannot be asked
 // anything.
 func (d *Daemon) peerStream(ctx context.Context, node *protocol.Node) (*transport.Stream, error) {
+	if d.ssh != nil && d.ssh.isDaemonTunnel(node.GetId()) {
+		return d.ssh.dialDaemon(ctx, node.GetId())
+	}
 	hops := hopsOf(ctx)
 	if hops >= maxHops {
 		return nil, fmt.Errorf("%s is more than %d nodes away", node.GetName(), maxHops)
@@ -64,11 +67,15 @@ func (d *Daemon) peerStream(ctx context.Context, node *protocol.Node) (*transpor
 
 // node resolves a node ID to its record.
 func (d *Daemon) node(nodeID string) (*protocol.Node, error) {
-	node, ok := d.peers.get(nodeID)
-	if !ok {
-		return nil, fmt.Errorf("unknown node %q", nodeID)
+	if node, ok := d.peers.get(nodeID); ok {
+		return node, nil
 	}
-	return node, nil
+	if d.ssh != nil {
+		if node, ok := d.ssh.node(nodeID); ok {
+			return node, nil
+		}
+	}
+	return nil, fmt.Errorf("unknown node %q", nodeID)
 }
 
 // relayToPeer hands a front-end's stream to the daemon of the node req
@@ -85,7 +92,11 @@ func (d *Daemon) relayToPeer(ctx context.Context, typ protocol.Type, req routed,
 	if err != nil {
 		return err
 	}
-	if err := peer.Send(typ, "", req); err != nil {
+	wireReq := req
+	if d.ssh != nil && d.ssh.isDaemonTunnel(node.GetId()) {
+		wireReq = clearRoutedNodeID(req)
+	}
+	if err := peer.Send(typ, "", wireReq); err != nil {
 		peer.Close()
 		return err
 	}

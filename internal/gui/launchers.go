@@ -225,5 +225,8 @@ func (m *model) launchProject(nodeID string) string {
 	if nodeID == "" || nodeID == ggui.Peek(m.Conn).Self.GetId() {
 		return ggui.Peek(m.Prefs).DefaultProject
 	}
+	if h, ok := m.sshHostFor(nodeID); ok && h.DefaultDir != "" {
+		return h.DefaultDir
+	}
 	return ""
 }

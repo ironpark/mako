@@ -63,6 +63,9 @@ func (d *Daemon) handleWatchFiles(ctx context.Context, stream *transport.Stream,
 	if err != nil {
 		return err
 	}
+	if d.isDirectSSH(req.GetNodeId()) {
+		return d.handleDirectSSHWatchFiles(ctx, stream, env, req)
+	}
 	if !d.local(req.GetNodeId()) {
 		return d.relayToPeer(ctx, protocol.TypeWatchFiles, req, stream)
 	}

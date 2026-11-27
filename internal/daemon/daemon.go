@@ -65,6 +65,7 @@ type Daemon struct {
 	layouts       windowLayouts // the window layouts' changes staged here, and what is node-local of them; see layouts.go
 	templateAsks  templateAsks  // the templates agents ask the user to save; see agent_templates.go
 	peers         *peerTable
+	ssh           *sshManager
 
 	// ln is the socket front-ends reach the daemon on, at socket; only
 	// this user can.
@@ -151,6 +152,7 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 		hookBinary: hookProgram,
 	}
 	d.cfgSnap.Store(snap)
+	d.ssh = newSSHManager(d)
 	d.agentUI = agentui.New(d.changes.fireAgentBlocks)
 	return d
 }
@@ -284,6 +286,8 @@ func (d *Daemon) Run(ctx context.Context) error {
 			defer d.p2p.Close()
 		}
 	}
+	d.ssh.start(ctx, run, cfg.SSHHosts)
+	defer d.ssh.close()
 	d.log.Info("daemon listening", "socket", socket, "node", cfg.NodeID, "name", cfg.Name)
 	close(d.ready)
 

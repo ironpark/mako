@@ -625,8 +625,17 @@ func daemonSettings(m *model) ggui.Widget {
 // Mesh ------------------------------------------------------------------------
 
 func nodeSettings(m *model) ggui.Widget {
-	nodes := ggui.View(m.Nodes, func(nodes []*protocol.Node) ggui.Widget { return nodeList(m, nodes) })
-	return page(T("Nodes"), T("Daemons this one knows of. Sessions start on those that let it in; ask the others to."),
+	nodes := ggui.View(m.Nodes, func(nodes []*protocol.Node) ggui.Widget {
+		mesh := make([]*protocol.Node, 0, len(nodes))
+		for _, n := range nodes {
+			if n.GetSource() != "ssh" {
+				mesh = append(mesh, n)
+			}
+		}
+		return nodeList(m, mesh)
+	})
+	return page(T("Nodes"), T("Remote SSH hosts and mesh daemons this machine can drive."),
+		sshHostsSection(m),
 		section(T("Mesh"), nodes),
 	)
 }

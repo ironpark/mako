@@ -73,6 +73,9 @@ type Config struct {
 	// ~/Projects, ~/Work). Multiple folders may be configured; the first is
 	// used as the default clone destination when adding a project by Git URL.
 	ProjectDirs []string `json:"project_dirs,omitempty"`
+	// SSHHosts are remote machines reached over OpenSSH without requiring
+	// libp2p connectivity.
+	SSHHosts []SSHHost `json:"ssh_hosts,omitempty"`
 }
 
 // Decision configures the default provider and model for decision calls.
@@ -360,6 +363,7 @@ func Load() (*Config, error) {
 	}
 	cfg.TakeShell()
 	cfg.ProjectDirs = NormalizeProjectDirs(cfg.ProjectDirs)
+	cfg.SSHHosts = NormalizeSSHHosts(cfg.SSHHosts)
 	return cfg, nil
 }
 

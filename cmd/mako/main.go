@@ -42,6 +42,16 @@ Projects:
   mako projects dirs [add <path>|remove <path>|default <path>]
                                      list or configure default project storage directories
 
+Remote SSH hosts:
+  mako ssh [list]                   list configured remote SSH hosts
+  mako ssh add <host> [-name <name>] [-user <user>] [-port <port>] [-key <path>] [-jump <host>] [-dir <path>] [-mode auto|daemon|direct]
+                                     add a remote SSH host
+  mako ssh remove <id-or-name>      remove a configured SSH host
+  mako ssh enable|disable <id-or-name>
+                                     enable or disable an SSH host
+  mako ssh test <id-or-name|host>   test connectivity, platform, and installed agents
+  mako ssh discover                 list concrete Host aliases from ~/.ssh/config
+
 Devices (docs/devices.md: one node's devices, used from another):
   mako devices                      list the devices attached to every node
   mako borrow <device>              borrow a device for this node (or -node's),
@@ -133,6 +143,9 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 	}
 	if args[0] == "projects" && len(args) > 1 && args[1] == "dirs" {
 		return projectsDirs(args[2:])
+	}
+	if args[0] == "ssh" {
+		return sshCmd(args[1:])
 	}
 	cfg, err := config.Load()
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/gui/skin"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // isShellTarget reports whether target launches a plain shell rather than an
@@ -191,30 +192,91 @@ func folderMenu(m *model, l *launchState, where ggui.Readable[launchWhere]) ggui
 	})
 }
 
-// nodeMenu picks the node the new session runs on, where there are more
-// than this one to pick.
+// nodeMenu picks the environment (local machine, mesh node, or remote SSH host)
+// where the new session runs, and offers quick access to adding an SSH host.
 func nodeMenu(m *model, l *launchState, where ggui.Readable[launchWhere]) ggui.Widget {
 	ids := reachableNodeIDs(m)
 	return ggui.Reactive(func() ggui.Widget {
-		ids, f, nodes := ids.Get(), where.Get(), m.Nodes.Get()
-		if len(ids) < 2 {
-			return widget.Box()
-		}
-		items := make([]ggui.Widget, 0, len(ids))
-		for _, id := range ids {
-			items = append(items, ui.MenuItem(checked(nodeName(nodes, id), id == f.NodeID), func() {
-				l.Form.Update(func(f newSession) newSession {
-					if f.NodeID != id {
-						f.NodeID, f.Project = id, m.launchProject(id)
-						if isShellTarget(f.Agent) {
-							f.Agent = m.defaultSessionAgent(id)
-						}
+		ids, f, nodes, sshHosts := ids.Get(), where.Get(), m.Nodes.Get(), m.SSHHosts.Get()
+		selectNode := func(id string) {
+			l.Form.Update(func(f newSession) newSession {
+				if f.NodeID != id {
+					f.NodeID, f.Project = id, m.launchProject(id)
+					if isShellTarget(f.Agent) {
+						f.Agent = m.defaultSessionAgent(id)
 					}
-					return f
-				})
+				}
+				return f
+			})
+		}
+
+		items := make([]ggui.Widget, 0, len(ids)+len(sshHosts)+3)
+		shown := map[string]bool{}
+		for _, id := range ids {
+			nodeID := id
+			shown[nodeID] = true
+			label := nodeName(nodes, nodeID)
+			if n, ok := nodeIn(nodes, nodeID); ok && n.GetSource() == "self" {
+				label = Tf("%s (Local)", label)
+			} else if n, ok := nodeIn(nodes, nodeID); ok && n.GetSource() == "ssh" {
+				label = Tf("%s (SSH)", label)
+			}
+			items = append(items, ui.MenuItem(checked(label, nodeID == f.NodeID), func() { selectNode(nodeID) }))
+		}
+		// Also list offline or disabled SSH hosts so users can connect them right from the environment picker.
+		for _, h := range sshHosts {
+			host := h
+			nodeID := host.NodeID()
+			if shown[nodeID] {
+				continue
+			}
+			status := T("offline")
+			if host.Disabled {
+				status = T("disconnected")
+			} else if n, ok := nodeIn(nodes, nodeID); ok && n.GetLink() == protocol.LinkLinking {
+				status = T("connecting…")
+			}
+			label := Tf("%s (SSH · %s)", host.DisplayName(), status)
+			items = append(items, ui.MenuItem(label, func() {
+				if host.Disabled {
+					m.setSSHHostDisabled(host.ID, false)
+				} else if n, ok := nodeIn(nodes, nodeID); ok {
+					m.relink(n)
+				}
 			}))
 		}
-		return dropMenu("monitor", nodeName(nodes, f.NodeID), false, 240, T("Node"), items...)
+		if len(items) > 0 {
+			items = append(items, ui.MenuDivider())
+		}
+		items = append(items,
+			ui.MenuItem(T("Add SSH host…"), func() {
+				m.openAddSSHHost(func(nodeID string) {
+					// Pre-select the newly added SSH host once it comes online or in the picker.
+					if n, ok := nodeIn(ggui.Peek(m.Nodes), nodeID); ok && reachable(n) {
+						selectNode(nodeID)
+					}
+				})
+			}).Icon(icon("plus").Size(14).Color(skin.Muted)),
+			ui.MenuItem(T("Manage SSH hosts…"), func() { m.openSettings("nodes") }).Icon(icon("server").Size(14).Color(skin.Muted)),
+		)
+
+		glyph := "monitor"
+		curLabel := nodeName(nodes, f.NodeID)
+		if n, ok := nodeIn(nodes, f.NodeID); ok {
+			switch n.GetSource() {
+			case "self":
+				glyph = "laptop"
+				if len(ids) < 2 && len(sshHosts) == 0 {
+					curLabel = T("Local")
+				}
+			case "ssh":
+				glyph = "server"
+			}
+		} else if curLabel == "" {
+			glyph = "laptop"
+			curLabel = T("Local")
+		}
+		return dropMenu(glyph, curLabel, false, 260, T("Environment"), items...)
 	})
 }
 

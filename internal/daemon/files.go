@@ -21,6 +21,7 @@ import (
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
+	"github.com/ironpark/mako/internal/sshremote"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -37,13 +38,29 @@ const maxRead = 4 << 20
 const maxImage = 5 << 20
 
 func (d *Daemon) handleListDir(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeDir,
-		func(r *protocol.ListDir) (*protocol.Dir, error) { return listDir(mcp.ExpandHome(r.GetPath())) })
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeDir,
+		func(r *protocol.ListDir) (*protocol.Dir, error) {
+			if d.isDirectSSH(r.GetNodeId()) {
+				host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+				if err != nil {
+					return nil, err
+				}
+				return sshremote.ListDir(ctx, host, ctrl, home, r.GetPath())
+			}
+			return listDir(mcp.ExpandHome(r.GetPath()))
+		})
 }
 
 func (d *Daemon) handleReadFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeFile,
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeFile,
 		func(r *protocol.ReadFile) (*protocol.File, error) {
+			if d.isDirectSSH(r.GetNodeId()) {
+				host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+				if err != nil {
+					return nil, err
+				}
+				return sshremote.ReadFile(ctx, host, ctrl, home, r)
+			}
 			path := mcp.ExpandHome(r.GetPath()) // as a terminal may write it
 			switch {
 			case r.GetImage():
@@ -56,8 +73,15 @@ func (d *Daemon) handleReadFile(ctx context.Context, stream *transport.Stream, e
 }
 
 func (d *Daemon) handleWriteFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeFile,
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeFile,
 		func(r *protocol.WriteFile) (*protocol.File, error) {
+			if d.isDirectSSH(r.GetNodeId()) {
+				host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+				if err != nil {
+					return nil, err
+				}
+				return sshremote.WriteFile(ctx, host, ctrl, home, r)
+			}
 			if r.GetOffset() > 0 {
 				return writePiece(r.GetPath(), r.GetOffset(), r.GetData())
 			}
@@ -66,8 +90,15 @@ func (d *Daemon) handleWriteFile(ctx context.Context, stream *transport.Stream, 
 }
 
 func (d *Daemon) handleGitStatus(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeGitChanges,
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeGitChanges,
 		func(r *protocol.GitStatus) (*protocol.GitChanges, error) {
+			if d.isDirectSSH(r.GetNodeId()) {
+				host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+				if err != nil {
+					return nil, err
+				}
+				return sshremote.GitStatus(ctx, host, ctrl, home, r)
+			}
 			return d.gitStatusLocal(ctx, r)
 		})
 }
@@ -101,8 +132,15 @@ func (d *Daemon) gitStatusLocal(ctx context.Context, r *protocol.GitStatus) (*pr
 }
 
 func (d *Daemon) handleGitDiff(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeDiff,
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeDiff,
 		func(r *protocol.GitDiff) (*protocol.Diff, error) {
+			if d.isDirectSSH(r.GetNodeId()) {
+				host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+				if err != nil {
+					return nil, err
+				}
+				return sshremote.GitDiff(ctx, host, ctrl, home, r)
+			}
 			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.Diff, error) {
 				if r.GetPull() > 0 {
 					return forge.PullDiff(ctx, r.GetRoot(), r.GetPull(), r.GetCommit(), r.GetPath())
@@ -119,7 +157,16 @@ func (d *Daemon) handleGitDiff(ctx context.Context, stream *transport.Stream, en
 }
 
 func (d *Daemon) handleFileOp(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeFile, fileOp)
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeFile, func(r *protocol.FileOp) (*protocol.File, error) {
+		if d.isDirectSSH(r.GetNodeId()) {
+			host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+			if err != nil {
+				return nil, err
+			}
+			return sshremote.FileOp(ctx, host, ctrl, home, r)
+		}
+		return fileOp(r)
+	})
 }
 
 // gitTimeout bounds a git operation, a push or a pull over a slow link
@@ -139,8 +186,15 @@ func inRepo[T any](ctx context.Context, root string, work func(context.Context) 
 }
 
 func (d *Daemon) handleGitLog(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeGitHistory,
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeGitHistory,
 		func(r *protocol.GitLog) (*protocol.GitHistory, error) {
+			if d.isDirectSSH(r.GetNodeId()) {
+				host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+				if err != nil {
+					return nil, err
+				}
+				return sshremote.GitLog(ctx, host, ctrl, home, r)
+			}
 			return d.gitLogLocal(ctx, r)
 		})
 }
@@ -152,8 +206,15 @@ func (d *Daemon) gitLogLocal(ctx context.Context, r *protocol.GitLog) (*protocol
 }
 
 func (d *Daemon) handleGitShow(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeGitCommitInfo,
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeGitCommitInfo,
 		func(r *protocol.GitShow) (*protocol.GitCommitInfo, error) {
+			if d.isDirectSSH(r.GetNodeId()) {
+				host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+				if err != nil {
+					return nil, err
+				}
+				return sshremote.GitShow(ctx, host, ctrl, home, r)
+			}
 			return d.gitShowLocal(ctx, r)
 		})
 }
@@ -165,8 +226,15 @@ func (d *Daemon) gitShowLocal(ctx context.Context, r *protocol.GitShow) (*protoc
 }
 
 func (d *Daemon) handleGitRun(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeGitResult,
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeGitResult,
 		func(r *protocol.GitRun) (*protocol.GitResult, error) {
+			if d.isDirectSSH(r.GetNodeId()) {
+				host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+				if err != nil {
+					return nil, err
+				}
+				return sshremote.GitRun(ctx, host, ctrl, home, r)
+			}
 			return d.gitRunLocal(ctx, r)
 		})
 }

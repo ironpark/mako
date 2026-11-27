@@ -35,14 +35,25 @@ func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Strea
 	}
 	// A front-end asking a single daemon for sessions expects the whole mesh,
 	// so fold in what the peers that let this daemon in sent of the nodes
-	// it reaches through them.
+	// it reaches through them, plus any tunneled SSH daemons.
 	sessions = append(sessions, d.meshSessions(d.routing())...)
+	if d.ssh != nil {
+		sessions = append(sessions, d.ssh.daemonSessions()...)
+	}
 	return stream.Send(protocol.TypeSessions, env.GetId(), &protocol.Sessions{Sessions: sessions})
 }
 
 func (d *Daemon) handleOpenSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.OpenSession) (*protocol.SessionInfo, error) {
-		s, err := d.openSession(ctx, r)
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.OpenSession) (*protocol.SessionInfo, error) {
+		var (
+			s   *session.Session
+			err error
+		)
+		if d.isDirectSSH(r.GetNodeId()) {
+			s, err = d.openDirectSSHSession(ctx, r)
+		} else {
+			s, err = d.openSession(ctx, r)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -52,7 +63,7 @@ func (d *Daemon) handleOpenSession(ctx context.Context, stream *transport.Stream
 }
 
 func (d *Daemon) handleCloseSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeExited, func(r *protocol.CloseSession) (*protocol.Exited, error) {
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeExited, func(r *protocol.CloseSession) (*protocol.Exited, error) {
 		if err := d.closeSession(r.GetSessionId()); err != nil {
 			return nil, err
 		}
@@ -93,7 +104,7 @@ func (d *Daemon) handleAnswerApproval(ctx context.Context, stream *transport.Str
 }
 
 func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.Send) (*protocol.SessionInfo, error) {
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.Send) (*protocol.SessionInfo, error) {
 		s, ok := d.sessions.get(r.GetSessionId())
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
@@ -244,7 +255,7 @@ func (d *Daemon) handleAnswerQuestion(ctx context.Context, stream *transport.Str
 // handleAnswerDialog picks an option of the dialog a session's agent shows
 // in its terminal, as the user would there.
 func (d *Daemon) handleAnswerDialog(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.AnswerDialog) (*protocol.SessionInfo, error) {
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.AnswerDialog) (*protocol.SessionInfo, error) {
 		s, ok := d.sessions.get(r.GetSessionId())
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
@@ -259,7 +270,7 @@ func (d *Daemon) handleAnswerDialog(ctx context.Context, stream *transport.Strea
 // handleSeeSession records what of a session's attention the user has
 // looked at, which every front-end then shows as seen.
 func (d *Daemon) handleSeeSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.SeeSession) (*protocol.SessionInfo, error) {
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.SeeSession) (*protocol.SessionInfo, error) {
 		s, ok := d.sessions.get(r.GetSessionId())
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
@@ -272,7 +283,7 @@ func (d *Daemon) handleSeeSession(ctx context.Context, stream *transport.Stream,
 // handleConfigureAgent sets a session's agent's mode, model, effort, or fast
 // mode as its driver or native bridge supports.
 func (d *Daemon) handleConfigureAgent(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.ConfigureAgent) (*protocol.SessionInfo, error) {
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.ConfigureAgent) (*protocol.SessionInfo, error) {
 		s, ok := d.sessions.get(r.GetSessionId())
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
@@ -416,7 +427,7 @@ func (d *Daemon) ensureDynamicModelsForConfigure(ctx context.Context, s *session
 const maxSessionName = 200
 
 func (d *Daemon) handleRenameSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.RenameSession) (*protocol.SessionInfo, error) {
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.RenameSession) (*protocol.SessionInfo, error) {
 		name := strings.Join(strings.Fields(r.GetName()), " ") // one line
 		if len(name) > maxSessionName {
 			return nil, fmt.Errorf("a session name is at most %d bytes", maxSessionName)
@@ -428,7 +439,7 @@ func (d *Daemon) handleRenameSession(ctx context.Context, stream *transport.Stre
 // handleSleepSession stops the program of a session whose agent rests,
 // keeping the session to resume when it is next attached.
 func (d *Daemon) handleSleepSession(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.SleepSession) (*protocol.SessionInfo, error) {
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.SleepSession) (*protocol.SessionInfo, error) {
 		info, err := d.sleepSession(r.GetSessionId())
 		if err != nil {
 			return nil, err
@@ -470,7 +481,7 @@ func (d *Daemon) handleAttach(ctx context.Context, stream *transport.Stream, env
 	if err != nil {
 		return err
 	}
-	if !d.local(req.GetNodeId()) {
+	if !d.local(req.GetNodeId()) && !d.isDirectSSH(req.GetNodeId()) {
 		if !stream.Packs() {
 			// The relay unpacks the peer's frames for the front-end, so
 			// the peer may pack them as one stream.

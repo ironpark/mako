@@ -13,6 +13,7 @@ import (
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/sshremote"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -44,7 +45,14 @@ func (d *Daemon) stageRoot() (string, error) {
 }
 
 func (d *Daemon) handleStageFile(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeStaged, func(r *protocol.StageFile) (*protocol.Staged, error) {
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeStaged, func(r *protocol.StageFile) (*protocol.Staged, error) {
+		if d.isDirectSSH(r.GetNodeId()) {
+			host, ctrl, home, _, err := d.ssh.directConnInfo(r.GetNodeId())
+			if err != nil {
+				return nil, err
+			}
+			return sshremote.StageFile(ctx, host, ctrl, home, r)
+		}
 		root, err := d.stageRoot()
 		if err != nil {
 			return nil, err
