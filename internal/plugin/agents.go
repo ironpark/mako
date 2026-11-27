@@ -160,6 +160,15 @@ func (h *host) MessagesStartAgent(_ context.Context, req *hostapi.StartAgentRequ
 		return nil, errors.New("name the agent to start, and its profile if any")
 	}
 	project, ok := p.m.project(req.GetProject(), req.GetRoot())
+	if !ok && p.bundled && req.GetRoot() != "" && p.m.cfg.Git != nil &&
+		p.hasWatchedFolderContaining(protocol.LocalScopeNode, req.GetRoot()) &&
+		p.m.cfg.Git.Allowed(GitTarget{Path: req.GetRoot()}) {
+		// Bundled first-party plugins (such as mako-git) may start an agent in
+		// an actively watched local worktree/repository folder even when its
+		// worktree path differs from the parent project's registered roots.
+		project = ProjectRoots{ID: req.GetProject(), Name: req.GetProject(), Roots: []string{req.GetRoot()}}
+		ok = true
+	}
 	if !ok {
 		return nil, fmt.Errorf("this node knows no project %q with the folder %q: see files.listProjects", req.GetProject(), req.GetRoot())
 	}
@@ -200,7 +209,7 @@ func (h *host) MessagesStartAgent(_ context.Context, req *hostapi.StartAgentRequ
 	}
 	ask := &agentAsk{id: "a" + nonce(), name: project.Name, since: time.Now(),
 		req: AgentStart{Agent: req.GetAgent(), Profile: req.GetProfile(), Project: req.GetProject(), Root: req.GetRoot(), Prompt: prompt, Name: name, ParentSessionID: parentID}}
-	if p.m.grant.get(p.id).AgentsAllowed {
+	if p.bundled || p.m.grant.get(p.id).AgentsAllowed {
 		go p.startAgent(ask)
 		return &hostapi.StartAgentResponse{RequestId: ask.id}, nil
 	}
