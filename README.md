@@ -8,7 +8,13 @@ mako connects your computers into a private mesh. Start Codex on a build box, re
 
 ## Quick start
 
-1. On each computer, build from the repository root with the Go version specified in [go.mod](go.mod). See the [build guide](DEVELOP.md#building) for details.
+1. On each computer, build from the repository root with the Go version specified in [go.mod](go.mod). This step builds `bin/mako`, `bin/makod`, and `bin/mako-gui`. See the [build guide](DEVELOP.md#building) for details.
+
+   ```sh
+   make build
+   ```
+
+   On macOS, install the ggui command, build the app bundle, and start the desktop app from the bundle. The bundle lets the desktop app post native notifications.
 
    ```sh
    go install github.com/ironpark/ggui/cmd/ggui@latest
@@ -16,7 +22,7 @@ mako connects your computers into a private mesh. Start Codex on a build box, re
    ./bin/mako.app/Contents/MacOS/mako-gui
    ```
 
-   By default, the desktop app uses an existing daemon or starts one inside the app. On a headless host, run `./bin/makod`.
+   On Linux and Windows, run `./bin/mako-gui`. By default, the desktop app uses an existing daemon or starts one inside the app. On a headless host, run `./bin/makod`.
 
 2. Open **Settings → Nodes** and choose **Ask to be let in** next to the other computer. On that computer, open **Settings → Access** and select **Allow**. Nodes discover each other on the local network or your Tailscale network. You can also configure peer addresses manually. [Networking settings](docs/usage.md#configuration)
 3. Choose an agent in the tab bar to start a session. From the repository root, you can also use the CLI.
