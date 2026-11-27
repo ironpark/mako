@@ -217,6 +217,36 @@ func withProjectDirs(agentName string, args, dirs []string) []string {
 	return append(slices.Clone(args), takes.DirArgs(dirs)...)
 }
 
+// trustLaunchDirs marks the session's working directory and any additional
+// directories given to the agent (from project GiveDirs or explicit CLI flags
+// such as --add-dir / -C) as trusted before the agent process starts.
+func (d *Daemon) trustLaunchDirs(agentName, project string, extraDirs []string, l *agent.Launch) {
+	if l == nil || len(l.Command) == 0 {
+		return
+	}
+	entry, ok := agents.ByProgram(l.Command[0])
+	if !ok {
+		return
+	}
+	truster, ok := entry.Driver.(agent.DirTruster)
+	if !ok {
+		return
+	}
+	dirs := make([]string, 0, 1+len(extraDirs))
+	if project != "" {
+		dirs = append(dirs, project)
+	}
+	dirs = append(dirs, extraDirs...)
+	if extractor, ok := entry.Driver.(interface {
+		ExtractDirs(command []string, baseDir string) []string
+	}); ok {
+		dirs = append(dirs, extractor.ExtractDirs(l.Command, project)...)
+	}
+	if err := truster.TrustDirs(l, dirs); err != nil && d.log != nil {
+		d.log.Warn("failed to pre-trust project directories", "agent", agentName, "err", err)
+	}
+}
+
 // handleSetProjects keeps the projects a front-end gives, until the
 // workspace says what the projects are: from then on they are the
 // workspace's (syncWorkspaceProjects), whichever node edits them, and a

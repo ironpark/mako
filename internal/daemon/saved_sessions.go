@@ -415,7 +415,8 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	// A project that gives its folders gives them to an agent started in
 	// one: worked out at each start, so a resumed session has its
 	// project's folders as they are now.
-	launch.Command = withProjectDirs(req.GetAgent(), launch.Command, d.projectDirs(req.GetProject()))
+	extraDirs := d.projectDirs(req.GetProject())
+	launch.Command = withProjectDirs(req.GetAgent(), launch.Command, extraDirs)
 
 	d.sessionMu.Lock()
 	previous, existed := d.saved[id]
@@ -485,6 +486,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	if err := skills.EnsureAgentSkills(req.GetAgent(), launch.Env); err != nil {
 		d.log.Warn("failed to sync mako built-in skills", "agent", req.GetAgent(), "err", err)
 	}
+	d.trustLaunchDirs(req.GetAgent(), req.GetProject(), extraDirs, &launch.Launch)
 	var codexBridge *codexBridge
 	if req.GetAgent() == "codex" {
 		var stopCodex func()

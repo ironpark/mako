@@ -65,6 +65,14 @@ type Prompter interface{ PromptArgs(text string) []string }
 // the arguments that give it dirs, none when this one takes none.
 type DirTaker interface{ DirArgs(dirs []string) []string }
 
+// DirTruster is an agent that prompts the user to trust directories before
+// working in them: TrustDirs marks dirs (the session's working directory and
+// any extra --add-dir directories) as trusted for launch l so the agent starts
+// without blocking on interactive folder-trust dialogs.
+type DirTruster interface {
+	TrustDirs(l *Launch, dirs []string) error
+}
+
 // Launch is how mako starts an agent: its command line, and the variables
 // it adds to the agent's environment. Readying a launch changes both.
 type Launch struct {

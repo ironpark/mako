@@ -3,12 +3,19 @@
 package daemon
 
 import (
+	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/BurntSushi/toml"
+
+	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -85,5 +92,141 @@ func TestAProjectGivesItsFolders(t *testing.T) {
 	d.projects.set([]*protocol.ProjectScope{{Id: "p", Paths: []string{server, web}}})
 	if got := d.projectDirs(server); got != nil {
 		t.Fatalf("a project that does not give its folders gave %v", got)
+	}
+}
+
+// Starting an agent in a new project or a multi-folder project with GiveDirs
+// pre-trusts both the working directory and every sub-project / --add-dir
+// folder in the agent's native trust store before the process launches.
+func TestSessionLaunchPreTrustsProjectAndSubprojectDirs(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+
+	claudeCmd, claudeRoot := fakeAgent(t, "claude")
+	codexCmd, codexRoot := fakeAgent(t, "codex")
+	agyCmd, agyRoot := fakeAgent(t, "agy")
+	agyHome := t.TempDir()
+
+	cfg := &config.Config{
+		NodeID: "node",
+		Agents: map[string]agentspec.Agent{
+			"claude": {
+				Command: []string{claudeCmd},
+				Env:     map[string]string{"MAKO_FAKE_AGENT": "claude", "MAKO_FAKE_ROOT": claudeRoot, "CLAUDE_CONFIG_DIR": claudeRoot},
+			},
+			"codex": {
+				Command: []string{codexCmd},
+				Env:     map[string]string{"MAKO_FAKE_AGENT": "codex", "MAKO_FAKE_ROOT": codexRoot, "CODEX_HOME": codexRoot},
+			},
+			"agy": {
+				Command: []string{agyCmd},
+				Env:     map[string]string{"MAKO_FAKE_AGENT": "agy", "MAKO_FAKE_ROOT": agyRoot, "HOME": agyHome},
+			},
+		},
+	}
+	d := New(cfg, slog.New(slog.DiscardHandler))
+	d.dir, d.ctx, d.mcp = t.TempDir(), t.Context(), nil
+	if err := d.loadSessions(d.dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(d.sessions.closeAll)
+
+	// 1. Standalone new project (no GiveDirs scope).
+	solo := t.TempDir()
+	if _, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: solo}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "codex", Project: solo}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "agy", Project: solo}); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Multi-folder / nested project with GiveDirs enabled + an explicit --add-dir arg.
+	mainDir := t.TempDir()
+	sub1, sub2, sub3, manualDir := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
+	d.projects.set([]*protocol.ProjectScope{{
+		Id:       "composite",
+		Paths:    []string{mainDir, sub1, sub2, sub3},
+		GiveDirs: true,
+	}})
+
+	if _, err := d.openSession(t.Context(), &protocol.OpenSession{
+		Agent:   "claude",
+		Project: mainDir,
+		Args:    []string{"--add-dir=" + manualDir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.openSession(t.Context(), &protocol.OpenSession{
+		Agent:   "codex",
+		Project: mainDir,
+		Args:    []string{"--add-dir", manualDir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.openSession(t.Context(), &protocol.OpenSession{
+		Agent:   "agy",
+		Project: mainDir,
+		Args:    []string{"--add-dir", manualDir},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	wantDirs := agent.CanonicalDirs([]string{solo, mainDir, sub1, sub2, sub3, manualDir})
+
+	// Verify Claude Code .claude.json
+	clBody, err := os.ReadFile(filepath.Join(claudeRoot, ".claude.json"))
+	if err != nil {
+		t.Fatalf("read .claude.json: %v", err)
+	}
+	var clState struct {
+		Projects map[string]struct {
+			Accepted bool `json:"hasTrustDialogAccepted"`
+		} `json:"projects"`
+	}
+	if err := json.Unmarshal(clBody, &clState); err != nil {
+		t.Fatalf("parse .claude.json: %v", err)
+	}
+	for _, dir := range wantDirs {
+		if !clState.Projects[dir].Accepted {
+			t.Errorf("claude .claude.json missing trust for %q: %+v", dir, clState.Projects)
+		}
+	}
+
+	// Verify Codex config.toml
+	cxBody, err := os.ReadFile(filepath.Join(codexRoot, "config.toml"))
+	if err != nil {
+		t.Fatalf("read codex config.toml: %v", err)
+	}
+	var cxCfg struct {
+		Projects map[string]struct {
+			TrustLevel string `toml:"trust_level"`
+		} `toml:"projects"`
+	}
+	if _, err := toml.Decode(string(cxBody), &cxCfg); err != nil {
+		t.Fatalf("parse codex config.toml: %v\n%s", err, cxBody)
+	}
+	for _, dir := range wantDirs {
+		if cxCfg.Projects[dir].TrustLevel != "trusted" {
+			t.Errorf("codex config.toml missing trust for %q: %+v", dir, cxCfg.Projects)
+		}
+	}
+
+	// Verify Agy settings.json
+	agyBody, err := os.ReadFile(filepath.Join(agyHome, ".gemini", "antigravity-cli", "settings.json"))
+	if err != nil {
+		t.Fatalf("read agy settings.json: %v", err)
+	}
+	var agySettings struct {
+		TrustedWorkspaces []string `json:"trustedWorkspaces"`
+	}
+	if err := json.Unmarshal(agyBody, &agySettings); err != nil {
+		t.Fatalf("parse agy settings.json: %v", err)
+	}
+	for _, dir := range wantDirs {
+		if !slices.Contains(agySettings.TrustedWorkspaces, dir) {
+			t.Errorf("agy settings.json missing trustedWorkspace %q: %q", dir, agySettings.TrustedWorkspaces)
+		}
 	}
 }
