@@ -282,6 +282,22 @@ func TestNotificationsAreSerializedAndCausallyConsistent(t *testing.T) {
 		})
 	}
 	wg.Wait()
+	// Let the coalesced notifications drain before Shutdown: Shutdown drops a
+	// pending one by design, which would leave the last snapshot stale (or,
+	// if the notifier goroutine had not yet run, notify never called).
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.mu.Lock()
+		idle := !s.notifyRunning && !s.notifyDirty
+		s.mu.Unlock()
+		if idle {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("notifications did not settle")
+		}
+		time.Sleep(time.Millisecond)
+	}
 	s.Shutdown()
 
 	if got := maxInFlight.Load(); got != 1 {

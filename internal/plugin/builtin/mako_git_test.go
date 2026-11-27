@@ -897,7 +897,7 @@ func TestMakoGitHTTPSAuthDialogAndRetry(t *testing.T) {
 		saveNode.GetId(): "on",
 	})
 
-	tree = w.until("dialog closes and retry fetch succeeds", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+	w.until("dialog closes and retry fetch succeeds", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		note := findByKeySuffix(n, "note-text")
 		return findByKeySuffix(n, "git-dialog") == nil && note != nil && note.GetText() == "Fetched origin"
 	})
