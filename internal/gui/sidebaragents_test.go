@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ironpark/ggui"
+
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -94,5 +96,37 @@ func TestProjectLooks(t *testing.T) {
 		if !hasIcon(ic.Icon) {
 			t.Fatalf("no icon %s", ic.Icon)
 		}
+	}
+}
+
+// A detailed agent row's machine and ID show whole or not at all: with
+// room for both they show, with less only the machine does, and on a
+// narrow sidebar neither, rather than crowd into the folder and branch.
+func TestAgentMetaDropsIDThenMachineWhenNarrow(t *testing.T) {
+	s := &protocol.SessionInfo{Id: "82a1c2a4dd802b47", Branch: "feat/ssh-remote-agents"}
+	tag := agentTag{Where: "mako", Host: "MacBook-Pro-178.local", OS: "darwin"}
+	hostAndID, host, id := "MacBook-Pro-178.local ·", "MacBook-Pro-178.local", "82a1c2a4"
+	for _, tc := range []struct {
+		width           float64
+		shown, notShown []string
+	}{
+		{600, []string{"mako", hostAndID, id, "feat/ssh-remote-agents"}, []string{host}},
+		{350, []string{"mako", host, "feat/ssh-remote-agents"}, []string{hostAndID, id}},
+		{180, []string{"mako", "feat/ssh-remote-agents"}, []string{hostAndID, host, id}},
+	} {
+		p := ggui.ProbeBuilder(func() ggui.Widget { return agentMeta(s, tag) }, ggui.Sz(tc.width, 40))
+		p.Frame()
+		sem := p.Semantics()
+		for _, text := range tc.shown {
+			if _, ok := sem.Find(ggui.RoleText, text); !ok {
+				t.Errorf("at %v wide, %q is missing", tc.width, text)
+			}
+		}
+		for _, text := range tc.notShown {
+			if _, ok := sem.Find(ggui.RoleText, text); ok {
+				t.Errorf("at %v wide, %q still shows", tc.width, text)
+			}
+		}
+		p.Close()
 	}
 }
