@@ -28,7 +28,8 @@ var screenRules = detect.MustCompile([]detect.Rule{
 		Contains: []string{"navigate", "tab amend"},
 	},
 	{
-		ID: "question_prompt", State: detect.Blocked, Priority: 290, Region: detect.Bottom(2),
+		// Bottom(8) tolerates a stacked custom statusLine below agy's footer.
+		ID: "question_prompt", State: detect.Blocked, Priority: 290, Region: detect.Bottom(8),
 		Contains: []string{"navigate", "esc skip"},
 	},
 	{

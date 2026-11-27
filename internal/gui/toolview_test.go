@@ -1,8 +1,11 @@
 package gui
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -156,5 +159,28 @@ func TestSwarmToolSummariesAndClassification(t *testing.T) {
 				t.Fatalf("isSwarmSyncTool() = %v, want %v", got, tc.wantSync)
 			}
 		})
+	}
+}
+
+func TestToolQuestionShowsAllQuestions(t *testing.T) {
+	in := map[string]any{
+		"question": "Pick color",
+		"options":  []any{"Red", "Blue"},
+		"questions": []any{
+			map[string]any{"question": "Pick color", "options": []any{map[string]any{"label": "Red"}, map[string]any{"label": "Blue"}}},
+			map[string]any{"question": "Pick fruits", "header": "Fruit", "options": []any{map[string]any{"label": "Apple"}, map[string]any{"label": "Banana"}}},
+		},
+	}
+	rows := toolQuestionRows(in)
+	p := ggui.ProbeBuilder(func() ggui.Widget {
+		return widget.Column(rows...).Gap(6).Stretch()
+	}, ggui.Sz(640, 400))
+	t.Cleanup(p.Close)
+	p.Frame()
+	sem := p.Semantics().String()
+	for _, want := range []string{"1/2", "Pick color", "Red, Blue", "2/2 · Fruit", "Pick fruits", "Apple, Banana"} {
+		if !strings.Contains(sem, want) {
+			t.Fatalf("missing %q in toolQuestionRows:\n%s", want, sem)
+		}
 	}
 }

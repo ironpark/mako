@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/detect"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -46,7 +47,12 @@ func (s *Session) readDialogLocked() bool {
 	var d *protocol.ScreenDialog
 	if w.state == detect.Blocked && w.visible && s.approval == nil {
 		if text, err := s.term.Terminal().PlainString(); err == nil {
-			d = screenDialog(w.rules, text, int(s.spec.Cols))
+			// A question dialog the driver answers through AnswerQuestion
+			// has its own multi-question form; do not shadow it with a
+			// single-step ScreenDialog.
+			if keyed, ok := agents.As[agent.KeyedAnswers](s.spec.Agent); !ok || !keyed.Asking(text) {
+				d = screenDialog(w.rules, text, int(s.spec.Cols))
+			}
 		}
 	}
 	if proto.Equal(d, w.dialog) {

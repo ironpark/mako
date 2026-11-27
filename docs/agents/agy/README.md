@@ -60,6 +60,7 @@ flowchart TB
 | `Hooks`, `SubAgentHooks` | `hooks.go` | `~/.gemini/config/hooks.json` 병합, 3중 서브에이전트 훅 하이재킹 방지 |
 | `StatusLine`, `StatusLineEvents` | `statusline.go` | `--settings` 인라인 statusLine 주입, 쿼터/토큰 + 실시간 대기/작업 상태 보강 |
 | `Screen`, `ScreenLive`, `ScreenLiveBaseline`, `ScreenLiveTurn`, `ScreenLiveStatus`, `ScreenLiveActivity` | `screen.go`, `live.go` | PTY 화면에서 실시간 응답(불릿/GFM 테이블 변환)·기준선·턴 앵커·스피너 라벨·Swarm/Agent 활동 행 추출 |
+| `KeyedAnswers` | `questions.go` | `ask_question` 다중 질문·복수 선택(`is_multi_select`)·`Write-in...` 폼 응답 키 시퀀스 입력 |
 | `Modes`, `Models` | `controls.go` | `shift+tab` 실행 모드 순환(`auto`/`acceptEdits`/`plan`), `/model`·`/effort` |
 | `Logs`, `Folders`, `Tools` | `log.go`, `tools.go` | `brain/<id>/.system_generated/logs/transcript_full.jsonl` + `history.jsonl` |
 | `SubAgents` | `subagents.go` | `.system_generated/subagents/*.json` + `swarm/members.json` 기반 워커 추적 |

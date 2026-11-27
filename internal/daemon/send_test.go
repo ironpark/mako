@@ -197,6 +197,57 @@ func TestAnswerQuestionTypesTheAnswers(t *testing.T) {
 	}
 }
 
+func TestAnswerQuestionTypesAgyMultiQuestionAnswers(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out")
+	s, err := session.Start(session.Spec{
+		ID: "s", NodeID: "test-node", Agent: "agy", Project: dir,
+		Command: []string{"sh", "-c", `stty raw -echo; printf '\033[?2004h\033[>5u'; ` +
+			`printf 'Question 1/2: Pick color\r\n> 1. Red\r\n  2. Blue\r\n  3. Write-in...\r\n  ↑/↓ Navigate · → Next · enter Select · esc Skip\r\nesc to cancel\r\n'; cat > out`},
+		Cols: 120, Rows: 12,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+
+	waitFor(t, "agy dialog never showed", func() bool {
+		snap, err := s.Snapshot(false)
+		return err == nil && strings.Contains(snap.GetText(), "esc Skip")
+	})
+
+	questions := []*protocol.Question{
+		{Question: "Pick color", Options: []*protocol.QuestionOption{{Label: "Red"}, {Label: "Blue"}}},
+		{Question: "Pick fruits", MultiSelect: true, Options: []*protocol.QuestionOption{{Label: "Apple"}, {Label: "Banana"}}},
+	}
+	answers := []*protocol.QuestionAnswer{
+		{Picked: []int32{1}},
+		{Picked: []int32{0}, Text: "Mango"},
+	}
+	stream, _ := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+		if err := d.handleAnswerQuestion(t.Context(), st, env); err != nil {
+			return protocol.WriteError(st, env.GetId(), err)
+		}
+		return nil
+	}, protocol.TypeAnswerQuestion, &protocol.AnswerQuestion{SessionId: "s", Questions: questions, Answers: answers})
+	env, err := stream.Recv()
+	if err != nil || env.Type() != protocol.TypeSessionInfo {
+		t.Fatalf("reply %v, %v", env, err)
+	}
+	// Q1: Down + Enter; Q2: Space + Down + Down + Enter, then bracketed paste "Mango" + Enter.
+	want := "\x1b[B\r \x1b[B\x1b[B\r\x1b[200~Mango\x1b[201~\r"
+	var got []byte
+	waitFor(t, "agy answers never came", func() bool {
+		got, _ = os.ReadFile(out)
+		return len(got) >= len(want)
+	})
+	if string(got) != want {
+		t.Fatalf("typed %q, want %q", got, want)
+	}
+}
+
 func TestHandleSendRoutesCodexUserPromptViaBridgeWithFallback(t *testing.T) {
 	dir := t.TempDir()
 	ptyOut := filepath.Join(dir, "pty.out")

@@ -131,7 +131,11 @@ func (s *Session) encodeKeys(keys []input.Key) ([]byte, error) {
 	}
 	var buf bytes.Buffer
 	for _, k := range keys {
-		if err := input.EncodeKey(&buf, s.term.Terminal(), input.KeyEvent{Action: input.KeyActionPress, Key: k}, ""); err != nil {
+		text := ""
+		if k == input.KeySpace {
+			text = " "
+		}
+		if err := input.EncodeKey(&buf, s.term.Terminal(), input.KeyEvent{Action: input.KeyActionPress, Key: k}, text); err != nil {
 			return nil, err
 		}
 	}

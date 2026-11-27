@@ -72,3 +72,20 @@ func TestARowCarriesItsQuestions(t *testing.T) {
 		t.Fatal("a call that asks nothing carries questions")
 	}
 }
+
+func TestQuestionsReadsAgyIsMultiSelectAndEncodedList(t *testing.T) {
+	in := map[string]any{"questions": []any{
+		map[string]any{"question": "Pick color", "is_multi_select": false, "options": []any{"Red", "Blue"}},
+		map[string]any{"question": "Pick fruits", "is_multi_select": true, "options": []any{"Apple", "Banana"}},
+	}}
+	got := Questions(in)
+	if len(got) != 2 || got[0].GetMultiSelect() || !got[1].GetMultiSelect() {
+		t.Fatalf("questions = %v", got)
+	}
+	// Compact transcripts may encode questions as a JSON string.
+	encoded := map[string]any{"questions": `[{"question":"Q1","is_multi_select":false,"options":["A"]},{"question":"Q2","is_multi_select":true,"options":["B","C"]}]`}
+	gotEncoded := Questions(encoded)
+	if len(gotEncoded) != 2 || gotEncoded[0].GetQuestion() != "Q1" || gotEncoded[1].GetQuestion() != "Q2" || !gotEncoded[1].GetMultiSelect() {
+		t.Fatalf("encoded questions = %v", gotEncoded)
+	}
+}

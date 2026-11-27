@@ -207,8 +207,14 @@ func Questions(in map[string]any, keys ...string) []*protocol.Question {
 	if len(keys) == 0 {
 		keys = []string{"question"}
 	}
+	rawQuestions := List(in, "questions")
+	if rawQuestions == nil {
+		if s, ok := in["questions"].(string); ok {
+			_ = json.Unmarshal([]byte(s), &rawQuestions)
+		}
+	}
 	var out []*protocol.Question
-	for _, q := range List(in, "questions") {
+	for _, q := range rawQuestions {
 		q, _ := q.(map[string]any)
 		text := Str(q, keys...)
 		if text == "" {
@@ -217,6 +223,9 @@ func Questions(in map[string]any, keys ...string) []*protocol.Question {
 		question := &protocol.Question{Question: text, Header: Str(q, "header")}
 		question.MultiSelect, _ = q["multiSelect"].(bool)
 		if multi, ok := q["multi_select"].(bool); ok {
+			question.MultiSelect = multi
+		}
+		if multi, ok := q["is_multi_select"].(bool); ok {
 			question.MultiSelect = multi
 		}
 		for _, o := range List(q, "options") {

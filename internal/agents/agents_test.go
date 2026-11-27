@@ -79,7 +79,7 @@ func TestProgramsAreTheirAgents(t *testing.T) {
 			t.Errorf("%s: %q, want %q", program, got, want)
 		}
 	}
-	if Caps("claude") == 0 || Caps("shell") != 0 || Caps("agy")&protocol.CapSubAgents == 0 || Caps("agy")&protocol.CapAnswerKeys != 0 {
+	if Caps("claude") == 0 || Caps("shell") != 0 || Caps("agy")&protocol.CapSubAgents == 0 || Caps("agy")&protocol.CapAnswerKeys == 0 || Caps("claude")&protocol.CapAnswerKeys != 0 {
 		t.Error("caps")
 	}
 }
