@@ -386,6 +386,11 @@ func checklist(items []any) ggui.Widget {
 		case "completed", "done":
 			glyph = icon("circle-check").Size(14).Color(skin.DiffAdded)
 			text = text.Color(skin.Muted)
+		case "skipped":
+			glyph = icon("circle").Size(14).Color(skin.Muted)
+			text = text.Color(skin.Muted)
+		case "failed":
+			glyph = icon("circle-x").Size(14).Color(skin.DiffRemoved)
 		case "in_progress":
 			glyph = icon("circle-dot").Size(14).Color(skin.AccentBright)
 			text = text.Weight(ggui.WeightMedium)

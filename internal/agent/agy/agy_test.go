@@ -459,8 +459,48 @@ func TestScreenModeAndControls(t *testing.T) {
 	if got := a.ScreenMode("? for shortcuts     plan · Gemini 4 Neon · high\n"); got != "plan" {
 		t.Errorf("plan mode = %q", got)
 	}
+	// Default mode omits the mode prefix before the model name.
+	if got := a.ScreenMode("? for shortcuts                         Gemini 4 Neon · high\n"); got != "default" {
+		t.Errorf("default mode = %q, want default", got)
+	}
+	// Stacked custom statusLine and trailing task count still resolve mode.
+	stacked := "? for shortcuts   auto · Gemini 4 Neon · xhigh · 1 task(s) · /tasks\ncustom status line\n"
+	if got := a.ScreenMode(stacked); got != "auto" {
+		t.Errorf("stacked statusLine mode = %q, want auto", got)
+	}
+	// Overlays never report a prompt mode.
+	overlay := "Skills\nKeyboard: ↑/↓ Navigate  enter View  esc Cancel\n? for shortcuts   auto · Gemini 4 Neon · high\n"
+	if got := a.ScreenMode(overlay); got != "" {
+		t.Errorf("overlay mode = %q, want empty", got)
+	}
 	if a.ModelCommand("gemini-4-neon-high") != "/model gemini-4-neon-high" || a.EffortCommand("high") != "/effort high" {
 		t.Errorf("unexpected control commands")
+	}
+}
+
+func TestUpdateStepsAndMultiSelectQuestionTools(t *testing.T) {
+	a := New()
+	kind, canon := a.Tool("update_steps", json.RawMessage(`{"steps":[{"title":"Inspect PTY streams","status":"done"},{"title":"Fix live parser","status":"in_progress"},{"title":"Run tests","status":"pending"}]}`))
+	if kind != protocol.ToolPlan {
+		t.Fatalf("update_steps kind = %q, want %q", kind, protocol.ToolPlan)
+	}
+	items := agent.List(canon, "items")
+	if len(items) != 3 {
+		t.Fatalf("update_steps items = %#v, want 3", items)
+	}
+	first, _ := items[0].(map[string]any)
+	second, _ := items[1].(map[string]any)
+	if first["text"] != "Inspect PTY streams" || first["status"] != "done" || second["text"] != "Fix live parser" || second["status"] != "in_progress" {
+		t.Fatalf("unexpected plan items: %#v", items)
+	}
+
+	qKind, qCanon := a.Tool("ask_question", json.RawMessage(`{"questions":[{"question":"Which limits?","is_multi_select":true,"options":["None","No external libs"]}]}`))
+	if qKind != protocol.ToolQuestion {
+		t.Fatalf("ask_question kind = %q, want %q", qKind, protocol.ToolQuestion)
+	}
+	qs := agent.Questions(qCanon)
+	if len(qs) != 1 || !qs[0].GetMultiSelect() || len(qs[0].GetOptions()) != 2 {
+		t.Fatalf("ask_question is_multi_select decoded = %+v", qs)
 	}
 }
 

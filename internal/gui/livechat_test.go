@@ -38,6 +38,15 @@ func TestAReplyStreamingShowsAsTurns(t *testing.T) {
 	if got := liveStatusLabel("Searching web…"); got != "Searching web…" {
 		t.Fatalf("custom status label = %q, want %q", got, "Searching web…")
 	}
+	if got := liveStatusLabel("1/3 steps · Editing files... 1m 56s"); got != Tf("%s steps", "1/3")+" · "+T("Editing files…")+" 1m 56s" {
+		t.Fatalf("stepped status label = %q", got)
+	}
+	if got := liveStatusLabel("0/6 steps · Running command... 10s"); got != Tf("%s steps", "0/6")+" · "+T("Running command…")+" 10s" {
+		t.Fatalf("stepped command label = %q", got)
+	}
+	if got := liveStatusLabel("Calling MCP tool…"); got != T("Calling MCP tool…") {
+		t.Fatalf("mcp status label = %q", got)
+	}
 	if done := liveTurns([]*protocol.LiveBlock{{Index: 0, Kind: "thinking"}, {Index: 1, Kind: "text", Text: "a"}}); len(done) != 1 || done[0].Thinking {
 		t.Fatalf("a thought done still shows: %+v", done)
 	}
@@ -104,19 +113,20 @@ func TestLiveActivitySplittingAndCard(t *testing.T) {
 		"Swarm(Plugin UI rich components) · coordinator: @ui-schema · 69 posts",
 		"Agent(worker: Swarm Worker (ui-schema)) · For split elements... · 6m44s",
 		"Agent(worker: Swarm Worker (monitor)) · Working · 27h53m4s",
+		"Task(go test -race ./internal/daemon/...) · running · 06:08:51",
 	}, "\n")
 
-	// When only Swarm/Agent activity is present (coordinator idle at ">"),
+	// When only Swarm/Agent/Task activity is present (coordinator idle at ">"),
 	// liveTurns must NOT emit a spurious "Thinking…" turn in the feed.
 	turns := liveTurns([]*protocol.LiveBlock{{Index: 0, Kind: "thinking", Text: raw}})
 	if len(turns) != 0 {
 		t.Fatalf("activity-only live block emitted feed turns: %+v", turns)
 	}
 
-	// When a foreground spinner status accompanies Swarm/Agent activity,
+	// When a foreground spinner status accompanies Swarm/Agent/Task activity,
 	// liveTurns emits the foreground status while splitLiveStatus extracts both.
 	fg, acts := splitLiveStatus("Thinking…\n" + raw)
-	if fg != "Thinking…" || len(acts) != 3 {
+	if fg != "Thinking…" || len(acts) != 4 {
 		t.Fatalf("splitLiveStatus = (%q, %+v)", fg, acts)
 	}
 	if acts[0].Kind != "swarm" || acts[0].Title != "Plugin UI rich components" || acts[0].Detail != "coordinator: @ui-schema · 69 posts" {
@@ -128,17 +138,20 @@ func TestLiveActivitySplittingAndCard(t *testing.T) {
 	if acts[2].Kind != "agent" || acts[2].Title != "Swarm Worker (monitor)" || acts[2].Detail != T("Working") || acts[2].Duration != "27h53m4s" {
 		t.Fatalf("agent 2 = %+v", acts[2])
 	}
+	if acts[3].Kind != "task" || acts[3].Title != "go test -race ./internal/daemon/..." || acts[3].Detail != T("Running") || acts[3].Duration != "06:08:51" {
+		t.Fatalf("task item = %+v", acts[3])
+	}
 
-	// Deduplicates Agent rows already shown in runningAgents while keeping Swarm summary.
+	// Deduplicates Agent rows already shown in runningAgents while keeping Swarm and Task rows.
 	deduped := liveActivityItems(
 		[]*protocol.LiveBlock{{Index: 0, Kind: "thinking", Text: raw}},
 		[]*protocol.SubAgent{{Id: "a1", Running: true, Description: "Swarm Worker (ui-schema)"}},
 	)
-	if len(deduped) != 2 || deduped[0].Kind != "swarm" || deduped[1].Title != "Swarm Worker (monitor)" {
+	if len(deduped) != 3 || deduped[0].Kind != "swarm" || deduped[1].Title != "Swarm Worker (monitor)" || deduped[2].Kind != "task" {
 		t.Fatalf("deduped = %+v", deduped)
 	}
 
-	// Render liveActivityCard over the composer and confirm Swarm & Agent rows appear.
+	// Render liveActivityCard over the composer and confirm Swarm, Agent, and Task rows appear.
 	t.Setenv("MAKO_HOME", t.TempDir())
 	m := newModel(config.Default(), "")
 	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "agy", State: protocol.StateRunning, Status: protocol.AgentDone}})
@@ -148,7 +161,7 @@ func TestLiveActivitySplittingAndCard(t *testing.T) {
 	defer p.Close()
 	p.Frame()
 	page := p.Semantics().String()
-	for _, want := range []string{T("Swarm"), "Plugin UI rich components", "Swarm Worker (ui-schema)", "6m44s", "Swarm Worker (monitor)", "27h53m4s"} {
+	for _, want := range []string{T("Swarm"), T("Command"), "Plugin UI rich components", "Swarm Worker (ui-schema)", "6m44s", "Swarm Worker (monitor)", "27h53m4s", "go test -race ./internal/daemon/...", "06:08:51"} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("liveActivityCard missing %q:\n%s", want, page)
 		}

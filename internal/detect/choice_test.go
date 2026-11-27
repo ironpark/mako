@@ -61,3 +61,55 @@ func TestParseChoiceOthers(t *testing.T) {
 		t.Errorf("a prompt typed read as %+v", c)
 	}
 }
+
+func TestParseChoiceWrappedColumnZeroKoreanOptions(t *testing.T) {
+	rules := MustCompile(nil).WithCursors(">")
+	screen := strings.Join([]string{
+		"Question",
+		"─────────────────────────────────────────────────────────────────────────────────────────────",
+		"",
+		"Question 1/4: Docker Compose 태스크의 이름과 기본 모드를 어떻게 할까요?",
+		"",
+		"> 1. (Recommended) docker:* 네임스페이스, 기본은 Tailscale 오버레이 포함 (LOCAL=1이면 로컬",
+		"포트)",
+		"  2. stack:* 네임스페이스, 기본은 Tailscale 오버레이 포함 (LOCAL=1이면 로컬 포트)",
+		"  3. docker:* 네임스페이스, 기본은 로컬 compose.yaml만 (TAILSCALE=1이면 오버레이 포함)",
+		"  4. Write-in...",
+		"",
+		"  ↑/↓ Navigate · → Next · enter Select · esc Skip · ctrl+r Review",
+		"esc to cancel                                                auto · Gemini 4 Neon · xhigh",
+	}, "\n")
+
+	c, ok := rules.ParseChoice(screen, 95)
+	if !ok {
+		t.Fatal("expected wrapped Korean choice dialog to parse")
+	}
+	want := []string{
+		"(Recommended) docker:* 네임스페이스, 기본은 Tailscale 오버레이 포함 (LOCAL=1이면 로컬 포트)",
+		"stack:* 네임스페이스, 기본은 Tailscale 오버레이 포함 (LOCAL=1이면 로컬 포트)",
+		"docker:* 네임스페이스, 기본은 로컬 compose.yaml만 (TAILSCALE=1이면 오버레이 포함)",
+		"Write-in...",
+	}
+	if !reflect.DeepEqual(c.Options, want) || c.Selected != 0 {
+		t.Fatalf("got options=%q selected=%d, want=%q selected=0", c.Options, c.Selected, want)
+	}
+
+	// Trailing option wrapped onto column 0 at full display width must also join
+	// without swallowing the footer below.
+	lastWrapped := strings.Join([]string{
+		"Question 4/4: 이름은 어떻게 처리할까요?",
+		"",
+		"> 1. (Recommended) 하위 호환 alias(ci:fetch:packs, server:release:dev, release)를",
+		"숨김(internal/alias)으로 잠시 유지",
+		"  2. 옛 이름은 깔끔하게 제거하고 새 이름만 남김",
+		"",
+		"                          enter Submit All",
+	}, "\n")
+	c2, ok := rules.ParseChoice(lastWrapped, 101)
+	if !ok || len(c2.Options) != 2 {
+		t.Fatalf("lastWrapped: got %+v %v, want 2 options", c2, ok)
+	}
+	if c2.Options[0] != "(Recommended) 하위 호환 alias(ci:fetch:packs, server:release:dev, release)를 숨김(internal/alias)으로 잠시 유지" {
+		t.Fatalf("wrapped option 1 = %q", c2.Options[0])
+	}
+}

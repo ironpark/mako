@@ -23,6 +23,7 @@ var tools = map[string]string{
 	"search_web":       protocol.ToolWebSearch,
 	"invoke_subagent":  protocol.ToolTask,
 	"ask_question":     protocol.ToolQuestion,
+	"update_steps":     protocol.ToolPlan,
 }
 
 // Tool reads a call's arguments as agy's tools write them.
@@ -95,6 +96,8 @@ func (*Agent) Tool(name string, args json.RawMessage) (string, map[string]any) {
 		return kind, agent.Canon(map[string]any{"description": agent.Str(in, "toolSummary", "Role"), "prompt": prompt, "agent": role})
 	case protocol.ToolQuestion:
 		return kind, agent.Question(in, "question", "header")
+	case protocol.ToolPlan:
+		return kind, agent.Canon(map[string]any{"items": agent.Items(agent.List(in, "steps"), "title", "status")})
 	}
 	return kind, nil
 }

@@ -40,7 +40,7 @@ func planStanding(steps []any) (done int, current string) {
 	for _, it := range steps {
 		step, _ := it.(map[string]any)
 		switch text := agent.Str(step, "text"); agent.Str(step, "status") {
-		case "completed", "done":
+		case "completed", "done", "skipped":
 			done++
 		case "in_progress":
 			if current == "" {

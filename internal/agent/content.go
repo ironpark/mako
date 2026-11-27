@@ -219,6 +219,9 @@ func Questions(in map[string]any, keys ...string) []*protocol.Question {
 		if multi, ok := q["multi_select"].(bool); ok {
 			question.MultiSelect = multi
 		}
+		if multi, ok := q["is_multi_select"].(bool); ok {
+			question.MultiSelect = multi
+		}
 		for _, o := range List(q, "options") {
 			switch o := o.(type) {
 			case map[string]any:

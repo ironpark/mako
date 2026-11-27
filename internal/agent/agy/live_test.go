@@ -738,3 +738,135 @@ func TestExtractTurn(t *testing.T) {
 		t.Fatalf("ExtractTurn() = (%d, %q), want (2, %q)", turns, prompt, "두 번째 질문")
 	}
 }
+
+func TestExtractLiveBelowComposerDocksAndRealChrome(t *testing.T) {
+	a := New()
+	rule90 := strings.Repeat("─", 90)
+	divider := strings.Repeat("─", 60)
+
+	t.Run("background_task_dock_and_overflow_never_leak", func(t *testing.T) {
+		screen := divider + "\n" +
+			"> Run the full test suite\n\n" +
+			"▸ Thought for 10s, 384 tokens\n" +
+			"  Internal reasoning preview that must never leak...\n\n" +
+			"● Ran 1 command (go test -race ./...)\n" +
+			"… 13 more actions (8 reads, 4 commands, 1 tool: 1 failed) …\n\n" +
+			"  테스트가 백그라운드에서 실행 중입니다.\n" +
+			"⣟  1/3 steps · Running command... 10s\n" +
+			"  ⎿  ✓ Inspect package layout\n" +
+			"     ● Run race detector suite\n" +
+			"     ○ Summarize results\n" +
+			rule90 + "\n>\n" + rule90 + "\n" +
+			"  ● [06:08:51] go test -race ./internal/daemon/... ./internal/session/...   running\n" +
+			"  ↓ 1 more\n" +
+			rule90 + "\n" +
+			"  Tip: Use /tasks to view running background tasks.\n" +
+			"  To disable tips, toggle Show Tips in /settings.\n" +
+			"esc to cancel                     auto · Gemini 4 Neon · xhigh · 1 task(s) · /tasks\n"
+
+		if got := a.ExtractLive(screen, ""); got != "테스트가 백그라운드에서 실행 중입니다." {
+			t.Fatalf("ExtractLive() = %q, want only assistant prose", got)
+		}
+		if got := a.ExtractActivity(screen); got != "Task(go test -race ./internal/daemon/... ./internal/session/...) · running · 06:08:51" {
+			t.Fatalf("ExtractActivity() = %q", got)
+		}
+		wantStatus := "1/3 steps · Running command... 10s\nTask(go test -race ./internal/daemon/... ./internal/session/...) · running · 06:08:51"
+		if got := a.ExtractStatus(screen); got != wantStatus {
+			t.Fatalf("ExtractStatus() = %q, want %q", got, wantStatus)
+		}
+	})
+
+	t.Run("thought_header_followed_by_blank_keeps_prose_and_expanded_thought_is_skipped", func(t *testing.T) {
+		screen := divider + "\n" +
+			"> Explain server startup\n\n" +
+			"│ ▾ Thought for 4s, 170 tokens (ctrl+o to collapse)\n" +
+			"│   Checking Taskfile.yml and run_server.sh.\n\n" +
+			"─── Conversation compacted ───\n\n" +
+			"▸ Thought for 7s, 540 tokens\n\n" +
+			"  서버는 호스트에서 직접 실행합니다.\n" +
+			"⣾  Generating...\n" +
+			rule90 + "\n>\n" + rule90 + "\n" +
+			"esc to cancel                                              auto · Gemini 4 Neon · xhigh\n"
+
+		if got := a.ExtractLive(screen, ""); got != "서버는 호스트에서 직접 실행합니다." {
+			t.Fatalf("ExtractLive() = %q", got)
+		}
+	})
+
+	t.Run("borderless_unicode_table_converts_to_gfm", func(t *testing.T) {
+		screen := divider + "\n" +
+			"> Taskfile 정리 초안 보여줘\n\n" +
+			"  정리 방향 초안:\n\n" +
+			"   그룹       │ 제안 태스크                        │ 설명\n" +
+			"  ────────────┼────────────────────────────────────┼──────────────────────────────────\n" +
+			"   Docker     │ docker:up, docker:build,           │ 기본 compose.yaml +\n" +
+			"              │ docker:deploy, docker:down,        │ compose.tailscale.yaml 기준\n" +
+			"              │ docker:logs, docker:format         │\n" +
+			"   로컬 서버  │ server, server:dev                 │ 디버그 / HMR 모드\n\n" +
+			"  계속 진행할까요?\n" +
+			"⠙  Generating...\n" +
+			rule90 + "\n>\n" + rule90 + "\n" +
+			"esc to cancel                                              auto · Gemini 4 Neon · xhigh\n"
+
+		got := a.ExtractLive(screen, "")
+		want := strings.Join([]string{
+			"정리 방향 초안:",
+			"",
+			"| 그룹 | 제안 태스크 | 설명 |",
+			"| --- | --- | --- |",
+			"| Docker | docker:up, docker:build, docker:deploy, docker:down, docker:logs, docker:format | 기본 compose.yaml + compose.tailscale.yaml 기준 |",
+			"| 로컬 서버 | server, server:dev | 디버그 / HMR 모드 |",
+			"",
+			"계속 진행할까요?",
+		}, "\n")
+		if got != want {
+			t.Fatalf("ExtractLive(borderless table) =\n%s\n\nwant:\n%s", got, want)
+		}
+	})
+
+	t.Run("overlays_never_leak_into_live_baseline_turn_or_status", func(t *testing.T) {
+		skills := "Skills\n10 skills\n\n> mako\n  Work with Mako workspaces\n\nKeyboard: ↑/↓ Navigate  enter View  esc Cancel\nesc to cancel   auto · Gemini 4 Neon · xhigh\n"
+		if got := a.ExtractLive(skills, ""); got != "" {
+			t.Fatalf("ExtractLive(skills) = %q, want empty", got)
+		}
+		if got := a.ExtractBaseline(skills); got != "" {
+			t.Fatalf("ExtractBaseline(skills) = %q, want empty", got)
+		}
+		if turns, prompt := a.ExtractTurn(skills); turns != 0 || prompt != "" {
+			t.Fatalf("ExtractTurn(skills) = (%d, %q), want (0, empty)", turns, prompt)
+		}
+		if got := a.ExtractStatus(skills); got != "" {
+			t.Fatalf("ExtractStatus(skills) = %q, want empty", got)
+		}
+	})
+
+	t.Run("partial_redraw_below_composer_swarm_dock_never_leaks", func(t *testing.T) {
+		screen := divider + "\n" +
+			"> /swarm 아래 한계점 개선.\n\n" +
+			"  진행 상황이 올라오면 바로 알려드리겠습니다.\n" +
+			"○ Used 14 tools (ReadBoard ×6)\n" +
+			"○ Using Swarm (ctrl+o to expand)\n" +
+			"⣻  Working...\n" +
+			rule90 + "\n>\n" + rule90 + "\n" +
+			"  ● Swarm(Improve svgx)  verifier: done · 32 posts · alt+s board\n" +
+			"                                fuzzer))  Working · 39m44s\n" +
+			"                                binary-v3))  Working · 39m45s\n" +
+			"  ● Agent(worker: Swarm Worker (css-anim))  Working · 39m47s\n" +
+			"  ↓ 1 more\n" +
+			rule90 + "\n" +
+			"esc to cancel                          auto · Gemini 4 Neon · xhigh · 5 subagent(s)\n"
+		if got := a.ExtractLive(screen, ""); got != "" {
+			t.Fatalf("ExtractLive(partial swarm dock) = %q, want empty", got)
+		}
+	})
+
+	t.Run("concatenated_spinner_redraw_is_deduplicated", func(t *testing.T) {
+		screen := divider + "\n> fix\n" +
+			"⠋  1/3 steps · Constants already exist...⠙  1/3 steps · Editing files... 1m 56s\n" +
+			rule90 + "\n>\n" + rule90 + "\n" +
+			"esc to cancel                                              auto · Gemini 4 Neon · xhigh\n"
+		if got := a.ExtractStatus(screen); got != "1/3 steps · Editing files... 1m 56s" {
+			t.Fatalf("ExtractStatus(concatenated spinner) = %q", got)
+		}
+	})
+}

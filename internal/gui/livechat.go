@@ -163,17 +163,17 @@ func liveTurns(blocks []*protocol.LiveBlock) []chatTurnItem {
 	return turns
 }
 
-// liveActivityItem is one structured active Swarm/Agent row extracted from
-// live status blocks (such as agy's bottom Swarm and background Agent rows).
+// liveActivityItem is one structured active Swarm/Agent/Task row extracted from
+// live status blocks (such as agy's bottom Swarm, Agent, and background Task rows).
 type liveActivityItem struct {
-	Kind     string // "swarm" or "agent"
+	Kind     string // "swarm", "agent", or "task"
 	Title    string
 	Detail   string
 	Duration string
 }
 
 // splitLiveStatus separates foreground spinner status lines (e.g. "Thinking…")
-// from structured Swarm(...) and Agent(...) live activity rows.
+// from structured Swarm(...), Agent(...), and Task(...) live activity rows.
 func splitLiveStatus(text string) (status string, activities []liveActivityItem) {
 	if strings.TrimSpace(text) == "" {
 		return "", nil
@@ -200,6 +200,8 @@ func parseLiveActivityItem(line string) (liveActivityItem, bool) {
 		kind, rest = "swarm", line[len("Swarm("):]
 	case strings.HasPrefix(line, "Agent("):
 		kind, rest = "agent", line[len("Agent("):]
+	case strings.HasPrefix(line, "Task("):
+		kind, rest = "task", line[len("Task("):]
 	default:
 		return liveActivityItem{}, false
 	}
@@ -242,13 +244,16 @@ func parseLiveActivityItem(line string) (liveActivityItem, bool) {
 		}
 	}
 	var duration string
-	if len(parts) > 0 && looksLikeElapsed(parts[len(parts)-1]) {
+	if len(parts) > 0 && (looksLikeElapsed(parts[len(parts)-1]) || looksLikeClockTime(parts[len(parts)-1])) {
 		duration = parts[len(parts)-1]
 		parts = parts[:len(parts)-1]
 	}
 	for i, p := range parts {
-		if strings.EqualFold(p, "working") {
+		switch strings.ToLower(p) {
+		case "working":
 			parts[i] = T("Working")
+		case "running":
+			parts[i] = T("Running")
 		}
 	}
 	return liveActivityItem{
@@ -257,6 +262,19 @@ func parseLiveActivityItem(line string) (liveActivityItem, bool) {
 		Detail:   strings.Join(parts, " · "),
 		Duration: duration,
 	}, true
+}
+
+// looksLikeClockTime reports whether s is an HH:MM:SS timestamp such as "06:08:51".
+func looksLikeClockTime(s string) bool {
+	if len(s) != 8 || s[2] != ':' || s[5] != ':' {
+		return false
+	}
+	for _, i := range []int{0, 1, 3, 4, 6, 7} {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // looksLikeElapsed reports whether s looks like an agy duration token such as
@@ -335,14 +353,24 @@ func liveActivityCard(m *model, id string, state *chatState) ggui.Widget {
 		for i, item := range list {
 			var cols []ggui.Widget
 			cols = append(cols, ui.Spinner().Size(13))
-			if item.Kind == "swarm" {
+			switch item.Kind {
+			case "swarm":
 				cols = append(cols, widget.Text(T("Swarm")).Size(11.5).Weight(ggui.WeightMedium).Color(skin.AccentBright).NoWrap())
+			case "task":
+				cols = append(cols, widget.Text(T("Command")).Size(11.5).Weight(ggui.WeightMedium).Color(skin.AccentBright).NoWrap())
 			}
-			cols = append(cols, widget.Text(item.Title).Size(12.5).Weight(ggui.WeightMedium).NoWrap())
-			if item.Detail != "" {
-				cols = append(cols, widget.Expanded(muted(widget.Text(item.Detail).Size(12).NoWrap().Ellipsis())))
+			if item.Kind == "task" {
+				cols = append(cols, widget.Expanded(widget.Text(item.Title).Size(12.5).Weight(ggui.WeightMedium).NoWrap().Ellipsis()))
+				if item.Detail != "" {
+					cols = append(cols, muted(widget.Text(item.Detail).Size(12).NoWrap()))
+				}
 			} else {
-				cols = append(cols, widget.Spacer())
+				cols = append(cols, widget.Text(item.Title).Size(12.5).Weight(ggui.WeightMedium).NoWrap())
+				if item.Detail != "" {
+					cols = append(cols, widget.Expanded(muted(widget.Text(item.Detail).Size(12).NoWrap().Ellipsis())))
+				} else {
+					cols = append(cols, widget.Spacer())
+				}
 			}
 			if item.Duration != "" {
 				cols = append(cols, muted(widget.Text(item.Duration).Size(11.5).NoWrap()))
@@ -354,9 +382,32 @@ func liveActivityCard(m *model, id string, state *chatState) ggui.Widget {
 	})
 }
 
-// liveStatusLabel localizes well-known agent activity statuses while passing
-// through any agent-specific status text verbatim.
+var (
+	liveStepPrefixRe   = regexp.MustCompile(`^(\d+/\d+)\s+steps\s*·\s*(.+)$`)
+	liveElapsedTrailRe = regexp.MustCompile(`^(.+?)\s+((?:\d+h\s*)?(?:\d+m\s*)?\d+s)$`)
+)
+
+// liveStatusLabel localizes well-known agent activity statuses (including
+// optional "N/M steps · " prefixes and trailing elapsed timers like "1m 56s")
+// while passing through any agent-specific status text verbatim.
 func liveStatusLabel(status string) string {
+	s := strings.TrimSpace(status)
+	if s == "" {
+		return T("Thinking…")
+	}
+	var prefix, suffix string
+	if m := liveStepPrefixRe.FindStringSubmatch(s); m != nil {
+		prefix = Tf("%s steps", m[1]) + " · "
+		s = strings.TrimSpace(m[2])
+	}
+	if m := liveElapsedTrailRe.FindStringSubmatch(s); m != nil {
+		suffix = " " + m[2]
+		s = strings.TrimSpace(m[1])
+	}
+	return prefix + localizeCoreLiveStatus(s) + suffix
+}
+
+func localizeCoreLiveStatus(status string) string {
 	switch strings.TrimSpace(status) {
 	case "", "Thinking…", "Thinking...":
 		return T("Thinking…")
@@ -364,18 +415,34 @@ func liveStatusLabel(status string) string {
 		return T("Generating…")
 	case "Reading file…", "Reading file...":
 		return T("Reading file…")
+	case "Reading files…", "Reading files...":
+		return T("Reading files…")
 	case "Editing file…", "Editing file...":
 		return T("Editing file…")
+	case "Editing files…", "Editing files...":
+		return T("Editing files…")
 	case "Writing file…", "Writing file...":
 		return T("Writing file…")
 	case "Running command…", "Running command...":
 		return T("Running command…")
+	case "Running commands…", "Running commands...":
+		return T("Running commands…")
 	case "Searching…", "Searching...":
 		return T("Searching…")
 	case "Searching files…", "Searching files...":
 		return T("Searching files…")
 	case "Listing directory…", "Listing directory...":
 		return T("Listing directory…")
+	case "Calling MCP tool…", "Calling MCP tool...":
+		return T("Calling MCP tool…")
+	case "Managing tasks…", "Managing tasks...":
+		return T("Managing tasks…")
+	case "Checking tasks…", "Checking tasks...":
+		return T("Checking tasks…")
+	case "Working…", "Working...":
+		return T("Working…")
+	case "Loading…", "Loading...":
+		return T("Loading…")
 	case "Starting…", "Starting...":
 		return T("Starting…")
 	default:

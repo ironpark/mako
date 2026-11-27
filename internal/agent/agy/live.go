@@ -12,15 +12,20 @@ import (
 )
 
 var (
-	spinnerLineRe    = regexp.MustCompile(`^\s*[\x{2801}-\x{28FF}]+(?:\s|$)`)
-	promptFooterRe   = regexp.MustCompile(`^\s*\? for shortcuts\b`)
-	numberedListRe   = regexp.MustCompile(`^(\d+[.)]\s+)(.*)$`)
-	expandHintRe     = regexp.MustCompile(`^(?:\(ctrl\+o to expand\)|(?:…|\.\.\.)\s*\+\d+\s+(?:more\s+)?lines?)$`)
-	markdownLinkRe   = regexp.MustCompile(`!?\[([^\]]*)\]\([^)\s]+(?:\s+"[^"]*")?\)`)
-	fileLinkRe       = regexp.MustCompile(`\[[^\]]*\]\(file://([^)#\s]+)(?:#[^)\s]*)?\)`)
-	tableSeparatorRe = regexp.MustCompile(`^\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?$`)
-	rawHTMLTagRe     = regexp.MustCompile(`</?[A-Za-z][A-Za-z0-9_.:-]*(?:\s[^>\n]*)?/?>`)
-	htmlBreakRe      = regexp.MustCompile(`(?i)<br\s*/?>`)
+	spinnerLineRe       = regexp.MustCompile(`^\s*[\x{2801}-\x{28FF}]+(?:\s|$)`)
+	promptFooterRe      = regexp.MustCompile(`^\s*\? for shortcuts\b`)
+	numberedListRe      = regexp.MustCompile(`^(\d+[.)]\s+)(.*)$`)
+	expandHintRe        = regexp.MustCompile(`^(?:\(ctrl\+o to (?:expand|collapse)\)|(?:…|\.\.\.)\s*(?:\+\d+\s+(?:more\s+)?lines?|\d+\s+more\s+actions?\b.*))$`)
+	markdownLinkRe      = regexp.MustCompile(`!?\[([^\]]*)\]\([^)\s]+(?:\s+"[^"]*")?\)`)
+	fileLinkRe          = regexp.MustCompile(`\[[^\]]*\]\(file://([^)#\s]+)(?:#[^)\s]*)?\)`)
+	tableSeparatorRe    = regexp.MustCompile(`^\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?$`)
+	rawHTMLTagRe        = regexp.MustCompile(`</?[A-Za-z][A-Za-z0-9_.:-]*(?:\s[^>\n]*)?/?>`)
+	htmlBreakRe         = regexp.MustCompile(`(?i)<br\s*/?>`)
+	dockOverflowRe      = regexp.MustCompile(`^\s*[↓↑]\s+\d+\s+more\s*$`)
+	thoughtHeaderRe     = regexp.MustCompile(`^\s*(?:│\s*)?[▸▾○●]\s+Thought\s+for\b`)
+	taskDockRe          = regexp.MustCompile(`^\s*(?:[●○✓✔✗✘◆]|[\x{2801}-\x{28FF}]+)\s+\[(\d{2}:\d{2}:\d{2})\]\s+(.+?)\s+(running|done|completed|failed|exited|stopped|killed)\s*$`)
+	stepChecklistItemRe = regexp.MustCompile(`^\s*(?:⎿\s+)?[✓✔●○✗✘]\s+\S`)
+	submitAllFooterRe   = regexp.MustCompile(`(?i)^\s*(?:.*·\s*)?enter\s+submit\s+all(?:\s*·|\s*$)`)
 )
 
 // ExtractLive extracts the currently streaming assistant response text from an
@@ -38,9 +43,9 @@ func (*Agent) ExtractLive(screen, lastLogged string) string {
 	}
 	lines := rawLines[:end]
 
-	// Gate 1: Reject idle, dialog, permission, trust, and slash-menu screens.
+	// Gate 1: Reject idle, overlay, dialog, permission, trust, and slash-menu screens.
 	detected := screenRules.Detect(detect.Input{Screen: norm})
-	if detected.State == detect.Blocked || detected.State == detect.Idle {
+	if detected.State == detect.Blocked || detected.State == detect.Idle || detected.Hold {
 		return ""
 	}
 	if hasIdleOrDialogFooter(lines) {
@@ -78,7 +83,7 @@ func (*Agent) ExtractBaseline(screen string) string {
 	lines := rawLines[:end]
 
 	detected := screenRules.Detect(detect.Input{Screen: norm})
-	if detected.State == detect.Blocked || hasDialogFooter(lines) {
+	if detected.State == detect.Blocked || detected.Hold || hasDialogFooter(lines) {
 		return ""
 	}
 	return extractBodyText(lines, true)
@@ -94,6 +99,10 @@ func (*Agent) ExtractTurn(screen string) (int, string) {
 		return 0, ""
 	}
 	lines := rawLines[:end]
+	detected := screenRules.Detect(detect.Input{Screen: norm})
+	if detected.State == detect.Blocked || detected.Hold || hasDialogFooter(lines) {
+		return 0, ""
+	}
 	bodyEnd, cols := stripBottomChrome(lines, true)
 	if bodyEnd == 0 {
 		return 0, ""
@@ -139,8 +148,8 @@ func (*Agent) ExtractTurn(screen string) (int, string) {
 	for j < len(body) {
 		curr := body[j]
 		if strings.TrimSpace(curr) == "" ||
-			isToolHeader(curr) || isToolDetail(curr) || isSpinnerLine(curr) ||
-			isHorizontalRule(curr) || isBoxStart(curr) || isAnnouncementLine(curr) {
+			isToolHeader(curr) || isThoughtHeader(curr) || isToolDetail(curr) || isSpinnerLine(curr) ||
+			isHorizontalRule(curr) || isTitledDivider(curr) || isBoxStart(curr) || isAnnouncementLine(curr) || isInterruptedBanner(curr) {
 			break
 		}
 		prevLen := displayWidth(strings.TrimRight(prevLine, " \t"))
@@ -171,7 +180,7 @@ func (*Agent) ExtractStatus(screen string) string {
 	lines := rawLines[:end]
 
 	detected := screenRules.Detect(detect.Input{Screen: norm})
-	if detected.State == detect.Blocked || detected.ID == "slash_menu" || hasDialogFooter(lines) {
+	if detected.State == detect.Blocked || detected.Hold || detected.ID == "slash_menu" || hasDialogFooter(lines) {
 		return ""
 	}
 
@@ -192,7 +201,7 @@ func (*Agent) ExtractStatus(screen string) string {
 		if spinnerEnd > 0 {
 			scanFloor := max(0, spinnerEnd-14)
 			for i := spinnerEnd - 1; i >= scanFloor; i-- {
-				if !isSpinnerLine(lines[i]) || isLiveActivityHeader(lines[i]) {
+				if !isSpinnerLine(lines[i]) || isLiveActivityHeader(lines[i]) || isTaskDockLine(lines[i]) {
 					continue
 				}
 				if label := normalizeStatusLabel(lines[i]); label != "" {
@@ -212,10 +221,10 @@ func (*Agent) ExtractStatus(screen string) string {
 	return spinner + "\n" + strings.Join(activity, "\n")
 }
 
-// ExtractActivity extracts only active background Swarm/Agent status rows from
-// agy's bottom chrome (never foreground braille spinners), stripped of raw
-// keybinding hints like "alt+s board · alt+x dismiss". Returns "" on dialogs
-// or when no Swarm/Agent work is active.
+// ExtractActivity extracts only active background Swarm/Agent/Task status rows
+// from agy's bottom chrome (never foreground braille spinners), stripped of raw
+// keybinding hints like "alt+s board · alt+x dismiss". Returns "" on dialogs,
+// overlays, or when no background work is active.
 func (*Agent) ExtractActivity(screen string) string {
 	norm := strings.ReplaceAll(strings.ReplaceAll(screen, "\r\n", "\n"), "\r", "\n")
 	rawLines := strings.Split(norm, "\n")
@@ -226,7 +235,7 @@ func (*Agent) ExtractActivity(screen string) string {
 	lines := rawLines[:end]
 
 	detected := screenRules.Detect(detect.Input{Screen: norm})
-	if detected.State == detect.Blocked || detected.ID == "slash_menu" || hasDialogFooter(lines) {
+	if detected.State == detect.Blocked || detected.Hold || detected.ID == "slash_menu" || hasDialogFooter(lines) {
 		return ""
 	}
 	return strings.Join(extractLiveActivity(lines), "\n")
@@ -262,6 +271,18 @@ func extractLiveActivity(lines []string) []string {
 	}
 	var entries []rawEntry
 	for i := 0; i < len(chrome); i++ {
+		if name, started, status, ok := parseTaskDockLine(chrome[i]); ok {
+			detail := status
+			if started != "" {
+				if detail != "" {
+					detail += " · " + started
+				} else {
+					detail = started
+				}
+			}
+			entries = append(entries, rawEntry{kind: "Task", name: name, detail: detail})
+			continue
+		}
 		kind, name, rest, ok := parseLiveActivityHeader(chrome[i])
 		if !ok {
 			continue
@@ -312,7 +333,7 @@ func extractLiveActivity(lines []string) []string {
 }
 
 // findBottomComposerBox locates the bottommost prompt composer box (bounded by
-// horizontal rules around a ">" line) within the bottom 24 lines of the screen.
+// equal-width horizontal rules around a ">" line) within the bottom 24 lines.
 func findBottomComposerBox(lines []string) (top, bottom int) {
 	floor := max(0, len(lines)-24)
 	for b := len(lines) - 1; b >= floor; b-- {
@@ -322,7 +343,7 @@ func findBottomComposerBox(lines []string) (top, bottom int) {
 		limit := max(0, b-12)
 		for t := b - 1; t >= limit; t-- {
 			if isHorizontalRule(lines[t]) {
-				if looksLikeComposerBody(lines[t+1 : b]) {
+				if rulesMatchWidth(lines[t], lines[b]) && looksLikeComposerBody(lines[t+1 : b]) {
 					return t, b
 				}
 				break
@@ -333,6 +354,16 @@ func findBottomComposerBox(lines []string) (top, bottom int) {
 		}
 	}
 	return -1, -1
+}
+
+func rulesMatchWidth(a, b string) bool {
+	wa := utf8.RuneCountInString(strings.TrimSpace(a))
+	wb := utf8.RuneCountInString(strings.TrimSpace(b))
+	diff := wa - wb
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff <= 2
 }
 
 // isActivityContinuationCandidate reports whether lines[i] is a wrapped
@@ -466,13 +497,48 @@ func isInactiveActivityDetail(detail string) bool {
 	return false
 }
 
+func parseTaskDockLine(line string) (cmd, started, status string, ok bool) {
+	m := taskDockRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", "", "", false
+	}
+	started = m[1]
+	cmd = strings.Join(strings.Fields(strings.TrimSpace(m[2])), " ")
+	status = strings.ToLower(strings.TrimSpace(m[3]))
+	if cmd == "" {
+		return "", "", "", false
+	}
+	return cmd, started, status, true
+}
+
+func isTaskDockLine(line string) bool {
+	_, _, _, ok := parseTaskDockLine(line)
+	return ok
+}
+
+func isDockOverflowLine(line string) bool {
+	return dockOverflowRe.MatchString(line)
+}
+
 func normalizeStatusLabel(line string) string {
 	t := strings.TrimSpace(line)
 	// Strip leading braille spinner rune(s) and separating whitespace.
 	t = strings.TrimLeftFunc(t, func(r rune) bool {
 		return (r >= 0x2801 && r <= 0x28FF) || unicode.IsSpace(r)
 	})
-	t = strings.TrimSpace(t)
+	// If a partial TUI redraw left two spinner statuses concatenated on one
+	// logical line (e.g. "1/3 steps · Foo...⠋  1/3 steps · Bar..."), keep the
+	// latest segment after the rightmost braille spinner.
+	if lastSpinner := strings.LastIndexFunc(t, func(r rune) bool {
+		return r >= 0x2801 && r <= 0x28FF
+	}); lastSpinner >= 0 {
+		_, sz := utf8.DecodeRuneInString(t[lastSpinner:])
+		if tail := strings.TrimSpace(t[lastSpinner+sz:]); tail != "" {
+			t = tail
+		}
+	}
+	// Strip optional leading completion mark ("✓ 1/3 steps · ...").
+	t = strings.TrimSpace(strings.TrimPrefix(t, "✓"))
 	if t == "" {
 		return ""
 	}
@@ -540,7 +606,27 @@ func hasIdleOrDialogFooter(lines []string) bool {
 	return hasDialogFooter(lines)
 }
 
+func hasOverlayFooter(lines []string) bool {
+	start := max(0, len(lines)-10)
+	for i := start; i < len(lines); i++ {
+		lower := strings.ToLower(lines[i])
+		if strings.Contains(lower, "keyboard:") &&
+			(strings.Contains(lower, "esc cancel") ||
+				strings.Contains(lower, "esc go back") ||
+				strings.Contains(lower, "esc close") ||
+				strings.Contains(lower, "esc back") ||
+				strings.Contains(lower, "esc exit") ||
+				strings.Contains(lower, "tab switch tab")) {
+			return true
+		}
+	}
+	return false
+}
+
 func hasDialogFooter(lines []string) bool {
+	if hasOverlayFooter(lines) {
+		return true
+	}
 	start := max(0, len(lines)-10)
 	for i := start; i < len(lines); i++ {
 		lower := strings.ToLower(lines[i])
@@ -549,6 +635,15 @@ func hasDialogFooter(lines []string) bool {
 				strings.Contains(lower, "esc skip") ||
 				strings.Contains(lower, "enter confirm") ||
 				strings.Contains(lower, "tab complete")) {
+			return true
+		}
+		if strings.Contains(lower, "esc skip") &&
+			(strings.Contains(lower, "enter select") ||
+				strings.Contains(lower, "space toggle") ||
+				strings.Contains(lower, "write-in")) {
+			return true
+		}
+		if submitAllFooterRe.MatchString(lines[i]) {
 			return true
 		}
 		if strings.Contains(lower, "requesting permission for:") ||
@@ -624,49 +719,38 @@ func stripBottomChrome(lines []string, includeIdleFooter bool) (end int, cols in
 	}
 	end = trimTrailingBlanks(lines[:end])
 
-	// 2. Iteratively strip stacked bottom chrome above the footer: composer
-	//    prompt box(es), Swarm/Agent status bars, artifact Tip banners, working
-	//    spinners, and horizontal rules.
+	// 2. Strip the bottommost prompt composer box AND any below-composer dock
+	//    (background tasks, Swarm/Agent workers, overflow rows, or partial TUI
+	//    redraws) in one step so below-composer chrome can never leak as prose.
+	if boxTop, boxBottom := findBottomComposerBox(lines[:end]); boxTop >= 0 {
+		if w := utf8.RuneCountInString(strings.TrimSpace(lines[boxTop])); w >= 20 && w > cols {
+			cols = w
+		}
+		if w := utf8.RuneCountInString(strings.TrimSpace(lines[boxBottom])); w >= 20 && w > cols {
+			cols = w
+		}
+		end = boxTop
+	} else if end >= 2 && isComposerLine(lines[end-1]) && isHorizontalRule(lines[end-2]) {
+		if w := utf8.RuneCountInString(strings.TrimSpace(lines[end-2])); w >= 20 && w > cols {
+			cols = w
+		}
+		end -= 2
+	}
+
+	// 3. Iteratively strip stacked chrome immediately above the composer box:
+	//    live step checklists, Swarm/Agent status bars, artifact Tip banners,
+	//    working spinners, and separator rules.
 	for end > 0 {
 		prev := end
-		// Strip a prompt composer box:
-		//    ────────────────────
-		//    > (optional draft)
-		//    ────────────────────
-		if end > 0 && isHorizontalRule(lines[end-1]) {
-			if w := utf8.RuneCountInString(strings.TrimSpace(lines[end-1])); w >= 20 && w > cols {
-				cols = w
-			}
-			boxTop := -1
-			limit := max(0, end-14)
-			for i := end - 2; i >= limit; i-- {
-				if isHorizontalRule(lines[i]) {
-					if looksLikeComposerBody(lines[i+1 : end-1]) {
-						boxTop = i
-					}
-					break
-				}
-				if isToolHeader(lines[i]) {
-					break
-				}
-			}
-			if boxTop >= 0 {
-				if w := utf8.RuneCountInString(strings.TrimSpace(lines[boxTop])); w > cols && w >= 20 {
+		if stripped := stripTrailingStepChecklist(lines, end); stripped < end {
+			end = stripped
+		}
+		for end > 0 && (isBottomChromeLine(lines[end-1]) || isActivityContinuationCandidate(lines, end-1)) {
+			if isHorizontalRule(lines[end-1]) {
+				if w := utf8.RuneCountInString(strings.TrimSpace(lines[end-1])); w >= 20 && w > cols {
 					cols = w
 				}
-				end = boxTop
-			} else {
-				end--
 			}
-		} else if end >= 2 && isComposerLine(lines[end-1]) && isHorizontalRule(lines[end-2]) {
-			if w := utf8.RuneCountInString(strings.TrimSpace(lines[end-2])); w >= 20 && w > cols {
-				cols = w
-			}
-			end -= 2
-		}
-
-		// Strip trailing blanks, spinners, rules, Swarm/Agent bars, and Tip banners.
-		for end > 0 && (isBottomChromeLine(lines[end-1]) || isActivityContinuationCandidate(lines, end-1)) {
 			end--
 		}
 		if end == prev {
@@ -682,7 +766,51 @@ func isTipLine(line string) bool {
 		return false
 	}
 	t = strings.TrimLeft(t, "└╰⎿├│┃ \t")
-	return strings.HasPrefix(t, "Tip:")
+	return strings.HasPrefix(t, "Tip:") ||
+		strings.HasPrefix(t, "To disable tips, toggle Show Tips in /settings")
+}
+
+func isTitledDivider(line string) bool {
+	t := strings.TrimSpace(line)
+	if utf8.RuneCountInString(t) < 10 {
+		return false
+	}
+	left := 0
+	for _, r := range t {
+		if r == '─' || r == '━' || r == '═' {
+			left++
+		} else {
+			break
+		}
+	}
+	if left < 3 {
+		return false
+	}
+	right := 0
+	for i := len(t); i > 0; {
+		r, sz := utf8.DecodeLastRuneInString(t[:i])
+		if r == '─' || r == '━' || r == '═' {
+			right++
+			i -= sz
+		} else {
+			break
+		}
+	}
+	if right < 3 {
+		return false
+	}
+	// Require inner title text (letters/digits) and reject table grid lines ("───┼───").
+	hasLabel := false
+	for _, r := range t {
+		switch r {
+		case '┼', '╪', '╂', '┿', '┬', '┴', '│', '┃':
+			return false
+		}
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			hasLabel = true
+		}
+	}
+	return hasLabel
 }
 
 func isSwarmChromeLine(line string) bool {
@@ -705,9 +833,38 @@ func isBottomChromeLine(line string) bool {
 	return strings.TrimSpace(line) == "" ||
 		isSpinnerLine(line) ||
 		isHorizontalRule(line) ||
+		isTitledDivider(line) ||
 		isTipLine(line) ||
 		isSwarmChromeLine(line) ||
+		isTaskDockLine(line) ||
+		isDockOverflowLine(line) ||
 		isExpandHint(line)
+}
+
+// stripTrailingStepChecklist strips an agy step checklist block immediately
+// beneath a working spinner (e.g. "⣟  1/3 steps · ...\n  ⎿  ✓ ...\n     ● ...\n     ○ ...").
+func stripTrailingStepChecklist(lines []string, end int) int {
+	j := end
+	for j > 0 && strings.TrimSpace(lines[j-1]) == "" {
+		j--
+	}
+	items := 0
+	hasDetail := false
+	for j > 0 && items < 16 {
+		l := lines[j-1]
+		if !stepChecklistItemRe.MatchString(l) || leadingSpaces(l) < 2 {
+			break
+		}
+		if isToolDetail(l) {
+			hasDetail = true
+		}
+		items++
+		j--
+	}
+	if items > 0 && hasDetail && j > 0 && isSpinnerLine(lines[j-1]) {
+		return j - 1
+	}
+	return end
 }
 
 func looksLikeComposerBody(lines []string) bool {
@@ -802,8 +959,8 @@ func findCurrentTurnStart(lines []string, cols int) (start int, ok bool) {
 	for start < len(lines) {
 		curr := lines[start]
 		if strings.TrimSpace(curr) == "" ||
-			isToolHeader(curr) || isToolDetail(curr) || isSpinnerLine(curr) ||
-			isHorizontalRule(curr) || isBoxStart(curr) || isAnnouncementLine(curr) {
+			isToolHeader(curr) || isThoughtHeader(curr) || isToolDetail(curr) || isSpinnerLine(curr) ||
+			isHorizontalRule(curr) || isTitledDivider(curr) || isBoxStart(curr) || isAnnouncementLine(curr) || isInterruptedBanner(curr) {
 			break
 		}
 		prevLen := displayWidth(strings.TrimRight(prevLine, " \t"))
@@ -870,9 +1027,21 @@ func isExpandHint(line string) bool {
 	return expandHintRe.MatchString(strings.TrimSpace(line))
 }
 
+func isThoughtHeader(line string) bool {
+	return thoughtHeaderRe.MatchString(line)
+}
+
+func isInterruptedBanner(line string) bool {
+	return strings.HasPrefix(strings.TrimSpace(line), "Interrupted ·")
+}
+
+func isQuestionEchoLine(line string) bool {
+	return strings.HasPrefix(line, "? ") && strings.TrimSpace(line[2:]) != ""
+}
+
 // skipThroughLastTool scans a turn's lines and returns the index immediately
-// after the final tool call / tool output / bordered box block. Any assistant
-// text preceding a tool call belonged to an earlier planner step.
+// after the final tool call / tool output / thinking block / bordered box.
+// Any assistant text preceding a tool call belonged to an earlier planner step.
 func skipThroughLastTool(lines []string) int {
 	inFence := false
 	afterLast := 0
@@ -888,6 +1057,9 @@ func skipThroughLastTool(lines []string) int {
 			continue
 		}
 		switch {
+		case isThoughtHeader(line):
+			i = consumeThoughtBlock(lines, i)
+			afterLast = i
 		case isToolHeader(line):
 			i++
 			i = consumeToolBody(lines, i)
@@ -895,10 +1067,15 @@ func skipThroughLastTool(lines []string) int {
 		case isToolDetail(line):
 			i = consumeDetailBlock(lines, i)
 			afterLast = i
+		case isQuestionEchoLine(line):
+			i = consumeQuestionEcho(lines, i)
+			afterLast = i
 		case isBoxStart(line):
 			i = consumeBox(lines, i)
 			afterLast = i
-		case isAnnouncementLine(line) || isTipLine(line) || isSwarmChromeLine(line):
+		case isAnnouncementLine(line) || isTipLine(line) || isSwarmChromeLine(line) ||
+			isTaskDockLine(line) || isDockOverflowLine(line) || isExpandHint(line) ||
+			isTitledDivider(line) || isInterruptedBanner(line):
 			i++
 			afterLast = i
 		default:
@@ -906,6 +1083,48 @@ func skipThroughLastTool(lines []string) int {
 		}
 	}
 	return afterLast
+}
+
+// consumeThoughtBlock skips an agy collapsible thinking header
+// ("▸ Thought for 10s, 384 tokens", "▾ Thought for ...", or "│ ▾ Thought for ...")
+// along with any immediately contiguous indented CoT preview lines or "│"-framed
+// expanded thought lines. Assistant prose after a blank line is preserved.
+func consumeThoughtBlock(lines []string, i int) int {
+	i++ // consume the Thought header itself
+	for i < len(lines) {
+		l := lines[i]
+		if strings.TrimSpace(l) == "" {
+			break
+		}
+		if isToolHeader(l) || isThoughtHeader(l) || isToolDetail(l) || isHorizontalRule(l) || isTitledDivider(l) {
+			break
+		}
+		if isBoxLine(l) || leadingSpaces(l) >= 2 || isExpandHint(l) {
+			i++
+			continue
+		}
+		break
+	}
+	return i
+}
+
+// consumeQuestionEcho skips an AskQuestion history prompt line ("? <question>")
+// and any immediately wrapped continuation lines without a blank separator.
+func consumeQuestionEcho(lines []string, i int) int {
+	i++
+	for i < len(lines) {
+		l := lines[i]
+		if strings.TrimSpace(l) == "" || isToolHeader(l) || isThoughtHeader(l) ||
+			isQuestionEchoLine(l) || isHorizontalRule(l) || isTitledDivider(l) || isBoxStart(l) {
+			break
+		}
+		if leadingSpaces(l) == 0 {
+			i++
+			continue
+		}
+		break
+	}
+	return i
 }
 
 func consumeToolBody(lines []string, i int) int {
@@ -1069,6 +1288,20 @@ func convertBoxTables(lines []string) []string {
 				continue
 			}
 		}
+		if wantCols, ok := isBorderlessTableStart(lines, i); ok {
+			end := consumeBorderlessTable(lines, i, wantCols)
+			if gfm := renderBorderlessTableAsGFM(lines[i:end], wantCols); len(gfm) > 0 {
+				if len(out) > 0 && strings.TrimSpace(out[len(out)-1]) != "" {
+					out = append(out, "")
+				}
+				out = append(out, gfm...)
+				if end < len(lines) && strings.TrimSpace(lines[end]) != "" {
+					out = append(out, "")
+				}
+				i = end
+				continue
+			}
+		}
 		out = append(out, line)
 		i++
 	}
@@ -1167,12 +1400,115 @@ func splitBoxTableCells(line string) []string {
 	return cells
 }
 
-func renderBoxTableAsGFM(block []string) []string {
-	type rawLine struct {
-		isMid bool
-		cells []string
+func isBorderlessTableMid(line string) (cols int, ok bool) {
+	t := strings.TrimSpace(line)
+	if t == "" || strings.HasPrefix(t, "├") || strings.HasPrefix(t, "╞") {
+		return 0, false
 	}
-	var items []rawLine
+	cross, horiz := 0, 0
+	for _, r := range t {
+		switch r {
+		case '─', '━', '═':
+			horiz++
+		case '┼', '╪', '╂', '┿':
+			cross++
+		case ' ':
+		default:
+			return 0, false
+		}
+	}
+	if cross < 1 || horiz < 3 {
+		return 0, false
+	}
+	return cross + 1, true
+}
+
+func isBorderlessTableRow(line string, wantCols int) bool {
+	t := strings.TrimSpace(line)
+	if t == "" {
+		return false
+	}
+	pipes := strings.Count(t, "│") + strings.Count(t, "┃")
+	if pipes < 1 {
+		return false
+	}
+	if wantCols > 0 {
+		return pipes+1 == wantCols
+	}
+	return !strings.HasPrefix(t, "│") && !strings.HasPrefix(t, "┃")
+}
+
+func isBorderlessTableStart(lines []string, i int) (int, bool) {
+	if !isBorderlessTableRow(lines[i], 0) {
+		return 0, false
+	}
+	limit := min(len(lines), i+4)
+	for j := i + 1; j < limit; j++ {
+		if cols, ok := isBorderlessTableMid(lines[j]); ok {
+			for k := i; k < j; k++ {
+				if !isBorderlessTableRow(lines[k], cols) {
+					return 0, false
+				}
+			}
+			return cols, true
+		}
+		if !isBorderlessTableRow(lines[j], 0) {
+			return 0, false
+		}
+	}
+	return 0, false
+}
+
+func consumeBorderlessTable(lines []string, start, wantCols int) int {
+	i := start
+	for i < len(lines) {
+		if cols, ok := isBorderlessTableMid(lines[i]); ok && cols == wantCols {
+			i++
+			continue
+		}
+		if isBorderlessTableRow(lines[i], wantCols) {
+			i++
+			continue
+		}
+		break
+	}
+	return i
+}
+
+func splitBorderlessTableCells(line string) []string {
+	var cells []string
+	start := 0
+	for idx, r := range line {
+		if r == '│' || r == '┃' {
+			cells = append(cells, strings.TrimSpace(line[start:idx]))
+			start = idx + utf8.RuneLen(r)
+		}
+	}
+	cells = append(cells, strings.TrimSpace(line[start:]))
+	return cells
+}
+
+func renderBorderlessTableAsGFM(block []string, wantCols int) []string {
+	var items []tableRawLine
+	midCount := 0
+	for _, line := range block {
+		if cols, ok := isBorderlessTableMid(line); ok && cols == wantCols {
+			midCount++
+			items = append(items, tableRawLine{isMid: true})
+			continue
+		}
+		if isBorderlessTableRow(line, wantCols) {
+			items = append(items, tableRawLine{cells: splitBorderlessTableCells(line)})
+		}
+	}
+	if wantCols < 2 || midCount == 0 || len(items) == 0 {
+		return nil
+	}
+	return formatTableItemsAsGFM(items, wantCols, midCount)
+}
+
+func renderBoxTableAsGFM(block []string) []string {
+	var items []tableRawLine
 	midCount := 0
 	numCols := 0
 	for _, line := range block {
@@ -1181,18 +1517,27 @@ func renderBoxTableAsGFM(block []string) []string {
 			continue
 		case isBoxTableMid(line):
 			midCount++
-			items = append(items, rawLine{isMid: true})
+			items = append(items, tableRawLine{isMid: true})
 		case isBoxTableDataRow(line):
 			cells := splitBoxTableCells(line)
 			if len(cells) > numCols {
 				numCols = len(cells)
 			}
-			items = append(items, rawLine{cells: cells})
+			items = append(items, tableRawLine{cells: cells})
 		}
 	}
 	if numCols < 2 || len(items) == 0 {
 		return nil
 	}
+	return formatTableItemsAsGFM(items, numCols, midCount)
+}
+
+type tableRawLine struct {
+	isMid bool
+	cells []string
+}
+
+func formatTableItemsAsGFM(items []tableRawLine, numCols, midCount int) []string {
 
 	// Partition lines into header group (before first mid border) and body groups.
 	var headerLines [][]string
@@ -1834,7 +2179,7 @@ func normalizeForCompare(s string) string {
 	inSpace := true
 	for line := range strings.SplitSeq(strings.ReplaceAll(s, "\r\n", "\n"), "\n") {
 		t := strings.TrimSpace(line)
-		if t == "" || isFenceLine(t) || isMarkdownRule(t) || tableSeparatorRe.MatchString(t) {
+		if t == "" || isFenceLine(t) || isMarkdownRule(t) || isTitledDivider(t) || tableSeparatorRe.MatchString(t) {
 			continue
 		}
 		// Replace markdown links/images with their visible label text.

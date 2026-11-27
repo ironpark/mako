@@ -59,9 +59,10 @@ flowchart TB
 | `MessageDeliverer` + 사이드카 | `sidecar.go`, `daemon/agent_cli.go` | `mako-bridge` 사이드카 + `agentapi send-message` 네이티브 푸시 |
 | `Hooks`, `SubAgentHooks` | `hooks.go` | `~/.gemini/config/hooks.json` 병합, 3중 서브에이전트 훅 하이재킹 방지 |
 | `StatusLine`, `StatusLineEvents` | `statusline.go` | `--settings` 인라인 statusLine 주입, 쿼터/토큰 + 실시간 대기/작업 상태 보강 |
-| `Screen`, `ScreenLive`, `ScreenLiveBaseline`, `ScreenLiveTurn`, `ScreenLiveStatus`, `ScreenLiveActivity` | `screen.go`, `live.go` | PTY 화면에서 실시간 응답(불릿/GFM 테이블 변환)·기준선·턴 앵커·스피너 라벨·Swarm/Agent 활동 행 추출 |
-| `Modes`, `Models` | `controls.go` | `shift+tab` 실행 모드 순환(`auto`/`acceptEdits`/`plan`), `/model`·`/effort` |
-| `Logs`, `Folders`, `Tools` | `log.go`, `tools.go` | `brain/<id>/.system_generated/logs/transcript_full.jsonl` + `history.jsonl` |
+| `Screen`, `ScreenLive`, `ScreenLiveBaseline`, `ScreenLiveTurn`, `ScreenLiveStatus`, `ScreenLiveActivity` | `screen.go`, `live.go` | PTY 화면에서 실시간 응답(불릿·유니코드 테두리/무테두리 GFM 테이블 변환)·기준선·턴 앵커·스피너 라벨·Swarm/Agent/백그라운드 Task 행 추출 |
+| `Recaller` | `recall.go` | `/skills`·`/resume` 등 `Keyboard:` 모달/대체 화면 오버레이에서 `Esc`로 프롬프트 복귀 |
+| `Modes`, `Models` | `controls.go` | `shift+tab` 실행 모드 순환(`auto`/`acceptEdits`/`plan`, 기본 모드 및 스택 `statusLine` 허용), `/model`·`/effort` |
+| `Logs`, `Folders`, `Tools` | `log.go`, `tools.go` | `brain/<id>/.system_generated/logs/transcript_full.jsonl` + `history.jsonl`, `update_steps` → `ToolPlan` |
 | `SubAgents` | `subagents.go` | `.system_generated/subagents/*.json` + `swarm/members.json` 기반 워커 추적 |
 | `Servers` | `servers.go` | `~/.gemini/config/mcp_config.json` 병합 + 환경변수 세션 자격증명 |
 | `Commands` | `commands.go` | 내장 슬래시 커맨드 + `~/.gemini/config/skills` + `.agents`/`.agent` 스킬 |
@@ -165,17 +166,18 @@ Mako는 `agy.Agent.IsSubAgent(parentID, parentLog, childID, childLog)`로 3단�
 
 ### 6.1 5개 `ScreenLive*` 인터페이스 동작
 1. **`ExtractLive(screen, lastLogged)`**:
-   - **게이트 검사**: `screenRules`가 `Blocked`/`Idle`이거나 하단 10줄에 `? for shortcuts`·다이얼로그 푸터가 있으면 즉시 중단합니다. 반드시 작업 증거(`esc to cancel` 푸터 또는 점자 스피너 `[\u2801-\u28FF]`)가 있을 때만 추출합니다.
-   - **정제 및 마크다운 복원**: 하단 크롬(푸터, 스택 statusLine, 프롬프트 입력 박스, Swarm 바, Tip 배너, 스피너) 제거 → 마지막 사용자 프롬프트(`> `) 이후 현재 턴 위치 탐색 → 도구 호출·세부 출력·일반 테두리 박스 건너뛰기 → 유니코드 박스 테이블(`┌──┬──┐`, `╭──┬──╮`, 다중 줄 셀 포함)을 GFM 파이프 테이블로 변환 → 유니코드 불릿(`•`/`◦` 등)을 중첩 마크다운 `- ` 리스트로 정규화하고 한글 2셀 폭 및 토큰 경계(`.`,`-`,`/`, 경로 중간 절단)를 고려해 재결합 → 코드 블록 밖 `<hash>`/`<id>` 등 원시 `<tag>` 플레이스홀더 이스케이프.
+   - **게이트 검사**: `screenRules`가 `Blocked`/`Idle`/`Hold`(오버레이)이거나 하단 10줄에 `? for shortcuts`·다이얼로그·`Keyboard:` 오버레이 푸터가 있으면 즉시 중단합니다. 반드시 작업 증거(`esc to cancel` 푸터 또는 점자 스피너)가 있을 때만 추출합니다.
+   - **정제 및 마크다운 복원**: 하단 크롬(푸터, 스택 statusLine, 입력 박스 하단의 백그라운드 Task/Swarm 도크 및 `↓ N more` 오버플로, 프롬프트 입력 박스, 단계 체크리스트 `⎿ ✓/●/○`, Swarm 바, Tip 2줄 배너, 스피너) 제거 → 마지막 사용자 프롬프트(`> `) 이후 현재 턴 위치 탐색 → 도구 호출·세부 출력·접힘/펼침 사고 블록(`▸/▾/○ Thought for ...`)·접힌 액션 요약(`… N more actions ...`)·`─── Conversation compacted ───` 구분선·질문 에코(`? ...`)·일반 테두리 박스 건너뛰기 → 유니코드 박스 테이블(`┌──┬──┐`, `╭──┬──╮`) 및 `agy` 1.5.18+ 무테두리 테이블(`컬럼 │ 설명` / `───┼───`, 다중 줄 셀 포함)을 GFM 파이프 테이블로 변환 → 유니코드 불릿(`•`/`◦` 등)을 중첩 마크다운 `- ` 리스트로 정규화하고 한글 2셀 폭 및 토큰 경계(`.`,`-`,`/`, 경로 중간 절단)를 고려해 재결합 → 코드 블록 밖 `<hash>`/`<id>` 등 원시 `<tag>` 플레이스홀더 이스케이프.
    - **로그 중복 억제**: `transcript_full.jsonl`의 마지막 256KiB에서 읽은 `lastLogged`와 비교(`<br>`·`file://` 확장 경로·`\<` 이스케이프 정규화 포함)해 일치하면 중복 방출을 차단합니다.
 2. **`ExtractBaseline(screen)`**: 세션이 Idle일 때 화면에 남아 있는 직전 턴의 완료 응답을 스냅샷해 두어, 새 프롬프트 제출 직후 TUI가 리페인트되기 전 짧은 틈에 이전 응답이 반짝이는 현상을 방지합니다(뷰포트가 1–2줄 이동해도 양방향 포함·중첩 비교로 억제 유지).
-3. **`ExtractTurn(screen)`**: 대화 본문에 렌더링된 사용자 프롬프트 턴 수와 마지막 프롬프트 텍스트를 반환해, `transcript_full.jsonl`에 새 `USER_INPUT`이 기록된 뒤 아직 TUI에 새 `> 프롬프트`가 그려지기 전 구간에서 이전 턴 응답이 임시 렌더로 노출되지 않도록 차단합니다.
-4. **`ExtractStatus(screen)`**: 작업 중 하단 점자 스피너 옆 라벨(예: `Reading file…`, `Running command…`, `Thinking…`)과 활성 `Swarm(...)`/`Agent(...)` 행을 추출해 `thinking` 라이브 블록으로 전달합니다.
-5. **`ExtractActivity(screen)`**: 메인 코디네이터가 `Idle` 상태여도 하단 크롬에 남아 있는 백그라운드 `Swarm(...)` / `Agent(...)` 활성 행(`Done`/`Killed` 등 완료 상태 및 `alt+s board` 같은 단축키 힌트 제거)을 추출해 Chat 컴포저 위의 라이브 활동 카드로 표시합니다.
+3. **`ExtractTurn(screen)`**: 대화 본문에 렌더링된 사용자 프롬프트 턴 수와 마지막 프롬프트 텍스트를 반환해(다이얼로그·오버레이 화면 제외), `transcript_full.jsonl`에 새 `USER_INPUT`이 기록된 뒤 아직 TUI에 새 `> 프롬프트`가 그려지기 전 구간에서 이전 턴 응답이 임시 렌더로 노출되지 않도록 차단합니다.
+4. **`ExtractStatus(screen)`**: 작업 중 하단 점자 스피너 옆 라벨(예: `1/3 steps · Editing files… 1m 56s`, `Reading file…`, `Running command…`, `Thinking…`; 부분 리드로로 붙은 중복 스피너 정리 포함)과 활성 `Swarm(...)`/`Agent(...)`/`Task(...)` 행을 추출해 `thinking` 라이브 블록으로 전달합니다.
+5. **`ExtractActivity(screen)`**: 메인 코디네이터가 `Idle` 상태여도 하단 도크/크롬에 남아 있는 백그라운드 `Swarm(...)` / `Agent(...)` 및 `● [HH:MM:SS] <cmd> running` → `Task(<cmd>) · running · <HH:MM:SS>` 활성 행(`Done`/`Killed` 등 완료 상태 및 `alt+s board` 같은 단축키 힌트 제거)을 추출해 Chat 컴포저 위의 라이브 활동 카드로 표시합니다.
 
-### 6.2 `ScreenRules` 및 TUI 제어 (`screen.go`, `controls.go`)
-- **화면 상태 감지**: `permission_prompt`(`tab amend`), `question_prompt`(`esc skip`), `trust_prompt`, `legacy_permission_prompt`, `slash_menu`(`tab complete`), `esc_cancel_footer_working`, `spinner_working`, `prompt_footer`(`? for shortcuts`)를 우선순위 기반으로 판별합니다.
-- **모드/모델 제어**: `ModeKey()`는 `Shift+Tab` (`\x1b[Z`), `ScreenMode()`는 `? for shortcuts    auto · ...` 푸터에서 `auto`/`acceptEdits`/`plan`을 읽습니다. 모델 및 effort 변경은 `/model <id>`, `/effort <level>`로 수행하며 별도 확인 모달이 없습니다(`ConfirmKeys` = `nil`).
+### 6.2 `ScreenRules`, `Recaller` 및 TUI 제어 (`screen.go`, `recall.go`, `controls.go`)
+- **화면 상태 감지**: `overlay_view`(`Hold: true`, `Keyboard:` + `esc Cancel`/`esc Go back` 등), `permission_prompt`(`tab amend`), `question_prompt`(`esc skip`, `space toggle`, `write-in`, `enter Submit All`), `trust_prompt`, `legacy_permission_prompt`, `slash_menu`(`tab complete`), `esc_cancel_footer_working`, `spinner_working`, `prompt_footer`(`? for shortcuts`)를 우선순위 기반으로 판별합니다. 하단 영역은 `Bottom(5)` 이상을 스캔해 스택된 사용자 `statusLine`이나 하단 도크가 있어도 감지가 깨지지 않습니다.
+- **오버레이 복귀 (`Recaller`)**: `/skills`, `/resume` 등 `Keyboard:` 모달 오버레이가 열려 있으면 프롬프트 전송·모드 전환 전에 `Esc`를 보내 프롬프트로 돌아갑니다.
+- **모드/모델 제어**: `ModeKey()`는 `Shift+Tab` (`\x1b[Z`), `ScreenMode()`는 하단 6줄의 `? for shortcuts` 푸터에서 `auto`/`acceptEdits`/`plan`/`bypassPermissions` 및 모드 접두사가 생략된 기본 모드(`default`)를 읽습니다. 모델 및 effort 변경은 `/model <id>`, `/effort <level>`로 수행하며 별도 확인 모달이 없습니다(`ConfirmKeys` = `nil`).
 
 ---
 
@@ -185,7 +187,7 @@ Mako는 `agy.Agent.IsSubAgent(parentID, parentLog, childID, childLog)`로 3단�
 - **로그 경로**: `<root>/brain/<id>/.system_generated/logs/transcript_full.jsonl` (`transcript.jsonl`은 긴 필드가 잘리므로 `transcript_full.jsonl`을 사용).
 - **워크스페이스 역추적 (`Whose`)**: 로그 각 줄에 `cwd`가 없으므로 `<root>/history.jsonl`에서 해당 `conversationId`의 `workspace` 필드를 조회합니다.
 - **레코드 디코딩**: `USER_INPUT`(`<USER_REQUEST>` 내부 추출, `<ADDITIONAL_METADATA>` 제거), `PLANNER_RESPONSE`(텍스트 + `tool_calls`, 호출 ID는 `<step_index>.<idx>`), `GENERIC`(선입선출 `pending` 큐와 매칭해 도구 결과로 변환), `CHECKPOINT`(요약).
-- **도구 정규화**: `run_command`, `edit_file`/`replace_file_content`, `multi_replace_file_content`, `write_file`/`write_to_file`, `read_file`/`view_file`, `grep_search`/`find_by_name`/`list_dir`, `read_url_content`, `search_web`, `invoke_subagent`, `ask_question`을 표준 `protocol.Tool*`로 변환하고 타임스탬프·줄번호·`[diff_block_start]` 래퍼를 벗겨냅니다.
+- **도구 정규화**: `run_command`, `edit_file`/`replace_file_content`, `multi_replace_file_content`, `write_file`/`write_to_file`, `read_file`/`view_file`, `grep_search`/`find_by_name`/`list_dir`, `read_url_content`, `search_web`, `invoke_subagent`, `ask_question`(`is_multi_select` 포함), `update_steps`(`ToolPlan` → 컴포저 상단 진행 체크리스트 연동)를 표준 `protocol.Tool*`로 변환하고 타임스탬프·줄번호·`[diff_block_start]` 래퍼를 벗겨냅니다.
 
 ### 7.2 네이티브 서브에이전트 & Swarm 스캔 (`subagents.go`)
 - 부모 대화의 `<brainDir>/<parentID>/.system_generated/subagents/*.json` 메타파일을 디렉터리/파일 mtime 캐싱으로 증분 스캔합니다.

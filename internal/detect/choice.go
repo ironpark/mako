@@ -7,6 +7,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/width"
 )
 
 // A dialog in an agent's terminal often asks the user to pick one of a
@@ -125,16 +127,118 @@ func (cur *cursors) numberedChoice(lines []string, at, cols int) (int, Choice) {
 			last = l
 			continue
 		}
-		indent := utf8.RuneCountInString(l) - utf8.RuneCountInString(strings.TrimLeftFunc(l, unicode.IsSpace))
-		if strings.TrimSpace(l) == "" || len(c.Options) == 0 || indent <= max(numberCol, 0) {
+		trimmed := strings.TrimSpace(l)
+		if trimmed == "" || len(c.Options) == 0 || isRule(trimmed) {
 			break
 		}
-		if cols > 0 && utf8.RuneCountInString(last) >= cols-2 {
-			c.Options[len(c.Options)-1] += " " + strings.TrimSpace(l) // its label, wrapped
+		indent := utf8.RuneCountInString(l) - utf8.RuneCountInString(strings.TrimLeftFunc(l, unicode.IsSpace))
+		if indent <= max(numberCol, 0) {
+			// Some TUIs (notably agy) wrap long numbered option labels onto
+			// column 0 without hanging indentation. Keep reading when the next
+			// sequential option follows directly after the wrapped line(s), or
+			// when the previous line filled the terminal width and this line is
+			// not a dialog footer.
+			if cur.hasSequentialOptionAhead(lines, i+1, len(c.Options)+1, numberCol) {
+				if indent == 0 || wrapsFromLine(last, trimmed, cols) {
+					c.Options[len(c.Options)-1] += " " + trimmed
+				}
+				last = l
+				continue
+			}
+			if indent == 0 && !looksLikeChoiceFooter(trimmed) && wrapsFromLine(last, trimmed, cols) {
+				c.Options[len(c.Options)-1] += " " + trimmed
+				last = l
+				continue
+			}
+			break
+		}
+		if wrapsFromLine(last, trimmed, cols) {
+			c.Options[len(c.Options)-1] += " " + trimmed // its label, wrapped
 		}
 		last = l
 	}
 	return start, c
+}
+
+// hasSequentialOptionAhead reports whether numbered option next appears within
+// a few contiguous non-blank, non-rule lines starting at from.
+func (cur *cursors) hasSequentialOptionAhead(lines []string, from, next, numberCol int) bool {
+	want := strconv.Itoa(next)
+	limit := min(len(lines), from+4)
+	for i := from; i < limit; i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" || isRule(trimmed) {
+			return false
+		}
+		if m := cur.numberedLine.FindStringSubmatch(lines[i]); m != nil {
+			if m[2] != want {
+				return false
+			}
+			col := utf8.RuneCountInString(m[1])
+			return numberCol < 0 || col == numberCol || cur.cursorLine.MatchString(lines[i])
+		}
+	}
+	return false
+}
+
+// wrapsFromLine reports whether trimmed looks like a soft-wrapped continuation
+// of last inside a terminal cols cells wide (measuring East Asian wide runes as
+// two cells).
+func wrapsFromLine(last, trimmed string, cols int) bool {
+	if cols <= 0 {
+		return false
+	}
+	lastW := choiceDisplayWidth(last)
+	if lastW >= cols-2 {
+		return true
+	}
+	firstW := choiceFirstWordWidth(trimmed)
+	return firstW > 0 && lastW >= cols/2 && lastW+1+firstW > cols
+}
+
+func looksLikeChoiceFooter(trimmed string) bool {
+	lower := strings.ToLower(trimmed)
+	for _, hint := range []string{
+		"esc to cancel",
+		"esc cancel",
+		"esc skip",
+		"navigate",
+		"enter select",
+		"enter confirm",
+		"enter submit",
+		"tab amend",
+		"ctrl+r review",
+		"? for shortcuts",
+		"space toggle",
+	} {
+		if strings.Contains(lower, hint) {
+			return true
+		}
+	}
+	return false
+}
+
+func choiceDisplayWidth(s string) int {
+	w := 0
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f || unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) || unicode.Is(unicode.Cf, r) {
+			continue
+		}
+		switch width.LookupRune(r).Kind() {
+		case width.EastAsianWide, width.EastAsianFullwidth:
+			w += 2
+		default:
+			w++
+		}
+	}
+	return w
+}
+
+func choiceFirstWordWidth(s string) int {
+	if i := strings.IndexFunc(s, unicode.IsSpace); i >= 0 {
+		s = s[:i]
+	}
+	return choiceDisplayWidth(s)
 }
 
 // plainChoice reads unnumbered options: the lines next to the cursor's
