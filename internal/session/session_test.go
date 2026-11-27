@@ -3,6 +3,10 @@
 package session
 
 import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -10,6 +14,7 @@ import (
 	"github.com/ironpark/gostty"
 
 	"github.com/ironpark/mako/internal/kitty"
+	"github.com/ironpark/mako/internal/protocol"
 )
 
 // An exited session keeps the screen its agent left, so it can still be
@@ -165,4 +170,251 @@ func TestASnapshotCarriesTheProgramsModes(t *testing.T) {
 	if got := modesAround(plainSrc.Terminal(), "x"); got != "x" {
 		t.Fatalf("a plain screen got %q", got)
 	}
+}
+
+func TestSessionRestartKeepsSessionAndSubscribersAlive(t *testing.T) {
+	dir := t.TempDir()
+	outPath := filepath.Join(dir, "in.txt")
+	s, err := Start(Spec{
+		ID:      "restart-1",
+		Agent:   "codex",
+		Project: dir,
+		Command: []string{"/bin/sh", "-c", "printf '\033]9;4;3\007first-proc'; sleep 30"},
+		Cols:    80,
+		Rows:    24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	sub := s.Subscribe()
+	defer sub.Close()
+
+	oldPID := s.PID()
+	if oldPID <= 0 {
+		t.Fatalf("unexpected initial PID %d", oldPID)
+	}
+	// Wait for first process output & busy progress.
+	deadline := time.Now().Add(3 * time.Second)
+	for !s.Info().GetBusy() {
+		if time.Now().After(deadline) {
+			t.Fatal("initial process never reported progress")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	s.SetStatus(protocol.AgentWorking)
+
+	// Drain initial subscriber output in background while collecting post-restart chunks.
+	var gotBuf strings.Builder
+	subDone := make(chan struct{})
+	seenSecond := make(chan struct{}, 1)
+	go func() {
+		defer close(subDone)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		for {
+			chunk, ok := sub.Next(ctx)
+			if !ok {
+				return
+			}
+			gotBuf.Write(chunk)
+			if strings.Contains(gotBuf.String(), "second-proc:tok-new") {
+				select {
+				case seenSecond <- struct{}{}:
+				default:
+				}
+				return
+			}
+		}
+	}()
+
+	err = s.Restart(func(ctx context.Context) ([]string, map[string]string, error) {
+		return []string{
+			"/bin/sh", "-c",
+			`stty -echo; printf 'second-proc:%s\n' "$MAKO_CODEX_WS_TOKEN"; IFS= read -r line; printf '%s' "$line" > in.txt; sleep 30`,
+		}, map[string]string{"MAKO_CODEX_WS_TOKEN": "tok-new"}, nil
+	})
+	if err != nil {
+		t.Fatalf("Restart: %v", err)
+	}
+
+	select {
+	case <-s.Done():
+		t.Fatal("s.Done() closed during in-place Restart")
+	default:
+	}
+	if s.Info().GetState() != protocol.StateRunning {
+		t.Fatalf("state = %q, want running", s.Info().GetState())
+	}
+	if s.Info().GetBusy() {
+		t.Fatal("stale progress busy flag survived Restart")
+	}
+	if newPID := s.PID(); newPID <= 0 || newPID == oldPID {
+		t.Fatalf("PID did not change across Restart: old=%d new=%d", oldPID, newPID)
+	}
+	select {
+	case <-seenSecond:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("subscriber never received replacement process output; got %q", gotBuf.String())
+	}
+	<-subDone
+
+	// Writing to the session reaches the replacement process.
+	if _, err := s.Write([]byte("hello-after-restart\n")); err != nil {
+		t.Fatalf("Write after Restart: %v", err)
+	}
+	deadline = time.Now().Add(3 * time.Second)
+	for {
+		b, _ := os.ReadFile(outPath)
+		if string(b) == "hello-after-restart" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("replacement process did not read input; got %q", string(b))
+		}
+		time.Sleep(15 * time.Millisecond)
+	}
+
+	// PostNotice updates SessionInfo.Notice and increments Seq.
+	s.PostNotice("Recovered", "Backend restarted")
+	if n := s.Info().GetNotice(); n.GetTitle() != "Recovered" || n.GetBody() != "Backend restarted" || n.GetSeq() != 1 {
+		t.Fatalf("Notice = %+v", n)
+	}
+}
+
+func TestSessionRestartFailureAndCloseCancellation(t *testing.T) {
+	t.Run("prepare error exits session cleanly", func(t *testing.T) {
+		s, err := Start(Spec{
+			ID:      "restart-fail",
+			Command: []string{"/bin/sh", "-c", "sleep 30"},
+			Cols:    40, Rows: 10,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		wantErr := errors.New("boom")
+		if err := s.Restart(func(context.Context) ([]string, map[string]string, error) {
+			return nil, nil, wantErr
+		}); !errors.Is(err, wantErr) {
+			t.Fatalf("Restart err = %v, want %v", err, wantErr)
+		}
+		select {
+		case <-s.Done():
+		case <-time.After(3 * time.Second):
+			t.Fatal("session did not exit after failed Restart")
+		}
+		if s.Info().GetState() != protocol.StateExited {
+			t.Fatalf("state = %q, want exited", s.Info().GetState())
+		}
+	})
+
+	t.Run("Close cancels in-flight Restart prepare", func(t *testing.T) {
+		s, err := Start(Spec{
+			ID:      "restart-cancel",
+			Command: []string{"/bin/sh", "-c", "sleep 30"},
+			Cols:    40, Rows: 10,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		entered := make(chan struct{})
+		restartErr := make(chan error, 1)
+		go func() {
+			restartErr <- s.Restart(func(ctx context.Context) ([]string, map[string]string, error) {
+				close(entered)
+				<-ctx.Done()
+				return nil, nil, ctx.Err()
+			})
+		}()
+
+		select {
+		case <-entered:
+		case <-time.After(3 * time.Second):
+			t.Fatal("Restart prepare was not entered")
+		}
+
+		closeDone := make(chan error, 1)
+		go func() { closeDone <- s.Close() }()
+
+		select {
+		case err := <-restartErr:
+			if !errors.Is(err, context.Canceled) {
+				t.Fatalf("Restart err = %v, want context.Canceled", err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("Restart hung after Close")
+		}
+		select {
+		case <-closeDone:
+		case <-time.After(3 * time.Second):
+			t.Fatal("Close hung while Restart was in flight")
+		}
+	})
+
+	t.Run("concurrent Restart during prepare is rejected immediately", func(t *testing.T) {
+		s, err := Start(Spec{
+			ID:      "restart-conc",
+			Command: []string{"/bin/sh", "-c", "sleep 30"},
+			Cols:    40, Rows: 10,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		inPrepare := make(chan struct{})
+		releasePrepare := make(chan struct{})
+		firstErr := make(chan error, 1)
+		go func() {
+			firstErr <- s.Restart(func(ctx context.Context) ([]string, map[string]string, error) {
+				close(inPrepare)
+				<-releasePrepare
+				return []string{"/bin/sh", "-c", "sleep 30"}, nil, nil
+			})
+		}()
+
+		select {
+		case <-inPrepare:
+		case <-time.After(3 * time.Second):
+			t.Fatal("first Restart did not enter prepare")
+		}
+
+		// A second Restart invoked while runRestart is active must fail immediately
+		// rather than queueing with proc == nil and blocking forever.
+		secondErr := make(chan error, 1)
+		go func() {
+			secondErr <- s.Restart(func(ctx context.Context) ([]string, map[string]string, error) {
+				return []string{"/bin/sh", "-c", "sleep 30"}, nil, nil
+			})
+		}()
+		select {
+		case err := <-secondErr:
+			if err == nil || !strings.Contains(err.Error(), "already in progress") {
+				t.Fatalf("second Restart err = %v, want already in progress", err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("second Restart blocked while first prepare was running")
+		}
+
+		close(releasePrepare)
+		select {
+		case err := <-firstErr:
+			if err != nil {
+				t.Fatalf("first Restart err = %v", err)
+			}
+		case <-time.After(3 * time.Second):
+			t.Fatal("first Restart did not finish")
+		}
+
+		// A subsequent sequential Restart after the first completes succeeds.
+		if err := s.Restart(func(ctx context.Context) ([]string, map[string]string, error) {
+			return []string{"/bin/sh", "-c", "sleep 30"}, nil, nil
+		}); err != nil {
+			t.Fatalf("sequential Restart after completion failed: %v", err)
+		}
+	})
 }

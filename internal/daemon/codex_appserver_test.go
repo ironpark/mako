@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -24,6 +26,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
+	"github.com/ironpark/mako/internal/transport"
 )
 
 func testSleepCommand() []string {
@@ -1010,4 +1013,845 @@ func TestCodexRewindThreadPaginatedAndLegacy(t *testing.T) {
 			t.Fatalf("res=%+v rolledTurns=%d, want th-leg-fork / 2", res, rolledTurns)
 		}
 	})
+}
+
+func TestCodexAbortGracefulInterruptAndStaleTurnGuard(t *testing.T) {
+	var mu sync.Mutex
+	var interrupts []codex.TurnInterruptParams
+	var restartCalled atomic.Int32
+	var mock *mockCodexWSServer
+	mock = startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		if method == "turn/interrupt" {
+			var p codex.TurnInterruptParams
+			_ = json.Unmarshal(params, &p)
+			mu.Lock()
+			interrupts = append(interrupts, p)
+			mu.Unlock()
+			reply(map[string]any{"id": id, "result": map[string]any{}})
+			go func(turnID string) {
+				// First emit a stale completion for a different turn; it must be ignored.
+				mock.sendNotification(t, "turn/completed", map[string]any{
+					"threadId": "th-grace",
+					"turn":     map[string]any{"id": "turn-stale", "status": "completed"},
+				})
+				time.Sleep(15 * time.Millisecond)
+				if turnID == "turn-1" {
+					mock.sendNotification(t, "turn/completed", map[string]any{
+						"threadId": "th-grace",
+						"turn":     map[string]any{"id": "turn-1", "status": "interrupted"},
+					})
+				} else {
+					mock.sendNotification(t, "codex/event/turn_aborted", map[string]any{
+						"threadId": "th-grace",
+						"msg":      map[string]any{"type": "turn_aborted", "turn_id": turnID},
+					})
+				}
+			}(p.TurnID)
+		}
+	})
+
+	client, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := session.Start(session.Spec{
+		ID: "codex-abort-grace", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+		Command: testSleepCommand(), Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+	b := newCodexBridge(t.Context(), s.ID(), client, nil, nil, nil)
+	b.setThread("th-grace", true)
+	b.restartServer = func(context.Context, string) (*codexRestartOutcome, error) {
+		restartCalled.Add(1)
+		return nil, nil
+	}
+	d.attachCodexBridge(s, b)
+	defer b.Close()
+
+	// 1. Start turn-1, stream a delta, then interrupt via handleSend("\x1b").
+	mock.sendNotification(t, "turn/started", map[string]any{
+		"threadId": "th-grace",
+		"turn":     map[string]any{"id": "turn-1", "status": "inProgress"},
+	})
+	mock.sendNotification(t, "item/agentMessage/delta", map[string]any{
+		"threadId": "th-grace", "turnId": "turn-1", "itemId": "m1", "delta": "working...",
+	})
+	waitFor(t, "turn-1 did not become working", func() bool {
+		return s.Info().GetStatus() == protocol.AgentWorking && len(d.live.blocks(liveKey(s.ID(), ""))) == 1
+	})
+
+	st, done := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+		return d.handleSend(t.Context(), st, env)
+	}, protocol.TypeSend, &protocol.Send{SessionId: s.ID(), Keys: []byte("\x1b")})
+	env, err := st.Recv()
+	if err != nil || env.Type() != protocol.TypeSessionInfo {
+		t.Fatalf("handleSend interrupt reply = %v, %v", env, err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("handleSend interrupt err: %v", err)
+	}
+	waitFor(t, "status did not settle to idle", func() bool {
+		return s.Info().GetStatus() == protocol.AgentIdle
+	})
+	if restartCalled.Load() != 0 {
+		t.Fatalf("graceful interrupt unexpectedly triggered force restart (%d)", restartCalled.Load())
+	}
+
+	// 2. Start turn-2, ensure subagent codex/event notifications with snake_case
+	// and camelCase thread IDs cannot settle the parent turn, then settle via
+	// legacy codex/event/turn_aborted for the parent thread.
+	mock.sendNotification(t, "turn/started", map[string]any{
+		"threadId": "th-grace",
+		"turn":     map[string]any{"id": "turn-2", "status": "inProgress"},
+	})
+	waitFor(t, "turn-2 did not become working", func() bool {
+		return s.Info().GetStatus() == protocol.AgentWorking
+	})
+	// Subagent codex/event variants must all be ignored for parent thread "th-grace".
+	mock.sendNotification(t, "codex/event/turn_aborted", map[string]any{
+		"thread_id": "th-sub-snake",
+		"msg":       map[string]any{"type": "turn_aborted", "turn_id": "turn-2"},
+	})
+	mock.sendNotification(t, "codex/event/turn_aborted", map[string]any{
+		"conversation_id": "th-sub-conv",
+		"msg":             map[string]any{"type": "turn_aborted", "turn_id": "turn-2"},
+	})
+	mock.sendNotification(t, "codex/event/turn_aborted", map[string]any{
+		"msg": map[string]any{"type": "turn_aborted", "turnId": "turn-2", "threadId": "th-sub-nested"},
+	})
+	// Synchronize with a parent delta to guarantee all three subagent events were processed.
+	mock.sendNotification(t, "item/agentMessage/delta", map[string]any{
+		"threadId": "th-grace", "turnId": "turn-2", "itemId": "m2", "delta": "still-running",
+	})
+	waitFor(t, "turn-2 sync delta not received", func() bool {
+		blocks := d.live.blocks(liveKey(s.ID(), ""))
+		return len(blocks) == 1 && blocks[0].GetText() == "still-running"
+	})
+	b.mu.Lock()
+	stillActive, stillTurnID := b.turnActive, b.activeTurnID
+	b.mu.Unlock()
+	if !stillActive || stillTurnID != "turn-2" || s.Info().GetStatus() != protocol.AgentWorking {
+		t.Fatalf("subagent codex/event settled parent turn: active=%v turnID=%q status=%q", stillActive, stillTurnID, s.Info().GetStatus())
+	}
+
+	res := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: time.Second})
+	if !res.HadActiveTurn || !res.Aborted || res.ForcedRestart {
+		t.Fatalf("turn-2 abort result = %+v, want graceful abort", res)
+	}
+	waitFor(t, "turn-2 status did not settle to idle", func() bool {
+		return s.Info().GetStatus() == protocol.AgentIdle
+	})
+	mu.Lock()
+	gotInterrupts := slices.Clone(interrupts)
+	mu.Unlock()
+	if len(gotInterrupts) != 2 || gotInterrupts[0].TurnID != "turn-1" || gotInterrupts[1].TurnID != "turn-2" {
+		t.Fatalf("interrupts = %+v, want [turn-1, turn-2]", gotInterrupts)
+	}
+
+	// 3. When idle (no active turn), abortCodexTurn reports HadActiveTurn=false.
+	idleRes := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: 100 * time.Millisecond})
+	if idleRes.HadActiveTurn || idleRes.Aborted || idleRes.ForcedRestart {
+		t.Fatalf("idle abort result = %+v, want empty", idleRes)
+	}
+}
+
+func TestCodexAbortPendingApprovalDeniedFirst(t *testing.T) {
+	mock := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		if method == "turn/interrupt" {
+			reply(map[string]any{"id": id, "result": map[string]any{}})
+		}
+	})
+	client, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := session.Start(session.Spec{
+		ID: "codex-abort-ap", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+		Command: testSleepCommand(), Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+	d.approvals.watch(true)
+
+	b := newCodexBridge(t.Context(), s.ID(), client, nil, nil, nil)
+	b.setThread("th-ap", true)
+	d.attachCodexBridge(s, b)
+	defer b.Close()
+
+	mock.sendNotification(t, "turn/started", map[string]any{
+		"threadId": "th-ap",
+		"turn":     map[string]any{"id": "turn-ap", "status": "inProgress"},
+	})
+	waitFor(t, "turn-ap not working", func() bool {
+		return s.Info().GetStatus() == protocol.AgentWorking
+	})
+
+	hookSeq := time.Now().UnixNano() + int64(time.Second)
+	s.ReportStatus(protocol.AgentWaiting, hookSeq)
+	replyCh := make(chan hookReply, 1)
+	go func() {
+		replyCh <- d.approvals.ask(t.Context(), s, "codex", agent.Event{Tool: "Bash", Input: json.RawMessage(`{"command":"sleep 99"}`)}, hookSeq)
+	}()
+	waitFor(t, "approval never became pending", func() bool {
+		return s.Info().GetApproval() != nil
+	})
+
+	forceOff := false
+	res := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{
+		GracePeriod:           60 * time.Millisecond,
+		ForceRestartOnTimeout: &forceOff,
+	})
+	if !res.HadActiveTurn {
+		t.Fatalf("expected HadActiveTurn=true, got %+v", res)
+	}
+	select {
+	case rep := <-replyCh:
+		if rep.Decision != protocol.DecisionDeny {
+			t.Fatalf("approval decision = %q, want deny", rep.Decision)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("pending approval was not denied on abort")
+	}
+}
+
+func TestCodexAbortTimeoutTriggersForceRestartResumeAndPTYRespawn(t *testing.T) {
+	origGrace := codexAbortGracePeriod
+	codexAbortGracePeriod = 80 * time.Millisecond
+	t.Cleanup(func() { codexAbortGracePeriod = origGrace })
+
+	// Server 1: wedged — acknowledges or ignores turn/interrupt and NEVER sends turn/completed.
+	var int1Count atomic.Int32
+	srv1 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		if method == "turn/interrupt" {
+			int1Count.Add(1)
+			// Intentionally do not respond or emit turn/completed to simulate a wedged server.
+		}
+	})
+
+	// Server 2: fresh restarted server — handles thread/resume and subsequent turns/deliveries.
+	var mu2 sync.Mutex
+	var resumedIDs []string
+	var delivered2 []string
+	srv2 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		switch method {
+		case "thread/resume":
+			var p codex.ThreadResumeParams
+			_ = json.Unmarshal(params, &p)
+			mu2.Lock()
+			resumedIDs = append(resumedIDs, p.ThreadID)
+			mu2.Unlock()
+			reply(map[string]any{
+				"id":     id,
+				"result": map[string]any{"thread": map[string]any{"id": p.ThreadID, "path": ""}},
+			})
+		case "thread/queue/add":
+			var p codex.ThreadQueueAddParams
+			_ = json.Unmarshal(params, &p)
+			if len(p.Input) > 0 {
+				mu2.Lock()
+				delivered2 = append(delivered2, p.Input[0].Text)
+				mu2.Unlock()
+			}
+			reply(map[string]any{
+				"id":     id,
+				"result": map[string]any{"queuedSubmission": map[string]any{"id": "q-after-restart"}},
+			})
+		case "thread/backgroundTerminals/list":
+			reply(map[string]any{"id": id, "result": map[string]any{"data": []any{}}})
+		}
+	})
+
+	client1, err := codex.DialAppServerWS(t.Context(), srv1.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Start a real dummy old server process group + socket file to verify cleanup on restart.
+	oldCmd := exec.Command(testSleepCommand()[0], testSleepCommand()[1:]...)
+	configureCodexServerCmd(oldCmd)
+	if err := oldCmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	oldExited := make(chan struct{})
+	go func() {
+		_ = oldCmd.Wait()
+		close(oldExited)
+	}()
+	oldSock := filepath.Join(t.TempDir(), "old-codex.sock")
+	if err := os.WriteFile(oldSock, []byte("sock"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := session.Start(session.Spec{
+		ID: "codex-force-1", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+		Command: testSleepCommand(), Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	oldPTYPID := s.PID()
+	sub := s.Subscribe()
+	defer sub.Close()
+	reattachedSeen := make(chan struct{}, 1)
+	go func() {
+		var buf strings.Builder
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		for {
+			chunk, ok := sub.Next(ctx)
+			if !ok {
+				return
+			}
+			buf.Write(chunk)
+			if strings.Contains(buf.String(), "reattached-tui") {
+				select {
+				case reattachedSeen <- struct{}{}:
+				default:
+				}
+				return
+			}
+		}
+	}()
+
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+
+	b := newCodexBridge(t.Context(), s.ID(), client1, oldCmd, oldExited, func() { _ = os.Remove(oldSock) })
+	b.setThread("th-wedged", true)
+	var restartCount atomic.Int32
+	b.restartServer = func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error) {
+		restartCount.Add(1)
+		c2, err := codex.DialAppServerWS(ctx, srv2.wsURL(), "")
+		if err != nil {
+			return nil, err
+		}
+		res, err := resumeCodexThread(ctx, c2, codex.ThreadResumeParams{ThreadID: prevThreadID, ExcludeTurns: true})
+		if err != nil {
+			_ = c2.Close()
+			return nil, err
+		}
+		tuiCmd := testSleepCommand()
+		if runtime.GOOS != "windows" {
+			tuiCmd = []string{"sh", "-c", "printf 'reattached-tui'; sleep 30"}
+		}
+		return &codexRestartOutcome{
+			client:        c2,
+			threadID:      res.Thread.ID,
+			resumedThread: true,
+			tuiCmd:        tuiCmd,
+		}, nil
+	}
+	d.attachCodexBridge(s, b)
+	defer b.Close()
+
+	// Start wedged turn with live streaming blocks + background task.
+	srv1.sendNotification(t, "turn/started", map[string]any{
+		"threadId": "th-wedged",
+		"turn":     map[string]any{"id": "turn-wedged", "status": "inProgress"},
+	})
+	srv1.sendNotification(t, "item/started", map[string]any{
+		"threadId": "th-wedged", "turnId": "turn-wedged",
+		"item": map[string]any{"type": "commandExecution", "id": "cmd-1", "command": "sleep 9999"},
+	})
+	s.ReportBridgeTasks([]*protocol.BackgroundTask{{Id: "bg-1", Command: "old-bg", Running: true}})
+	waitFor(t, "wedged turn state not established", func() bool {
+		return s.Info().GetStatus() == protocol.AgentWorking && len(d.live.blocks(liveKey(s.ID(), ""))) == 1
+	})
+
+	// Trigger interrupt via handleSend("\x1b").
+	st, done := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+		return d.handleSend(t.Context(), st, env)
+	}, protocol.TypeSend, &protocol.Send{SessionId: s.ID(), Keys: []byte("\x1b")})
+	env, err := st.Recv()
+	if err != nil || env.Type() != protocol.TypeSessionInfo {
+		t.Fatalf("handleSend reply = %v, %v", env, err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("handleSend err: %v", err)
+	}
+
+	if int1Count.Load() != 1 {
+		t.Fatalf("turn/interrupt calls on server 1 = %d, want 1", int1Count.Load())
+	}
+	if restartCount.Load() != 1 {
+		t.Fatalf("restart calls = %d, want 1", restartCount.Load())
+	}
+	// Old server process and socket file cleaned up.
+	select {
+	case <-oldExited:
+	case <-time.After(3 * time.Second):
+		t.Fatal("old app-server process was not terminated")
+	}
+	if _, err := os.Stat(oldSock); !os.IsNotExist(err) {
+		t.Fatalf("old socket file was not removed: %v", err)
+	}
+	// Old client disconnected.
+	select {
+	case <-client1.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("old AppServerClient was not closed")
+	}
+	// Thread resumed on server 2.
+	mu2.Lock()
+	gotResumed := slices.Clone(resumedIDs)
+	mu2.Unlock()
+	if !slices.Equal(gotResumed, []string{"th-wedged"}) {
+		t.Fatalf("resumed thread IDs = %v, want [th-wedged]", gotResumed)
+	}
+	// Session UI state: not stuck in working, live blocks cleared, tasks cleared, notice posted, PTY alive & respawned.
+	info := s.Info()
+	if info.GetState() != protocol.StateRunning {
+		t.Fatalf("session state = %q, want running", info.GetState())
+	}
+	if info.GetStatus() != protocol.AgentIdle {
+		t.Fatalf("session status = %q, want idle", info.GetStatus())
+	}
+	if len(d.live.blocks(liveKey(s.ID(), ""))) != 0 {
+		t.Fatalf("live blocks not cleared after force restart: %+v", d.live.blocks(liveKey(s.ID(), "")))
+	}
+	if len(info.GetTasks()) != 0 {
+		t.Fatalf("stale tasks not cleared after force restart: %+v", info.GetTasks())
+	}
+	if !strings.Contains(info.GetNotice().GetBody(), "restarted and the previous thread was resumed") {
+		t.Fatalf("unexpected recovery notice: %+v", info.GetNotice())
+	}
+	if s.PID() == oldPTYPID {
+		t.Fatalf("session PTY PID did not change after restart (%d)", oldPTYPID)
+	}
+	if runtime.GOOS != "windows" {
+		select {
+		case <-reattachedSeen:
+		case <-time.After(3 * time.Second):
+			t.Fatal("subscriber did not receive respawned PTY output")
+		}
+	}
+	if d.codexBridge(s.ID()) != b {
+		t.Fatal("codexBridge was unexpectedly unregistered after restart")
+	}
+
+	// Post-restart health: server 2 notifications & new prompt delivery work cleanly.
+	srv2.sendNotification(t, "turn/started", map[string]any{
+		"threadId": "th-wedged",
+		"turn":     map[string]any{"id": "turn-after", "status": "inProgress"},
+	})
+	srv2.sendNotification(t, "item/agentMessage/delta", map[string]any{
+		"threadId": "th-wedged", "turnId": "turn-after", "itemId": "m-after", "delta": "recovered!",
+	})
+	waitFor(t, "post-restart delta not received", func() bool {
+		blocks := d.live.blocks(liveKey(s.ID(), ""))
+		return s.Info().GetStatus() == protocol.AgentWorking && len(blocks) == 1 && blocks[0].GetText() == "recovered!"
+	})
+	srv2.sendNotification(t, "turn/completed", map[string]any{
+		"threadId": "th-wedged",
+		"turn":     map[string]any{"id": "turn-after", "status": "completed"},
+	})
+	waitFor(t, "post-restart turn did not complete", func() bool {
+		return s.Info().GetStatus() == protocol.AgentDone
+	})
+
+	if !d.deliverViaCodexBridge(t.Context(), s.ID(), "next prompt") {
+		t.Fatal("post-restart deliverViaCodexBridge failed")
+	}
+	mu2.Lock()
+	gotDelivered := slices.Clone(delivered2)
+	mu2.Unlock()
+	if !slices.Equal(gotDelivered, []string{"next prompt"}) {
+		t.Fatalf("post-restart delivered = %v, want [next prompt]", gotDelivered)
+	}
+}
+
+func TestCodexAbortStaleEpochExitAndNotificationsIgnored(t *testing.T) {
+	srv1 := startMockCodexWSServer(t, nil)
+	srv2 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		if method == "thread/resume" {
+			reply(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "th-epoch"}}})
+		}
+	})
+	c1, err := codex.DialAppServerWS(t.Context(), srv1.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := session.Start(session.Spec{
+		ID: "codex-epoch", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+		Command: testSleepCommand(), Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+
+	oldExited := make(chan struct{})
+	b := newCodexBridge(t.Context(), s.ID(), c1, nil, oldExited, nil)
+	b.setThread("th-epoch", true)
+	b.restartServer = func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error) {
+		c2, err := codex.DialAppServerWS(ctx, srv2.wsURL(), "")
+		if err != nil {
+			return nil, err
+		}
+		_, _ = c2.ThreadResume(ctx, codex.ThreadResumeParams{ThreadID: prevThreadID, ExcludeTurns: true})
+		return &codexRestartOutcome{
+			client:        c2,
+			threadID:      prevThreadID,
+			resumedThread: true,
+			tuiCmd:        testSleepCommand(),
+		}, nil
+	}
+	d.attachCodexBridge(s, b)
+	defer b.Close()
+
+	srv1.sendNotification(t, "turn/started", map[string]any{
+		"threadId": "th-epoch", "turn": map[string]any{"id": "turn-1", "status": "inProgress"},
+	})
+	waitFor(t, "turn-1 not active", func() bool { return s.Info().GetStatus() == protocol.AgentWorking })
+
+	// Force restart advances epoch 1 -> 2.
+	res := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: 40 * time.Millisecond})
+	if !res.ForcedRestart || !res.ResumedThread {
+		t.Fatalf("abort result = %+v, want forced restart + resumed", res)
+	}
+
+	// Start a new active turn on epoch 2.
+	srv2.sendNotification(t, "turn/started", map[string]any{
+		"threadId": "th-epoch", "turn": map[string]any{"id": "turn-2", "status": "inProgress"},
+	})
+	waitFor(t, "turn-2 not active on epoch 2", func() bool {
+		b.mu.Lock()
+		ok := b.turnActive && b.activeTurnID == "turn-2" && b.epoch == 2
+		b.mu.Unlock()
+		return ok && s.Info().GetStatus() == protocol.AgentWorking
+	})
+
+	// Fire a stale exit from epoch 1 AND a stale turn/completed notification tagged with epoch 1.
+	close(oldExited)
+	b.onProcessExit(1)
+	staleParams, _ := json.Marshal(map[string]any{
+		"threadId": "th-epoch",
+		"turn":     map[string]any{"id": "turn-2", "status": "interrupted"},
+	})
+	d.handleCodexNotification(s, b, codex.Notification{Method: "turn/completed", Params: staleParams}, 1)
+
+	// Epoch 2's active turn must remain completely untouched.
+	b.mu.Lock()
+	active, turnID, epoch := b.turnActive, b.activeTurnID, b.epoch
+	b.mu.Unlock()
+	if !active || turnID != "turn-2" || epoch != 2 {
+		t.Fatalf("stale epoch 1 corrupted epoch 2 state: active=%v turnID=%q epoch=%d", active, turnID, epoch)
+	}
+	if s.Info().GetStatus() != protocol.AgentWorking {
+		t.Fatalf("stale epoch 1 altered session status to %q", s.Info().GetStatus())
+	}
+}
+
+func TestCodexAbortConcurrentDeduplicatedAndDeliverSerialized(t *testing.T) {
+	var intCalls atomic.Int32
+	srv1 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		if method == "turn/interrupt" {
+			intCalls.Add(1)
+		}
+	})
+
+	var deliveredMu sync.Mutex
+	var delivered2 []string
+	srv2 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		switch method {
+		case "thread/resume":
+			reply(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "th-conc"}}})
+		case "thread/queue/add":
+			var p codex.ThreadQueueAddParams
+			_ = json.Unmarshal(params, &p)
+			if len(p.Input) > 0 {
+				deliveredMu.Lock()
+				delivered2 = append(delivered2, p.Input[0].Text)
+				deliveredMu.Unlock()
+			}
+			reply(map[string]any{"id": id, "result": map[string]any{"queuedSubmission": map[string]any{"id": "q-conc"}}})
+		}
+	})
+
+	c1, err := codex.DialAppServerWS(t.Context(), srv1.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := session.Start(session.Spec{
+		ID: "codex-conc", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+		Command: testSleepCommand(), Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+
+	b := newCodexBridge(t.Context(), s.ID(), c1, nil, nil, nil)
+	b.setThread("th-conc", true)
+	var restartCalls atomic.Int32
+	restartStarted := make(chan struct{}, 1)
+	b.restartServer = func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error) {
+		restartCalls.Add(1)
+		select {
+		case restartStarted <- struct{}{}:
+		default:
+		}
+		time.Sleep(40 * time.Millisecond)
+		c2, err := codex.DialAppServerWS(ctx, srv2.wsURL(), "")
+		if err != nil {
+			return nil, err
+		}
+		_, _ = c2.ThreadResume(ctx, codex.ThreadResumeParams{ThreadID: prevThreadID, ExcludeTurns: true})
+		return &codexRestartOutcome{
+			client:        c2,
+			threadID:      prevThreadID,
+			resumedThread: true,
+			tuiCmd:        testSleepCommand(),
+		}, nil
+	}
+	d.attachCodexBridge(s, b)
+	defer b.Close()
+
+	srv1.sendNotification(t, "turn/started", map[string]any{
+		"threadId": "th-conc", "turn": map[string]any{"id": "turn-conc", "status": "inProgress"},
+	})
+	waitFor(t, "turn-conc not active", func() bool { return s.Info().GetStatus() == protocol.AgentWorking })
+
+	const callers = 5
+	results := make([]codexAbortResult, callers)
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			results[idx] = d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: 60 * time.Millisecond})
+		}(i)
+	}
+
+	// Launch a message delivery while force restart is underway; it must wait
+	// for abort/restart to finish and deliver cleanly to server 2.
+	deliverErr := make(chan error, 1)
+	go func() {
+		<-restartStarted
+		deliverErr <- b.deliverMessage(t.Context(), "after-concurrent-abort")
+	}()
+
+	wg.Wait()
+	if err := <-deliverErr; err != nil {
+		t.Fatalf("deliverMessage during restart failed: %v", err)
+	}
+	if intCalls.Load() != 1 {
+		t.Fatalf("turn/interrupt calls = %d, want 1", intCalls.Load())
+	}
+	if restartCalls.Load() != 1 {
+		t.Fatalf("restart calls = %d, want 1", restartCalls.Load())
+	}
+	for i, r := range results {
+		if !r.HadActiveTurn || !r.Aborted || !r.ForcedRestart || !r.ResumedThread || r.Err != nil {
+			t.Fatalf("caller %d result = %+v, want deduped forced restart success", i, r)
+		}
+	}
+	deliveredMu.Lock()
+	gotDelivered := slices.Clone(delivered2)
+	deliveredMu.Unlock()
+	if !slices.Equal(gotDelivered, []string{"after-concurrent-abort"}) {
+		t.Fatalf("delivered to server 2 = %v, want [after-concurrent-abort]", gotDelivered)
+	}
+}
+
+func TestCodexAbortResumeFailureFallsBackCleanly(t *testing.T) {
+	srv1 := startMockCodexWSServer(t, nil)
+	srv2 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		if method == "thread/resume" {
+			reply(map[string]any{
+				"id":    id,
+				"error": map[string]any{"code": -32600, "message": "no rollout found for thread id"},
+			})
+		}
+	})
+	c1, err := codex.DialAppServerWS(t.Context(), srv1.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := session.Start(session.Spec{
+		ID: "codex-noresume", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+		Command: testSleepCommand(), Cols: 80, Rows: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+
+	b := newCodexBridge(t.Context(), s.ID(), c1, nil, nil, nil)
+	b.setThread("th-missing", true)
+	b.restartServer = func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error) {
+		c2, err := codex.DialAppServerWS(ctx, srv2.wsURL(), "")
+		if err != nil {
+			return nil, err
+		}
+		_, err = resumeCodexThread(ctx, c2, codex.ThreadResumeParams{ThreadID: prevThreadID, ExcludeTurns: true})
+		return &codexRestartOutcome{
+			client:        c2,
+			resumedThread: err == nil,
+			tuiCmd:        testSleepCommand(),
+		}, nil
+	}
+	d.attachCodexBridge(s, b)
+	defer b.Close()
+
+	srv1.sendNotification(t, "turn/started", map[string]any{
+		"threadId": "th-missing", "turn": map[string]any{"id": "turn-1", "status": "inProgress"},
+	})
+	waitFor(t, "turn-1 not working", func() bool { return s.Info().GetStatus() == protocol.AgentWorking })
+
+	res := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: 40 * time.Millisecond})
+	if !res.ForcedRestart || res.ResumedThread || res.Err != nil {
+		t.Fatalf("result = %+v, want ForcedRestart=true ResumedThread=false Err=nil", res)
+	}
+	if b.threadID() != "" {
+		t.Fatalf("stale threadID %q not cleared after failed resume", b.threadID())
+	}
+	if !strings.Contains(s.Info().GetNotice().GetBody(), "could not be resumed") {
+		t.Fatalf("unexpected notice = %+v", s.Info().GetNotice())
+	}
+	if s.Info().GetState() != protocol.StateRunning || s.Info().GetStatus() != protocol.AgentIdle {
+		t.Fatalf("post-fallback state=%q status=%q", s.Info().GetState(), s.Info().GetStatus())
+	}
+}
+
+func TestBuildCodexRemoteTUICommandRestartOmitsInitialPrompt(t *testing.T) {
+	split := codex.SplitRemoteLaunch([]string{
+		"codex", "--model", "gpt-6.2-sol", "--dangerously-bypass-approvals-and-sandbox", "--", "-initial-task",
+	})
+	tr := &codexAppServerTransport{
+		extraTUIArgs: []string{"--remote-auth-token-env", "MAKO_CODEX_WS_TOKEN"},
+		extraTUIEnv:  map[string]string{"MAKO_CODEX_WS_TOKEN": "tok-123"},
+	}
+
+	resumedCmd, env := buildCodexRemoteTUICommand(split, tr, "ws://127.0.0.1:4321", "th-1", false)
+	joined := strings.Join(resumedCmd, " ")
+	if strings.Contains(joined, "-initial-task") {
+		t.Fatalf("restart resumed command leaked initial prompt: %q", resumedCmd)
+	}
+	if !strings.Contains(joined, "--remote ws://127.0.0.1:4321") || !strings.Contains(joined, "resume --model gpt-6.2-sol th-1") {
+		t.Fatalf("unexpected resumed command: %q", resumedCmd)
+	}
+	if env["MAKO_CODEX_WS_TOKEN"] != "tok-123" {
+		t.Fatalf("extraTUIEnv = %v", env)
+	}
+
+	freshCmd, _ := buildCodexRemoteTUICommand(split, tr, "ws://127.0.0.1:4321", "", false)
+	freshJoined := strings.Join(freshCmd, " ")
+	if strings.Contains(freshJoined, "-initial-task") || strings.Contains(freshJoined, " resume ") {
+		t.Fatalf("fresh restart command unexpected: %q", freshCmd)
+	}
+	if !strings.Contains(freshJoined, "--dangerously-bypass-approvals-and-sandbox") {
+		t.Fatalf("fresh restart command missing NewTUIArgs: %q", freshCmd)
+	}
+}
+
+func TestCodexAbortIdleFallsBackToPTYAndDiscoversTurnViaThreadRead(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses POSIX sh to capture PTY Escape")
+	}
+	dir := t.TempDir()
+	ptyOut := filepath.Join(dir, "esc.out")
+	s, err := session.Start(session.Spec{
+		ID: "codex-idle-esc", NodeID: "test-node", Agent: "codex", Project: dir,
+		Command: []string{"sh", "-c", `stty raw -echo; dd bs=1 count=1 of=esc.out 2>/dev/null; sleep 30`},
+		Cols:    80, Rows: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	var mu sync.Mutex
+	var gotInterrupt codex.TurnInterruptParams
+	var srv *mockCodexWSServer
+	srv = startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+		switch method {
+		case "thread/read":
+			reply(map[string]any{
+				"id": id,
+				"result": map[string]any{
+					"thread": map[string]any{
+						"id": "th-disc",
+						"turns": []map[string]any{
+							{"id": "turn-old", "status": "completed"},
+							{"id": "turn-discovered", "status": "inProgress"},
+						},
+					},
+				},
+			})
+		case "turn/interrupt":
+			var p codex.TurnInterruptParams
+			_ = json.Unmarshal(params, &p)
+			mu.Lock()
+			gotInterrupt = p
+			mu.Unlock()
+			reply(map[string]any{"id": id, "result": map[string]any{}})
+			go srv.sendNotification(t, "turn/completed", map[string]any{
+				"threadId": "th-disc",
+				"turn":     map[string]any{"id": p.TurnID, "status": "interrupted"},
+			})
+		}
+	})
+
+	client, err := codex.DialAppServerWS(t.Context(), srv.wsURL(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d.sessions.add(s)
+	b := newCodexBridge(t.Context(), s.ID(), client, nil, nil, nil)
+	b.setThread("th-disc", true)
+	d.attachCodexBridge(s, b)
+	defer b.Close()
+
+	// 1. When idle (no active turn), Escape via handleSend falls back to PTY.
+	st, done := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+		return d.handleSend(t.Context(), st, env)
+	}, protocol.TypeSend, &protocol.Send{SessionId: s.ID(), Keys: []byte("\x1b")})
+	if env, err := st.Recv(); err != nil || env.Type() != protocol.TypeSessionInfo {
+		t.Fatalf("idle handleSend reply = %v, %v", env, err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("idle handleSend err: %v", err)
+	}
+	waitFor(t, "idle Escape never reached PTY", func() bool {
+		raw, _ := os.ReadFile(ptyOut)
+		return string(raw) == "\x1b"
+	})
+
+	// 2. When working without a prior turn/started notification, abort discovers
+	// the inProgress turn via thread/read and sends turn/interrupt for it.
+	s.SetStatus(protocol.AgentWorking)
+	res := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: time.Second})
+	if !res.HadActiveTurn || !res.Aborted || res.ForcedRestart {
+		t.Fatalf("discovered-turn abort = %+v, want graceful abort", res)
+	}
+	mu.Lock()
+	got := gotInterrupt
+	mu.Unlock()
+	if got.ThreadID != "th-disc" || got.TurnID != "turn-discovered" {
+		t.Fatalf("discovered TurnInterrupt = %+v, want th-disc / turn-discovered", got)
+	}
 }

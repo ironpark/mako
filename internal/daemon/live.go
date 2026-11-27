@@ -347,6 +347,25 @@ func (h *liveHub) blocks(key string) []*protocol.LiveBlock {
 	return nil
 }
 
+// clear drops any active live blocks for session's main conversation and marks
+// followers due so WatchChat clients exit streaming state immediately (for
+// example after a force-aborted turn whose log will not grow).
+func (h *liveHub) clear(session string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := h.chats[liveKey(session, "")]
+	if c == nil {
+		return
+	}
+	if len(c.blocks) > 0 || c.ended.IsZero() {
+		now := time.Now()
+		c.blocks = nil
+		c.ended = now
+		c.posted = now
+		c.dirty = true
+	}
+}
+
 // forget drops a session's replies, its subagents' too, as it closes.
 func (h *liveHub) forget(session string) {
 	h.mu.Lock()

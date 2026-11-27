@@ -204,6 +204,32 @@ func (a *approvals) answer(sessionID string, req *protocol.AnswerApproval) error
 	return nil
 }
 
+// abortSession denies all pending approvals belonging to sessionID so any
+// blocked PermissionRequest hook unblocks immediately when a turn is aborted.
+func (a *approvals) abortSession(sessionID string) {
+	a.mu.Lock()
+	var targets []*pendingApproval
+	var ids []string
+	for id, p := range a.pending {
+		if p.session != nil && p.session.ID() == sessionID {
+			targets = append(targets, p)
+			ids = append(ids, id)
+		}
+	}
+	a.mu.Unlock()
+	for i, p := range targets {
+		select {
+		case p.reply <- &protocol.AnswerApproval{
+			SessionId:  sessionID,
+			ApprovalId: ids[i],
+			Decision:   protocol.DecisionDeny,
+			Message:    "The user interrupted the turn.",
+		}:
+		default:
+		}
+	}
+}
+
 func approvalID() string {
 	var b [8]byte
 	_, _ = rand.Read(b[:])

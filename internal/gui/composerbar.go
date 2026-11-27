@@ -90,14 +90,35 @@ func (m *model) attachFiles(id string) {
 	})
 }
 
-// stopTurn interrupts the turn session id's agent is on, as its driver
-// says to in its terminal.
+// stopTurn interrupts the turn session id's agent is on, routing through the
+// daemon's Send RPC when linked (so managed agents such as Codex can run
+// graceful turn/interrupt with force-restart fallback) and falling back to
+// writing the interrupt key directly to the terminal attachment.
 func (m *model) stopTurn(id string) {
-	s, _ := m.session(id)
-	if conn := m.conns[id]; conn != nil {
-		known, _ := agents.Lookup(s.GetAgent())
-		conn.send(agent.Interrupt(known.Driver))
+	s, ok := m.session(id)
+	known, _ := agents.Lookup(s.GetAgent())
+	keys := agent.Interrupt(known.Driver)
+	conn := m.conns[id]
+	if !ok || !m.link.isLinked() {
+		if conn != nil {
+			conn.send(keys)
+		}
+		return
 	}
+	ggui.Async(func() (struct{}, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		c, err := m.link.client(ctx)
+		if err != nil {
+			return struct{}{}, err
+		}
+		_, err = c.Send(ctx, &protocol.Send{NodeId: s.GetNodeId(), SessionId: id, Keys: keys})
+		return struct{}{}, err
+	}, func(_ struct{}, err error) {
+		if err != nil && conn != nil {
+			conn.send(keys)
+		}
+	})
 }
 
 // permissionChip says what the agent may do unasked, by the mode it names:

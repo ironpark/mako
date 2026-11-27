@@ -7,6 +7,7 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"maps"
 	"os"
 	goruntime "runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +29,7 @@ import (
 	"github.com/ironpark/mako/internal/activity"
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/detect"
 	"github.com/ironpark/mako/internal/kitty"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -54,13 +57,22 @@ type Spec struct {
 	OnChange func()
 }
 
+type restartRequest struct {
+	prepare func(ctx context.Context) (argv []string, envOverrides map[string]string, err error)
+	done    chan error
+}
+
 // Session is a running agent process with its terminal state.
 type Session struct {
 	spec Spec
 
-	proc  *proc    // the agent's process, on its terminal
-	env   []string // the process's environment
-	scope string   // scopeEnv's value, which every process it starts inherits
+	proc           *proc           // the agent's process, on its terminal; guarded by mu
+	env            []string        // the process's environment; guarded by mu
+	scope          string          // scopeEnv's value, which every process it starts inherits; guarded by mu
+	closing        bool            // Close was called; guarded by mu
+	closeCh        chan struct{}   // closed once when Close begins
+	pendingRestart *restartRequest // in-place PTY replacement handed to pump; guarded by mu
+	restarting     bool            // true while pump is executing runRestart; guarded by mu
 
 	mu       sync.Mutex
 	term     *gostty.Session
@@ -166,6 +178,7 @@ func Start(spec Spec) (*Session, error) {
 		proc:    p,
 		env:     env,
 		scope:   scope,
+		closeCh: make(chan struct{}),
 		term:    term,
 		state:   protocol.StateRunning,
 		subs:    map[int]*Subscription{},
@@ -192,7 +205,23 @@ func (s *Session) ID() string { return s.spec.ID }
 func (s *Session) Agent() string { return s.spec.Agent }
 
 // Command is a copy of the resolved launch command the session started with.
-func (s *Session) Command() []string { return append([]string(nil), s.spec.Command...) }
+func (s *Session) Command() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.spec.Command...)
+}
+
+func (s *Session) currentProc() *proc {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.proc
+}
+
+func (s *Session) currentScope() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.scope
+}
 
 // Info snapshots the session metadata.
 func (s *Session) Info() *protocol.SessionInfo {
@@ -216,7 +245,7 @@ func (s *Session) Info() *protocol.SessionInfo {
 		StartedAt:      protocol.Time(s.started),
 		ExitCode:       s.exitCode,
 		Busy:           s.state != protocol.StateExited && s.progress.Busy(time.Now()),
-		Idle:           s.state == protocol.StateRunning && s.proc.idle(),
+		Idle:           s.state == protocol.StateRunning && s.proc != nil && s.proc.idle(),
 		Status:         status,
 		StatusAt:       protocol.Time(statusAt),
 		LastOutput:     protocol.Time(s.LastOutput()),
@@ -316,9 +345,9 @@ func (s *Session) tasksLocked() []*protocol.BackgroundTask {
 // shown is the command as Info reports it.
 func (s *Session) shown() []string {
 	if s.spec.Shown != nil {
-		return s.spec.Shown
+		return slices.Clone(s.spec.Shown)
 	}
-	return s.spec.Command
+	return slices.Clone(s.spec.Command)
 }
 
 // SetStatus records what the agent's hooks report it is doing.
@@ -330,6 +359,14 @@ func (s *Session) SetStatus(status protocol.AgentStatus) {
 	// than the first. A status set here is the newest there is.
 	seq := max(time.Now().UnixNano(), s.statusSeq+1, s.workEndedAt+1)
 	s.reportStatusLocked(status, seq)
+}
+
+// StatusWatermark returns the highest status/work-end sequence number recorded
+// on s so native bridges can anchor subsequent event sequences past it.
+func (s *Session) StatusWatermark() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return max(s.statusSeq, s.workEndedAt)
 }
 
 // ReportStatus orders hooks by when they ran, rather than when their
@@ -546,10 +583,26 @@ func (s *Session) SetTitle(title string) {
 	s.mu.Unlock()
 }
 
+// PostNotice records a daemon-generated notice on the session and notifies
+// watching front-ends.
+func (s *Session) PostNotice(title, body string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited {
+		return
+	}
+	s.notice = &protocol.Notice{Title: title, Body: body, Seq: s.notice.GetSeq() + 1}
+	s.changedLocked()
+}
+
 // Write sends input to the agent.
 func (s *Session) Write(p []byte) (int, error) {
 	s.lastInput.Store(time.Now().UnixNano())
-	return s.proc.Write(p)
+	proc := s.currentProc()
+	if proc == nil {
+		return 0, errors.New("session: process restarting")
+	}
+	return proc.Write(p)
 }
 
 // LastInput is when anything was last written to the agent; zero before.
@@ -681,8 +734,10 @@ func (s *Session) ResizeCells(cols, rows, cellW, cellH uint16) error {
 	if cellW == 0 || cellH == 0 {
 		cellW, cellH = s.spec.CellWidth, s.spec.CellHeight
 	}
-	if err := s.proc.resize(cols, rows, cellW, cellH); err != nil {
-		return err
+	if s.proc != nil {
+		if err := s.proc.resize(cols, rows, cellW, cellH); err != nil {
+			return err
+		}
 	}
 	if s.state == protocol.StateExited {
 		return nil // its screen is kept as it was left
@@ -884,11 +939,58 @@ func (s *Session) Done() <-chan struct{} { return s.done }
 // left running is found when the session is closed.
 const scopeEnv = "MAKO_SCOPE"
 
+// terminalResetSeq restores normal screen, clears mouse/paste/focus/kitty
+// modes and screen contents before a restarted PTY TUI draws its first frame.
+var terminalResetSeq = []byte("\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?1006l\x1b[?1007l\x1b[?1049l\x1b[<u\x1b[?2004l\x1b[?1004l\x1b[0 q\x1b[?25h\x1b[2J\x1b[H")
+
+// Restart replaces the session's PTY process in place without ending the
+// session or disconnecting attached subscribers. It stops the current PTY
+// process (and sweeps its descendants), runs prepare while the session stays
+// alive, and launches the returned command on a fresh PTY sized to the
+// session's current dimensions. If prepare fails or the replacement fails to
+// start, the session transitions cleanly to exited.
+func (s *Session) Restart(prepare func(ctx context.Context) (argv []string, envOverrides map[string]string, err error)) error {
+	if prepare == nil {
+		return errors.New("session: nil restart prepare function")
+	}
+	req := &restartRequest{
+		prepare: prepare,
+		done:    make(chan error, 1),
+	}
+	s.mu.Lock()
+	if s.state != protocol.StateRunning || s.closing {
+		s.mu.Unlock()
+		return errors.New("session: not running")
+	}
+	if s.pendingRestart != nil || s.restarting {
+		s.mu.Unlock()
+		return errors.New("session: restart already in progress")
+	}
+	s.pendingRestart = req
+	p := s.proc
+	s.mu.Unlock()
+
+	if p != nil {
+		p.kill()
+	}
+	return <-req.done
+}
+
 // Close terminates the agent, and every process it started that runs
 // still, and releases the terminal.
 func (s *Session) Close() error {
-	s.proc.kill()
-	err := s.proc.Close()
+	s.mu.Lock()
+	if !s.closing {
+		s.closing = true
+		close(s.closeCh)
+	}
+	p := s.proc
+	s.mu.Unlock()
+	var err error
+	if p != nil {
+		p.kill()
+		err = p.Close()
+	}
 	<-s.done
 	return err
 }
@@ -903,49 +1005,194 @@ const outputGrace = time.Second
 func (s *Session) pump() {
 	defer close(s.done)
 
-	// The agent is waited for as it exits, not once its terminal's output
-	// ends, which a process it left in the background may hold off
-	// forever. What it started is swept then, while its leader's id still
-	// names its terminal's session: by the time the session is closed, that
-	// id may be another process's, and its session another's too.
-	exited := make(chan int64, 1)
-	go func() {
-		code := s.proc.wait()
-		sweep(s.scope, s.proc.pid())
-		s.proc.endOutput(outputGrace)
-		exited <- code
-	}()
-
-	buf := make([]byte, 32*1024)
+	var exitCode int64
 	for {
-		n, err := s.proc.Read(buf)
-		if n > 0 {
-			chunk := make([]byte, n)
-			copy(chunk, buf[:n])
-			s.feed(chunk)
+		p := s.currentProc()
+		scope := s.currentScope()
+
+		// The agent is waited for as it exits, not once its terminal's output
+		// ends, which a process it left in the background may hold off
+		// forever. What it started is swept then, while its leader's id still
+		// names its terminal's session: by the time the session is closed, that
+		// id may be another process's, and its session another's too.
+		exited := make(chan int64, 1)
+		go func(p *proc, scope string) {
+			code := p.wait()
+			sweep(scope, p.pid())
+			p.endOutput(outputGrace)
+			exited <- code
+		}(p, scope)
+
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := p.Read(buf)
+			if n > 0 {
+				chunk := make([]byte, n)
+				copy(chunk, buf[:n])
+				s.feed(chunk)
+			}
+			if err != nil {
+				break
+			}
 		}
-		if err != nil {
-			break
+
+		exitCode = <-exited
+		_ = p.Close()
+
+		// Atomically check under s.mu whether an in-place Restart was requested
+		// or the session is exiting for good.
+		s.mu.Lock()
+		s.proc = nil
+		req := s.pendingRestart
+		s.pendingRestart = nil
+		closing := s.closing
+		if req == nil || closing {
+			s.state = protocol.StateExited
+			s.clearApprovalLocked()
+			s.exitCode = &exitCode
+			s.progress = activity.Progress{}
+			for id, sub := range s.subs {
+				delete(s.subs, id)
+				sub.closeLocked()
+			}
+			s.finalPlain, _ = s.snapshotLocked(false)
+			s.finalStyled, _ = s.snapshotLocked(true)
+			s.term.Close()
+			s.recomputeLocked(time.Now())
+			s.changedLocked()
+			s.mu.Unlock()
+			if req != nil {
+				req.done <- errors.New("session: closed")
+			}
+			return
 		}
+		s.restarting = true
+		s.mu.Unlock()
+
+		if err := s.runRestart(req); err != nil {
+			exitCode = 1
+			s.mu.Lock()
+			s.restarting = false
+			s.state = protocol.StateExited
+			s.clearApprovalLocked()
+			s.exitCode = &exitCode
+			s.progress = activity.Progress{}
+			for id, sub := range s.subs {
+				delete(s.subs, id)
+				sub.closeLocked()
+			}
+			s.finalPlain, _ = s.snapshotLocked(false)
+			s.finalStyled, _ = s.snapshotLocked(true)
+			s.term.Close()
+			s.recomputeLocked(time.Now())
+			s.changedLocked()
+			s.mu.Unlock()
+			req.done <- err
+			return
+		}
+		req.done <- nil
+	}
+}
+
+func (s *Session) runRestart(req *restartRequest) error {
+	rctx, cancel := context.WithCancel(context.Background())
+	stopWatch := make(chan struct{})
+	go func() {
+		select {
+		case <-s.closeCh:
+			cancel()
+		case <-stopWatch:
+		}
+	}()
+	argv, envOverrides, err := req.prepare(rctx)
+	close(stopWatch)
+	cancel()
+	if err != nil {
+		return err
+	}
+	if len(argv) == 0 {
+		return errors.New("session: empty restart command")
 	}
 
-	exitCode := <-exited
+	var token [16]byte
+	_, _ = rand.Read(token[:])
+	newScope := hex.EncodeToString(token[:])
 
 	s.mu.Lock()
-	s.state = protocol.StateExited
-	s.clearApprovalLocked()
-	s.exitCode = &exitCode
-	s.progress = activity.Progress{}
-	for id, sub := range s.subs {
-		delete(s.subs, id)
-		sub.closeLocked()
+	if s.closing {
+		s.mu.Unlock()
+		return errors.New("session: closed")
 	}
-	s.finalPlain, _ = s.snapshotLocked(false)
-	s.finalStyled, _ = s.snapshotLocked(true)
-	s.term.Close()
-	s.recomputeLocked(time.Now())
-	s.changedLocked()
+	overrides := make(map[string]string, len(envOverrides)+1)
+	for k, v := range envOverrides {
+		overrides[k] = v
+	}
+	overrides[scopeEnv] = newScope
+	newEnv := mergeEnv(s.env, overrides)
+	cols, rows := s.spec.Cols, s.spec.Rows
+	project := s.spec.Project
 	s.mu.Unlock()
+
+	newProc, err := startProc(argv, project, newEnv, cols, rows)
+	if err != nil {
+		return fmt.Errorf("session: restart %s: %w", argv[0], err)
+	}
+
+	s.mu.Lock()
+	if s.closing {
+		s.mu.Unlock()
+		newProc.kill()
+		_ = newProc.Close()
+		return errors.New("session: closed")
+	}
+	s.proc = newProc
+	s.restarting = false
+	s.scope = newScope
+	s.env = newEnv
+	s.spec.Command = slices.Clone(argv)
+	s.progress = activity.Progress{}
+	if s.screen != nil {
+		s.screen.state = detect.Unknown
+		s.screen.visible = false
+		s.screen.pendingAt = time.Time{}
+		s.screen.confirms = 0
+		s.screen.dialog = nil
+	}
+	now := time.Now()
+	s.endWorkLocked(now)
+	s.recomputeLocked(now)
+	s.mu.Unlock()
+
+	// Reset terminal modes on both daemon terminal and attached subscribers
+	// before the restarted PTY process draws its initial screen.
+	s.feed(terminalResetSeq)
+	return nil
+}
+
+func mergeEnv(base []string, overrides map[string]string) []string {
+	out := make([]string, 0, len(base)+len(overrides))
+	for _, kv := range base {
+		k, _, _ := strings.Cut(kv, "=")
+		replaced := false
+		if goruntime.GOOS == "windows" {
+			for ok := range overrides {
+				if strings.EqualFold(k, ok) {
+					replaced = true
+					break
+				}
+			}
+		} else {
+			_, replaced = overrides[k]
+		}
+		if replaced {
+			continue
+		}
+		out = append(out, kv)
+	}
+	for k, v := range overrides {
+		out = append(out, k+"="+v)
+	}
+	return out
 }
 
 func (s *Session) feed(chunk []byte) {
@@ -1018,7 +1265,9 @@ func (s *Session) writeReplies() {
 	for {
 		select {
 		case b := <-s.replies:
-			_, _ = s.proc.Write(b)
+			if p := s.currentProc(); p != nil {
+				_, _ = p.Write(b)
+			}
 		case <-s.done:
 			return
 		}

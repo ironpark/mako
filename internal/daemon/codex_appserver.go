@@ -33,9 +33,13 @@ const (
 	codexStartupMaxAttempts  = 3
 	codexStderrTailMaxBytes  = 8192
 	codexBGCommandMaxLen     = 1000
+	codexTurnLookupTimeout   = 500 * time.Millisecond
 )
 
-var codexBGPollInterval = 5 * time.Second
+var (
+	codexBGPollInterval   = 5 * time.Second
+	codexAbortGracePeriod = 3 * time.Second
+)
 
 // stderrTail retains the last codexStderrTailMaxBytes written to it so startup
 // failures can inspect Codex's stderr (e.g. SQLite runtime initialization errors).
@@ -164,20 +168,79 @@ func resumeCodexThread(ctx context.Context, client *codex.AppServerClient, param
 	return client.ThreadResume(ctx, params)
 }
 
+type codexServerLaunchConfig struct {
+	runDir      string
+	sessionID   string
+	project     string
+	split       codex.RemoteLaunchSplit
+	serverEnv   map[string]string
+	stateDirKey string
+}
+
+type codexStartedServer struct {
+	tr         *codexAppServerTransport
+	cmd        *exec.Cmd
+	exited     chan struct{}
+	client     *codex.AppServerClient
+	remoteAddr string
+	initRes    codex.InitializeResult
+}
+
+type codexAbortOptions struct {
+	GracePeriod           time.Duration
+	ForceRestartOnTimeout *bool // nil defaults to true
+}
+
+type codexAbortResult struct {
+	HadActiveTurn bool
+	Aborted       bool
+	ForcedRestart bool
+	ResumedThread bool
+	Err           error
+}
+
+type inFlightAbort struct {
+	done   chan struct{}
+	result codexAbortResult
+}
+
+// codexRestartOutcome holds the newly started server and TUI launch spec
+// produced during force-recovery restart.
+type codexRestartOutcome struct {
+	client        *codex.AppServerClient
+	cmd           *exec.Cmd
+	exited        chan struct{}
+	cleanupFiles  func()
+	userAgent     string
+	initUsage     *protocol.Usage
+	threadID      string
+	threadPath    string
+	resumedThread bool
+	tuiCmd        []string
+	tuiEnv        map[string]string
+}
+
 // codexBridge owns a session's managed `codex app-server` subprocess and its
 // WebSocket JSON-RPC observer/controller connection.
 type codexBridge struct {
-	sessionID    string
-	cmd          *exec.Cmd
-	exited       chan struct{}
-	client       *codex.AppServerClient
-	cleanupFiles func()
+	sessionID string
 
 	ctx       context.Context
 	cancel    context.CancelFunc
 	closeOnce sync.Once
 
+	launchCfg     *codexServerLaunchConfig
+	restartServer func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error)
+
 	mu              sync.Mutex
+	closed          bool
+	epoch           uint64
+	restarting      bool
+	swapped         chan struct{} // closed and replaced on client/restart state changes
+	cmd             *exec.Cmd
+	exited          chan struct{}
+	client          *codex.AppServerClient
+	cleanupFiles    func()
 	serverUserAgent string
 	tid             string
 	pendingPath     string // rollout path reported by app-server, bound once written on disk
@@ -187,7 +250,12 @@ type codexBridge struct {
 	abandoned       map[string]bool // previous top-level thread IDs switched away from
 	initUsage       *protocol.Usage
 	lastSeq         int64
-	activeTurn      string
+	activeTurn      string          // active liveHub step label
+	activeTurnID    string          // server-assigned turn ID when known
+	turnActive      bool            // true while a turn is in flight
+	turnDone        chan struct{}   // closed when active turn settles
+	completedTurns  map[string]bool // dedup turn/completed and codex/event completions
+	aborting        *inFlightAbort  // non-nil while an abort is in progress
 	itemIndices     map[string]int32
 	nextBlock       int32
 	thinkingSeen    map[string]bool
@@ -206,22 +274,122 @@ func newCodexBridge(parent context.Context, sessionID string, client *codex.AppS
 		parent = context.Background()
 	}
 	ctx, cancel := context.WithCancel(parent)
-	return &codexBridge{
-		sessionID:    sessionID,
-		cmd:          cmd,
-		exited:       exited,
-		client:       client,
-		cleanupFiles: cleanupFiles,
-		ctx:          ctx,
-		cancel:       cancel,
-		ignored:      map[string]bool{},
-		abandoned:    map[string]bool{},
-		itemIndices:  map[string]int32{},
-		thinkingSeen: map[string]bool{},
-		fgItems:      map[string]bool{},
-		fgProcesses:  map[string]bool{},
-		bgStarted:    map[string]int64{},
+	b := &codexBridge{
+		sessionID:      sessionID,
+		epoch:          1,
+		swapped:        make(chan struct{}),
+		cmd:            cmd,
+		exited:         exited,
+		client:         client,
+		cleanupFiles:   cleanupFiles,
+		ctx:            ctx,
+		cancel:         cancel,
+		ignored:        map[string]bool{},
+		abandoned:      map[string]bool{},
+		completedTurns: map[string]bool{},
+		itemIndices:    map[string]int32{},
+		thinkingSeen:   map[string]bool{},
+		fgItems:        map[string]bool{},
+		fgProcesses:    map[string]bool{},
+		bgStarted:      map[string]int64{},
 	}
+	if exited != nil {
+		b.watchProcessExit(exited, 1)
+	}
+	return b
+}
+
+func (b *codexBridge) ensureInitLocked() {
+	if b.epoch == 0 {
+		b.epoch = 1
+	}
+	if b.swapped == nil {
+		b.swapped = make(chan struct{})
+	}
+	if b.ignored == nil {
+		b.ignored = map[string]bool{}
+	}
+	if b.abandoned == nil {
+		b.abandoned = map[string]bool{}
+	}
+	if b.completedTurns == nil {
+		b.completedTurns = map[string]bool{}
+	}
+	if b.itemIndices == nil {
+		b.itemIndices = map[string]int32{}
+	}
+	if b.thinkingSeen == nil {
+		b.thinkingSeen = map[string]bool{}
+	}
+	if b.fgItems == nil {
+		b.fgItems = map[string]bool{}
+	}
+	if b.fgProcesses == nil {
+		b.fgProcesses = map[string]bool{}
+	}
+	if b.bgStarted == nil {
+		b.bgStarted = map[string]int64{}
+	}
+}
+
+func (b *codexBridge) watchProcessExit(done <-chan struct{}, gen uint64) {
+	go func() {
+		select {
+		case <-done:
+			b.onProcessExit(gen)
+		case <-b.ctx.Done():
+		}
+	}()
+}
+
+// onProcessExit handles a managed app-server process exiting. Exits belonging
+// to superseded epochs or occurring during an intentional restart are ignored
+// so stale process exits cannot corrupt a newly started generation.
+func (b *codexBridge) onProcessExit(gen uint64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed || b.restarting || b.epoch != gen {
+		return
+	}
+	b.settleTurnLocked()
+}
+
+func (b *codexBridge) signalSwapLocked() {
+	if b.swapped != nil {
+		close(b.swapped)
+	}
+	b.swapped = make(chan struct{})
+}
+
+func (b *codexBridge) currentClient() *codex.AppServerClient {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.client
+}
+
+func (b *codexBridge) activeStream() (*codex.AppServerClient, uint64, <-chan struct{}, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.ensureInitLocked()
+	return b.client, b.epoch, b.swapped, b.restarting
+}
+
+func (b *codexBridge) isCurrentEpoch(gen uint64) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return !b.closed && b.epoch == gen
+}
+
+func (b *codexBridge) shouldContinueAfterEOF(gen uint64) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.closed || b.ctx.Err() != nil {
+		return false
+	}
+	return b.restarting || b.epoch != gen
 }
 
 func (b *codexBridge) threadID() string {
@@ -249,6 +417,14 @@ func (b *codexBridge) seqFor(emittedAtMs int64) int64 {
 	return seq
 }
 
+func (b *codexBridge) advanceSeq(watermark int64) {
+	b.mu.Lock()
+	if watermark > b.lastSeq {
+		b.lastSeq = watermark
+	}
+	b.mu.Unlock()
+}
+
 func (b *codexBridge) resetTurnLocked(turnID string) {
 	b.activeTurn = turnID
 	b.itemIndices = map[string]int32{}
@@ -258,7 +434,69 @@ func (b *codexBridge) resetTurnLocked(turnID string) {
 	b.fgProcesses = map[string]bool{}
 }
 
+func (b *codexBridge) noteTurnStartedLocked(turnID string) {
+	b.turnActive = true
+	if turnID != "" {
+		b.activeTurnID = turnID
+		delete(b.completedTurns, turnID)
+	}
+	if b.turnDone == nil {
+		b.turnDone = make(chan struct{})
+	}
+}
+
+func (b *codexBridge) settleTurnLocked() {
+	b.turnActive = false
+	b.activeTurnID = ""
+	if b.turnDone != nil {
+		close(b.turnDone)
+		b.turnDone = nil
+	}
+}
+
+func (b *codexBridge) isStaleTurnLocked(turnID string) bool {
+	return b.turnActive && b.activeTurnID != "" && turnID != "" && b.activeTurnID != turnID
+}
+
+func (b *codexBridge) markTurnCompletedLocked(turnID string) bool {
+	if turnID == "" {
+		return true
+	}
+	if b.completedTurns == nil {
+		b.completedTurns = map[string]bool{}
+	}
+	if b.completedTurns[turnID] {
+		return false
+	}
+	if len(b.completedTurns) >= 64 {
+		b.completedTurns = map[string]bool{}
+	}
+	b.completedTurns[turnID] = true
+	return true
+}
+
+func (b *codexBridge) waitAbort(ctx context.Context) error {
+	for {
+		b.mu.Lock()
+		inFlight := b.aborting
+		b.mu.Unlock()
+		if inFlight == nil {
+			return nil
+		}
+		select {
+		case <-inFlight.done:
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-b.ctx.Done():
+			return b.ctx.Err()
+		}
+	}
+}
+
 func (b *codexBridge) blockIndexLocked(itemID string) int32 {
+	if b.itemIndices == nil {
+		b.itemIndices = map[string]int32{}
+	}
 	if idx, ok := b.itemIndices[itemID]; ok {
 		return idx
 	}
@@ -283,27 +521,39 @@ func (b *codexBridge) Close() {
 	b.closeOnce.Do(func() {
 		b.cancel()
 		b.mu.Lock()
+		b.closed = true
+		b.epoch++
+		b.restarting = false
 		if b.bgTimer != nil {
 			b.bgTimer.Stop()
 			b.bgTimer = nil
 		}
+		b.settleTurnLocked()
+		client := b.client
+		cmd := b.cmd
+		exited := b.exited
+		cleanupFiles := b.cleanupFiles
+		b.client = nil
+		b.cmd = nil
+		b.cleanupFiles = nil
+		b.signalSwapLocked()
 		b.mu.Unlock()
-		if b.client != nil {
-			_ = b.client.Close()
+		if client != nil {
+			_ = client.Close()
 		}
-		stopCodexServerCmd(b.cmd, b.exited)
-		if b.cleanupFiles != nil {
-			b.cleanupFiles()
+		stopCodexServerCmd(cmd, exited)
+		if cleanupFiles != nil {
+			cleanupFiles()
 		}
 	})
 }
 
 func (b *codexBridge) scheduleBackgroundRefresh(s *session.Session) {
-	if b == nil || s == nil || b.client == nil {
+	if b == nil || s == nil {
 		return
 	}
 	b.mu.Lock()
-	if b.bgUnsupported || b.tid == "" || b.ctx.Err() != nil {
+	if b.client == nil || b.bgUnsupported || b.tid == "" || b.ctx.Err() != nil {
 		b.mu.Unlock()
 		return
 	}
@@ -328,8 +578,10 @@ func (b *codexBridge) runBackgroundRefresh(s *session.Session) {
 		b.mu.Lock()
 		tid := b.tid
 		unsupported := b.bgUnsupported
+		client := b.client
+		epoch := b.epoch
 		b.mu.Unlock()
-		if unsupported || tid == "" || b.ctx.Err() != nil {
+		if unsupported || tid == "" || client == nil || b.ctx.Err() != nil {
 			b.mu.Lock()
 			b.bgInFlight = false
 			b.bgDirty = false
@@ -337,9 +589,15 @@ func (b *codexBridge) runBackgroundRefresh(s *session.Session) {
 			return
 		}
 
-		rows, err := b.listBackgroundTerminals(tid)
+		rows, err := b.listBackgroundTerminals(client, tid)
 
 		b.mu.Lock()
+		if b.epoch != epoch || b.closed {
+			b.bgInFlight = false
+			b.bgDirty = false
+			b.mu.Unlock()
+			return
+		}
 		if err != nil {
 			if codex.IsMethodNotFound(err) {
 				b.bgUnsupported = true
@@ -423,10 +681,13 @@ func (b *codexBridge) runBackgroundRefresh(s *session.Session) {
 	}
 }
 
-func (b *codexBridge) listBackgroundTerminals(tid string) ([]codex.BackgroundTerminal, error) {
+func (b *codexBridge) listBackgroundTerminals(client *codex.AppServerClient, tid string) ([]codex.BackgroundTerminal, error) {
+	if client == nil {
+		return nil, errors.New("codex app-server: disconnected")
+	}
 	tctx, cancel := context.WithTimeout(b.ctx, codexRPCTimeout)
 	defer cancel()
-	return b.client.ThreadBackgroundTerminalsList(tctx, tid)
+	return client.ThreadBackgroundTerminalsList(tctx, tid)
 }
 
 // deliverMessage injects text into the active Codex thread via `thread/queue/add`
@@ -440,12 +701,23 @@ func (b *codexBridge) deliverMessage(ctx context.Context, text string) error {
 	tctx, cancel := context.WithTimeout(ctx, codexRPCTimeout)
 	defer cancel()
 
+	// Serialize behind any in-flight abort/restart so a stale interrupt cannot
+	// race past and abort the newly delivered turn.
+	if err := b.waitAbort(tctx); err != nil {
+		return err
+	}
+
+	client := b.currentClient()
+	if client == nil {
+		return errors.New("codex app-server: disconnected")
+	}
+
 	tid := b.threadID()
-	if tid == "" && b.client != nil {
+	if tid == "" {
 		// On a brand-new session where the TUI creates the thread, ThreadLoadedList
 		// can discover the active thread even before the thread/started notification
 		// has been processed by runCodexBridge.
-		if res, err := b.client.ThreadLoadedList(tctx); err == nil && len(res.Data) == 1 && res.Data[0] != "" {
+		if res, err := client.ThreadLoadedList(tctx); err == nil && len(res.Data) == 1 && res.Data[0] != "" {
 			b.mu.Lock()
 			if b.tid == "" && !b.ignored[res.Data[0]] {
 				b.tid = res.Data[0]
@@ -459,7 +731,7 @@ func (b *codexBridge) deliverMessage(ctx context.Context, text string) error {
 	}
 
 	input := []codex.UserInput{{Type: "text", Text: text}}
-	_, err := b.client.ThreadQueueAdd(tctx, codex.ThreadQueueAddParams{
+	_, err := client.ThreadQueueAdd(tctx, codex.ThreadQueueAddParams{
 		ThreadID:            tid,
 		ClientUserMessageID: conversationUUID(),
 		Input:               input,
@@ -468,10 +740,16 @@ func (b *codexBridge) deliverMessage(ctx context.Context, text string) error {
 		return nil
 	}
 	if codex.IsInvalidRequest(err) {
-		_, err = b.client.TurnStart(tctx, codex.TurnStartParams{
+		res, startErr := client.TurnStart(tctx, codex.TurnStartParams{
 			ThreadID: tid,
 			Input:    input,
 		})
+		if startErr == nil && res.Turn.ID != "" {
+			b.mu.Lock()
+			b.noteTurnStartedLocked(res.Turn.ID)
+			b.mu.Unlock()
+		}
+		return startErr
 	}
 	return err
 }
@@ -485,6 +763,203 @@ func (d *Daemon) supportsCodexAppServer(ctx context.Context, program string) boo
 	}) && probed(ctx, program, []string{"--help"}, "--remote", 3*time.Second, func(out string) bool {
 		return strings.Contains(out, "--remote")
 	})
+}
+
+func (d *Daemon) startCodexAppServerProcess(ctx context.Context, cfg codexServerLaunchConfig) (*codexStartedServer, error) {
+	// Serialize per-CODEX_HOME startup so concurrent launches do not collide on
+	// Codex's shared SQLite state database, and retry up to 3 times on SQLite
+	// runtime init failure.
+	queueCtx, queueCancel := context.WithTimeout(ctx, codexStartupQueueTimeout)
+	releaseLane, err := d.codexStartup.acquire(queueCtx, cfg.stateDirKey)
+	queueCancel()
+	if err != nil {
+		return nil, err
+	}
+	defer releaseLane()
+
+	var (
+		tr         *codexAppServerTransport
+		cmd        *exec.Cmd
+		exited     chan struct{}
+		client     *codex.AppServerClient
+		remoteAddr string
+		initRes    codex.InitializeResult
+	)
+	for attempt := 1; attempt <= codexStartupMaxAttempts; attempt++ {
+		var attemptErr error
+		tr, attemptErr = newCodexAppServerTransport(cfg.runDir, cfg.sessionID)
+		if attemptErr != nil {
+			return nil, attemptErr
+		}
+
+		serverArgs := make([]string, 0, 3+len(tr.extraServerArgs)+len(cfg.split.ServerArgs))
+		serverArgs = append(serverArgs, "app-server", "--listen", tr.listenArg)
+		serverArgs = append(serverArgs, tr.extraServerArgs...)
+		serverArgs = append(serverArgs, cfg.split.ServerArgs...)
+
+		cmd = exec.Command(cfg.split.Program, serverArgs...)
+		cmd.Dir = cfg.project
+		cmd.Stdout = io.Discard
+		stderrPipe, pipeErr := cmd.StderrPipe()
+		if pipeErr != nil {
+			tr.cleanupFiles()
+			return nil, pipeErr
+		}
+		cmd.Env = mergeEnvSlice(os.Environ(), cfg.serverEnv)
+		configureCodexServerCmd(cmd)
+
+		if startErr := safeexec.Start(cmd); startErr != nil {
+			tr.cleanupFiles()
+			return nil, startErr
+		}
+		exited = make(chan struct{})
+		go func(c *exec.Cmd, done chan struct{}) {
+			_ = c.Wait()
+			close(done)
+		}(cmd, exited)
+
+		tail := &stderrTail{}
+		bootCtx, bootCancel := context.WithTimeout(ctx, codexServerBootTimeout)
+		client, remoteAddr, attemptErr = tr.waitReady(bootCtx, exited, stderrPipe, tail)
+		if attemptErr == nil {
+			initRes, attemptErr = client.Initialize(bootCtx, codex.NonOriginatingClientName, codex.NonOriginatingClientVersion, true)
+		}
+		bootCancel()
+		if attemptErr == nil {
+			return &codexStartedServer{
+				tr:         tr,
+				cmd:        cmd,
+				exited:     exited,
+				client:     client,
+				remoteAddr: remoteAddr,
+				initRes:    initRes,
+			}, nil
+		}
+
+		if client != nil {
+			_ = client.Close()
+			client = nil
+		}
+		stopCodexServerCmd(cmd, exited)
+		tr.cleanupFiles()
+
+		stderrText := tail.String()
+		if attempt < codexStartupMaxAttempts && ctx.Err() == nil && isCodexSQLiteStartupError(stderrText) {
+			d.log.Warn("codex app-server: SQLite state startup failed; retrying with fresh process",
+				"session", cfg.sessionID, "attempt", attempt, "max_attempts", codexStartupMaxAttempts, "err", attemptErr)
+			continue
+		}
+		return nil, attemptErr
+	}
+	return nil, errors.New("codex app-server: startup attempts exhausted")
+}
+
+// buildCodexRemoteTUICommand constructs the `codex --remote` command line and
+// transport environment overrides for either a resumed thread or a fresh session.
+// Place `--` before positional args when a prompt is present so prompts starting
+// with `-` (e.g. `-fix-me`) are never misparsed as CLI flags.
+func buildCodexRemoteTUICommand(
+	split codex.RemoteLaunchSplit,
+	tr *codexAppServerTransport,
+	remoteAddr, threadID string,
+	includeInitialPrompt bool,
+) ([]string, map[string]string) {
+	var extraArgs []string
+	var extraEnv map[string]string
+	if tr != nil {
+		extraArgs = tr.extraTUIArgs
+		extraEnv = tr.extraTUIEnv
+	}
+	tuiCmd := make([]string, 0, 6+len(extraArgs)+len(split.TUIArgs)+len(split.NewTUIArgs))
+	tuiCmd = append(tuiCmd, split.Program, "--remote", remoteAddr)
+	tuiCmd = append(tuiCmd, extraArgs...)
+	if threadID != "" {
+		tuiCmd = append(tuiCmd, "resume")
+		tuiCmd = append(tuiCmd, split.TUIArgs...)
+		if includeInitialPrompt && split.HasPrompt {
+			tuiCmd = append(tuiCmd, "--", threadID, split.Prompt)
+		} else {
+			tuiCmd = append(tuiCmd, threadID)
+		}
+	} else {
+		tuiCmd = append(tuiCmd, split.TUIArgs...)
+		tuiCmd = append(tuiCmd, split.NewTUIArgs...)
+		if includeInitialPrompt && split.HasPrompt {
+			tuiCmd = append(tuiCmd, "--", split.Prompt)
+		}
+	}
+	return tuiCmd, extraEnv
+}
+
+func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerLaunchConfig, prevThreadID string) (*codexRestartOutcome, error) {
+	started, err := d.startCodexAppServerProcess(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	bootCtx, bootCancel := context.WithTimeout(ctx, codexServerBootTimeout)
+	defer bootCancel()
+
+	initUsage := &protocol.Usage{}
+	if rl, err := started.client.RateLimitsRead(bootCtx); err == nil {
+		applyRateLimits(initUsage, rl.RateLimits)
+	}
+
+	var (
+		threadID      string
+		threadPath    string
+		resumedThread bool
+	)
+	if prevThreadID != "" {
+		cwd := cmp.Or(cfg.split.Cwd, cfg.project)
+		res, err := resumeCodexThread(bootCtx, started.client, codex.ThreadResumeParams{
+			ThreadID:       prevThreadID,
+			ExcludeTurns:   true,
+			Cwd:            cwd,
+			Model:          cfg.split.Model,
+			ApprovalPolicy: cfg.split.ApprovalPolicy,
+			Sandbox:        cfg.split.Sandbox,
+		})
+		if err != nil {
+			d.log.Warn("codex app-server: failed to resume thread after force restart",
+				"session", cfg.sessionID, "thread", prevThreadID, "err", err)
+		} else {
+			threadID = cmp.Or(res.Thread.ID, prevThreadID)
+			threadPath = res.Thread.Path
+			resumedThread = threadID != ""
+			applyThreadMetadata(initUsage, res.Model, res.ReasoningEffort, res.ApprovalPolicy, res.Sandbox)
+		}
+	}
+
+	tuiCmd, tuiEnv := buildCodexRemoteTUICommand(cfg.split, started.tr, started.remoteAddr, threadID, false)
+	if agent.IsLoopbackURL(started.remoteAddr) {
+		tmp := agent.Launch{Env: map[string]string{}}
+		if v, ok := cfg.serverEnv["NO_PROXY"]; ok {
+			tmp.Env["NO_PROXY"] = v
+		}
+		if v, ok := cfg.serverEnv["no_proxy"]; ok {
+			tmp.Env["no_proxy"] = v
+		}
+		maps.Copy(tmp.Env, tuiEnv)
+		agent.EnsureLocalProxyBypass(&tmp)
+		tuiEnv = tmp.Env
+	}
+	if initUsage.IsZero() {
+		initUsage = nil
+	}
+	return &codexRestartOutcome{
+		client:        started.client,
+		cmd:           started.cmd,
+		exited:        started.exited,
+		cleanupFiles:  started.tr.cleanupFiles,
+		userAgent:     started.initRes.UserAgent,
+		initUsage:     initUsage,
+		threadID:      threadID,
+		threadPath:    threadPath,
+		resumedThread: resumedThread,
+		tuiCmd:        tuiCmd,
+		tuiEnv:        tuiEnv,
+	}, nil
 }
 
 // prepareCodexAppServer starts a per-session `codex app-server` for native Codex
@@ -527,96 +1002,24 @@ func (d *Daemon) prepareCodexAppServer(
 	// `mako hook` routes events back to this session.
 	serverEnv["MAKO_SESSION"] = sessionID
 
-	// Serialize per-CODEX_HOME startup so concurrent launches do not collide on
-	// Codex's shared SQLite state database, and retry up to 3 times on SQLite
-	// runtime init failure.
-	queueCtx, queueCancel := context.WithTimeout(ctx, codexStartupQueueTimeout)
-	releaseLane, err := d.codexStartup.acquire(queueCtx, codexStateDirKey(serverEnv))
-	queueCancel()
+	cfg := codexServerLaunchConfig{
+		runDir:      runDir,
+		sessionID:   sessionID,
+		project:     project,
+		split:       split,
+		serverEnv:   serverEnv,
+		stateDirKey: codexStateDirKey(serverEnv),
+	}
+
+	started, err := d.startCodexAppServerProcess(ctx, cfg)
 	if err != nil {
-		d.log.Warn("codex app-server: startup queue cancelled; falling back to direct PTY", "session", sessionID, "err", err)
+		d.log.Warn("codex app-server: startup failed; falling back to direct PTY", "session", sessionID, "err", err)
 		return nil, noop
 	}
 
-	var (
-		tr         *codexAppServerTransport
-		cmd        *exec.Cmd
-		exited     chan struct{}
-		client     *codex.AppServerClient
-		remoteAddr string
-		initRes    codex.InitializeResult
-	)
-	for attempt := 1; attempt <= codexStartupMaxAttempts; attempt++ {
-		var attemptErr error
-		tr, attemptErr = newCodexAppServerTransport(runDir, sessionID)
-		if attemptErr != nil {
-			releaseLane()
-			d.log.Warn("codex app-server: transport setup failed; falling back to direct PTY", "session", sessionID, "err", attemptErr)
-			return nil, noop
-		}
-
-		serverArgs := make([]string, 0, 3+len(tr.extraServerArgs)+len(split.ServerArgs))
-		serverArgs = append(serverArgs, "app-server", "--listen", tr.listenArg)
-		serverArgs = append(serverArgs, tr.extraServerArgs...)
-		serverArgs = append(serverArgs, split.ServerArgs...)
-
-		cmd = exec.Command(split.Program, serverArgs...)
-		cmd.Dir = project
-		cmd.Stdout = io.Discard
-		stderrPipe, pipeErr := cmd.StderrPipe()
-		if pipeErr != nil {
-			tr.cleanupFiles()
-			releaseLane()
-			d.log.Warn("codex app-server: stderr pipe failed; falling back to direct PTY", "session", sessionID, "err", pipeErr)
-			return nil, noop
-		}
-		cmd.Env = mergeEnvSlice(os.Environ(), serverEnv)
-		configureCodexServerCmd(cmd)
-
-		if startErr := safeexec.Start(cmd); startErr != nil {
-			tr.cleanupFiles()
-			releaseLane()
-			d.log.Warn("codex app-server: start failed; falling back to direct PTY", "session", sessionID, "err", startErr)
-			return nil, noop
-		}
-		exited = make(chan struct{})
-		go func(c *exec.Cmd, done chan struct{}) {
-			_ = c.Wait()
-			close(done)
-		}(cmd, exited)
-
-		tail := &stderrTail{}
-		bootCtx, bootCancel := context.WithTimeout(ctx, codexServerBootTimeout)
-		client, remoteAddr, attemptErr = tr.waitReady(bootCtx, exited, stderrPipe, tail)
-		if attemptErr == nil {
-			initRes, attemptErr = client.Initialize(bootCtx, codex.NonOriginatingClientName, codex.NonOriginatingClientVersion, true)
-		}
-		bootCancel()
-		if attemptErr == nil {
-			break
-		}
-
-		if client != nil {
-			_ = client.Close()
-			client = nil
-		}
-		stopCodexServerCmd(cmd, exited)
-		tr.cleanupFiles()
-
-		stderrText := tail.String()
-		if attempt < codexStartupMaxAttempts && ctx.Err() == nil && isCodexSQLiteStartupError(stderrText) {
-			d.log.Warn("codex app-server: SQLite state startup failed; retrying with fresh process",
-				"session", sessionID, "attempt", attempt, "max_attempts", codexStartupMaxAttempts, "err", attemptErr)
-			continue
-		}
-		releaseLane()
-		d.log.Warn("codex app-server: startup failed; falling back to direct PTY", "session", sessionID, "err", attemptErr)
-		return nil, noop
-	}
-	releaseLane()
-
-	bridge := newCodexBridge(d.ctx, sessionID, client, cmd, exited, tr.cleanupFiles)
-	bridge.serverUserAgent = initRes.UserAgent
+	bridge := newCodexBridge(d.ctx, sessionID, started.client, started.cmd, started.exited, started.tr.cleanupFiles)
+	bridge.launchCfg = &cfg
+	bridge.serverUserAgent = started.initRes.UserAgent
 	fail := func(msg string, err error) (*codexBridge, func()) {
 		d.log.Warn("codex app-server: "+msg+"; falling back to direct PTY", "session", sessionID, "err", err)
 		bridge.Close()
@@ -627,7 +1030,7 @@ func (d *Daemon) prepareCodexAppServer(
 	defer bootCancel()
 
 	initUsage := &protocol.Usage{}
-	if rl, err := client.RateLimitsRead(bootCtx); err == nil {
+	if rl, err := started.client.RateLimitsRead(bootCtx); err == nil {
 		applyRateLimits(initUsage, rl.RateLimits)
 	}
 
@@ -635,7 +1038,7 @@ func (d *Daemon) prepareCodexAppServer(
 	targetID := cmp.Or(*conversationID, split.ResumeID)
 	var threadID, threadPath string
 	if targetID != "" {
-		res, err := resumeCodexThread(bootCtx, client, codex.ThreadResumeParams{
+		res, err := resumeCodexThread(bootCtx, started.client, codex.ThreadResumeParams{
 			ThreadID:       targetID,
 			ExcludeTurns:   true,
 			Cwd:            cwd,
@@ -682,38 +1085,16 @@ func (d *Daemon) prepareCodexAppServer(
 		bridge.mu.Unlock()
 	}
 
-	// Build the rewritten `--remote` TUI command:
-	// - Resumed session: `codex --remote <addr> [auth...] resume [TUI_FLAGS...] [--] <threadID> [PROMPT]`
-	// - New session:     `codex --remote <addr> [auth...] [TUI_FLAGS...] [NEW_TUI_FLAGS...] [--] [PROMPT]`
-	// Place `--` before positional args when a prompt is present so prompts starting
-	// with `-` (e.g. `-fix-me`) are never misparsed as CLI flags.
-	tuiCmd := make([]string, 0, 6+len(tr.extraTUIArgs)+len(split.TUIArgs)+len(split.NewTUIArgs))
-	tuiCmd = append(tuiCmd, split.Program, "--remote", remoteAddr)
-	tuiCmd = append(tuiCmd, tr.extraTUIArgs...)
-	if targetID != "" {
-		tuiCmd = append(tuiCmd, "resume")
-		tuiCmd = append(tuiCmd, split.TUIArgs...)
-		if split.HasPrompt {
-			tuiCmd = append(tuiCmd, "--", threadID, split.Prompt)
-		} else {
-			tuiCmd = append(tuiCmd, threadID)
-		}
-	} else {
-		tuiCmd = append(tuiCmd, split.TUIArgs...)
-		tuiCmd = append(tuiCmd, split.NewTUIArgs...)
-		if split.HasPrompt {
-			tuiCmd = append(tuiCmd, "--", split.Prompt)
-		}
-	}
+	tuiCmd, tuiEnv := buildCodexRemoteTUICommand(split, started.tr, started.remoteAddr, threadID, true)
 	launch.Command = tuiCmd
-	for k, v := range tr.extraTUIEnv {
+	for k, v := range tuiEnv {
 		launch.SetEnv(k, v)
 	}
-	if agent.IsLoopbackURL(remoteAddr) {
+	if agent.IsLoopbackURL(started.remoteAddr) {
 		agent.EnsureLocalProxyBypass(&launch.Launch)
 	}
 
-	d.log.Info("codex app-server ready", "session", sessionID, "thread", threadID, "remote", remoteAddr)
+	d.log.Info("codex app-server ready", "session", sessionID, "thread", threadID, "remote", started.remoteAddr)
 	return bridge, bridge.Close
 }
 
@@ -721,6 +1102,11 @@ func (d *Daemon) attachCodexBridge(s *session.Session, b *codexBridge) {
 	if s == nil || b == nil {
 		return
 	}
+	b.mu.Lock()
+	b.ensureInitLocked()
+	initUsage := b.initUsage
+	b.mu.Unlock()
+
 	d.codexMu.Lock()
 	if d.codexBridges == nil {
 		d.codexBridges = map[string]*codexBridge{}
@@ -728,8 +1114,8 @@ func (d *Daemon) attachCodexBridge(s *session.Session, b *codexBridge) {
 	d.codexBridges[s.ID()] = b
 	d.codexMu.Unlock()
 
-	if b.initUsage != nil && !b.initUsage.IsZero() {
-		s.Report(b.initUsage)
+	if initUsage != nil && !initUsage.IsZero() {
+		s.Report(initUsage)
 	}
 	go d.runCodexBridge(s, b)
 	if b.threadID() != "" {
@@ -776,33 +1162,463 @@ func (d *Daemon) deliverViaCodexBridge(ctx context.Context, sessionID, text stri
 	return true
 }
 
+func (d *Daemon) abortViaCodexBridge(ctx context.Context, s *session.Session) bool {
+	if s == nil {
+		return false
+	}
+	b := d.codexBridge(s.ID())
+	if b == nil {
+		return false
+	}
+	res := d.abortCodexTurn(ctx, s, b, codexAbortOptions{})
+	return res.HadActiveTurn
+}
+
+// abortCodexTurn requests graceful turn cancellation (`turn/interrupt`) and
+// waits up to the configured grace period for the turn to settle. If the turn
+// stays wedged past the grace period, it force-restarts the managed
+// `codex app-server`, resumes the previous thread, and respawns the session's
+// `--remote` PTY TUI cleanly. Concurrent abort calls are deduplicated.
+func (d *Daemon) abortCodexTurn(ctx context.Context, s *session.Session, b *codexBridge, opts codexAbortOptions) codexAbortResult {
+	if b == nil {
+		return codexAbortResult{}
+	}
+	if ctx == nil {
+		ctx = b.ctx
+	}
+	grace := opts.GracePeriod
+	if grace <= 0 {
+		grace = codexAbortGracePeriod
+	}
+	forceRestart := true
+	if opts.ForceRestartOnTimeout != nil {
+		forceRestart = *opts.ForceRestartOnTimeout
+	}
+
+	b.mu.Lock()
+	b.ensureInitLocked()
+	if b.closed || b.ctx.Err() != nil {
+		b.mu.Unlock()
+		return codexAbortResult{}
+	}
+	if inFlight := b.aborting; inFlight != nil {
+		b.mu.Unlock()
+		select {
+		case <-inFlight.done:
+			return inFlight.result
+		case <-ctx.Done():
+			return codexAbortResult{HadActiveTurn: true, Err: ctx.Err()}
+		case <-b.ctx.Done():
+			return codexAbortResult{HadActiveTurn: true, Err: b.ctx.Err()}
+		}
+	}
+	hadTurn := b.turnActive || b.activeTurnID != ""
+	if !hadTurn && s != nil {
+		info := s.Info()
+		st := info.GetStatus()
+		if protocol.AtWork(st) || (st == protocol.AgentWaiting && info.GetApproval() != nil) {
+			hadTurn = true
+			b.noteTurnStartedLocked("")
+		}
+	}
+	if !hadTurn {
+		b.mu.Unlock()
+		return codexAbortResult{HadActiveTurn: false}
+	}
+	inFlight := &inFlightAbort{done: make(chan struct{})}
+	b.aborting = inFlight
+	b.mu.Unlock()
+
+	// Execute on a goroutine tied to b.ctx so an RPC caller cancelling mid-abort
+	// cannot leave a force-restart halfway completed.
+	go func() {
+		res := d.executeCodexAbort(s, b, grace, forceRestart)
+		b.mu.Lock()
+		inFlight.result = res
+		if b.aborting == inFlight {
+			b.aborting = nil
+		}
+		close(inFlight.done)
+		b.mu.Unlock()
+	}()
+
+	select {
+	case <-inFlight.done:
+		return inFlight.result
+	case <-ctx.Done():
+		return codexAbortResult{HadActiveTurn: true, Err: ctx.Err()}
+	case <-b.ctx.Done():
+		return codexAbortResult{HadActiveTurn: true, Err: b.ctx.Err()}
+	}
+}
+
+func (d *Daemon) executeCodexAbort(s *session.Session, b *codexBridge, grace time.Duration, forceRestart bool) codexAbortResult {
+	// Resolve any pending PermissionRequest approvals first so a blocked tool
+	// prompt does not wedge turn cancellation.
+	if s != nil {
+		d.approvals.abortSession(s.ID())
+	}
+
+	b.mu.Lock()
+	client := b.client
+	tid := b.tid
+	turnID := b.activeTurnID
+	b.mu.Unlock()
+
+	if tid == "" && s != nil {
+		tid = s.Info().GetConversationId()
+	}
+
+	lookupTimeout := min(grace/2, codexTurnLookupTimeout)
+	if lookupTimeout <= 0 {
+		lookupTimeout = 50 * time.Millisecond
+	}
+	if tid == "" && client != nil {
+		lctx, lcancel := context.WithTimeout(b.ctx, lookupTimeout)
+		if res, err := client.ThreadLoadedList(lctx); err == nil && len(res.Data) == 1 && res.Data[0] != "" {
+			tid = res.Data[0]
+			b.mu.Lock()
+			if b.tid == "" && !b.ignored[tid] {
+				b.tid = tid
+			}
+			b.mu.Unlock()
+		}
+		lcancel()
+	}
+	if turnID == "" && tid != "" && client != nil {
+		lctx, lcancel := context.WithTimeout(b.ctx, lookupTimeout)
+		if res, err := client.ThreadRead(lctx, tid, true); err == nil {
+			for i := len(res.Thread.Turns) - 1; i >= 0; i-- {
+				t := res.Thread.Turns[i]
+				if t.ID != "" && (t.Status == "" || t.Status == "inProgress") {
+					turnID = t.ID
+					b.mu.Lock()
+					if b.turnActive && b.activeTurnID == "" {
+						b.activeTurnID = turnID
+					}
+					b.mu.Unlock()
+					break
+				}
+			}
+		}
+		lcancel()
+	}
+
+	// Best-effort turn/interrupt first without blocking the grace timer on the
+	// RPC itself: a wedged tool/subagent/MCP call can prevent the app-server
+	// from responding at all, and the restart fallback handles that case.
+	// StartTurnInterrupt registers the pending interrupt synchronously so a
+	// subsequent TurnStart/ThreadQueueAdd cannot slip ahead of it on fast settles.
+	if client != nil && tid != "" && turnID != "" {
+		intCtx, intCancel := context.WithTimeout(b.ctx, max(grace, time.Millisecond))
+		intDone := client.StartTurnInterrupt(intCtx, codex.TurnInterruptParams{
+			ThreadID: tid,
+			TurnID:   turnID,
+		})
+		go func() {
+			defer intCancel()
+			if err := <-intDone; err != nil && !errors.Is(err, context.Canceled) {
+				d.log.Debug("codex app-server: turn/interrupt error", "session", b.sessionID, "err", err)
+			}
+		}()
+	} else if s != nil {
+		// No server turn ID was discovered (e.g. brand-new unsubscribed turn);
+		// nudge the --remote PTY TUI with Escape before waiting out the grace window.
+		_, _ = s.Write([]byte("\x1b"))
+	}
+
+	if b.waitTurnSettled(s, grace) {
+		return codexAbortResult{HadActiveTurn: true, Aborted: true}
+	}
+	if !forceRestart {
+		return codexAbortResult{HadActiveTurn: true, Aborted: false}
+	}
+
+	d.log.Warn("codex app-server: interrupt did not settle turn within grace period; force-restarting backend",
+		"session", b.sessionID, "grace", grace)
+	resumed, err := d.forceRestartCodexBridge(s, b)
+	return codexAbortResult{
+		HadActiveTurn: true,
+		Aborted:       true,
+		ForcedRestart: true,
+		ResumedThread: resumed,
+		Err:           err,
+	}
+}
+
+func (b *codexBridge) waitTurnSettled(s *session.Session, timeout time.Duration) bool {
+	deadline := time.NewTimer(max(timeout, time.Millisecond))
+	defer deadline.Stop()
+	for {
+		b.mu.Lock()
+		active := b.turnActive
+		done := b.turnDone
+		noServerTurnID := b.activeTurnID == ""
+		b.mu.Unlock()
+		if !active || done == nil {
+			return true
+		}
+		var sessChanged <-chan struct{}
+		if s != nil {
+			sessChanged = s.Changed()
+			info := s.Info()
+			if info.GetState() == protocol.StateExited {
+				return true
+			}
+			if noServerTurnID && (info.GetStatus() == protocol.AgentIdle || info.GetStatus() == protocol.AgentDone) {
+				b.mu.Lock()
+				if b.activeTurnID == "" {
+					b.settleTurnLocked()
+				}
+				b.mu.Unlock()
+				return true
+			}
+		}
+		select {
+		case <-done:
+			return true
+		case <-sessChanged:
+			continue
+		case <-b.ctx.Done():
+			return true
+		case <-deadline.C:
+			return false
+		}
+	}
+}
+
+func (d *Daemon) forceRestartCodexBridge(s *session.Session, b *codexBridge) (bool, error) {
+	b.mu.Lock()
+	b.ensureInitLocked()
+	if b.closed || b.ctx.Err() != nil {
+		b.mu.Unlock()
+		return false, context.Canceled
+	}
+	prevThreadID := b.tid
+	if prevThreadID == "" && s != nil {
+		prevThreadID = s.Info().GetConversationId()
+	}
+	if b.bgTimer != nil {
+		b.bgTimer.Stop()
+		b.bgTimer = nil
+	}
+	// Advance epoch and mark restarting BEFORE tearing down the old generation
+	// so runCodexBridge stays parked waiting for the new client and stale exits
+	// or late notifications from the previous generation are ignored.
+	b.epoch++
+	targetEpoch := b.epoch
+	b.restarting = true
+	b.settleTurnLocked()
+	b.resetTurnLocked("")
+	b.completedTurns = map[string]bool{}
+	b.bgStarted = map[string]int64{}
+	b.bgHasTasks = false
+	oldClient := b.client
+	oldCmd := b.cmd
+	oldExited := b.exited
+	oldCleanup := b.cleanupFiles
+	b.client = nil
+	b.cmd = nil
+	b.cleanupFiles = nil
+	b.signalSwapLocked()
+	restartFn := b.restartServer
+	launchCfg := b.launchCfg
+	b.mu.Unlock()
+
+	if s != nil {
+		d.live.clear(s.ID())
+		s.ReportBridgeTasks(nil)
+		s.SetStatus(protocol.AgentIdle)
+	}
+
+	var teardownOnce sync.Once
+	teardownOld := func() {
+		teardownOnce.Do(func() {
+			if oldClient != nil {
+				_ = oldClient.Close()
+			}
+			stopCodexServerCmd(oldCmd, oldExited)
+			if oldCleanup != nil {
+				oldCleanup()
+			}
+		})
+	}
+
+	var outcome *codexRestartOutcome
+	prepareRestart := func(rctx context.Context) ([]string, map[string]string, error) {
+		ctx, cancel := context.WithCancel(b.ctx)
+		defer cancel()
+		if rctx != nil {
+			stop := context.AfterFunc(rctx, cancel)
+			defer stop()
+		}
+
+		teardownOld()
+		if err := ctx.Err(); err != nil {
+			return nil, nil, err
+		}
+
+		var err error
+		switch {
+		case restartFn != nil:
+			outcome, err = restartFn(ctx, prevThreadID)
+		case launchCfg != nil:
+			outcome, err = d.restartManagedCodexServer(ctx, *launchCfg, prevThreadID)
+		default:
+			err = errors.New("codex app-server: restart unavailable")
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		if outcome == nil || outcome.client == nil {
+			return nil, nil, errors.New("codex app-server: restart returned nil client")
+		}
+
+		b.mu.Lock()
+		if b.closed || b.ctx.Err() != nil {
+			b.mu.Unlock()
+			_ = outcome.client.Close()
+			stopCodexServerCmd(outcome.cmd, outcome.exited)
+			if outcome.cleanupFiles != nil {
+				outcome.cleanupFiles()
+			}
+			return nil, nil, context.Canceled
+		}
+		b.client = outcome.client
+		b.cmd = outcome.cmd
+		b.exited = outcome.exited
+		b.cleanupFiles = outcome.cleanupFiles
+		if outcome.userAgent != "" {
+			b.serverUserAgent = outcome.userAgent
+		}
+		b.restarting = false
+		b.ignored = map[string]bool{}
+		b.abandoned = map[string]bool{}
+		if outcome.resumedThread && outcome.threadID != "" {
+			b.tid = outcome.threadID
+			b.subscribed = true
+			if outcome.threadPath != "" {
+				b.pendingPath = outcome.threadPath
+			}
+			b.bound = s != nil && s.TranscriptPath() != "" && s.Info().GetConversationId() == outcome.threadID
+		} else {
+			b.tid = ""
+			b.pendingPath = ""
+			b.subscribed = false
+			b.bound = false
+		}
+		b.signalSwapLocked()
+		gen := b.epoch
+		exited := outcome.exited
+		b.mu.Unlock()
+
+		if exited != nil {
+			b.watchProcessExit(exited, gen)
+		}
+		if outcome.initUsage != nil && !outcome.initUsage.IsZero() && s != nil {
+			s.Report(outcome.initUsage)
+		}
+		return outcome.tuiCmd, outcome.tuiEnv, nil
+	}
+
+	var restartErr error
+	if s != nil && s.Info().GetState() == protocol.StateRunning {
+		restartErr = s.Restart(prepareRestart)
+	} else {
+		_, _, restartErr = prepareRestart(b.ctx)
+	}
+	if restartErr != nil {
+		teardownOld()
+		b.mu.Lock()
+		if b.epoch == targetEpoch && b.restarting {
+			b.restarting = false
+			b.signalSwapLocked()
+		}
+		b.mu.Unlock()
+	}
+
+	resumed := outcome != nil && outcome.resumedThread
+	if s != nil {
+		s.SetStatus(protocol.AgentIdle)
+		b.advanceSeq(s.StatusWatermark())
+		switch {
+		case restartErr != nil:
+			s.PostNotice("Codex task force-stopped",
+				"Force-stopped active task after interrupt timeout, but restarting Codex failed: "+restartErr.Error())
+		case resumed:
+			s.PostNotice("Codex task force-stopped",
+				"Force-stopped active task after interrupt timeout. Codex backend was restarted and the previous thread was resumed.")
+		default:
+			s.PostNotice("Codex task force-stopped",
+				"Force-stopped active task after interrupt timeout. Codex backend was restarted, but the previous thread could not be resumed.")
+		}
+		if restartErr == nil && resumed && b.threadID() != "" {
+			d.maybeBindCodexThread(s, b, targetEpoch)
+			b.scheduleBackgroundRefresh(s)
+		}
+	}
+	return resumed, restartErr
+}
+
 func (d *Daemon) runCodexBridge(s *session.Session, b *codexBridge) {
 	defer d.removeCodexBridge(s.ID(), b)
-	notifs := b.client.Notifications()
 	var daemonDone <-chan struct{}
 	if d.ctx != nil {
 		daemonDone = d.ctx.Done()
 	}
 	for {
-		select {
-		case n, ok := <-notifs:
-			if !ok {
+		client, epoch, swapped, restarting := b.activeStream()
+		if client == nil {
+			if !restarting {
 				return
 			}
-			d.handleCodexNotification(s, b, n)
-		case <-b.ctx.Done():
-			return
-		case <-s.Done():
-			b.Close()
-			return
-		case <-daemonDone:
-			b.Close()
-			return
+			select {
+			case <-swapped:
+				continue
+			case <-b.ctx.Done():
+				return
+			case <-s.Done():
+				b.Close()
+				return
+			case <-daemonDone:
+				b.Close()
+				return
+			}
 		}
+		notifs := client.Notifications()
+		for {
+			select {
+			case n, ok := <-notifs:
+				if !ok {
+					if b.shouldContinueAfterEOF(epoch) {
+						goto nextClient
+					}
+					return
+				}
+				if !b.isCurrentEpoch(epoch) {
+					goto nextClient
+				}
+				d.handleCodexNotification(s, b, n, epoch)
+			case <-swapped:
+				goto nextClient
+			case <-b.ctx.Done():
+				return
+			case <-s.Done():
+				b.Close()
+				return
+			case <-daemonDone:
+				b.Close()
+				return
+			}
+		}
+	nextClient:
 	}
 }
 
-func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n codex.Notification) {
+func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n codex.Notification, epoch uint64) {
+	if !b.isCurrentEpoch(epoch) {
+		return
+	}
 	switch n.Method {
 	case "thread/started":
 		var p codex.ThreadStartedNotification
@@ -811,17 +1627,23 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		}
 		if p.Thread.Ephemeral || p.Thread.IsSubagent() {
 			b.mu.Lock()
-			b.ignored[p.Thread.ID] = true
+			if b.epoch == epoch {
+				b.ignored[p.Thread.ID] = true
+			}
 			b.mu.Unlock()
 			return
 		}
 		b.mu.Lock()
+		if b.epoch != epoch {
+			b.mu.Unlock()
+			return
+		}
 		if p.Thread.ID == b.tid {
 			if p.Thread.Path != "" && b.pendingPath == "" {
 				b.pendingPath = p.Thread.Path
 			}
 			b.mu.Unlock()
-			d.maybeBindCodexThread(s, b)
+			d.maybeBindCodexThread(s, b, epoch)
 			return
 		}
 		// User switched to a new top-level conversation inside the TUI (e.g. /new).
@@ -833,10 +1655,11 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		b.pendingPath = p.Thread.Path
 		b.subscribed = false
 		b.bound = false
+		b.settleTurnLocked()
 		b.fgItems = map[string]bool{}
 		b.fgProcesses = map[string]bool{}
 		b.mu.Unlock()
-		d.maybeBindCodexThread(s, b)
+		d.maybeBindCodexThread(s, b, epoch)
 		b.scheduleBackgroundRefresh(s)
 
 	case "thread/status/changed":
@@ -845,6 +1668,10 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 			return
 		}
 		b.mu.Lock()
+		if b.epoch != epoch {
+			b.mu.Unlock()
+			return
+		}
 		curTID := b.tid
 		subscribed := b.subscribed
 		ignored := b.ignored[p.ThreadID]
@@ -862,7 +1689,7 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 			if p.Status.Type != "active" && (p.Status.Type != "idle" || abandoned) {
 				return
 			}
-			if !d.maybeSwitchCodexThread(s, b, p.ThreadID, p.Status.Type) {
+			if !d.maybeSwitchCodexThread(s, b, p.ThreadID, p.Status.Type, epoch) {
 				return
 			}
 			curTID = p.ThreadID
@@ -873,17 +1700,22 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 
 		if p.ThreadID == curTID && (p.Status.Type == "active" || p.Status.Type == "idle") {
 			if !subscribed {
-				d.trySubscribeCodexThread(s, b, p.ThreadID)
+				d.trySubscribeCodexThread(s, b, p.ThreadID, epoch)
 			}
-			d.maybeBindCodexThread(s, b)
+			d.maybeBindCodexThread(s, b, epoch)
 		}
-		if p.ThreadID != b.threadID() {
+		if !b.isCurrentEpoch(epoch) || p.ThreadID != b.threadID() {
 			return
 		}
 
 		seq := b.seqFor(n.EmittedAtMs)
 		switch p.Status.Type {
 		case "active":
+			b.mu.Lock()
+			if b.epoch == epoch && !b.turnActive {
+				b.noteTurnStartedLocked("")
+			}
+			b.mu.Unlock()
 			if slices.Contains(p.Status.ActiveFlags, "waitingOnApproval") || slices.Contains(p.Status.ActiveFlags, "waitingOnUserInput") {
 				s.ReportToolStatus(protocol.AgentWaiting, seq)
 			} else {
@@ -892,11 +1724,32 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 				s.ReportToolStatus(protocol.AgentWorking, seq)
 			}
 		case "idle":
-			// Clear AgentWaiting once approval/input resolves without clobbering AgentDone.
-			if s.Info().GetStatus() == protocol.AgentWaiting {
+			b.mu.Lock()
+			aborting := b.aborting != nil
+			wasActive := b.turnActive
+			step := cmp.Or(b.activeTurn, "turn")
+			if b.epoch == epoch {
+				b.settleTurnLocked()
+			}
+			b.mu.Unlock()
+			if aborting && wasActive {
+				d.live.take(livePost{Session: s.ID(), Step: step, End: true})
+				s.ReportStatus(protocol.AgentIdle, seq)
+			} else if s.Info().GetStatus() == protocol.AgentWaiting {
+				// Clear AgentWaiting once approval/input resolves without clobbering AgentDone.
 				s.ReportStatus(protocol.AgentIdle, seq)
 			}
 		case "systemError":
+			b.mu.Lock()
+			wasActive := b.turnActive
+			step := cmp.Or(b.activeTurn, "turn")
+			if b.epoch == epoch {
+				b.settleTurnLocked()
+			}
+			b.mu.Unlock()
+			if wasActive {
+				d.live.take(livePost{Session: s.ID(), Step: step, End: true})
+			}
 			if s.Info().GetStatus() != protocol.AgentDone {
 				s.ReportStatus(protocol.AgentIdle, seq)
 			}
@@ -909,9 +1762,14 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		}
 		step := cmp.Or(p.Turn.ID, "turn")
 		b.mu.Lock()
+		if b.epoch != epoch {
+			b.mu.Unlock()
+			return
+		}
 		b.resetTurnLocked(step)
+		b.noteTurnStartedLocked(p.Turn.ID)
 		b.mu.Unlock()
-		d.maybeBindCodexThread(s, b)
+		d.maybeBindCodexThread(s, b, epoch)
 		s.ReportStatus(protocol.AgentWorking, b.seqFor(n.EmittedAtMs))
 		d.live.take(livePost{Session: s.ID(), Step: step})
 
@@ -921,6 +1779,10 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 			return
 		}
 		b.mu.Lock()
+		if b.epoch != epoch {
+			b.mu.Unlock()
+			return
+		}
 		step := cmp.Or(p.TurnID, b.activeTurn, "turn")
 		idx := b.blockIndexLocked(p.Item.ID)
 		var pieces []livePiece
@@ -962,6 +1824,10 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 			return
 		}
 		b.mu.Lock()
+		if b.epoch != epoch {
+			b.mu.Unlock()
+			return
+		}
 		step := cmp.Or(p.TurnID, b.activeTurn, "turn")
 		idx := b.blockIndexLocked(cmp.Or(p.ItemID, "msg"))
 		b.mu.Unlock()
@@ -978,7 +1844,7 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		}
 		itemID := cmp.Or(p.ItemID, "reasoning")
 		b.mu.Lock()
-		if b.thinkingSeen[itemID] {
+		if b.epoch != epoch || b.thinkingSeen[itemID] {
 			b.mu.Unlock()
 			return
 		}
@@ -999,9 +1865,11 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		}
 		if p.Item.Type == "commandExecution" {
 			b.mu.Lock()
-			delete(b.fgItems, p.Item.ID)
-			if p.Item.ProcessID != "" {
-				delete(b.fgProcesses, p.Item.ProcessID)
+			if b.epoch == epoch {
+				delete(b.fgItems, p.Item.ID)
+				if p.Item.ProcessID != "" {
+					delete(b.fgProcesses, p.Item.ProcessID)
+				}
 			}
 			b.mu.Unlock()
 			b.scheduleBackgroundRefresh(s)
@@ -1012,21 +1880,7 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		if json.Unmarshal(n.Params, &p) != nil || p.ThreadID != b.threadID() {
 			return
 		}
-		b.mu.Lock()
-		step := cmp.Or(p.Turn.ID, b.activeTurn, "turn")
-		b.fgItems = map[string]bool{}
-		b.fgProcesses = map[string]bool{}
-		b.mu.Unlock()
-		d.live.take(livePost{Session: s.ID(), Step: step, End: true})
-		d.maybeBindCodexThread(s, b)
-		b.scheduleBackgroundRefresh(s)
-		seq := b.seqFor(n.EmittedAtMs)
-		if p.Turn.Status == "completed" {
-			d.refreshActivity(s)
-			s.ReportStatus(protocol.AgentDone, seq)
-		} else {
-			s.ReportStatus(protocol.AgentIdle, seq)
-		}
+		d.completeCodexTurn(s, b, epoch, p.Turn.ID, p.Turn.Status == "completed", n.EmittedAtMs)
 
 	case "thread/tokenUsage/updated":
 		var p codex.ThreadTokenUsageNotification
@@ -1048,23 +1902,108 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 		if !u.IsZero() {
 			s.Report(u)
 		}
+
+	default:
+		if n.Method == "codex/event" || strings.HasPrefix(n.Method, "codex/event/") {
+			var p struct {
+				ThreadID       string `json:"threadId"`
+				ThreadIDSnake  string `json:"thread_id"`
+				ConversationID string `json:"conversationId"`
+				ConvIDSnake    string `json:"conversation_id"`
+				Msg            struct {
+					Type           string `json:"type"`
+					TurnID         string `json:"turn_id"`
+					TurnIDV2       string `json:"turnId"`
+					ThreadID       string `json:"thread_id"`
+					ThreadIDV2     string `json:"threadId"`
+					ConversationID string `json:"conversation_id"`
+					ConvIDV2       string `json:"conversationId"`
+				} `json:"msg"`
+			}
+			if json.Unmarshal(n.Params, &p) != nil || p.Msg.Type == "" {
+				return
+			}
+			evTID := cmp.Or(
+				p.ThreadID, p.ThreadIDSnake, p.ConversationID, p.ConvIDSnake,
+				p.Msg.ThreadID, p.Msg.ThreadIDV2, p.Msg.ConversationID, p.Msg.ConvIDV2,
+			)
+			if evTID != "" && evTID != b.threadID() {
+				return
+			}
+			turnID := cmp.Or(p.Msg.TurnID, p.Msg.TurnIDV2)
+			switch p.Msg.Type {
+			case "task_started":
+				b.mu.Lock()
+				if b.epoch == epoch {
+					b.noteTurnStartedLocked(turnID)
+				}
+				b.mu.Unlock()
+			case "task_complete":
+				d.completeCodexTurn(s, b, epoch, turnID, true, n.EmittedAtMs)
+			case "turn_aborted":
+				d.completeCodexTurn(s, b, epoch, turnID, false, n.EmittedAtMs)
+			}
+		}
 	}
 }
 
-func (d *Daemon) maybeSwitchCodexThread(s *session.Session, b *codexBridge, threadID, statusType string) bool {
+func (d *Daemon) completeCodexTurn(s *session.Session, b *codexBridge, epoch uint64, turnID string, completed bool, emittedAtMs int64) {
+	b.mu.Lock()
+	if b.epoch != epoch {
+		b.mu.Unlock()
+		return
+	}
+	if b.isStaleTurnLocked(turnID) {
+		b.mu.Unlock()
+		return
+	}
+	if !b.markTurnCompletedLocked(turnID) {
+		b.settleTurnLocked()
+		b.mu.Unlock()
+		return
+	}
+	step := cmp.Or(turnID, b.activeTurn, "turn")
+	b.settleTurnLocked()
+	b.fgItems = map[string]bool{}
+	b.fgProcesses = map[string]bool{}
+	b.mu.Unlock()
+
+	d.live.take(livePost{Session: s.ID(), Step: step, End: true})
+	d.maybeBindCodexThread(s, b, epoch)
+	b.scheduleBackgroundRefresh(s)
+	seq := b.seqFor(emittedAtMs)
+	if completed {
+		d.refreshActivity(s)
+		s.ReportStatus(protocol.AgentDone, seq)
+	} else {
+		s.ReportStatus(protocol.AgentIdle, seq)
+	}
+}
+
+func (d *Daemon) maybeSwitchCodexThread(s *session.Session, b *codexBridge, threadID, statusType string, epoch uint64) bool {
+	client := b.currentClient()
+	if client == nil {
+		return false
+	}
 	ctx, cancel := context.WithTimeout(b.ctx, 3*time.Second)
 	defer cancel()
-	res, err := b.client.ThreadRead(ctx, threadID, false)
+	res, err := client.ThreadRead(ctx, threadID, false)
 	if err != nil {
 		return false
 	}
 	if res.Thread.Ephemeral || res.Thread.IsSubagent() {
 		b.mu.Lock()
-		b.ignored[threadID] = true
+		if b.epoch == epoch {
+			b.ignored[threadID] = true
+		}
 		b.mu.Unlock()
 		return false
 	}
 	b.mu.Lock()
+	if b.epoch != epoch {
+		b.mu.Unlock()
+		return false
+	}
 	if b.abandoned[threadID] && statusType != "active" {
 		b.mu.Unlock()
 		return false
@@ -1077,6 +2016,7 @@ func (d *Daemon) maybeSwitchCodexThread(s *session.Session, b *codexBridge, thre
 	b.pendingPath = res.Thread.Path
 	b.subscribed = false
 	b.bound = false
+	b.settleTurnLocked()
 	b.fgItems = map[string]bool{}
 	b.fgProcesses = map[string]bool{}
 	b.mu.Unlock()
@@ -1084,10 +2024,14 @@ func (d *Daemon) maybeSwitchCodexThread(s *session.Session, b *codexBridge, thre
 	return true
 }
 
-func (d *Daemon) trySubscribeCodexThread(s *session.Session, b *codexBridge, threadID string) {
+func (d *Daemon) trySubscribeCodexThread(s *session.Session, b *codexBridge, threadID string, epoch uint64) {
+	client := b.currentClient()
+	if client == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(b.ctx, 3*time.Second)
 	defer cancel()
-	res, err := resumeCodexThread(ctx, b.client, codex.ThreadResumeParams{
+	res, err := resumeCodexThread(ctx, client, codex.ThreadResumeParams{
 		ThreadID:     threadID,
 		ExcludeTurns: true,
 	})
@@ -1095,7 +2039,7 @@ func (d *Daemon) trySubscribeCodexThread(s *session.Session, b *codexBridge, thr
 		return
 	}
 	b.mu.Lock()
-	if b.tid == threadID {
+	if b.epoch == epoch && b.tid == threadID {
 		b.subscribed = true
 		if res.Thread.Path != "" {
 			b.pendingPath = res.Thread.Path
@@ -1111,23 +2055,28 @@ func (d *Daemon) trySubscribeCodexThread(s *session.Session, b *codexBridge, thr
 
 // maybeBindCodexThread binds the active thread's ConversationId and rollout path
 // once its rollout file actually exists on disk and verifies.
-func (d *Daemon) maybeBindCodexThread(s *session.Session, b *codexBridge) {
+func (d *Daemon) maybeBindCodexThread(s *session.Session, b *codexBridge, epoch uint64) {
 	b.mu.Lock()
+	if b.epoch != epoch {
+		b.mu.Unlock()
+		return
+	}
 	tid := b.tid
 	path := b.pendingPath
 	bound := b.bound
+	client := b.client
 	b.mu.Unlock()
 	if tid == "" || bound {
 		return
 	}
-	if path == "" && b.client != nil {
+	if path == "" && client != nil {
 		ctx, cancel := context.WithTimeout(b.ctx, 2*time.Second)
-		res, err := b.client.ThreadRead(ctx, tid, false)
+		res, err := client.ThreadRead(ctx, tid, false)
 		cancel()
 		if err == nil && res.Thread.Path != "" {
 			path = res.Thread.Path
 			b.mu.Lock()
-			if b.tid == tid {
+			if b.epoch == epoch && b.tid == tid {
 				b.pendingPath = path
 			}
 			b.mu.Unlock()
@@ -1139,7 +2088,7 @@ func (d *Daemon) maybeBindCodexThread(s *session.Session, b *codexBridge) {
 	}
 	if err := d.bindConversation(s, tid, verified); err == nil {
 		b.mu.Lock()
-		if b.tid == tid {
+		if b.epoch == epoch && b.tid == tid {
 			b.bound = true
 		}
 		b.mu.Unlock()

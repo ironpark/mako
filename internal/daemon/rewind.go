@@ -211,9 +211,9 @@ func (d *Daemon) rewindCodexSession(
 	}
 
 	var res codex.RewindThreadResult
-	if b != nil && b.client != nil {
+	if client := b.currentClient(); client != nil {
 		opts.ServerUserAgent = b.userAgent()
-		res, err = codex.RewindThread(ctx, b.client, opts)
+		res, err = codex.RewindThread(ctx, client, opts)
 	} else {
 		res, err = codex.RewindThreadStdio(ctx, split.Program, launch.Env, opts)
 	}

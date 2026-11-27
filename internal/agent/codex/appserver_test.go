@@ -2,7 +2,9 @@ package codex
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -12,6 +14,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -331,5 +334,253 @@ func TestThreadInfoIsSubagent(t *testing.T) {
 	}
 	if !(ThreadInfo{ID: "t3", Source: json.RawMessage(`{"subAgent":{"parent":"t1"}}`)}).IsSubagent() {
 		t.Fatal("thread with subAgent source not classified as subagent")
+	}
+}
+
+func TestAppServerClientTurnInterruptAndPendingSerialization(t *testing.T) {
+	upgrader := websocket.Upgrader{}
+	var mu sync.Mutex
+	var events []string
+	var gotInterrupt TurnInterruptParams
+	interruptSeen := make(chan struct{}, 1)
+	releaseInterrupt := make(chan struct{})
+	stallInterrupt := false
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		var writeMu sync.Mutex
+		reply := func(v any) {
+			writeMu.Lock()
+			defer writeMu.Unlock()
+			_ = conn.WriteJSON(v)
+		}
+		for {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var req struct {
+				ID     json.RawMessage `json:"id"`
+				Method string          `json:"method"`
+				Params json.RawMessage `json:"params"`
+			}
+			if json.Unmarshal(data, &req) != nil {
+				continue
+			}
+			switch req.Method {
+			case "turn/interrupt":
+				var p TurnInterruptParams
+				_ = json.Unmarshal(req.Params, &p)
+				mu.Lock()
+				gotInterrupt = p
+				events = append(events, "interrupt:start")
+				stall := stallInterrupt
+				mu.Unlock()
+				select {
+				case interruptSeen <- struct{}{}:
+				default:
+				}
+				if stall {
+					continue // never respond; caller times out
+				}
+				go func(id json.RawMessage) {
+					<-releaseInterrupt
+					mu.Lock()
+					events = append(events, "interrupt:reply")
+					mu.Unlock()
+					reply(map[string]any{"id": id, "result": map[string]any{}})
+				}(req.ID)
+			case "turn/start":
+				mu.Lock()
+				events = append(events, "turn/start")
+				mu.Unlock()
+				reply(map[string]any{"id": req.ID, "result": map[string]any{"turn": map[string]any{"id": "turn-next", "status": "inProgress"}}})
+			case "thread/queue/add":
+				mu.Lock()
+				events = append(events, "thread/queue/add")
+				mu.Unlock()
+				reply(map[string]any{"id": req.ID, "result": map[string]any{"queuedSubmission": map[string]any{"id": "q-1"}}})
+			}
+		}
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http")
+	client, err := DialAppServerWS(t.Context(), wsURL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	// 1. In-flight TurnInterrupt blocks concurrent TurnStart & ThreadQueueAdd
+	// until turn/interrupt completes so a stale interrupt cannot abort a later turn.
+	intErr := make(chan error, 1)
+	go func() {
+		intErr <- client.TurnInterrupt(t.Context(), TurnInterruptParams{ThreadID: "th-1", TurnID: "turn-1"})
+	}()
+	select {
+	case <-interruptSeen:
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not receive turn/interrupt")
+	}
+
+	startDone := make(chan error, 1)
+	go func() {
+		_, err := client.TurnStart(t.Context(), TurnStartParams{
+			ThreadID: "th-1",
+			Input:    []UserInput{{Type: "text", Text: "follow-up"}},
+		})
+		startDone <- err
+	}()
+	queueDone := make(chan error, 1)
+	go func() {
+		_, err := client.ThreadQueueAdd(t.Context(), ThreadQueueAddParams{
+			ThreadID:            "th-1",
+			ClientUserMessageID: "c-1",
+			Input:               []UserInput{{Type: "text", Text: "queued"}},
+		})
+		queueDone <- err
+	}()
+
+	time.Sleep(40 * time.Millisecond)
+	mu.Lock()
+	midEvents := slices.Clone(events)
+	mu.Unlock()
+	if !slices.Equal(midEvents, []string{"interrupt:start"}) {
+		t.Fatalf("subsequent turn RPC raced ahead of pending interrupt: %v", midEvents)
+	}
+
+	close(releaseInterrupt)
+	if err := <-intErr; err != nil {
+		t.Fatalf("TurnInterrupt: %v", err)
+	}
+	if err := <-startDone; err != nil {
+		t.Fatalf("TurnStart: %v", err)
+	}
+	if err := <-queueDone; err != nil {
+		t.Fatalf("ThreadQueueAdd: %v", err)
+	}
+
+	mu.Lock()
+	gotParams := gotInterrupt
+	finalEvents := slices.Clone(events)
+	mu.Unlock()
+	if gotParams.ThreadID != "th-1" || gotParams.TurnID != "turn-1" {
+		t.Fatalf("TurnInterrupt params = %+v, want th-1 / turn-1", gotParams)
+	}
+	if len(finalEvents) != 4 || finalEvents[0] != "interrupt:start" || finalEvents[1] != "interrupt:reply" {
+		t.Fatalf("unexpected RPC ordering: %v", finalEvents)
+	}
+
+	// 2. Bounded timeout on stalled TurnInterrupt returns context.DeadlineExceeded
+	// and still releases pending-interrupt waiters cleanly.
+	mu.Lock()
+	stallInterrupt = true
+	mu.Unlock()
+	tctx, tcancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer tcancel()
+	if err := client.TurnInterrupt(tctx, TurnInterruptParams{ThreadID: "th-1", TurnID: "turn-2"}); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("stalled TurnInterrupt err = %v, want DeadlineExceeded", err)
+	}
+	if _, err := client.TurnStart(t.Context(), TurnStartParams{
+		ThreadID: "th-1",
+		Input:    []UserInput{{Type: "text", Text: "after timeout"}},
+	}); err != nil {
+		t.Fatalf("TurnStart after timed-out interrupt failed: %v", err)
+	}
+
+	// 3. StartTurnInterrupt registers the pending interrupt synchronously before
+	// returning so an immediate TurnStart with zero delay cannot slip ahead of it.
+	releaseAsync := make(chan struct{})
+	mu.Lock()
+	stallInterrupt = false
+	events = nil
+	mu.Unlock()
+	// Replace releaseInterrupt by gating via a dedicated server for step 3.
+	asyncSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		var wmu sync.Mutex
+		send := func(v any) {
+			wmu.Lock()
+			defer wmu.Unlock()
+			_ = conn.WriteJSON(v)
+		}
+		for {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var req struct {
+				ID     json.RawMessage `json:"id"`
+				Method string          `json:"method"`
+			}
+			if json.Unmarshal(data, &req) != nil {
+				continue
+			}
+			switch req.Method {
+			case "turn/interrupt":
+				mu.Lock()
+				events = append(events, "async-interrupt:start")
+				mu.Unlock()
+				go func(id json.RawMessage) {
+					<-releaseAsync
+					mu.Lock()
+					events = append(events, "async-interrupt:reply")
+					mu.Unlock()
+					send(map[string]any{"id": id, "result": map[string]any{}})
+				}(req.ID)
+			case "turn/start":
+				mu.Lock()
+				events = append(events, "async-turn/start")
+				mu.Unlock()
+				send(map[string]any{"id": req.ID, "result": map[string]any{"turn": map[string]any{"id": "turn-after", "status": "inProgress"}}})
+			}
+		}
+	}))
+	defer asyncSrv.Close()
+
+	asyncClient, err := DialAppServerWS(t.Context(), "ws"+strings.TrimPrefix(asyncSrv.URL, "http"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer asyncClient.Close()
+
+	intDone := asyncClient.StartTurnInterrupt(t.Context(), TurnInterruptParams{ThreadID: "th-1", TurnID: "turn-3"})
+	// Immediately invoke TurnStart with zero sleep; pending interrupt is already registered.
+	asyncStartDone := make(chan error, 1)
+	go func() {
+		_, err := asyncClient.TurnStart(t.Context(), TurnStartParams{
+			ThreadID: "th-1",
+			Input:    []UserInput{{Type: "text", Text: "immediate"}},
+		})
+		asyncStartDone <- err
+	}()
+	time.Sleep(40 * time.Millisecond)
+	mu.Lock()
+	beforeRelease := slices.Clone(events)
+	mu.Unlock()
+	if slices.Contains(beforeRelease, "async-turn/start") {
+		t.Fatalf("TurnStart bypassed StartTurnInterrupt before reply: %v", beforeRelease)
+	}
+	close(releaseAsync)
+	if err := <-intDone; err != nil {
+		t.Fatalf("StartTurnInterrupt: %v", err)
+	}
+	if err := <-asyncStartDone; err != nil {
+		t.Fatalf("TurnStart after StartTurnInterrupt: %v", err)
+	}
+	mu.Lock()
+	afterRelease := slices.Clone(events)
+	mu.Unlock()
+	if !slices.Equal(afterRelease, []string{"async-interrupt:start", "async-interrupt:reply", "async-turn/start"}) {
+		t.Fatalf("unexpected async interrupt ordering: %v", afterRelease)
 	}
 }

@@ -257,6 +257,13 @@ type TurnSteerResult struct {
 	TurnID string `json:"turnId"`
 }
 
+type TurnInterruptParams struct {
+	ThreadID string `json:"threadId"`
+	TurnID   string `json:"turnId"`
+}
+
+type TurnInterruptResult struct{}
+
 // RateLimitWindow is one metered quota window from account/rateLimits/*.
 type RateLimitWindow struct {
 	UsedPercent        float64 `json:"usedPercent"`
@@ -401,6 +408,10 @@ type AppServerClient struct {
 	pending map[int64]chan rpcResponse
 	closed  bool
 	readErr error
+
+	interruptMu    sync.Mutex
+	interruptCount int
+	interruptDone  chan struct{}
 
 	notifs    chan Notification
 	done      chan struct{}
@@ -716,22 +727,98 @@ func (c *AppServerClient) ThreadBackgroundTerminalsList(ctx context.Context, thr
 	return out, nil
 }
 
+func (c *AppServerClient) beginInterrupt() {
+	c.interruptMu.Lock()
+	if c.interruptCount == 0 {
+		c.interruptDone = make(chan struct{})
+	}
+	c.interruptCount++
+	c.interruptMu.Unlock()
+}
+
+func (c *AppServerClient) endInterrupt() {
+	c.interruptMu.Lock()
+	c.interruptCount--
+	if c.interruptCount == 0 && c.interruptDone != nil {
+		close(c.interruptDone)
+		c.interruptDone = nil
+	}
+	c.interruptMu.Unlock()
+}
+
+// WaitPendingInterrupt blocks until any in-flight TurnInterrupt RPC finishes
+// (or ctx is cancelled), preventing a stale turn/interrupt from racing ahead
+// and aborting a subsequently started turn.
+func (c *AppServerClient) WaitPendingInterrupt(ctx context.Context) error {
+	for {
+		c.interruptMu.Lock()
+		done := c.interruptDone
+		c.interruptMu.Unlock()
+		if done == nil {
+			return nil
+		}
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 func (c *AppServerClient) ThreadQueueAdd(ctx context.Context, params ThreadQueueAddParams) (ThreadQueueAddResult, error) {
+	if err := c.WaitPendingInterrupt(ctx); err != nil {
+		return ThreadQueueAddResult{}, err
+	}
 	var res ThreadQueueAddResult
 	err := c.Call(ctx, "thread/queue/add", params, &res)
 	return res, err
 }
 
 func (c *AppServerClient) TurnStart(ctx context.Context, params TurnStartParams) (TurnStartResult, error) {
+	if err := c.WaitPendingInterrupt(ctx); err != nil {
+		return TurnStartResult{}, err
+	}
 	var res TurnStartResult
 	err := c.Call(ctx, "turn/start", params, &res)
 	return res, err
 }
 
 func (c *AppServerClient) TurnSteer(ctx context.Context, params TurnSteerParams) (TurnSteerResult, error) {
+	if err := c.WaitPendingInterrupt(ctx); err != nil {
+		return TurnSteerResult{}, err
+	}
 	var res TurnSteerResult
 	err := c.Call(ctx, "turn/steer", params, &res)
 	return res, err
+}
+
+// StartTurnInterrupt registers the pending interrupt synchronously before
+// dispatching JSON-RPC `turn/interrupt` asynchronously, returning a channel
+// that receives the RPC result. Because registration happens before return,
+// subsequent TurnStart / ThreadQueueAdd / TurnSteer calls on this client are
+// guaranteed to serialize behind the interrupt even before the RPC goroutine
+// is scheduled.
+func (c *AppServerClient) StartTurnInterrupt(ctx context.Context, params TurnInterruptParams) <-chan error {
+	done := make(chan error, 1)
+	if params.ThreadID == "" || params.TurnID == "" {
+		done <- nil
+		close(done)
+		return done
+	}
+	c.beginInterrupt()
+	go func() {
+		defer c.endInterrupt()
+		done <- c.Call(ctx, "turn/interrupt", params, nil)
+		close(done)
+	}()
+	return done
+}
+
+// TurnInterrupt requests cancellation of an active Codex turn via JSON-RPC
+// `turn/interrupt`. While in flight, subsequent TurnStart / ThreadQueueAdd /
+// TurnSteer calls on this client wait for TurnInterrupt to settle first.
+func (c *AppServerClient) TurnInterrupt(ctx context.Context, params TurnInterruptParams) error {
+	return <-c.StartTurnInterrupt(ctx, params)
 }
 
 func (c *AppServerClient) RateLimitsRead(ctx context.Context) (RateLimitsReadResult, error) {

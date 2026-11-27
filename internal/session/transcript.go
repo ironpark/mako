@@ -8,10 +8,20 @@ import (
 
 // TranscriptEnv returns only the paths needed to find this process's native
 // conversation logs, including profile overrides.
-func (s *Session) TranscriptEnv() map[string]string { return transcript.Env(s.env, nil) }
+func (s *Session) TranscriptEnv() map[string]string {
+	s.mu.Lock()
+	env := s.env
+	s.mu.Unlock()
+	return transcript.Env(env, nil)
+}
 
 // PID identifies the launched process while its session is alive.
-func (s *Session) PID() int { return s.proc.pid() }
+func (s *Session) PID() int {
+	if p := s.currentProc(); p != nil {
+		return p.pid()
+	}
+	return 0
+}
 
 // Outputs counts the program's writes to the terminal, so a watcher can tell
 // a session that did something since it last looked from an idle one.

@@ -96,6 +96,9 @@ func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
+		if d.abortNativeTurn(ctx, s, r.GetText(), r.GetKeys()) {
+			return s.Info(), nil
+		}
 		if d.deliverNativeUserPrompt(ctx, s, r.GetText(), r.GetKeys()) {
 			return s.Info(), nil
 		}
@@ -104,6 +107,45 @@ func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *
 		}
 		return s.Info(), nil
 	})
+}
+
+// isInterruptKeys reports whether keys is a bare Escape interrupt sequence
+// (plain ESC or Kitty CSI-u Escape).
+func isInterruptKeys(keys []byte) bool {
+	return bytes.Equal(keys, []byte("\x1b")) ||
+		bytes.Equal(keys, []byte("\x1b[27u")) ||
+		bytes.Equal(keys, []byte("\x1b[27;1u"))
+}
+
+// canAbortTurnNatively reports whether a Send request is a bare interrupt
+// request safe to route through an agent's native turn-abort controller.
+func canAbortTurnNatively(s *session.Session, text string, keys []byte) bool {
+	if text != "" || !isInterruptKeys(keys) {
+		return false
+	}
+	info := s.Info()
+	if info.GetState() != protocol.StateRunning || info.GetDialog() != nil {
+		return false
+	}
+	// If the agent is waiting on an interactive terminal prompt without an
+	// out-of-band approval card (e.g. request_user_input), let Escape go to
+	// the PTY so it cancels the prompt cleanly.
+	if info.GetStatus() == protocol.AgentWaiting && info.GetApproval() == nil {
+		return false
+	}
+	return true
+}
+
+func (d *Daemon) abortNativeTurn(ctx context.Context, s *session.Session, text string, keys []byte) bool {
+	if !canAbortTurnNatively(s, text, keys) {
+		return false
+	}
+	switch s.Info().GetAgent() {
+	case "codex":
+		return d.abortViaCodexBridge(ctx, s)
+	default:
+		return false
+	}
 }
 
 // isSubmitKeys reports whether keys is a plain Enter submission from the
