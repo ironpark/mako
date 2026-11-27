@@ -55,6 +55,8 @@ public  final class UiNode extends
     diffFrom_ = "";
     diffTo_ = "";
     graphLayout_ = "";
+    canvasCommands_ = emptyProtobufList();
+    timelineLanes_ = emptyProtobufList();
   }
   public static final int ID_FIELD_NUMBER = 1;
   private java.lang.String id_;
@@ -3278,6 +3280,353 @@ public  final class UiNode extends
   private void clearDoubleTap() {
 
     doubleTap_ = false;
+  }
+
+  public static final int CANVAS_COMMANDS_FIELD_NUMBER = 50;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiCanvasCommand> canvasCommands_;
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.UiCanvasCommand> getCanvasCommandsList() {
+    return canvasCommands_;
+  }
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.UiCanvasCommandOrBuilder> 
+      getCanvasCommandsOrBuilderList() {
+    return canvasCommands_;
+  }
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  @java.lang.Override
+  public int getCanvasCommandsCount() {
+    return canvasCommands_.size();
+  }
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.UiCanvasCommand getCanvasCommands(int index) {
+    return canvasCommands_.get(index);
+  }
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  public dev.ironpark.mako.v2.UiCanvasCommandOrBuilder getCanvasCommandsOrBuilder(
+      int index) {
+    return canvasCommands_.get(index);
+  }
+  private void ensureCanvasCommandsIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiCanvasCommand> tmp = canvasCommands_;
+    if (!tmp.isModifiable()) {
+      canvasCommands_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  private void setCanvasCommands(
+      int index, dev.ironpark.mako.v2.UiCanvasCommand value) {
+    java.util.Objects.requireNonNull(value);
+    ensureCanvasCommandsIsMutable();
+    canvasCommands_.set(index, value);
+  }
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  private void addCanvasCommands(dev.ironpark.mako.v2.UiCanvasCommand value) {
+    java.util.Objects.requireNonNull(value);
+    ensureCanvasCommandsIsMutable();
+    canvasCommands_.add(value);
+  }
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  private void addCanvasCommands(
+      int index, dev.ironpark.mako.v2.UiCanvasCommand value) {
+    java.util.Objects.requireNonNull(value);
+    ensureCanvasCommandsIsMutable();
+    canvasCommands_.add(index, value);
+  }
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  private void addAllCanvasCommands(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.UiCanvasCommand> values) {
+    ensureCanvasCommandsIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, canvasCommands_);
+  }
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  private void clearCanvasCommands() {
+    canvasCommands_ = emptyProtobufList();
+  }
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  private void removeCanvasCommands(int index) {
+    ensureCanvasCommandsIsMutable();
+    canvasCommands_.remove(index);
+  }
+
+  public static final int CANVAS_WIDTH_FIELD_NUMBER = 51;
+  private double canvasWidth_;
+  /**
+   * <code>double canvas_width = 51 [json_name = "canvasWidth"];</code>
+   * @return The canvasWidth.
+   */
+  @java.lang.Override
+  public double getCanvasWidth() {
+    return canvasWidth_;
+  }
+  /**
+   * <code>double canvas_width = 51 [json_name = "canvasWidth"];</code>
+   * @param value The canvasWidth to set.
+   */
+  private void setCanvasWidth(double value) {
+    
+    canvasWidth_ = value;
+  }
+  /**
+   * <code>double canvas_width = 51 [json_name = "canvasWidth"];</code>
+   */
+  private void clearCanvasWidth() {
+
+    canvasWidth_ = 0D;
+  }
+
+  public static final int CANVAS_HEIGHT_FIELD_NUMBER = 52;
+  private double canvasHeight_;
+  /**
+   * <code>double canvas_height = 52 [json_name = "canvasHeight"];</code>
+   * @return The canvasHeight.
+   */
+  @java.lang.Override
+  public double getCanvasHeight() {
+    return canvasHeight_;
+  }
+  /**
+   * <code>double canvas_height = 52 [json_name = "canvasHeight"];</code>
+   * @param value The canvasHeight to set.
+   */
+  private void setCanvasHeight(double value) {
+    
+    canvasHeight_ = value;
+  }
+  /**
+   * <code>double canvas_height = 52 [json_name = "canvasHeight"];</code>
+   */
+  private void clearCanvasHeight() {
+
+    canvasHeight_ = 0D;
+  }
+
+  public static final int CANVAS_PAN_FIELD_NUMBER = 53;
+  private boolean canvasPan_;
+  /**
+   * <code>bool canvas_pan = 53 [json_name = "canvasPan"];</code>
+   * @return The canvasPan.
+   */
+  @java.lang.Override
+  public boolean getCanvasPan() {
+    return canvasPan_;
+  }
+  /**
+   * <code>bool canvas_pan = 53 [json_name = "canvasPan"];</code>
+   * @param value The canvasPan to set.
+   */
+  private void setCanvasPan(boolean value) {
+    
+    canvasPan_ = value;
+  }
+  /**
+   * <code>bool canvas_pan = 53 [json_name = "canvasPan"];</code>
+   */
+  private void clearCanvasPan() {
+
+    canvasPan_ = false;
+  }
+
+  public static final int CANVAS_ZOOM_FIELD_NUMBER = 54;
+  private boolean canvasZoom_;
+  /**
+   * <code>bool canvas_zoom = 54 [json_name = "canvasZoom"];</code>
+   * @return The canvasZoom.
+   */
+  @java.lang.Override
+  public boolean getCanvasZoom() {
+    return canvasZoom_;
+  }
+  /**
+   * <code>bool canvas_zoom = 54 [json_name = "canvasZoom"];</code>
+   * @param value The canvasZoom to set.
+   */
+  private void setCanvasZoom(boolean value) {
+    
+    canvasZoom_ = value;
+  }
+  /**
+   * <code>bool canvas_zoom = 54 [json_name = "canvasZoom"];</code>
+   */
+  private void clearCanvasZoom() {
+
+    canvasZoom_ = false;
+  }
+
+  public static final int TIMELINE_LANES_FIELD_NUMBER = 55;
+  private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiTimelineLane> timelineLanes_;
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.ironpark.mako.v2.UiTimelineLane> getTimelineLanesList() {
+    return timelineLanes_;
+  }
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  public java.util.List<? extends dev.ironpark.mako.v2.UiTimelineLaneOrBuilder> 
+      getTimelineLanesOrBuilderList() {
+    return timelineLanes_;
+  }
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  @java.lang.Override
+  public int getTimelineLanesCount() {
+    return timelineLanes_.size();
+  }
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.UiTimelineLane getTimelineLanes(int index) {
+    return timelineLanes_.get(index);
+  }
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  public dev.ironpark.mako.v2.UiTimelineLaneOrBuilder getTimelineLanesOrBuilder(
+      int index) {
+    return timelineLanes_.get(index);
+  }
+  private void ensureTimelineLanesIsMutable() {
+    com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.UiTimelineLane> tmp = timelineLanes_;
+    if (!tmp.isModifiable()) {
+      timelineLanes_ =
+          com.google.protobuf.GeneratedMessageLite.mutableCopy(tmp);
+     }
+  }
+
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  private void setTimelineLanes(
+      int index, dev.ironpark.mako.v2.UiTimelineLane value) {
+    java.util.Objects.requireNonNull(value);
+    ensureTimelineLanesIsMutable();
+    timelineLanes_.set(index, value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  private void addTimelineLanes(dev.ironpark.mako.v2.UiTimelineLane value) {
+    java.util.Objects.requireNonNull(value);
+    ensureTimelineLanesIsMutable();
+    timelineLanes_.add(value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  private void addTimelineLanes(
+      int index, dev.ironpark.mako.v2.UiTimelineLane value) {
+    java.util.Objects.requireNonNull(value);
+    ensureTimelineLanesIsMutable();
+    timelineLanes_.add(index, value);
+  }
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  private void addAllTimelineLanes(
+      java.lang.Iterable<? extends dev.ironpark.mako.v2.UiTimelineLane> values) {
+    ensureTimelineLanesIsMutable();
+    com.google.protobuf.AbstractMessageLite.addAll(
+        values, timelineLanes_);
+  }
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  private void clearTimelineLanes() {
+    timelineLanes_ = emptyProtobufList();
+  }
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  private void removeTimelineLanes(int index) {
+    ensureTimelineLanesIsMutable();
+    timelineLanes_.remove(index);
   }
 
   public static dev.ironpark.mako.v2.UiNode parseFrom(
@@ -6760,6 +7109,382 @@ public  final class UiNode extends
       return this;
     }
 
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.UiCanvasCommand> getCanvasCommandsList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getCanvasCommandsList());
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    @java.lang.Override
+    public int getCanvasCommandsCount() {
+      return instance.getCanvasCommandsCount();
+    }/**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.UiCanvasCommand getCanvasCommands(int index) {
+      return instance.getCanvasCommands(index);
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    public Builder setCanvasCommands(
+        int index, dev.ironpark.mako.v2.UiCanvasCommand value) {
+      copyOnWrite();
+      instance.setCanvasCommands(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    public Builder setCanvasCommands(
+        int index, dev.ironpark.mako.v2.UiCanvasCommand.Builder builderForValue) {
+      copyOnWrite();
+      instance.setCanvasCommands(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    public Builder addCanvasCommands(dev.ironpark.mako.v2.UiCanvasCommand value) {
+      copyOnWrite();
+      instance.addCanvasCommands(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    public Builder addCanvasCommands(
+        int index, dev.ironpark.mako.v2.UiCanvasCommand value) {
+      copyOnWrite();
+      instance.addCanvasCommands(index, value);
+      return this;
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    public Builder addCanvasCommands(
+        dev.ironpark.mako.v2.UiCanvasCommand.Builder builderForValue) {
+      copyOnWrite();
+      instance.addCanvasCommands(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    public Builder addCanvasCommands(
+        int index, dev.ironpark.mako.v2.UiCanvasCommand.Builder builderForValue) {
+      copyOnWrite();
+      instance.addCanvasCommands(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    public Builder addAllCanvasCommands(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.UiCanvasCommand> values) {
+      copyOnWrite();
+      instance.addAllCanvasCommands(values);
+      return this;
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    public Builder clearCanvasCommands() {
+      copyOnWrite();
+      instance.clearCanvasCommands();
+      return this;
+    }
+    /**
+     * <pre>
+     * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+     * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+     * </pre>
+     *
+     * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+     */
+    public Builder removeCanvasCommands(int index) {
+      copyOnWrite();
+      instance.removeCanvasCommands(index);
+      return this;
+    }
+
+    /**
+     * <code>double canvas_width = 51 [json_name = "canvasWidth"];</code>
+     * @return The canvasWidth.
+     */
+    @java.lang.Override
+    public double getCanvasWidth() {
+      return instance.getCanvasWidth();
+    }
+    /**
+     * <code>double canvas_width = 51 [json_name = "canvasWidth"];</code>
+     * @param value The canvasWidth to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCanvasWidth(double value) {
+      copyOnWrite();
+      instance.setCanvasWidth(value);
+      return this;
+    }
+    /**
+     * <code>double canvas_width = 51 [json_name = "canvasWidth"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCanvasWidth() {
+      copyOnWrite();
+      instance.clearCanvasWidth();
+      return this;
+    }
+
+    /**
+     * <code>double canvas_height = 52 [json_name = "canvasHeight"];</code>
+     * @return The canvasHeight.
+     */
+    @java.lang.Override
+    public double getCanvasHeight() {
+      return instance.getCanvasHeight();
+    }
+    /**
+     * <code>double canvas_height = 52 [json_name = "canvasHeight"];</code>
+     * @param value The canvasHeight to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCanvasHeight(double value) {
+      copyOnWrite();
+      instance.setCanvasHeight(value);
+      return this;
+    }
+    /**
+     * <code>double canvas_height = 52 [json_name = "canvasHeight"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCanvasHeight() {
+      copyOnWrite();
+      instance.clearCanvasHeight();
+      return this;
+    }
+
+    /**
+     * <code>bool canvas_pan = 53 [json_name = "canvasPan"];</code>
+     * @return The canvasPan.
+     */
+    @java.lang.Override
+    public boolean getCanvasPan() {
+      return instance.getCanvasPan();
+    }
+    /**
+     * <code>bool canvas_pan = 53 [json_name = "canvasPan"];</code>
+     * @param value The canvasPan to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCanvasPan(boolean value) {
+      copyOnWrite();
+      instance.setCanvasPan(value);
+      return this;
+    }
+    /**
+     * <code>bool canvas_pan = 53 [json_name = "canvasPan"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCanvasPan() {
+      copyOnWrite();
+      instance.clearCanvasPan();
+      return this;
+    }
+
+    /**
+     * <code>bool canvas_zoom = 54 [json_name = "canvasZoom"];</code>
+     * @return The canvasZoom.
+     */
+    @java.lang.Override
+    public boolean getCanvasZoom() {
+      return instance.getCanvasZoom();
+    }
+    /**
+     * <code>bool canvas_zoom = 54 [json_name = "canvasZoom"];</code>
+     * @param value The canvasZoom to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCanvasZoom(boolean value) {
+      copyOnWrite();
+      instance.setCanvasZoom(value);
+      return this;
+    }
+    /**
+     * <code>bool canvas_zoom = 54 [json_name = "canvasZoom"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCanvasZoom() {
+      copyOnWrite();
+      instance.clearCanvasZoom();
+      return this;
+    }
+
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    @java.lang.Override
+    public java.util.List<dev.ironpark.mako.v2.UiTimelineLane> getTimelineLanesList() {
+      return java.util.Collections.unmodifiableList(
+          instance.getTimelineLanesList());
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    @java.lang.Override
+    public int getTimelineLanesCount() {
+      return instance.getTimelineLanesCount();
+    }/**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.UiTimelineLane getTimelineLanes(int index) {
+      return instance.getTimelineLanes(index);
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    public Builder setTimelineLanes(
+        int index, dev.ironpark.mako.v2.UiTimelineLane value) {
+      copyOnWrite();
+      instance.setTimelineLanes(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    public Builder setTimelineLanes(
+        int index, dev.ironpark.mako.v2.UiTimelineLane.Builder builderForValue) {
+      copyOnWrite();
+      instance.setTimelineLanes(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    public Builder addTimelineLanes(dev.ironpark.mako.v2.UiTimelineLane value) {
+      copyOnWrite();
+      instance.addTimelineLanes(value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    public Builder addTimelineLanes(
+        int index, dev.ironpark.mako.v2.UiTimelineLane value) {
+      copyOnWrite();
+      instance.addTimelineLanes(index, value);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    public Builder addTimelineLanes(
+        dev.ironpark.mako.v2.UiTimelineLane.Builder builderForValue) {
+      copyOnWrite();
+      instance.addTimelineLanes(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    public Builder addTimelineLanes(
+        int index, dev.ironpark.mako.v2.UiTimelineLane.Builder builderForValue) {
+      copyOnWrite();
+      instance.addTimelineLanes(index,
+          builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    public Builder addAllTimelineLanes(
+        java.lang.Iterable<? extends dev.ironpark.mako.v2.UiTimelineLane> values) {
+      copyOnWrite();
+      instance.addAllTimelineLanes(values);
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    public Builder clearTimelineLanes() {
+      copyOnWrite();
+      instance.clearTimelineLanes();
+      return this;
+    }
+    /**
+     * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+     */
+    public Builder removeTimelineLanes(int index) {
+      copyOnWrite();
+      instance.removeTimelineLanes(index);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.UiNode)
   }
   @java.lang.Override
@@ -6832,15 +7557,23 @@ public  final class UiNode extends
             "graphLayout_",
             "minimap_",
             "doubleTap_",
+            "canvasCommands_",
+            dev.ironpark.mako.v2.UiCanvasCommand.class,
+            "canvasWidth_",
+            "canvasHeight_",
+            "canvasPan_",
+            "canvasZoom_",
+            "timelineLanes_",
+            dev.ironpark.mako.v2.UiTimelineLane.class,
           };
           java.lang.String info =
-              "\u00001\u0000\u0000\u000111\u0000\n\u0000\u0001\u0208\u0002\u0208\u0003\u0208\u0004" +
+              "\u00007\u0000\u0000\u000177\u0000\f\u0000\u0001\u0208\u0002\u0208\u0003\u0208\u0004" +
               "\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u0007\n\u021a\u000b\u0000\f" +
               "\u0208\r\u0007\u000e\u0000\u000f\u0000\u0010\u0007\u0011\u0007\u0012\u001b\u0013" +
               "\u0208\u0014\u001b\u0015\u021a\u0016\u0208\u0017\u0007\u0018\u0208\u0019\u021a\u001a" +
               "\u0208\u001b\u0000\u001c\u0208\u001d\u0004\u001e\u0000\u001f\u0007 \u001b!\u001b" +
               "\"\u001b#\u0208$\u0007%\u0208&\u0208\'\u001b(\u0208)\u0000*\u0000+\u0000,\u001b-" +
-              "\u0208.\u0208/\u02080\u00071\u0007";
+              "\u0208.\u0208/\u02080\u00071\u00072\u001b3\u00004\u00005\u00076\u00077\u001b";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -166,6 +166,18 @@ func (t *Tree) Message(ev *protocol.BlockEvent) (Message, error) {
 				return Message{}, fmt.Errorf("diff %q of %s has no line %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
 			}
 			value = idx
+		case KindCanvas:
+			if !canvasHasHitID(node, ev.GetValue()) {
+				return Message{}, fmt.Errorf("canvas %q of %s has no hitId %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
+			}
+		case KindTimeline:
+			if !timelineHasSpan(node, ev.GetValue()) {
+				return Message{}, fmt.Errorf("timeline %q of %s has no span %q", ev.GetNode(), ev.GetBlock(), ev.GetValue())
+			}
+		case KindChart:
+			if !validChartChange(node, ev.GetValue()) {
+				return Message{}, fmt.Errorf("invalid chart selection %q for %q of %s", ev.GetValue(), ev.GetNode(), ev.GetBlock())
+			}
 		}
 		b, _ := json.Marshal(value)
 		m.Args = append(m.Args, b)
@@ -196,6 +208,80 @@ func graphHasNode(n *protocol.UiNode, id string) bool {
 		if gn.GetId() == id {
 			return true
 		}
+	}
+	return false
+}
+
+func canvasHasHitID(n *protocol.UiNode, id string) bool {
+	if n == nil || id == "" {
+		return false
+	}
+	for _, cmd := range n.GetCanvasCommands() {
+		if cmd.GetHitId() == id {
+			return true
+		}
+	}
+	return false
+}
+
+func timelineHasSpan(n *protocol.UiNode, id string) bool {
+	if n == nil || id == "" {
+		return false
+	}
+	for _, lane := range n.GetTimelineLanes() {
+		for _, sp := range lane.GetSpans() {
+			if sp.GetId() == id {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func validChartChange(n *protocol.UiNode, val string) bool {
+	if n == nil || val == "" || len(val) > 512 || strings.ContainsFunc(val, Spoofing) {
+		return false
+	}
+	numSeries := len(n.GetSeries())
+	maxCols := len(n.GetLabels())
+	for _, s := range n.GetSeries() {
+		maxCols = max(maxCols, len(s.GetValues()))
+	}
+	if idx, err := strconv.Atoi(val); err == nil {
+		return idx >= 0 && idx < maxChartPoints && (maxCols == 0 || idx < maxCols)
+	}
+	if strings.HasPrefix(val, "{") {
+		var obj struct {
+			Index  *int     `json:"index"`
+			Row    *int     `json:"row"`
+			Col    *int     `json:"col"`
+			Series string   `json:"series"`
+			Label  string   `json:"label"`
+			Value  *float64 `json:"value"`
+		}
+		dec := json.NewDecoder(strings.NewReader(val))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&obj); err != nil || dec.More() {
+			return false
+		}
+		if strings.ContainsFunc(obj.Series, Spoofing) || strings.ContainsFunc(obj.Label, Spoofing) {
+			return false
+		}
+		if obj.Value != nil && (math.IsNaN(*obj.Value) || math.IsInf(*obj.Value, 0)) {
+			return false
+		}
+		if obj.Index != nil {
+			return *obj.Index >= 0 && *obj.Index < maxChartPoints && (maxCols == 0 || *obj.Index < maxCols)
+		}
+		if obj.Row != nil && obj.Col != nil {
+			return *obj.Row >= 0 && *obj.Row < numSeries && *obj.Col >= 0 && *obj.Col < maxCols
+		}
+		return false
+	}
+	if rowStr, colStr, ok := strings.Cut(val, ":"); ok {
+		row, err1 := strconv.Atoi(rowStr)
+		col, err2 := strconv.Atoi(colStr)
+		return err1 == nil && err2 == nil && row >= 0 && col >= 0 && row < numSeries && col < maxCols
 	}
 	return false
 }

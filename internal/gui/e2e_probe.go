@@ -104,11 +104,34 @@ func NewUiTreeProbe(tree *protocol.UiNode, onEvent func(id, kind, value string),
 		if tree == nil {
 			return ggui.Widget(v.node(&protocol.UiNode{Kind: "column"}, false))
 		}
-		return v.node(tree, false)
+		return probeTreeRoot{
+			child: v.node(tree, false),
+			fill:  tree.GetFill(),
+		}
 	}, size)
 	p.Setup(func() {
 		uitheme.Set(skin.Theme(skin.Light))
 	})
 	p.Frame()
 	return p
+}
+
+// probeTreeRoot mirrors real plugin block sizing: fill=true trees expand to the
+// viewport constraints, while non-fill trees measure with MinH=0 so maxHeight
+// constraints are reflected in the laid-out height under ggui.Probe's Tight(size).
+type probeTreeRoot struct {
+	child ggui.Widget
+	fill  bool
+}
+
+func (p probeTreeRoot) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	if p.fill {
+		return p.child.Layout(c, env)
+	}
+	loose := ggui.Constraints{MinW: c.MinW, MaxW: c.MaxW, MinH: 0, MaxH: c.MaxH}
+	return loose.Constrain(p.child.Layout(loose, env))
+}
+
+func (p probeTreeRoot) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	dst.Paint(p.child, r)
 }

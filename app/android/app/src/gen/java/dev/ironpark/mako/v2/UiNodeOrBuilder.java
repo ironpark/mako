@@ -842,4 +842,71 @@ public interface UiNodeOrBuilder extends
    * @return The doubleTap.
    */
   boolean getDoubleTap();
+
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.UiCanvasCommand> 
+      getCanvasCommandsList();
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  dev.ironpark.mako.v2.UiCanvasCommand getCanvasCommands(int index);
+  /**
+   * <pre>
+   * canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+   * and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+   * </pre>
+   *
+   * <code>repeated .mako.v2.UiCanvasCommand canvas_commands = 50 [json_name = "canvasCommands"];</code>
+   */
+  int getCanvasCommandsCount();
+
+  /**
+   * <code>double canvas_width = 51 [json_name = "canvasWidth"];</code>
+   * @return The canvasWidth.
+   */
+  double getCanvasWidth();
+
+  /**
+   * <code>double canvas_height = 52 [json_name = "canvasHeight"];</code>
+   * @return The canvasHeight.
+   */
+  double getCanvasHeight();
+
+  /**
+   * <code>bool canvas_pan = 53 [json_name = "canvasPan"];</code>
+   * @return The canvasPan.
+   */
+  boolean getCanvasPan();
+
+  /**
+   * <code>bool canvas_zoom = 54 [json_name = "canvasZoom"];</code>
+   * @return The canvasZoom.
+   */
+  boolean getCanvasZoom();
+
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  java.util.List<dev.ironpark.mako.v2.UiTimelineLane> 
+      getTimelineLanesList();
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  dev.ironpark.mako.v2.UiTimelineLane getTimelineLanes(int index);
+  /**
+   * <code>repeated .mako.v2.UiTimelineLane timeline_lanes = 55 [json_name = "timelineLanes"];</code>
+   */
+  int getTimelineLanesCount();
 }

@@ -523,6 +523,63 @@ function normalizeDiffLines(list) {
   return children(list).map(normalizeDiffLine);
 }
 
+function normalizeCanvasCommand(cmd) {
+  const c = cmd || {};
+  const out = { op: String(c.op ?? "") };
+  for (const k of ["x", "y", "w", "h", "r", "x1", "y1", "x2", "y2", "cx1", "cy1", "cx2", "cy2", "strokeWidth"]) {
+    if (c[k] !== undefined) out[k] = Number(c[k]);
+  }
+  if (c.alpha !== undefined) out.alpha = Number(c.alpha);
+  if (c.text !== undefined) out.text = String(c.text ?? "");
+  if (c.icon !== undefined && c.icon !== "") out.icon = String(c.icon);
+  if (c.size !== undefined) {
+    out.size = typeof c.size === "string" ? c.size : Number(c.size);
+  }
+  if (c.tone !== undefined) out.tone = String(c.tone ?? "");
+  if (c.fillTone !== undefined) out.fillTone = String(c.fillTone ?? "");
+  if (c.strokeTone !== undefined) out.strokeTone = String(c.strokeTone ?? "");
+  if (c.hitId !== undefined && c.hitId !== "") out.hitId = String(c.hitId);
+  return out;
+}
+
+function normalizeTimelineSpan(sp) {
+  const s = sp || {};
+  const out = {
+    id: String(s.id ?? ""),
+    startMs: Number(s.startMs),
+    endMs: Number(s.endMs),
+    label: String(s.label ?? ""),
+  };
+  if (s.subtitle !== undefined && s.subtitle !== "") out.subtitle = String(s.subtitle);
+  if (s.tone !== undefined && s.tone !== "") out.tone = String(s.tone);
+  if (s.kind !== undefined && s.kind !== "") out.kind = String(s.kind);
+  return out;
+}
+
+function normalizeTimelineLanes(list) {
+  const items = children(list);
+  if (items.length === 0) return [];
+  if (items.some((it) => it && Array.isArray(it.spans))) {
+    return items.map((lane) => ({
+      id: String(lane?.id ?? ""),
+      label: String(lane?.label ?? ""),
+      spans: children(lane?.spans ?? []).map(normalizeTimelineSpan),
+    }));
+  }
+  const byLane = new Map();
+  for (const sp of items) {
+    const laneLabel = String(sp?.lane ?? "default");
+    const laneId = laneLabel || "default";
+    let lane = byLane.get(laneId);
+    if (!lane) {
+      lane = { id: laneId, label: laneLabel || laneId, spans: [] };
+      byLane.set(laneId, lane);
+    }
+    lane.spans.push(normalizeTimelineSpan(sp));
+  }
+  return [...byLane.values()];
+}
+
 // The UI vocabulary. A node is a plain description; its methods set what
 // the options do, and JSON.stringify writes it as the daemon reads it.
 class UiNode {
@@ -678,6 +735,22 @@ class UiNode {
     this.n.diffTo = String(s ?? "");
     return this;
   }
+  width(w) {
+    this.n.width = Number(w);
+    return this;
+  }
+  height(h) {
+    this.n.height = Number(h);
+    return this;
+  }
+  pan(on = true) {
+    this.n.pan = !!on;
+    return this;
+  }
+  zoom(on = true) {
+    this.n.zoom = !!on;
+    return this;
+  }
 }
 
 const options = [
@@ -686,6 +759,7 @@ const options = [
   "drag", "dragGroup", "onDrop", "dropAccept", "direction", "maxHeight", "layout", "minimap", "placeholder", "labels",
   "badges", "check", "onCheck", "contextMenu", "contextArg", "rows",
   "min", "max", "step", "diffLines", "diffFrom", "diffTo", "language",
+  "width", "height", "pan", "zoom",
 ];
 
 function node(kind, fields, opts) {
@@ -705,9 +779,9 @@ function node(kind, fields, opts) {
       n.n.diffLines = normalizeDiffLines(v);
     } else if (k === "labels" || k === "dropAccept") {
       n.n[k] = children(v).map(String);
-    } else if (k === "maxHeight" || k === "columns" || k === "ratio" || k === "min" || k === "max" || k === "step") {
+    } else if (k === "maxHeight" || k === "columns" || k === "ratio" || k === "min" || k === "max" || k === "step" || k === "width" || k === "height") {
       n.n[k] = Number(v);
-    } else if (k === "fill" || k === "checked" || k === "disabled" || k === "minimap") {
+    } else if (k === "fill" || k === "checked" || k === "disabled" || k === "minimap" || k === "pan" || k === "zoom") {
       n.n[k] = Boolean(v);
     } else {
       n.n[k] = v;
@@ -792,15 +866,34 @@ const ui = Object.freeze({
     ? node("progress", { progress: 0 }, v)
     : node("progress", { progress: v === undefined ? 0 : Number(v) }, o)),
   divider: (o) => node("divider", {}, o),
-  // A chart: "line", "bar", "sparkline", "donut" or "pie", of series
-  // [{ name, values, tone }], its points/slices named by opts.labels and
-  // itself by opts.caption, which is the node's text.
+  // A chart: "line", "bar", "sparkline", "donut", "pie", "area", "stacked-bar",
+  // or "heatmap", of series [{ name, values, tone }], its points/slices named
+  // by opts.labels and itself by opts.caption, which is the node's text.
   chart: (type, series, o) => {
     const { caption, ...rest } = o || {};
     return node("chart", {
       chart: String(type),
       text: String(caption ?? ""),
       series: children(series).map((s) => ({ name: String(s.name ?? ""), tone: s.tone ?? "", values: children(s.values ?? []).map(Number) })),
+    }, rest);
+  },
+  // A sandboxed 2D vector canvas of drawing commands
+  // [{ op, x, y, w, h, r, x1, y1, x2, y2, cx1, cy1, cx2, cy2, strokeWidth,
+  //    alpha, text, icon, size, tone, fillTone, strokeTone, hitId }].
+  canvas: (commands, o) => {
+    const { caption, ...rest } = o || {};
+    return node("canvas", {
+      text: String(caption ?? ""),
+      canvasCommands: children(commands).map(normalizeCanvasCommand),
+    }, rest);
+  },
+  // A time-axis timeline of lanes [{ id, label, spans }] or flat spans
+  // [{ id, lane, kind, label, subtitle, tone, startMs, endMs }].
+  timeline: (items, o) => {
+    const { caption, ...rest } = o || {};
+    return node("timeline", {
+      text: String(caption ?? ""),
+      timelineLanes: normalizeTimelineLanes(items),
     }, rest);
   },
   // A declarative interactive graph canvas of nodes [{ id, label, group, tone,

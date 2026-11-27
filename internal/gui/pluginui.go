@@ -216,9 +216,15 @@ func shallowCopyUiNode(n *protocol.UiNode, children []*protocol.UiNode) *protoco
 		DiffLines:   n.GetDiffLines(),
 		DiffFrom:    n.GetDiffFrom(),
 		DiffTo:      n.GetDiffTo(),
-		GraphLayout: n.GetGraphLayout(),
-		Minimap:     n.GetMinimap(),
-		DoubleTap:   n.GetDoubleTap(),
+		GraphLayout:    n.GetGraphLayout(),
+		Minimap:        n.GetMinimap(),
+		DoubleTap:      n.GetDoubleTap(),
+		CanvasCommands: n.GetCanvasCommands(),
+		CanvasWidth:    n.GetCanvasWidth(),
+		CanvasHeight:   n.GetCanvasHeight(),
+		CanvasPan:      n.GetCanvasPan(),
+		CanvasZoom:     n.GetCanvasZoom(),
+		TimelineLanes:  n.GetTimelineLanes(),
 	}
 }
 
@@ -337,6 +343,10 @@ func (v *treeView) nodeLayout(n *protocol.UiNode, inLine, bare, fullWidth bool) 
 	case "graph":
 		// graphNode handles per-node plugin and native context menus directly on canvas.
 		return v.graphNode(n)
+	case "canvas":
+		return v.canvasNode(n)
+	case "timeline":
+		return v.timelineNode(n)
 	case "dag":
 		// dagNode attaches context_menu per row with arg = row.id.
 		return v.dagNode(n, bare)
@@ -437,7 +447,7 @@ func (v *treeView) nodeLayout(n *protocol.UiNode, inLine, bare, fullWidth bool) 
 	case "divider":
 		return hline()
 	case "chart":
-		out = chartNode(n)
+		out = v.chartNode(n)
 	default:
 		return widget.Box() // the daemon sends no other kind
 	}
@@ -1583,7 +1593,7 @@ func (v *treeView) container(n *protocol.UiNode, bare bool) ggui.Widget {
 			w = widget.Expanded(w)
 		case g > 0:
 			w = widget.Flex(w, g)
-		case c.GetKind() == "graph" && c.GetFill() && (kind == "column" || kind == "card"):
+		case (c.GetKind() == "graph" || c.GetKind() == "canvas" || c.GetKind() == "timeline" || c.GetKind() == "chart") && c.GetFill() && (kind == "column" || kind == "card"):
 			w = widget.Expanded(w)
 		case c.GetKind() == "spacer" && c.GetGap() == 0:
 			w = widget.Expanded(w)
@@ -2023,6 +2033,8 @@ type blockForm struct {
 	localGiven map[string]string
 	graphs     map[string]*graphViewState
 	dags       map[string]*dagViewState
+	canvases   map[string]*canvasViewState
+	timelines  map[string]*timelineViewState
 }
 
 func newBlockForm() *blockForm {
@@ -2034,6 +2046,8 @@ func newBlockForm() *blockForm {
 		localGiven: map[string]string{},
 		graphs:     map[string]*graphViewState{},
 		dags:       map[string]*dagViewState{},
+		canvases:   map[string]*canvasViewState{},
+		timelines:  map[string]*timelineViewState{},
 	}
 }
 
@@ -2052,6 +2066,8 @@ func (f *blockForm) reset() {
 	f.localGiven = map[string]string{}
 	f.graphs = map[string]*graphViewState{}
 	f.dags = map[string]*dagViewState{}
+	f.canvases = map[string]*canvasViewState{}
+	f.timelines = map[string]*timelineViewState{}
 }
 
 // copyFrom restores cached field, local, graph, and dag state from src into f.
@@ -2066,6 +2082,8 @@ func (f *blockForm) copyFrom(src *blockForm) {
 	f.localGiven = src.localGiven
 	f.graphs = src.graphs
 	f.dags = src.dags
+	f.canvases = src.canvases
+	f.timelines = src.timelines
 }
 
 // field is the value of node id, which the tree gives as given.
@@ -2110,6 +2128,32 @@ func (f *blockForm) graphState(id string) *graphViewState {
 	if !ok {
 		st = newGraphViewState()
 		f.graphs[id] = st
+	}
+	return st
+}
+
+// canvasState returns persistent pan/zoom/selection state for canvas node id.
+func (f *blockForm) canvasState(id string) *canvasViewState {
+	if f.canvases == nil {
+		f.canvases = map[string]*canvasViewState{}
+	}
+	st, ok := f.canvases[id]
+	if !ok {
+		st = &canvasViewState{zoom: 1}
+		f.canvases[id] = st
+	}
+	return st
+}
+
+// timelineState returns persistent zoom/scroll/selection state for timeline node id.
+func (f *blockForm) timelineState(id string) *timelineViewState {
+	if f.timelines == nil {
+		f.timelines = map[string]*timelineViewState{}
+	}
+	st, ok := f.timelines[id]
+	if !ok {
+		st = &timelineViewState{zoom: 1}
+		f.timelines[id] = st
 	}
 	return st
 }

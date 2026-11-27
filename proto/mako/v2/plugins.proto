@@ -439,6 +439,60 @@ message UiNode {
   string graph_layout = 47;
   bool minimap = 48;
   bool double_tap = 49;
+  // canvas_commands, canvas_width, canvas_height, canvas_pan, canvas_zoom,
+  // and timeline_lanes configure sandboxed 2D canvas and timeline nodes.
+  repeated UiCanvasCommand canvas_commands = 50;
+  double canvas_width = 51;
+  double canvas_height = 52;
+  bool canvas_pan = 53;
+  bool canvas_zoom = 54;
+  repeated UiTimelineLane timeline_lanes = 55;
+}
+
+// UiCanvasCommand is one sandboxed 2D vector drawing primitive inside a
+// canvas node. Colours are strictly theme tokens (never raw hex or rgb).
+message UiCanvasCommand {
+  string op = 1;
+  double x = 2;
+  double y = 3;
+  double w = 4;
+  double h = 5;
+  double r = 6;
+  double x1 = 7;
+  double y1 = 8;
+  double x2 = 9;
+  double y2 = 10;
+  double cx1 = 11;
+  double cy1 = 12;
+  double cx2 = 13;
+  double cy2 = 14;
+  double stroke_width = 15;
+  optional double alpha = 16;
+  string text = 17;
+  string icon = 18;
+  double size = 19;
+  string tone = 20;
+  string fill_tone = 21;
+  string stroke_tone = 22;
+  string hit_id = 23;
+}
+
+// UiTimelineLane is one lane/track row in a timeline node.
+message UiTimelineLane {
+  string id = 1;
+  string label = 2;
+  repeated UiTimelineSpan spans = 3;
+}
+
+// UiTimelineSpan is a timed interval bar inside a UiTimelineLane.
+message UiTimelineSpan {
+  string id = 1;
+  double start_ms = 2;
+  double end_ms = 3;
+  string label = 4;
+  string subtitle = 5;
+  string tone = 6;
+  string kind = 7;
 }
 
 // UiDiffLine is one line of a diff node (revision 49): op is "+", "-", " " or

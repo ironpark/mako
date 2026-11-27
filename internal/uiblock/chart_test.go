@@ -60,7 +60,7 @@ func TestChartsOutOfBoundsAreRefused(t *testing.T) {
 		"spoof":     {`{"kind":"chart","chart":"bar","labels":["a\u202eb"],"series":[{"values":[1]}]}`, "reordering"},
 		"name":      {`{"kind":"chart","chart":"bar","series":[{"name":"a\u0007","values":[1]}]}`, "reordering"},
 		"elsewhere": {`{"kind":"text","text":"x","series":[{"values":[1]}]}`, "only a chart"},
-		"tap":       {`{"kind":"chart","chart":"line","series":[{"values":[1]}],"onTap":["x"]}`, "sends no messages"},
+		"tap":       {`{"kind":"chart","chart":"line","series":[{"values":[1]}],"onTap":["x"]}`, "takes onChange, not onTap"},
 		"children":  {`{"kind":"chart","chart":"line","series":[{"values":[1]}],"children":[{"kind":"text"}]}`, "holds no children"},
 	}
 	for name, c := range cases {
@@ -102,6 +102,32 @@ func TestDonutAndPieCharts(t *testing.T) {
 	for name, c := range bad {
 		if _, err := Read([]byte(c.tree)); err == nil || !strings.Contains(err.Error(), c.want) {
 			t.Errorf("%s: got %v, want %q", name, err, c.want)
+		}
+	}
+}
+
+func TestChartM3TypesSizingAndOnChange(t *testing.T) {
+	for _, typ := range []string{"area", "stacked-bar", "heatmap"} {
+		tr, err := Read([]byte(fmt.Sprintf(
+			`{"kind":"chart","chart":%q,"key":"ch","text":"Metrics","maxHeight":180,"fill":true,"onChange":["pick"],"labels":["A","B","C"],"series":[{"name":"S1","tone":"accent","values":[1,2,3]},{"name":"S2","tone":"success","values":[4,5,6]}]}`,
+			typ,
+		)))
+		if err != nil {
+			t.Fatalf("%s: %v", typ, err)
+		}
+		if !tr.Root.GetChange() || !tr.Root.GetFill() || tr.Root.GetMaxHeight() != 180 {
+			t.Fatalf("%s: unexpected node props %+v", typ, tr.Root)
+		}
+		for _, okVal := range []string{"1", "1:2", `{"index":2,"label":"C"}`, `{"row":1,"col":2,"series":"S2","label":"C","value":6}`} {
+			m, err := tr.Message(&protocol.BlockEvent{Node: "", Kind: protocol.UiChange, Value: okVal})
+			if err != nil || m.Name != "pick" {
+				t.Fatalf("%s valid change %q failed: m=%+v err=%v", typ, okVal, m, err)
+			}
+		}
+		for _, badVal := range []string{"", "-1", "99", "5:0", `{"index":99}`, `{"row":9,"col":0}`, `{"bad":1}`} {
+			if _, err := tr.Message(&protocol.BlockEvent{Node: "", Kind: protocol.UiChange, Value: badVal}); err == nil {
+				t.Errorf("%s invalid change %q unexpectedly accepted", typ, badVal)
+			}
 		}
 	}
 }

@@ -1219,3 +1219,171 @@ func TestGraphM1DropQuotedMaxID(t *testing.T) {
 		t.Fatalf("drop arg = %+v, want id=%d-quotes x=12.34 y=56.78", got, len(id))
 	}
 }
+
+func TestCanvasM3ValidationAndEvents(t *testing.T) {
+	tr, err := Read([]byte(`{
+		"kind":"column",
+		"fill":true,
+		"children":[
+			{
+				"kind":"canvas",
+				"key":"vec",
+				"text":"Vector Diagram",
+				"width":480,
+				"height":220,
+				"maxHeight":320,
+				"grow":1,
+				"onChange":["pick"],
+				"canvasCommands":[
+					{"op":"roundRect","x":10,"y":12,"w":120,"h":64,"r":8,"fillTone":"surfaceAlt","strokeTone":"accent","strokeWidth":2,"hitId":"worker"},
+					{"op":"circle","x":200,"y":48,"r":22,"fillTone":"success","strokeTone":"border","alpha":0.75,"hitId":"worker"},
+					{"op":"line","x1":130,"y1":44,"x2":178,"y2":48,"strokeTone":"muted","strokeWidth":1.5},
+					{"op":"bezier","x1":70,"y1":76,"cx1":100,"cy1":120,"cx2":170,"cy2":120,"x2":200,"y2":70,"strokeTone":"warning","strokeWidth":2},
+					{"op":"text","x":24,"y":40,"text":"Worker","size":"large","tone":"ink"},
+					{"op":"icon","x":96,"y":36,"icon":"cpu","size":16,"tone":"danger"}
+				]
+			}
+		]
+	}`))
+	if err != nil {
+		t.Fatalf("Read canvas: %v", err)
+	}
+	cv := tr.Root.GetChildren()[0]
+	if !cv.GetCanvasPan() || !cv.GetCanvasZoom() {
+		t.Fatalf("expected canvas pan/zoom defaults to be true, got pan=%v zoom=%v", cv.GetCanvasPan(), cv.GetCanvasZoom())
+	}
+	if cv.GetCanvasWidth() != 480 || cv.GetCanvasHeight() != 220 || len(cv.GetCanvasCommands()) != 6 {
+		t.Fatalf("unexpected canvas fields: w=%v h=%v cmds=%d", cv.GetCanvasWidth(), cv.GetCanvasHeight(), len(cv.GetCanvasCommands()))
+	}
+	if cv.GetCanvasCommands()[0].GetAlpha() != 1.0 || cv.GetCanvasCommands()[1].GetAlpha() != 0.75 {
+		t.Fatalf("unexpected command alphas: %v, %v", cv.GetCanvasCommands()[0].GetAlpha(), cv.GetCanvasCommands()[1].GetAlpha())
+	}
+	if cv.GetCanvasCommands()[4].GetSize() != 15 || cv.GetCanvasCommands()[5].GetSize() != 16 {
+		t.Fatalf("unexpected command sizes: text=%v icon=%v", cv.GetCanvasCommands()[4].GetSize(), cv.GetCanvasCommands()[5].GetSize())
+	}
+
+	// Diff/ApplyUi round-trip.
+	next := proto.CloneOf(tr.Root)
+	next.Children[0].CanvasCommands[0].StrokeTone = "danger"
+	applied, err := protocol.ApplyUi(tr.Root, protocol.DiffUi(tr.Root, next))
+	if err != nil || !proto.Equal(applied, next) {
+		t.Fatalf("canvas ApplyUi mismatch: err=%v equal=%v", err, proto.Equal(applied, next))
+	}
+
+	// Explicit pan/zoom false.
+	trNoPan, err := Read([]byte(`{"kind":"canvas","pan":false,"zoom":false,"canvasCommands":[]}`))
+	if err != nil {
+		t.Fatalf("Read empty canvas pan=false: %v", err)
+	}
+	if trNoPan.Root.GetCanvasPan() || trNoPan.Root.GetCanvasZoom() {
+		t.Fatalf("expected explicit pan=false zoom=false, got pan=%v zoom=%v", trNoPan.Root.GetCanvasPan(), trNoPan.Root.GetCanvasZoom())
+	}
+
+	// UiChange validation.
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "/vec", Kind: protocol.UiChange, Value: "worker"}); err != nil || m.Name != "pick" || string(m.Args[0]) != `"worker"` {
+		t.Fatalf("canvas change = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "/vec", Kind: protocol.UiChange, Value: "forged"}); err == nil {
+		t.Fatal("accepted UiChange for unknown canvas hitId")
+	}
+
+	// Explicit alpha: 0 must be preserved (Alpha != nil && *Alpha == 0) while omitted alpha defaults to 1.0.
+	trAlpha, err := Read([]byte(`{"kind":"canvas","canvasCommands":[{"op":"roundRect","x":0,"y":0,"w":20,"h":20,"alpha":0},{"op":"roundRect","x":0,"y":0,"w":20,"h":20}]}`))
+	if err != nil {
+		t.Fatalf("Read alpha=0 canvas: %v", err)
+	}
+	cmdsAlpha := trAlpha.Root.GetCanvasCommands()
+	if cmdsAlpha[0].Alpha == nil || *cmdsAlpha[0].Alpha != 0 || cmdsAlpha[0].GetAlpha() != 0 {
+		t.Fatalf("expected explicit alpha=0 to be preserved, got ptr=%v val=%v", cmdsAlpha[0].Alpha, cmdsAlpha[0].GetAlpha())
+	}
+	if cmdsAlpha[1].Alpha == nil || *cmdsAlpha[1].Alpha != 1.0 || cmdsAlpha[1].GetAlpha() != 1.0 {
+		t.Fatalf("expected omitted alpha to default to 1.0, got ptr=%v val=%v", cmdsAlpha[1].Alpha, cmdsAlpha[1].GetAlpha())
+	}
+	nextAlpha := proto.CloneOf(trAlpha.Root)
+	nextAlpha.CanvasCommands[1].Alpha = proto.Float64(0)
+	appliedAlpha, err := protocol.ApplyUi(trAlpha.Root, protocol.DiffUi(trAlpha.Root, nextAlpha))
+	if err != nil || !proto.Equal(appliedAlpha, nextAlpha) || appliedAlpha.CanvasCommands[1].Alpha == nil || *appliedAlpha.CanvasCommands[1].Alpha != 0 {
+		t.Fatalf("ApplyUi alpha=0 mismatch: err=%v applied=%+v", err, appliedAlpha.GetCanvasCommands())
+	}
+
+	// Strict sandbox & validation rejections.
+	bad := map[string]string{
+		"raw-hex-tone":       `{"kind":"canvas","canvasCommands":[{"op":"text","x":0,"y":0,"text":"x","tone":"#ff0000"}]}`,
+		"raw-hex-fill":       `{"kind":"canvas","canvasCommands":[{"op":"roundRect","x":0,"y":0,"w":10,"h":10,"fillTone":"#123456"}]}`,
+		"raw-hex-stroke":     `{"kind":"canvas","canvasCommands":[{"op":"circle","x":0,"y":0,"r":10,"strokeTone":"#abc"}]}`,
+		"rgb-color":          `{"kind":"canvas","canvasCommands":[{"op":"roundRect","x":0,"y":0,"w":10,"h":10,"fillTone":"rgb(1,2,3)"}]}`,
+		"rgba-color":         `{"kind":"canvas","canvasCommands":[{"op":"roundRect","x":0,"y":0,"w":10,"h":10,"fillTone":"rgba(1,2,3,0.5)"}]}`,
+		"named-color":        `{"kind":"canvas","canvasCommands":[{"op":"roundRect","x":0,"y":0,"w":10,"h":10,"fillTone":"rebeccapurple"}]}`,
+		"bad-op":             `{"kind":"canvas","canvasCommands":[{"op":"eval","x":0,"y":0,"text":"x"}]}`,
+		"empty-op":           `{"kind":"canvas","canvasCommands":[{"op":"","x":0,"y":0}]}`,
+		"bad-size-str":       `{"kind":"canvas","canvasCommands":[{"op":"text","x":0,"y":0,"text":"x","size":"huge"}]}`,
+		"bad-size-num":       `{"kind":"canvas","canvasCommands":[{"op":"text","x":0,"y":0,"text":"x","size":-5}]}`,
+		"bad-alpha":          `{"kind":"canvas","canvasCommands":[{"op":"roundRect","x":0,"y":0,"w":10,"h":10,"alpha":1.5}]}`,
+		"icon-missing-name":  `{"kind":"canvas","canvasCommands":[{"op":"icon","x":0,"y":0}]}`,
+		"bad-icon-name":      `{"kind":"canvas","canvasCommands":[{"op":"icon","x":0,"y":0,"icon":"Bad!"}]}`,
+		"spoof-text":         `{"kind":"canvas","canvasCommands":[{"op":"text","x":0,"y":0,"text":"a\u202eb"}]}`,
+		"ontap-rejected":     `{"kind":"canvas","onTap":["x"],"canvasCommands":[]}`,
+		"width-on-noncanvas": `{"kind":"text","text":"hi","width":100}`,
+		"cmds-on-noncanvas":  `{"kind":"text","text":"hi","canvasCommands":[]}`,
+	}
+	for name, tc := range bad {
+		if _, err := Read([]byte(tc)); err == nil {
+			t.Errorf("%s: expected rejection error, got nil", name)
+		}
+	}
+}
+
+func TestTimelineM3ValidationAndEvents(t *testing.T) {
+	tr, err := Read([]byte(`{
+		"kind":"timeline",
+		"key":"tl",
+		"text":"Execution Trace",
+		"maxHeight":240,
+		"fill":true,
+		"onChange":["inspect"],
+		"timelineLanes":[
+			{
+				"id":"lane-1",
+				"label":"Agent Turns",
+				"spans":[
+					{"id":"sp-1","startMs":0,"endMs":4200,"label":"Plan","subtitle":"opus","tone":"accent","kind":"turn"},
+					{"id":"sp-zero","startMs":5000,"endMs":5000,"label":"Marker","tone":"success"}
+				]
+			},
+			{"id":"lane-empty","label":"Idle","spans":[]}
+		]
+	}`))
+	if err != nil {
+		t.Fatalf("Read timeline: %v", err)
+	}
+	if len(tr.Root.GetTimelineLanes()) != 2 || len(tr.Root.GetTimelineLanes()[0].GetSpans()) != 2 {
+		t.Fatalf("unexpected timeline lanes: %+v", tr.Root.GetTimelineLanes())
+	}
+	if m, err := tr.Message(&protocol.BlockEvent{Node: "", Kind: protocol.UiChange, Value: "sp-1"}); err != nil || m.Name != "inspect" || string(m.Args[0]) != `"sp-1"` {
+		t.Fatalf("timeline change = %+v, %v", m, err)
+	}
+	if _, err := tr.Message(&protocol.BlockEvent{Node: "", Kind: protocol.UiChange, Value: "missing"}); err == nil {
+		t.Fatal("accepted UiChange for unknown timeline span id")
+	}
+
+	// Empty lanes array is valid.
+	if _, err := Read([]byte(`{"kind":"timeline","timelineLanes":[]}`)); err != nil {
+		t.Fatalf("empty timeline lanes rejected: %v", err)
+	}
+
+	bad := map[string]string{
+		"end-before-start": `{"kind":"timeline","timelineLanes":[{"id":"l1","label":"L","spans":[{"id":"s1","startMs":500,"endMs":100,"label":"Bad"}]}]}`,
+		"missing-ms":       `{"kind":"timeline","timelineLanes":[{"id":"l1","label":"L","spans":[{"id":"s1","startMs":0,"label":"Bad"}]}]}`,
+		"dup-lane-id":      `{"kind":"timeline","timelineLanes":[{"id":"l1","label":"A","spans":[]},{"id":"l1","label":"B","spans":[]}]}`,
+		"dup-span-id":      `{"kind":"timeline","timelineLanes":[{"id":"l1","label":"A","spans":[{"id":"s1","startMs":0,"endMs":1}]},{"id":"l2","label":"B","spans":[{"id":"s1","startMs":2,"endMs":3}]}]}`,
+		"bad-tone":         `{"kind":"timeline","timelineLanes":[{"id":"l1","label":"A","spans":[{"id":"s1","startMs":0,"endMs":1,"tone":"#ff0000"}]}]}`,
+		"bad-kind":         `{"kind":"timeline","timelineLanes":[{"id":"l1","label":"A","spans":[{"id":"s1","startMs":0,"endMs":1,"kind":"bad kind!"}]}]}`,
+		"ontap-rejected":   `{"kind":"timeline","onTap":["x"],"timelineLanes":[]}`,
+		"on-nontimeline":   `{"kind":"text","text":"x","timelineLanes":[]}`,
+	}
+	for name, tc := range bad {
+		if _, err := Read([]byte(tc)); err == nil {
+			t.Errorf("%s: expected rejection error, got nil", name)
+		}
+	}
+}

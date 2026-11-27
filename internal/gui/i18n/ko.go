@@ -1748,9 +1748,13 @@ var catalogKo = map[string]string{
 	"Recipient":                "수신자",
 
 	// Plugin graph controls
-	"Graph":    "그래프",
-	"Zoom in":  "확대",
-	"Zoom out": "축소",
+	"Graph":             "그래프",
+	"Canvas":            "캔버스",
+	"Timeline":          "타임라인",
+	"No data.":          "데이터가 없습니다.",
+	"No timeline data.": "타임라인 데이터가 없습니다.",
+	"Zoom in":           "확대",
+	"Zoom out":          "축소",
 
 	// Multi-window support
 	"Could not open window":            "창을 열 수 없습니다",

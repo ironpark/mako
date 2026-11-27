@@ -24,6 +24,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"google.golang.org/protobuf/proto"
 )
 
 // The UI vocabulary's kinds.
@@ -58,6 +59,8 @@ const (
 	KindDivider     = "divider"
 	KindChart       = "chart"
 	KindGraph       = "graph"
+	KindCanvas      = "canvas"
+	KindTimeline    = "timeline"
 	KindMenu        = "menu"
 	KindMenuItem    = "menu_item"
 	KindCheckbox    = "checkbox"
@@ -78,11 +81,17 @@ const (
 var Kinds = []string{KindColumn, KindRow, KindStack, KindCard, KindScroll, KindWrap, KindGrid, KindSplit,
 	KindCollapsible, KindBreadcrumb, KindTree, KindTreeItem, KindText, KindIcon, KindPill, KindChip, KindButton,
 	KindList, KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindTable, KindMarkdown, KindCode,
-	KindProgress, KindDivider, KindChart, KindGraph, KindMenu, KindMenuItem, KindCheckbox, KindDialog, KindDag,
+	KindProgress, KindDivider, KindChart, KindGraph, KindCanvas, KindTimeline, KindMenu, KindMenuItem, KindCheckbox, KindDialog, KindDag,
 	KindDiff, KindAlert, KindEmpty, KindStat, KindRadio, KindSlider, KindKbd, KindSkeleton, KindSpacer}
 
 // Charts are the kinds of chart a chart node draws.
-var Charts = []string{"line", "bar", "sparkline", "donut", "pie"}
+var Charts = []string{"line", "bar", "sparkline", "donut", "pie", "area", "stacked-bar", "heatmap"}
+
+// CanvasOps are the sandboxed 2D vector ops a canvas node accepts.
+var CanvasOps = []string{"roundRect", "circle", "line", "bezier", "text", "icon"}
+
+// CanvasTones are the strict theme colour tokens a canvas command accepts.
+var CanvasTones = []string{"", "muted", "faint", "accent", "success", "warning", "danger", "surface", "surfaceAlt", "border", "text", "ink"}
 
 // Tones are the colour tokens a node may take.
 var Tones = []string{"", "muted", "faint", "accent", "success", "warning", "danger"}
@@ -197,6 +206,22 @@ const (
 	maxDiffLineText = 4 << 10
 	maxDiffLabel    = 256
 	maxSliderBound  = 1e12
+	// Sandboxed 2D canvas bounds.
+	maxCanvasCommands = 1000
+	maxCanvasCoord    = 1e6
+	maxCanvasSize     = 4000
+	maxCanvasText     = 1024
+	maxCanvasHitID    = 128
+	maxCanvasStroke   = 64
+	maxCanvasFontSize = 256
+	// Timeline bounds.
+	maxTimelineLanes    = 64
+	maxTimelineSpans    = 500
+	maxTimelineID       = 128
+	maxTimelineLabel    = 128
+	maxTimelineSubtitle = 160
+	maxTimelineKind     = 32
+	maxTimelineMs       = 1e15
 )
 
 var (
@@ -257,9 +282,60 @@ type jsNode struct {
 	Min         *float64        `json:"min"`
 	Max         *float64        `json:"max"`
 	Step        *float64        `json:"step"`
-	DiffLines   []*jsDiffLine   `json:"diffLines"`
-	DiffFrom    string          `json:"diffFrom"`
-	DiffTo      string          `json:"diffTo"`
+	DiffLines      []*jsDiffLine      `json:"diffLines"`
+	DiffFrom       string             `json:"diffFrom"`
+	DiffTo         string             `json:"diffTo"`
+	Width          *float64           `json:"width"`
+	Height         *float64           `json:"height"`
+	Pan            *bool              `json:"pan"`
+	Zoom           *bool              `json:"zoom"`
+	CanvasCommands []*jsCanvasCommand `json:"canvasCommands"`
+	TimelineLanes  []*jsTimelineLane  `json:"timelineLanes"`
+}
+
+// jsCanvasCommand is one sandboxed 2D vector drawing command as the prelude writes it.
+type jsCanvasCommand struct {
+	Op          string          `json:"op"`
+	X           float64         `json:"x"`
+	Y           float64         `json:"y"`
+	W           float64         `json:"w"`
+	H           float64         `json:"h"`
+	R           float64         `json:"r"`
+	X1          float64         `json:"x1"`
+	Y1          float64         `json:"y1"`
+	X2          float64         `json:"x2"`
+	Y2          float64         `json:"y2"`
+	Cx1         float64         `json:"cx1"`
+	Cy1         float64         `json:"cy1"`
+	Cx2         float64         `json:"cx2"`
+	Cy2         float64         `json:"cy2"`
+	StrokeWidth float64         `json:"strokeWidth"`
+	Alpha       *float64        `json:"alpha"`
+	Text        string          `json:"text"`
+	Icon        string          `json:"icon"`
+	Size        json.RawMessage `json:"size"`
+	Tone        string          `json:"tone"`
+	FillTone    string          `json:"fillTone"`
+	StrokeTone  string          `json:"strokeTone"`
+	HitID       string          `json:"hitId"`
+}
+
+// jsTimelineLane is one track lane of a timeline node as the prelude writes it.
+type jsTimelineLane struct {
+	ID    string            `json:"id"`
+	Label string            `json:"label"`
+	Spans []*jsTimelineSpan `json:"spans"`
+}
+
+// jsTimelineSpan is one timed interval bar inside a timeline lane.
+type jsTimelineSpan struct {
+	ID       string   `json:"id"`
+	StartMs  *float64 `json:"startMs"`
+	EndMs    *float64 `json:"endMs"`
+	Label    string   `json:"label"`
+	Subtitle string   `json:"subtitle"`
+	Tone     string   `json:"tone"`
+	Kind     string   `json:"kind"`
 }
 
 // jsDiffLine is one line of a diff node as the prelude writes it.
@@ -503,8 +579,8 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 			ratio = *j.Ratio
 		}
 	}
-	if j.Fill && j.Kind != KindGraph && (depth != 1 || (j.Kind != KindColumn && j.Kind != KindRow && j.Kind != KindSplit)) {
-		return nil, fmt.Errorf("%s: fill is only allowed on a root column, row, or split, or a graph", where(id))
+	if j.Fill && j.Kind != KindGraph && j.Kind != KindCanvas && j.Kind != KindTimeline && j.Kind != KindChart && (depth != 1 || (j.Kind != KindColumn && j.Kind != KindRow && j.Kind != KindSplit)) {
+		return nil, fmt.Errorf("%s: fill is only allowed on a root column, row, or split, or a graph, canvas, timeline or chart", where(id))
 	}
 	if !languageTag.MatchString(j.Language) {
 		return nil, fmt.Errorf("%s: language %q is not a language's name", where(id), j.Language)
@@ -589,7 +665,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 	}
 	if j.MaxHeight != 0 {
 		switch j.Kind {
-		case KindScroll, KindDag, KindCode, KindDiff, KindSkeleton:
+		case KindScroll, KindDag, KindCode, KindDiff, KindSkeleton, KindChart, KindCanvas, KindTimeline:
 			if !finite(j.MaxHeight, 0, maxScrollH) {
 				return nil, fmt.Errorf("%s: maxHeight is from 0 to %d", where(id), maxScrollH)
 			}
@@ -598,7 +674,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 				return nil, fmt.Errorf("%s: graph maxHeight is from %d to %d", where(id), minGraphHeight, maxGraphHeight)
 			}
 		default:
-			return nil, fmt.Errorf("%s: only a scroll, graph, dag, code, diff or skeleton node takes maxHeight", where(id))
+			return nil, fmt.Errorf("%s: only a scroll, graph, dag, code, diff, skeleton, chart, canvas or timeline node takes maxHeight", where(id))
 		}
 	}
 	if j.Layout != "" && j.Kind != KindGraph {
@@ -683,6 +759,12 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 	if err := r.diff(j, n, id); err != nil {
 		return nil, err
 	}
+	if err := r.canvas(j, n, id); err != nil {
+		return nil, err
+	}
+	if err := r.timeline(j, n, id); err != nil {
+		return nil, err
+	}
 	if j.ContextMenu != "" {
 		args := r.t.contextArgs[j.ContextMenu]
 		if args == nil {
@@ -749,7 +831,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 		}
 	}
 	switch j.Kind {
-	case KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindBreadcrumb, KindCheckbox, KindDialog, KindDag, KindRadio, KindSlider, KindDiff, KindAlert:
+	case KindInput, KindTextarea, KindToggle, KindSelect, KindTabs, KindBreadcrumb, KindCheckbox, KindDialog, KindDag, KindRadio, KindSlider, KindDiff, KindAlert, KindChart, KindCanvas, KindTimeline:
 		if a.tap != nil {
 			return nil, fmt.Errorf("%s: a %s takes onChange, not onTap", where(id), j.Kind)
 		}
@@ -788,7 +870,7 @@ func (r *treeReader) node(j *jsNode, id string, depth, menuDepth int, ctxMenuKey
 			return nil, fmt.Errorf("%s: a markdown does not take drag", where(id))
 		}
 		a.change = linkMsg
-	case KindDivider, KindProgress, KindCode, KindChart, KindMenu, KindKbd, KindSkeleton, KindSpacer:
+	case KindDivider, KindProgress, KindCode, KindMenu, KindKbd, KindSkeleton, KindSpacer:
 		if a.tap != nil || a.change != nil || a.submit != nil || a.drop != nil {
 			return nil, fmt.Errorf("%s: a %s sends no messages", where(id), j.Kind)
 		}
@@ -906,9 +988,14 @@ func (r *treeReader) chart(j *jsNode, n *protocol.UiNode, id string) error {
 		return fmt.Errorf("%s: chart %q is not one of %s", where(id), j.Chart, strings.Join(Charts, ", "))
 	}
 	radial := j.Chart == "donut" || j.Chart == "pie"
+	heatmap := j.Chart == "heatmap"
 	if radial {
 		if len(j.Series) != 1 {
 			return fmt.Errorf("%s: a %s chart has 1 series", where(id), j.Chart)
+		}
+	} else if heatmap {
+		if len(j.Series) == 0 || len(j.Series) > maxPieSlices {
+			return fmt.Errorf("%s: a heatmap chart has 1 to %d series", where(id), maxPieSlices)
 		}
 	} else if len(j.Series) == 0 || len(j.Series) > maxSeries {
 		return fmt.Errorf("%s: a chart has 1 to %d series", where(id), maxSeries)
@@ -1311,6 +1398,238 @@ func (r *treeReader) diff(j *jsNode, n *protocol.UiNode, id string) error {
 		return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
 	}
 	n.DiffFrom, n.DiffTo = j.DiffFrom, j.DiffTo
+	return nil
+}
+
+// canvas validates a sandboxed 2D vector canvas node and its drawing commands.
+func (r *treeReader) canvas(j *jsNode, n *protocol.UiNode, id string) error {
+	if j.Kind != KindCanvas {
+		if j.Width != nil || j.Height != nil || j.Pan != nil || j.Zoom != nil || j.CanvasCommands != nil {
+			return fmt.Errorf("%s: only a canvas has width, height, pan, zoom or canvasCommands", where(id))
+		}
+		return nil
+	}
+	if j.Width != nil {
+		if !finite(*j.Width, 0, maxCanvasSize) {
+			return fmt.Errorf("%s: canvas width must be from 0 to %d", where(id), maxCanvasSize)
+		}
+		n.CanvasWidth = *j.Width
+	}
+	if j.Height != nil {
+		if !finite(*j.Height, 0, maxCanvasSize) {
+			return fmt.Errorf("%s: canvas height must be from 0 to %d", where(id), maxCanvasSize)
+		}
+		n.CanvasHeight = *j.Height
+	}
+	pan := true
+	if j.Pan != nil {
+		pan = *j.Pan
+	}
+	zoom := true
+	if j.Zoom != nil {
+		zoom = *j.Zoom
+	}
+	n.CanvasPan = pan
+	n.CanvasZoom = zoom
+	if len(j.CanvasCommands) > maxCanvasCommands {
+		return fmt.Errorf("%s: a canvas has at most %d commands", where(id), maxCanvasCommands)
+	}
+	for i, cmd := range j.CanvasCommands {
+		if cmd == nil {
+			return fmt.Errorf("%s: canvas command %d is null", where(id), i)
+		}
+		if !slices.Contains(CanvasOps, cmd.Op) {
+			return fmt.Errorf("%s: canvas command %d op %q is not one of %s", where(id), i, cmd.Op, strings.Join(CanvasOps, ", "))
+		}
+		if !slices.Contains(CanvasTones, cmd.Tone) {
+			return fmt.Errorf("%s: canvas command %d tone %q is not a colour token", where(id), i, cmd.Tone)
+		}
+		if !slices.Contains(CanvasTones, cmd.FillTone) {
+			return fmt.Errorf("%s: canvas command %d fillTone %q is not a colour token", where(id), i, cmd.FillTone)
+		}
+		if !slices.Contains(CanvasTones, cmd.StrokeTone) {
+			return fmt.Errorf("%s: canvas command %d strokeTone %q is not a colour token", where(id), i, cmd.StrokeTone)
+		}
+		for _, coord := range []float64{cmd.X, cmd.Y, cmd.X1, cmd.Y1, cmd.X2, cmd.Y2, cmd.Cx1, cmd.Cy1, cmd.Cx2, cmd.Cy2} {
+			if !finite(coord, -maxCanvasCoord, maxCanvasCoord) {
+				return fmt.Errorf("%s: canvas command %d coordinate out of range", where(id), i)
+			}
+		}
+		for _, dim := range []float64{cmd.W, cmd.H, cmd.R} {
+			if !finite(dim, 0, maxCanvasSize) {
+				return fmt.Errorf("%s: canvas command %d dimension must be from 0 to %d", where(id), i, maxCanvasSize)
+			}
+		}
+		if !finite(cmd.StrokeWidth, 0, maxCanvasStroke) {
+			return fmt.Errorf("%s: canvas command %d strokeWidth must be from 0 to %d", where(id), i, maxCanvasStroke)
+		}
+		alpha := 1.0
+		if cmd.Alpha != nil {
+			if !finite(*cmd.Alpha, 0, 1) {
+				return fmt.Errorf("%s: canvas command %d alpha must be from 0 to 1", where(id), i)
+			}
+			alpha = *cmd.Alpha
+		}
+		size, err := parseCanvasSize(cmd.Size)
+		if err != nil {
+			return fmt.Errorf("%s: canvas command %d: %w", where(id), i, err)
+		}
+		if cmd.Op == "icon" && cmd.Icon == "" {
+			return fmt.Errorf("%s: canvas command %d icon op requires icon", where(id), i)
+		}
+		if cmd.Icon != "" && (len(cmd.Icon) > 48 || !iconName.MatchString(cmd.Icon)) {
+			return fmt.Errorf("%s: canvas command %d icon %q is not an icon's name", where(id), i, cmd.Icon)
+		}
+		if len(cmd.Text) > maxCanvasText || strings.ContainsFunc(cmd.Text, spoofingInline) {
+			return fmt.Errorf("%s: canvas command %d text is over %d bytes or holds control or reordering characters", where(id), i, maxCanvasText)
+		}
+		if cmd.HitID != "" && (len(cmd.HitID) > maxCanvasHitID || strings.ContainsFunc(cmd.HitID, Spoofing)) {
+			return fmt.Errorf("%s: canvas command %d invalid hitId %q", where(id), i, cmd.HitID)
+		}
+		r.text += len(cmd.Text) + len(cmd.Icon) + len(cmd.HitID)
+		if r.text > maxTreeText {
+			return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+		}
+		n.CanvasCommands = append(n.CanvasCommands, &protocol.UiCanvasCommand{
+			Op:          cmd.Op,
+			X:           cmd.X,
+			Y:           cmd.Y,
+			W:           cmd.W,
+			H:           cmd.H,
+			R:           cmd.R,
+			X1:          cmd.X1,
+			Y1:          cmd.Y1,
+			X2:          cmd.X2,
+			Y2:          cmd.Y2,
+			Cx1:         cmd.Cx1,
+			Cy1:         cmd.Cy1,
+			Cx2:         cmd.Cx2,
+			Cy2:         cmd.Cy2,
+			StrokeWidth: cmd.StrokeWidth,
+			Alpha:       proto.Float64(alpha),
+			Text:        cmd.Text,
+			Icon:        cmd.Icon,
+			Size:        size,
+			Tone:        cmd.Tone,
+			FillTone:    cmd.FillTone,
+			StrokeTone:  cmd.StrokeTone,
+			HitId:       cmd.HitID,
+		})
+	}
+	return nil
+}
+
+func parseCanvasSize(raw json.RawMessage) (float64, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		switch s {
+		case "":
+			return 0, nil
+		case "small":
+			return 11.5, nil
+		case "medium":
+			return 13, nil
+		case "large":
+			return 15, nil
+		default:
+			return 0, fmt.Errorf("size %q is not small, medium or large", s)
+		}
+	}
+	var v float64
+	if err := json.Unmarshal(raw, &v); err != nil || !finite(v, 0, maxCanvasFontSize) {
+		return 0, fmt.Errorf("size must be small, medium, large, or a number from 0 to %d", maxCanvasFontSize)
+	}
+	return v, nil
+}
+
+// timeline validates a timeline node's lanes and spans.
+func (r *treeReader) timeline(j *jsNode, n *protocol.UiNode, id string) error {
+	if j.Kind != KindTimeline {
+		if j.TimelineLanes != nil {
+			return fmt.Errorf("%s: only a timeline has timelineLanes", where(id))
+		}
+		return nil
+	}
+	if len(j.TimelineLanes) > maxTimelineLanes {
+		return fmt.Errorf("%s: a timeline has at most %d lanes", where(id), maxTimelineLanes)
+	}
+	laneIDs := make(map[string]bool, len(j.TimelineLanes))
+	spanIDs := map[string]bool{}
+	totalSpans := 0
+	for i, lane := range j.TimelineLanes {
+		if lane == nil {
+			return fmt.Errorf("%s: timeline lane %d is null", where(id), i)
+		}
+		if lane.ID == "" || utf8.RuneCountInString(lane.ID) > maxTimelineID || len(lane.ID) > maxTimelineID*4 || strings.ContainsFunc(lane.ID, Spoofing) {
+			return fmt.Errorf("%s: timeline lane %d has invalid id %q", where(id), i, lane.ID)
+		}
+		if laneIDs[lane.ID] {
+			return fmt.Errorf("%s: timeline lane id %q is duplicated", where(id), lane.ID)
+		}
+		laneIDs[lane.ID] = true
+		if len(lane.Label) > maxTimelineLabel || strings.ContainsFunc(lane.Label, Spoofing) {
+			return fmt.Errorf("%s: timeline lane %q has invalid label", where(id), lane.ID)
+		}
+		r.text += len(lane.ID) + len(lane.Label)
+		outLane := &protocol.UiTimelineLane{
+			Id:    lane.ID,
+			Label: lane.Label,
+		}
+		for si, sp := range lane.Spans {
+			totalSpans++
+			if totalSpans > maxTimelineSpans {
+				return fmt.Errorf("%s: a timeline has at most %d spans", where(id), maxTimelineSpans)
+			}
+			if sp == nil {
+				return fmt.Errorf("%s: timeline lane %q span %d is null", where(id), lane.ID, si)
+			}
+			if sp.ID == "" || utf8.RuneCountInString(sp.ID) > maxTimelineID || len(sp.ID) > maxTimelineID*4 || strings.ContainsFunc(sp.ID, Spoofing) {
+				return fmt.Errorf("%s: timeline span %d has invalid id %q", where(id), si, sp.ID)
+			}
+			if spanIDs[sp.ID] {
+				return fmt.Errorf("%s: timeline span id %q is duplicated", where(id), sp.ID)
+			}
+			spanIDs[sp.ID] = true
+			if sp.StartMs == nil || sp.EndMs == nil || !finite(*sp.StartMs, -maxTimelineMs, maxTimelineMs) || !finite(*sp.EndMs, -maxTimelineMs, maxTimelineMs) {
+				return fmt.Errorf("%s: timeline span %q requires finite startMs and endMs", where(id), sp.ID)
+			}
+			if *sp.EndMs < *sp.StartMs {
+				return fmt.Errorf("%s: timeline span %q has endMs < startMs", where(id), sp.ID)
+			}
+			if len(sp.Label) > maxTimelineLabel || strings.ContainsFunc(sp.Label, Spoofing) {
+				return fmt.Errorf("%s: timeline span %q has invalid label", where(id), sp.ID)
+			}
+			if len(sp.Subtitle) > maxTimelineSubtitle || strings.ContainsFunc(sp.Subtitle, Spoofing) {
+				return fmt.Errorf("%s: timeline span %q has invalid subtitle", where(id), sp.ID)
+			}
+			if !slices.Contains(Tones, sp.Tone) {
+				return fmt.Errorf("%s: timeline span %q: tone %q is not a colour token", where(id), sp.ID, sp.Tone)
+			}
+			if sp.Kind != "" && (len(sp.Kind) > maxTimelineKind || !graphEdgeKindName.MatchString(sp.Kind)) {
+				return fmt.Errorf("%s: timeline span %q has invalid kind %q", where(id), sp.ID, sp.Kind)
+			}
+			r.text += len(sp.ID) + len(sp.Label) + len(sp.Subtitle) + len(sp.Kind)
+			if r.text > maxTreeText {
+				return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+			}
+			outLane.Spans = append(outLane.Spans, &protocol.UiTimelineSpan{
+				Id:       sp.ID,
+				StartMs:  *sp.StartMs,
+				EndMs:    *sp.EndMs,
+				Label:    sp.Label,
+				Subtitle: sp.Subtitle,
+				Tone:     sp.Tone,
+				Kind:     sp.Kind,
+			})
+		}
+		if r.text > maxTreeText {
+			return fmt.Errorf("the tree holds more than %d KiB of text", maxTreeText>>10)
+		}
+		n.TimelineLanes = append(n.TimelineLanes, outLane)
+	}
 	return nil
 }
 
