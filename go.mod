@@ -11,8 +11,8 @@ require (
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/grandcat/zeroconf v1.0.0
-	github.com/ironpark/ggfx v0.1.0
-	github.com/ironpark/ggui v0.8.0
+	github.com/ironpark/ggfx v0.2.1
+	github.com/ironpark/ggui v0.8.2
 	github.com/ironpark/ggui/pkg/fswatch v0.2.3
 	github.com/ironpark/ggwd v0.0.0-20261123092851-969c1988e18d
 	github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291
@@ -68,6 +68,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/ipfs/go-cid v0.6.2 // indirect
+	github.com/ironpark/svgx v0.1.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
