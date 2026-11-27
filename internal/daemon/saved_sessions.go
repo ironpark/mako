@@ -405,11 +405,12 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 			w.Base = gitstat.Branch(project)
 		}
 		wtCtx, cancel := context.WithTimeout(ctx, time.Minute)
-		w.Repo, w.Path, err = gitstat.AddWorktree(wtCtx, project, w.GetBranch(), cmp.Or(w.GetStart(), w.GetBase()))
+		repo, path, branch, err := gitstat.AddWorktree(wtCtx, project, w.GetBranch(), cmp.Or(w.GetStart(), w.GetBase()))
 		cancel()
 		if err != nil {
 			return nil, err
 		}
+		w.Repo, w.Path, w.Branch = repo, path, branch
 		req.Project = w.GetPath()
 	}
 	// A project that gives its folders gives them to an agent started in

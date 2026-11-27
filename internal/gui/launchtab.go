@@ -148,7 +148,7 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 		T("A worktree of the folder's repository, beside it, on a new branch: agents in one repository then keep out of each other's files."))
 	top := widget.Row(folderMenu(m, l, where), nodeMenu(m, l, where), widget.Spacer(), gitToggle).Gap(4).Align(widget.AlignCenter)
 	branchRow := ggui.If(worktree, func() ggui.Widget {
-		return widget.Box(ui.TextField(branch).Placeholder(T("Branch, such as agent/fix-login")).Name(T("Branch")).
+		return widget.Box(ui.TextField(branch).Placeholder(T("Branch, such as agent/fix-login. Empty names one after the repository")).Name(T("Branch")).
 			OnSubmit(func(string) { start() })).Pad(0, 4)
 	})
 	hasErr := ggui.Map(l.Err, func(s string) bool { return s != "" })

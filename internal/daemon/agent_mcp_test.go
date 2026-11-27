@@ -10,7 +10,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -20,6 +22,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
@@ -494,6 +497,30 @@ func TestProjectMCPChildrenShareTheirParentsWorktreeScope(t *testing.T) {
 	}
 	if s.Info().GetProject() != worktree {
 		t.Fatal("child changed the working directory")
+	}
+}
+
+func TestWorktreeSessionWithoutBranchGetsOneNamedAfterRepo(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	d, _ := projectMCPDaemon(t)
+	repo := filepath.Join(t.TempDir(), "My Repo")
+	for _, args := range [][]string{{"init", "-q", "-b", "main", repo}, {"-C", repo, "-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "first"}} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	t.Cleanup(func() { os.RemoveAll(filepath.Join(filepath.Dir(repo), "My Repo.worktrees")) })
+
+	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: repo, Worktree: &protocol.Worktree{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := s.Info().GetWorktree()
+	if !regexp.MustCompile(`^My-Repo-[0-9a-z]{6}$`).MatchString(w.GetBranch()) || filepath.Base(w.GetPath()) != w.GetBranch() ||
+		w.GetBase() != "main" || s.Info().GetProject() != w.GetPath() || gitstat.Branch(w.GetPath()) != w.GetBranch() {
+		t.Fatalf("worktree %+v project %s", w, s.Info().GetProject())
 	}
 }
 
