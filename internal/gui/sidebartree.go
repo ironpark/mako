@@ -93,6 +93,13 @@ func (m *model) scopeLocation() (node, dir string, ok bool) {
 	if cur.Section == "" || cur.Space != p.spaceID(p.Space) {
 		return "", "", false
 	}
+	return m.scopeKeyLocation(cur.scopeKey, p)
+}
+
+func (m *model) scopeKeyLocation(cur scopeKey, p spaceSet) (node, dir string, ok bool) {
+	if cur.Section == "" {
+		return "", "", false
+	}
 	nodes := m.Nodes.Get()
 	if i := projectByID(p.Projects, cur.Section); i >= 0 {
 		g := projectGroup(p.Projects[i], nodes)

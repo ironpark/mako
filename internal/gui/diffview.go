@@ -373,12 +373,22 @@ func (m *model) agentsFor(root fileRoot) []*protocol.SessionInfo {
 // askAgent puts a note in a session's composer and shows its chat, for the
 // user to finish and send.
 func (m *model) askAgent(id, text string) {
+	m.askAgentIn(nil, id, text)
+}
+
+// askAgentIn puts a note in a session's composer and shows its chat in sw (or
+// the main workspace when sw is nil).
+func (m *model) askAgentIn(sw *spaceWindowState, id, text string) {
 	draft := strings.TrimRight(m.composerDraft(id), "\n")
 	if draft != "" {
 		draft += "\n\n"
 	}
 	m.setComposerDraft(id, draft+text)
 	m.setChatMode(id, true)
+	if sw != nil {
+		m.spaceWindowSelectSession(sw, id)
+		return
+	}
 	m.showTab(id)
 }
 

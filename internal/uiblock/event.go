@@ -270,18 +270,24 @@ func validChartChange(n *protocol.UiNode, val string) bool {
 		if obj.Value != nil && (math.IsNaN(*obj.Value) || math.IsInf(*obj.Value, 0)) {
 			return false
 		}
-		if obj.Index != nil {
+		hasIdx := obj.Index != nil
+		hasRC := obj.Row != nil || obj.Col != nil
+		if hasIdx && hasRC {
+			return false
+		}
+		if hasIdx {
 			return *obj.Index >= 0 && *obj.Index < maxChartPoints && (maxCols == 0 || *obj.Index < maxCols)
 		}
 		if obj.Row != nil && obj.Col != nil {
-			return *obj.Row >= 0 && *obj.Row < numSeries && *obj.Col >= 0 && *obj.Col < maxCols
+			r, c := *obj.Row, *obj.Col
+			return r >= 0 && r < numSeries && c >= 0 && c < len(n.Series[r].GetValues())
 		}
 		return false
 	}
 	if rowStr, colStr, ok := strings.Cut(val, ":"); ok {
 		row, err1 := strconv.Atoi(rowStr)
 		col, err2 := strconv.Atoi(colStr)
-		return err1 == nil && err2 == nil && row >= 0 && col >= 0 && row < numSeries && col < maxCols
+		return err1 == nil && err2 == nil && row >= 0 && col >= 0 && row < numSeries && col < len(n.Series[row].GetValues())
 	}
 	return false
 }

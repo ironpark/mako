@@ -218,7 +218,11 @@ func pluginMainPageHeaderBar(m *model, pg sidebarPageDef, onClose func()) ggui.W
 // full central workspace area, lifting any leading toolbar row into a sleek
 // top action strip over the full-size body.
 func mainPluginPageView(m *model, pg sidebarPageDef) ggui.Widget {
-	bv := treeBlockView(m, pg.Block, blockOrigin{plugin: pg.PluginID}, pg.Title, pg.Scope, nil, blockPlace{Solo: true})
+	return mainPluginPageViewIn(m, pg, nil)
+}
+
+func mainPluginPageViewIn(m *model, pg sidebarPageDef, sw *spaceWindowState) ggui.Widget {
+	bv := treeBlockView(m, pg.Block, blockOrigin{plugin: pg.PluginID}, pg.Title, pg.Scope, nil, blockPlace{Solo: true, SpaceWindow: sw})
 	showScope := isScoped(pg.Scope)
 	toolbar := ggui.Reactive(func() ggui.Widget {
 		hasBar := bv.hasToolbar != nil && bv.hasToolbar.Get()

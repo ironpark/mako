@@ -696,10 +696,12 @@ export default {
         },
         async resetAll(s) {
           const ctx = mako.blocks.context("explorer");
-          const keys = await ctx.storage.listKeys("");
-          for (const k of keys.keys || []) {
-            await ctx.storage.deleteItem(k);
-          }
+          try {
+            const keys = await ctx.storage.listKeys("");
+            for (const k of keys.keys || []) {
+              await ctx.storage.deleteItem(k);
+            }
+          } catch (_) {}
           s.query = "";
           s.totalNotes = 0;
           await ctx.ui.toast(ctx.t("toast.reset"));
@@ -754,8 +756,13 @@ export default {
         const tabKey = (ctx.tab && ctx.tab.key) || "default";
         s.comments = await loadSavedComments(ctx, `${tabKey}:${s.presetId}`);
         s.commentSeq = Math.max(s.commentSeq || 0, maxCommentSeq(s.comments));
-        const note = await ctx.storage.getItem(`scratch:${tabKey}`);
-        s.scratchpad = (note.found && typeof note.value === "string") ? sanitizeMultilineText(note.value, 4096) : "";
+        s.scratchpad = "";
+        try {
+          const note = await ctx.storage.getItem(`scratch:${tabKey}`);
+          s.scratchpad = (note.found && typeof note.value === "string") ? sanitizeMultilineText(note.value, 4096) : "";
+        } catch (_) {
+          s.scratchpad = "";
+        }
         let loadedPositions = {};
         try {
           const gp = await ctx.storage.getItem(`graph-pos:${tabKey}`);
@@ -883,7 +890,9 @@ export default {
           s.comments = [...existing, { id: `c${seq}`, line: lineNo, text }];
           s.commentDraft = "";
           const tabKey = (ctx.tab && ctx.tab.key) || "default";
-          await ctx.storage.setItem(`comments:${tabKey}:${s.presetId}`, JSON.stringify(s.comments));
+          try {
+            await ctx.storage.setItem(`comments:${tabKey}:${s.presetId}`, JSON.stringify(s.comments));
+          } catch (_) {}
           mako.blocks.reload("explorer", "");
           await ctx.ui.toast(ctx.t("toast.saved"));
         },
@@ -891,7 +900,9 @@ export default {
           const ctx = mako.blocks.context("viewer");
           s.comments = [];
           const tabKey = (ctx.tab && ctx.tab.key) || "default";
-          await ctx.storage.deleteItem(`comments:${tabKey}:${s.presetId}`);
+          try {
+            await ctx.storage.deleteItem(`comments:${tabKey}:${s.presetId}`);
+          } catch (_) {}
           mako.blocks.reload("explorer", "");
         },
         setSlider(s, val) {
@@ -929,7 +940,9 @@ export default {
           const text = sanitizeMultilineText(vals["scratch-input"] ?? s.scratchpad ?? "", 4096);
           s.scratchpad = text;
           const tabKey = (ctx.tab && ctx.tab.key) || "default";
-          await ctx.storage.setItem(`scratch:${tabKey}`, text);
+          try {
+            await ctx.storage.setItem(`scratch:${tabKey}`, text);
+          } catch (_) {}
           await ctx.ui.toast(ctx.t("toast.saved"));
         },
         async copyTabKey() {
@@ -1019,7 +1032,9 @@ export default {
           const tabKey = (ctx.tab && ctx.tab.key) || "default";
           const next = { ...(s.graphPositions || {}), [pos.id]: { x: pos.x, y: pos.y } };
           s.graphPositions = next;
-          await ctx.storage.setItem(`graph-pos:${tabKey}`, JSON.stringify(next));
+          try {
+            await ctx.storage.setItem(`graph-pos:${tabKey}`, JSON.stringify(next));
+          } catch (_) {}
         },
         async resetGraphPositions(s) {
           const ctx = mako.blocks.context("viewer");
@@ -1027,7 +1042,9 @@ export default {
           s.graphPositions = {};
           s.graphLastDoubleTap = "";
           s.graphSelected = "";
-          await ctx.storage.deleteItem(`graph-pos:${tabKey}`);
+          try {
+            await ctx.storage.deleteItem(`graph-pos:${tabKey}`);
+          } catch (_) {}
         },
         async inspectGraphNodeFromMenu(s, arg) {
           const ctx = mako.blocks.context("viewer");

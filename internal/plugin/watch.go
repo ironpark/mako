@@ -73,9 +73,9 @@ func (p *plugin) blockChrome(block string) string {
 	return ""
 }
 
-func (p *plugin) subscribe(block, scopeKey, locale string, view View) (string, []string) {
+func (p *plugin) subscribe(block, scopeKey, locale string, view View) (string, []string, bool) {
 	p.mu.Lock()
-	in, evicted := p.getOrCreateInstanceLocked(block, scopeKey, view.Instance, view.Params)
+	in, evicted, paramsChanged := p.getOrCreateInstanceLocked(block, scopeKey, view.Instance, view.Params)
 	in.subs++
 	if view.Standalone {
 		in.solo++
@@ -83,7 +83,7 @@ func (p *plugin) subscribe(block, scopeKey, locale string, view View) (string, [
 	in.locale = normalizeLocale(locale)
 	key := in.key
 	p.mu.Unlock()
-	return key, evicted
+	return key, evicted, paramsChanged
 }
 
 func (p *plugin) unsubscribe(key string, view View) {
@@ -181,10 +181,18 @@ func (m *Manager) WatchScopedView(ctx context.Context, name, scope, locale strin
 	if !ok {
 		return noPlugin(id)
 	}
-	key, evicted := p.subscribe(block, scope, locale, view)
+	key, evicted, paramsChanged := p.subscribe(block, scope, locale, view)
 	defer p.unsubscribe(key, view)
 	if !p.post(func() {
 		p.evictInstances(evicted)
+		if paramsChanged {
+			p.mu.Lock()
+			in := p.inst[key]
+			p.mu.Unlock()
+			if in != nil {
+				in.loaded = false
+			}
+		}
 		p.show(key)
 	}) {
 		return errors.New("the plugin is busy")

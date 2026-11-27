@@ -14,6 +14,10 @@ import (
 // in answer to a PluginAction or BlockEvent: external web links, toasts,
 // clipboard text, and window intents (diff, file, forge PR/runs, create PR).
 func (m *model) handlePluginDone(done *protocol.PluginDone) {
+	m.handlePluginDoneIn(nil, done)
+}
+
+func (m *model) handlePluginDoneIn(sw *spaceWindowState, done *protocol.PluginDone) {
 	if done == nil {
 		return
 	}
@@ -23,7 +27,7 @@ func (m *model) handlePluginDone(done *protocol.PluginDone) {
 		ggui.CurrentClipboard().Write(text)
 	}
 	for _, o := range done.GetOpen() {
-		m.dispatchPluginOpen(o)
+		m.dispatchPluginOpenIn(sw, o)
 	}
 }
 
@@ -39,6 +43,10 @@ func (m *model) pluginIntentNode(node string) string {
 // dispatchPluginOpen runs one PluginOpen window intent against the window's
 // native tabs and dialogs.
 func (m *model) dispatchPluginOpen(o *protocol.PluginOpen) {
+	m.dispatchPluginOpenIn(nil, o)
+}
+
+func (m *model) dispatchPluginOpenIn(sw *spaceWindowState, o *protocol.PluginOpen) {
 	if o == nil {
 		return
 	}
@@ -146,17 +154,21 @@ func (m *model) dispatchPluginOpen(o *protocol.PluginOpen) {
 		if folder != "" {
 			pt.Root = fileRoot{Node: node, Path: folder}
 		}
-		m.openPluginTab(pt)
+		m.openPluginTabIn(sw, pt)
 
 	case "close_tab":
 		if o.GetBlock() == "" {
 			return
 		}
-		m.closePluginTabByKey(o.GetBlock(), o.GetKey())
+		m.closePluginTabByKeyIn(sw, o.GetBlock(), o.GetKey())
 
 	case "session":
 		sid := o.GetKey()
 		if sid == "" {
+			return
+		}
+		if sw != nil {
+			m.spaceWindowSelectSession(sw, sid)
 			return
 		}
 		m.clearSidebarPage()

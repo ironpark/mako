@@ -458,7 +458,7 @@ func paneTabBar(m *model, id int, group ggui.Readable[tabGroup]) ggui.Widget {
 		if len(g.Tabs) > 0 {
 			ref := paneRef{Key: m.ws.layoutKey, GroupID: id}
 			popout = widget.Box(widget.Column(
-				iconButton("external-link", T("Open pane in new window"), func() { m.popoutPane(ref) }),
+				iconButton("external-link", T("Open pane in new window"), func() { m.popoutPaneIn(nil, ref) }),
 			).Justify(widget.JustifyCenter)).Height(tabBarHeight).Pad(0, 4, 0, 0)
 		}
 		extra := float64(34)

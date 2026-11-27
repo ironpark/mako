@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -116,6 +117,7 @@ func (m *model) closeAllSecondaryWindows() {
 			w.Close()
 		}
 	}
+	clear(m.paneOwners)
 	for id, sw := range maps.Clone(m.spaceWindows) {
 		delete(m.spaceWindows, id)
 		if sw != nil && sw.win != nil {
@@ -484,13 +486,23 @@ func (m *model) popoutCurrentPane() {
 	if g := ggui.Peek(m.Layout).group(id); g == nil || len(g.Tabs) == 0 {
 		return
 	}
-	m.popoutPane(ref)
+	m.popoutPaneIn(nil, ref)
 }
 
 // popoutPane opens split pane ref in a dedicated OS window without mutating
 // persisted layout data. Closing that window automatically returns the pane to
 // its original position.
 func (m *model) popoutPane(ref paneRef) {
+	var sw *spaceWindowState
+	if cand := m.spaceWindows[keySpace(ref.Key)]; cand != nil && cand.peekLayoutKey() == ref.Key && ref.Key != m.ws.layoutKey {
+		sw = cand
+	}
+	m.popoutPaneIn(sw, ref)
+}
+
+// popoutPaneIn opens split pane ref in a dedicated OS window owned by sw (or
+// the main window when sw is nil) without mutating persisted layout data.
+func (m *model) popoutPaneIn(sw *spaceWindowState, ref paneRef) {
 	if m.peekLayoutForKey(ref.Key).group(ref.GroupID) == nil {
 		return
 	}
@@ -498,6 +510,10 @@ func (m *model) popoutPane(ref paneRef) {
 		w.Focus()
 		return
 	}
+	if m.paneOwners == nil {
+		m.paneOwners = map[paneRef]*spaceWindowState{}
+	}
+	m.paneOwners[ref] = sw
 	next := maps.Clone(ggui.Peek(m.DetachedPanes))
 	if next == nil {
 		next = map[paneRef]bool{}
@@ -554,6 +570,7 @@ func (m *model) popoutPane(ref paneRef) {
 // returnPane restores a detached pane back into its parent layout view without
 // touching persisted layout data.
 func (m *model) returnPane(ref paneRef) {
+	delete(m.paneOwners, ref)
 	cur := ggui.Peek(m.DetachedPanes)
 	if !cur[ref] {
 		return
@@ -571,6 +588,7 @@ func (m *model) dockPane(ref paneRef) {
 		w.Close()
 		return
 	}
+	delete(m.paneOwners, ref)
 	m.returnPane(ref)
 }
 
@@ -594,6 +612,18 @@ func (m *model) returnAllPanes(key string) {
 func (m *model) returnAllDetachedPanes() {
 	for ref := range maps.Clone(ggui.Peek(m.DetachedPanes)) {
 		m.dockPane(ref)
+	}
+}
+
+// dockOwnedPanes docks every detached pane owned by sw.
+func (m *model) dockOwnedPanes(sw *spaceWindowState) {
+	if m == nil || sw == nil {
+		return
+	}
+	for ref, owner := range maps.Clone(m.paneOwners) {
+		if owner == sw {
+			m.dockPane(ref)
+		}
 	}
 }
 
@@ -634,11 +664,23 @@ func detachedPaneWindow(m *model, ref paneRef, dock func()) ggui.Widget {
 	if dock == nil {
 		dock = func() { m.dockPane(ref) }
 	}
+	var sw *spaceWindowState
+	if m != nil {
+		var ok bool
+		sw, ok = m.paneOwners[ref]
+		if !ok {
+			if sid := keySpace(ref.Key); sid != "" {
+				if cand := m.spaceWindows[sid]; cand != nil && cand.peekLayoutKey() == ref.Key && ref.Key != m.ws.layoutKey {
+					sw = cand
+				}
+			}
+		}
+	}
 	return widget.Column(
-		keyedPaneTabBar(m, ref.Key, ref.GroupID, group, true, dock, nil),
+		keyedPaneTabBar(m, ref.Key, ref.GroupID, group, true, dock, nil, sw),
 		hline(),
 		keyedAgentLane(m, ref.Key, ref.GroupID, group, nil),
-		widget.Expanded(keyedPaneBody(m, ref.Key, ref.GroupID, group, nil)),
+		widget.Expanded(keyedPaneBodyIn(m, ref.Key, ref.GroupID, group, nil, sw)),
 	).Stretch()
 }
 
@@ -794,6 +836,7 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 			delete(n, spaceID)
 			m.SpaceWindows.Set(n)
 		}
+		m.dockOwnedPanes(sw)
 	}
 	w, err := m.window.App().OpenWindow(ggui.Config{
 		Title:     m.spaceTitleByID(spaceID) + " — mako",
@@ -807,6 +850,9 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 		sw.win = w
 		m.registerSecondaryWindow(w)
 		hEsc := w.Shortcut("escape", func() {
+			if m.closeOpenGraphCtxPopupIn(sw) {
+				return
+			}
 			if ggui.Peek(sw.sidebarPage) == "" {
 				return
 			}
@@ -862,6 +908,7 @@ func (m *model) closeSpaceWindow(spaceID string) {
 		delete(n, spaceID)
 		m.SpaceWindows.Set(n)
 	}
+	m.dockOwnedPanes(sw)
 }
 
 // Space window actions (scoped strictly to sw, never mutating main window) ---
@@ -980,13 +1027,13 @@ func spaceWindowView(m *model, sw *spaceWindowState) ggui.Widget {
 	activePage := activeSidebarPageDerived(m, sw.sidebarPage)
 	center := crossfade(activePage, func(blockName string) ggui.Widget {
 		if blockName == "" {
-			return keyedLayoutView(m, sw.layoutKey, sw.focusGroup)
+			return keyedLayoutViewIn(m, sw.layoutKey, sw.focusGroup, sw)
 		}
 		pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
 		if !ok {
-			return keyedLayoutView(m, sw.layoutKey, sw.focusGroup)
+			return keyedLayoutViewIn(m, sw.layoutKey, sw.focusGroup, sw)
 		}
-		return mainPluginPageView(m, pg)
+		return mainPluginPageViewIn(m, pg, sw)
 	})
 	right := widget.Column(
 		spaceWindowHeader(m, sw),
@@ -1330,6 +1377,10 @@ func paneGroupForKey(m *model, key string, id int) ggui.Readable[tabGroup] {
 }
 
 func keyedLayoutView(m *model, keyFn func() string, focusGroup *ggui.StateValue[int]) ggui.Widget {
+	return keyedLayoutViewIn(m, keyFn, focusGroup, nil)
+}
+
+func keyedLayoutViewIn(m *model, keyFn func() string, focusGroup *ggui.StateValue[int], sw *spaceWindowState) ggui.Widget {
 	type layoutKeyShape struct {
 		Key   string
 		Shape string
@@ -1351,15 +1402,19 @@ func keyedLayoutView(m *model, keyFn func() string, focusGroup *ggui.StateValue[
 			if vis == nil {
 				return detachedPanesPlaceholder(m, s.Key)
 			}
-			return keyedLayoutNodeView(m, s.Key, vis, focusGroup)
+			return keyedLayoutNodeViewIn(m, s.Key, vis, focusGroup, sw)
 		}),
 		&dragGhostOverlay{m: m},
 	).Expand()
 }
 
 func keyedLayoutNodeView(m *model, key string, n *layoutNode, focusGroup *ggui.StateValue[int]) ggui.Widget {
+	return keyedLayoutNodeViewIn(m, key, n, focusGroup, nil)
+}
+
+func keyedLayoutNodeViewIn(m *model, key string, n *layoutNode, focusGroup *ggui.StateValue[int], sw *spaceWindowState) ggui.Widget {
 	if n.Group != nil {
-		return keyedPaneView(m, key, n.Group.ID, focusGroup)
+		return keyedPaneViewIn(m, key, n.Group.ID, focusGroup, sw)
 	}
 	id := n.ID
 	ratio := ggui.Bind(func() float64 {
@@ -1368,7 +1423,7 @@ func keyedLayoutNodeView(m *model, key string, n *layoutNode, focusGroup *ggui.S
 		}
 		return 0.5
 	}, func(r float64) { m.setRatioForKey(key, id, r) })
-	split := ui.Resizable(ratio, keyedLayoutNodeView(m, key, n.First, focusGroup), keyedLayoutNodeView(m, key, n.Second, focusGroup)).
+	split := ui.Resizable(ratio, keyedLayoutNodeViewIn(m, key, n.First, focusGroup, sw), keyedLayoutNodeViewIn(m, key, n.Second, focusGroup, sw)).
 		MinSizes(160, 120).Hairline().Name(T("Pane divider"))
 	if n.Vertical {
 		split = split.Vertical()
@@ -1377,19 +1432,23 @@ func keyedLayoutNodeView(m *model, key string, n *layoutNode, focusGroup *ggui.S
 }
 
 func keyedPaneView(m *model, key string, id int, focusGroup *ggui.StateValue[int]) ggui.Widget {
+	return keyedPaneViewIn(m, key, id, focusGroup, nil)
+}
+
+func keyedPaneViewIn(m *model, key string, id int, focusGroup *ggui.StateValue[int], sw *spaceWindowState) ggui.Widget {
 	group := paneGroupForKey(m, key, id)
 	return paneWatch(widget.Column(
-		keyedPaneTabBar(m, key, id, group, false, nil, focusGroup),
+		keyedPaneTabBar(m, key, id, group, false, nil, focusGroup, sw),
 		hline(),
 		keyedAgentLane(m, key, id, group, focusGroup),
-		widget.Expanded(widget.Stack(keyedPaneBody(m, key, id, group, focusGroup), &paneGlow{on: func() bool {
+		widget.Expanded(widget.Stack(keyedPaneBodyIn(m, key, id, group, focusGroup, sw), &paneGlow{on: func() bool {
 			return m.Prefs.Get().PaneGlow && focusGroup != nil && focusGroup.Get() == id
 		}}).Expand()),
 	).Stretch(), func() {
 		if focusGroup != nil {
 			focusGroup.Set(id)
 		}
-		if sw := m.spaceWindows[keySpace(key)]; sw != nil {
+		if sw != nil {
 			if g := m.peekLayoutForKey(key).group(id); g != nil && g.Active != "" {
 				m.syncSpaceWindowScope(sw, g.Active)
 			}
@@ -1397,7 +1456,7 @@ func keyedPaneView(m *model, key string, id int, focusGroup *ggui.StateValue[int
 	})
 }
 
-func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup], detached bool, onDock func(), focusGroup *ggui.StateValue[int]) ggui.Widget {
+func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup], detached bool, onDock func(), focusGroup *ggui.StateValue[int], sw *spaceWindowState) ggui.Widget {
 	tabs := ggui.Reactive(func() ggui.Widget {
 		g := group.Get()
 		sessions := m.Sessions.Get()
@@ -1451,15 +1510,34 @@ func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup]
 				}
 			}
 			t := ui.EditorTab(label, func() {
+				if isPluginTab(tid) {
+					if last := m.lastTap; last.id == tid && time.Since(last.at) < doubleTap {
+						m.keepPluginTab(tid)
+					}
+					m.lastTap = tabTap{tid, time.Now()}
+				}
 				f := m.activateTabInKey(key, id, tid)
 				if focusGroup != nil {
 					focusGroup.Set(f)
 				}
-				if sw := m.spaceWindows[keySpace(key)]; sw != nil {
+				if sw != nil {
 					m.syncSpaceWindowScope(sw, tid)
 				}
 			}).Icon(glyph).MaxLabelWidth(168).Selected(selected).Current(focused).
-				OnClose(func() { m.closeTabInKey(key, tid) }).CloseName(Tf("Close %s", label))
+				Preview(ptabs[tid].Preview).
+				OnClose(func() {
+					if isPluginTab(tid) {
+						if sw != nil && sw.peekLayoutKey() == key {
+							m.closePluginTabIn(sw, tid)
+							return
+						}
+						if sw == nil && key == m.ws.layoutKey {
+							m.closePluginTab(tid)
+							return
+						}
+					}
+					m.closeTabInKey(key, tid)
+				}).CloseName(Tf("Close %s", label))
 			if isSessionTab(tid) {
 				dot := m.dotFor(tid)
 				t = t.Status(&activityDot{state: dot, quiet: true}).StatusWhile(func() bool { return dot() != dotRest })
@@ -1500,7 +1578,7 @@ func keyedPaneTabBar(m *model, key string, id int, group ggui.Readable[tabGroup]
 		} else if len(g.Tabs) > 0 {
 			ref := paneRef{Key: key, GroupID: id}
 			endBtn = widget.Box(widget.Column(
-				iconButton("external-link", T("Open pane in new window"), func() { m.popoutPane(ref) }),
+				iconButton("external-link", T("Open pane in new window"), func() { m.popoutPaneIn(sw, ref) }),
 			).Justify(widget.JustifyCenter)).Height(tabBarHeight).Pad(0, 4, 0, 0)
 		}
 
@@ -1570,6 +1648,10 @@ func keyedAgentLane(m *model, key string, id int, group ggui.Readable[tabGroup],
 }
 
 func keyedPaneBody(m *model, key string, id int, group ggui.Readable[tabGroup], focusGroup *ggui.StateValue[int]) ggui.Widget {
+	return keyedPaneBodyIn(m, key, id, group, focusGroup, nil)
+}
+
+func keyedPaneBodyIn(m *model, key string, id int, group ggui.Readable[tabGroup], focusGroup *ggui.StateValue[int], sw *spaceWindowState) ggui.Widget {
 	current := ggui.Derived(func() pane {
 		tab := group.Get().Active
 		return pane{ID: tab, Ready: !isSessionTab(tab) || slices.Contains(m.Attached.Get(), tab)}
@@ -1592,7 +1674,7 @@ func keyedPaneBody(m *model, key string, id int, group ggui.Readable[tabGroup], 
 		case isDiffTab(p.ID):
 			return diffTabView(m, p.ID)
 		case isPluginTab(p.ID):
-			return pluginTabView(m, p.ID)
+			return pluginTabViewIn(m, p.ID, sw)
 		case isLaunchTab(p.ID):
 			return launchView(m, p.ID)
 		case !p.Ready:

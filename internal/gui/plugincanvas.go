@@ -3,6 +3,7 @@ package gui
 import (
 	"image/color"
 	"math"
+	"unicode/utf8"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -17,6 +18,12 @@ import (
 const (
 	canvasMinZoom = 0.25
 	canvasMaxZoom = 4.0
+)
+
+var (
+	canvasZoomInChord    = ggui.MustChord("cmd+=")
+	canvasZoomOutChord   = ggui.MustChord("cmd+-")
+	canvasZoomResetChord = ggui.MustChord("cmd+0")
 )
 
 type canvasViewState struct {
@@ -120,14 +127,14 @@ func (v *treeView) canvasNode(n *protocol.UiNode) ggui.Widget {
 					ui.ButtonOf(widget.Text("+").Size(13).Weight(ggui.WeightMedium).Color(skin.Fg).NoWrap(), func() {
 						st.zoom = clampFloat(st.zoom*1.25, canvasMinZoom, canvasMaxZoom)
 						bump()
-					}).Ghost().Pad(2, 6).Radius(5).Name(T("Zoom in")),
+					}).Ghost().Pad(2, 6).Radius(5).Disabled(n.GetDisabled()).Name(T("Zoom in")),
 					T("Zoom in"),
 				),
 				ui.Tooltip(
 					ui.ButtonOf(widget.Text("−").Size(13).Weight(ggui.WeightMedium).Color(skin.Fg).NoWrap(), func() {
 						st.zoom = clampFloat(st.zoom/1.25, canvasMinZoom, canvasMaxZoom)
 						bump()
-					}).Ghost().Pad(2, 6).Radius(5).Name(T("Zoom out")),
+					}).Ghost().Pad(2, 6).Radius(5).Disabled(n.GetDisabled()).Name(T("Zoom out")),
 					T("Zoom out"),
 				),
 			)
@@ -139,7 +146,7 @@ func (v *treeView) canvasNode(n *protocol.UiNode) ggui.Widget {
 					st.panY = 0
 					st.zoom = 1.0
 					bump()
-				}).Ghost().Pad(4).Radius(5).Name(T("Reset")),
+				}).Ghost().Pad(4).Radius(5).Disabled(n.GetDisabled()).Name(T("Reset")),
 				T("Reset"),
 			),
 		)
@@ -208,10 +215,12 @@ type pluginCanvasWidget struct {
 	colBg     color.Color
 	colBorder color.Color
 
-	dragging bool
-	moved    bool
-	downPos  ggui.Point
-	lastPos  ggui.Point
+	dragging      bool
+	moved         bool
+	downPos       ggui.Point
+	lastPos       ggui.Point
+	textWidths    []float64
+	textWidthZoom float64
 }
 
 func (p *pluginCanvasWidget) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
@@ -265,13 +274,84 @@ func (p *pluginCanvasWidget) Describe() ggui.Node {
 
 func (p *pluginCanvasWidget) CaptureDrag() bool      { return !p.IsInert() && p.panEnabled }
 func (p *pluginCanvasWidget) CaptureTouchDrag() bool { return !p.IsInert() && p.panEnabled }
-func (p *pluginCanvasWidget) HandleKey(ggui.KeyEvent) {}
+
+func (p *pluginCanvasWidget) zoomIn() {
+	p.state.zoom = clampFloat(p.state.zoom*1.25, canvasMinZoom, canvasMaxZoom)
+	if p.bump != nil {
+		p.bump()
+	}
+	ggui.Invalidate(p.env)
+}
+
+func (p *pluginCanvasWidget) zoomOut() {
+	p.state.zoom = clampFloat(p.state.zoom/1.25, canvasMinZoom, canvasMaxZoom)
+	if p.bump != nil {
+		p.bump()
+	}
+	ggui.Invalidate(p.env)
+}
+
+func (p *pluginCanvasWidget) zoomReset() {
+	p.state.panX = 0
+	p.state.panY = 0
+	p.state.zoom = 1.0
+	if p.bump != nil {
+		p.bump()
+	}
+	ggui.Invalidate(p.env)
+}
+
+func (p *pluginCanvasWidget) applyZoomChord(ev ggui.KeyEvent) bool {
+	switch {
+	case ev.Is(canvasZoomInChord):
+		p.zoomIn()
+		return true
+	case ev.Is(canvasZoomOutChord):
+		p.zoomOut()
+		return true
+	case ev.Is(canvasZoomResetChord):
+		p.zoomReset()
+		return true
+	}
+	return false
+}
+
+func (p *pluginCanvasWidget) ConsumesKey(ev ggui.KeyEvent) bool {
+	if p.IsInert() || ev.Kind != ggui.KeyPress || !p.zoomEnabled || !p.Focused {
+		return false
+	}
+	return ev.Is(canvasZoomInChord) || ev.Is(canvasZoomOutChord) || ev.Is(canvasZoomResetChord)
+}
+
+func (p *pluginCanvasWidget) HandleKey(ev ggui.KeyEvent) {
+	if !p.IsInert() && ev.Kind == ggui.KeyPress && p.zoomEnabled && p.Focused && p.applyZoomChord(ev) {
+		return
+	}
+	p.Keyboard(ev, nil)
+}
+
+func (p *pluginCanvasWidget) Adopt(prev any) {
+	p.Interactive.Adopt(prev)
+	if q, ok := prev.(*pluginCanvasWidget); ok {
+		p.rect = q.rect
+		p.dragging = q.dragging
+		p.moved = q.moved
+		p.downPos = q.downPos
+		p.lastPos = q.lastPos
+		p.textWidths = q.textWidths
+		p.textWidthZoom = q.textWidthZoom
+	}
+}
 
 func (p *pluginCanvasWidget) worldToScreen(x, y float64, r ggui.Rect) ggui.Point {
 	return ggui.Pt(r.Origin.X+p.state.panX+x*p.state.zoom, r.Origin.Y+p.state.panY+y*p.state.zoom)
 }
 
 func (p *pluginCanvasWidget) cmdScreenBounds(dst *ggui.Canvas, cmd *protocol.UiCanvasCommand, r ggui.Rect) ggui.Rect {
+	return p.cmdScreenBoundsAt(dst, -1, cmd, r)
+}
+
+func (p *pluginCanvasWidget) cmdScreenBoundsAt(dst *ggui.Canvas, idx int, cmd *protocol.UiCanvasCommand, r ggui.Rect) ggui.Rect {
 	z := p.state.zoom
 	switch cmd.GetOp() {
 	case "roundRect":
@@ -303,8 +383,10 @@ func (p *pluginCanvasWidget) cmdScreenBounds(dst *ggui.Canvas, cmd *protocol.UiC
 		tw := 24.0
 		if dst != nil && p.font != nil && cmd.GetText() != "" {
 			tw = max(dst.TextWidth(cmd.GetText(), p.font, fs), 8)
+		} else if idx >= 0 && idx < len(p.textWidths) && p.textWidthZoom == z && p.textWidths[idx] > 0 {
+			tw = p.textWidths[idx]
 		} else if cmd.GetText() != "" {
-			tw = float64(len(cmd.GetText())) * fs * 0.55
+			tw = max(float64(utf8.RuneCountInString(cmd.GetText()))*fs*0.55, 8)
 		}
 		return ggui.Rct(pt, ggui.Sz(tw, fs*1.3))
 	case "icon":
@@ -327,36 +409,20 @@ func (p *pluginCanvasWidget) Paint(dst *ggui.Canvas, r ggui.Rect) {
 			cursor = ggui.CursorShapeMove
 		}
 		p.Hit(dst, r, p, cursor)
-		if p.zoomEnabled {
-			dst.Shortcut(ggui.MustChord("cmd+="), func() {
-				p.state.zoom = clampFloat(p.state.zoom*1.25, canvasMinZoom, canvasMaxZoom)
-				if p.bump != nil {
-					p.bump()
-				}
-				ggui.Invalidate(p.env)
-			})
-			dst.Shortcut(ggui.MustChord("cmd+-"), func() {
-				p.state.zoom = clampFloat(p.state.zoom/1.25, canvasMinZoom, canvasMaxZoom)
-				if p.bump != nil {
-					p.bump()
-				}
-				ggui.Invalidate(p.env)
-			})
-			dst.Shortcut(ggui.MustChord("cmd+0"), func() {
-				p.state.panX = 0
-				p.state.panY = 0
-				p.state.zoom = 1.0
-				if p.bump != nil {
-					p.bump()
-				}
-				ggui.Invalidate(p.env)
-			})
+		if !p.IsInert() && p.zoomEnabled && p.Hovered {
+			dst.Shortcut(canvasZoomInChord, p.zoomIn)
+			dst.Shortcut(canvasZoomOutChord, p.zoomOut)
+			dst.Shortcut(canvasZoomResetChord, p.zoomReset)
 		}
 
 		dst.FillRoundRect(r, 8, p.colBg)
+		if len(p.textWidths) != len(p.commands) {
+			p.textWidths = make([]float64, len(p.commands))
+		}
+		p.textWidthZoom = p.state.zoom
 		dst.ClipRoundRect(r, 8, func(dst *ggui.Canvas) {
 			z := p.state.zoom
-			for _, cmd := range p.commands {
+			for idx, cmd := range p.commands {
 				alpha := canvasCmdAlpha(cmd)
 				switch cmd.GetOp() {
 				case "roundRect":
@@ -432,6 +498,7 @@ func (p *pluginCanvasWidget) Paint(dst *ggui.Canvas, r ggui.Rect) {
 						fs := max(cmd.GetSize(), 12) * z
 						col := graphFade(canvasToneColor(cmd.GetTone(), p.env), alpha)
 						dst.DrawText(cmd.GetText(), p.font, fs, pt, col)
+						p.textWidths[idx] = max(dst.TextWidth(cmd.GetText(), p.font, fs), 8)
 					}
 				case "icon":
 					if svg := canvasIconSVG(cmd.GetIcon()); svg != nil {
@@ -443,7 +510,7 @@ func (p *pluginCanvasWidget) Paint(dst *ggui.Canvas, r ggui.Rect) {
 				}
 
 				if cmd.GetHitId() != "" {
-					bounds := p.cmdScreenBounds(dst, cmd, r).Intersect(r)
+					bounds := p.cmdScreenBoundsAt(dst, idx, cmd, r).Intersect(r)
 					if !bounds.Empty() {
 						dst.Leaf(bounds, ggui.Node{
 							Role:     ggui.RoleButton,
@@ -453,7 +520,7 @@ func (p *pluginCanvasWidget) Paint(dst *ggui.Canvas, r ggui.Rect) {
 						})
 					}
 				} else if cmd.GetOp() == "text" && cmd.GetText() != "" {
-					bounds := p.cmdScreenBounds(dst, cmd, r).Intersect(r)
+					bounds := p.cmdScreenBoundsAt(dst, idx, cmd, r).Intersect(r)
 					if !bounds.Empty() {
 						dst.Leaf(bounds, ggui.Node{
 							Role: ggui.RoleText,
@@ -480,7 +547,7 @@ func (p *pluginCanvasWidget) hitTest(pt ggui.Point) string {
 		}
 		switch cmd.GetOp() {
 		case "roundRect":
-			bounds := p.cmdScreenBounds(nil, cmd, p.rect)
+			bounds := p.cmdScreenBoundsAt(nil, i, cmd, p.rect)
 			if bounds.Contains(pt) {
 				return hitID
 			}
@@ -507,7 +574,7 @@ func (p *pluginCanvasWidget) hitTest(pt ggui.Point) string {
 				return hitID
 			}
 		case "text", "icon":
-			bounds := p.cmdScreenBounds(nil, cmd, p.rect)
+			bounds := p.cmdScreenBoundsAt(nil, i, cmd, p.rect)
 			if bounds.Contains(pt) {
 				return hitID
 			}

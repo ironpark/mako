@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -275,6 +276,7 @@ type model struct {
 	DetachedPanes *ggui.StateValue[map[paneRef]bool]
 	SpaceWindows  *ggui.StateValue[map[string]bool]
 	paneWindows   map[paneRef]*ggui.Window
+	paneOwners    map[paneRef]*spaceWindowState
 	spaceWindows  map[string]*spaceWindowState
 	wsRev         *ggui.StateValue[uint64]
 	secWinMu      sync.RWMutex
@@ -407,6 +409,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		DetachedPanes: ggui.State(map[paneRef]bool{}).WithEqual(maps.Equal[map[paneRef]bool]),
 		SpaceWindows:  ggui.State(map[string]bool{}).WithEqual(maps.Equal[map[string]bool]),
 		paneWindows:   map[paneRef]*ggui.Window{},
+		paneOwners:    map[paneRef]*spaceWindowState{},
 		spaceWindows:  map[string]*spaceWindowState{},
 		wsRev:         ggui.State(uint64(0)),
 		secWins:       map[*ggui.Window]struct{}{},
@@ -663,6 +666,28 @@ func (m *model) forgetClosedTabs() {
 		open[id] = true
 	}
 	m.forgetTabs(func(id string) bool { return !open[id] })
+	if m.PluginTabs != nil {
+		var dropped []pluginTab
+		m.PluginTabs.Update(func(v map[string]pluginTab) map[string]pluginTab {
+			var next map[string]pluginTab
+			for id, pt := range v {
+				if !open[id] {
+					if next == nil {
+						next = maps.Clone(v)
+					}
+					delete(next, id)
+					dropped = append(dropped, pt)
+				}
+			}
+			if next == nil {
+				return v
+			}
+			return next
+		})
+		for _, pt := range dropped {
+			m.deleteCachedBlockInstance(pt.Block, pt.Scope, pt.Key)
+		}
+	}
 }
 
 // forgetTabs forgets the tabs gone says are, setting the window's state
@@ -732,6 +757,12 @@ func (m *model) openNew(nodeID, project string) *launchState {
 
 // openSubagent opens a new-session tab prefilled as a subagent of parentID.
 func (m *model) openSubagent(parentID string) *launchState {
+	return m.openSubagentIn(nil, parentID)
+}
+
+// openSubagentIn opens a new-session tab prefilled as a subagent of parentID
+// inside sw (or the main workspace when sw is nil).
+func (m *model) openSubagentIn(sw *spaceWindowState, parentID string) *launchState {
 	s, ok := m.session(parentID)
 	if !ok {
 		return nil
@@ -745,6 +776,25 @@ func (m *model) openSubagent(parentID string) *launchState {
 		NodeID:          nodeID,
 		Project:         project,
 		ParentSessionID: parentID,
+	}
+	if sw != nil {
+		if sw.sidebarPage != nil && ggui.Peek(sw.sidebarPage) != "" {
+			sw.sidebarPage.Set("")
+		}
+		if sec := sectionID(m.projectsNow(), s); sec != "" {
+			ctx := projectContext(sec)
+			sw.context.Set(ctx)
+			m.ws.contexts[sw.spaceID] = ctx
+		}
+		m.launchSeq++
+		id := launchPrefix + strconv.Itoa(m.launchSeq)
+		l := m.launchOf(id)
+		l.Form.Set(f)
+		focus := m.activateTabInKey(sw.peekLayoutKey(), ggui.Peek(sw.focusGroup), id)
+		if sw.focusGroup != nil {
+			sw.focusGroup.Set(focus)
+		}
+		return l
 	}
 	if f.Project != "" {
 		if pl := placeIn(m.projectsNow(), f.NodeID, f.Project, "", ""); pl.At >= 0 {

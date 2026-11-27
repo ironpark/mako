@@ -329,11 +329,44 @@ func (m *model) shortcutAction(id string) func() {
 	}
 }
 
+func (m *model) closeOpenGraphCtxPopup() bool {
+	return m.closeOpenGraphCtxPopupIn(nil)
+}
+
+func (m *model) closeOpenGraphCtxPopupIn(sw *spaceWindowState) bool {
+	if m == nil || m.plugins == nil {
+		return false
+	}
+	closed := false
+	for _, cached := range m.plugins.blockCache {
+		if cached == nil || cached.form == nil {
+			continue
+		}
+		for _, st := range cached.form.graphs {
+			cs := st.peekCtxState(sw)
+			if cs == nil {
+				continue
+			}
+			if cs.popup != nil && cs.popup.IsOpen() {
+				cs.popup.Hide()
+				closed = true
+			} else if cs.open != nil && ggui.Peek(cs.open) {
+				cs.open.Set(false)
+				closed = true
+			}
+		}
+	}
+	return closed
+}
+
 // handleEscape returns from Settings or an active sidebar plugin page to the
 // workspace when Escape is pressed and no dialog, text input, dropdown/menu, or
 // shortcut recorder owns Escape.
 func (m *model) handleEscape(host ggui.Host) {
 	if m.isRecordingShortcut() {
+		return
+	}
+	if m.closeOpenGraphCtxPopup() {
 		return
 	}
 	if host != nil {

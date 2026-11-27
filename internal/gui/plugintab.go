@@ -77,6 +77,12 @@ func (m *model) lookupPluginBlock(block string) (*protocol.PluginInfo, *protocol
 // openPluginTab opens (or focuses/updates) a plugin tab in the workspace.
 // Preview tabs replace the previous preview plugin tab unless already open.
 func (m *model) openPluginTab(pt pluginTab) {
+	m.openPluginTabIn(nil, pt)
+}
+
+// openPluginTabIn opens (or focuses/updates) a plugin tab in sw (or the main
+// workspace when sw is nil).
+func (m *model) openPluginTabIn(sw *spaceWindowState, pt pluginTab) {
 	if pt.Block == "" {
 		return
 	}
@@ -97,7 +103,7 @@ func (m *model) openPluginTab(pt pluginTab) {
 			pt.Icon = b.GetIcon()
 		}
 		if pt.Scope == "" && isScoped(b.GetScope()) {
-			pt.Scope = ggui.Untrack(func() string { return m.resolveActiveScope(b.GetScope()) })
+			pt.Scope = ggui.Untrack(func() string { return m.resolveActiveScopeIn(sw, b.GetScope()) })
 		}
 	}
 	if pt.Icon == "" {
@@ -110,10 +116,18 @@ func (m *model) openPluginTab(pt pluginTab) {
 	}
 
 	id := pluginTabID(pt.Block, pt.Key)
+	var targetTabs []string
+	if sw != nil {
+		for _, g := range m.peekLayoutForKey(sw.peekLayoutKey()).groups() {
+			targetTabs = append(targetTabs, g.Tabs...)
+		}
+	} else {
+		targetTabs = ggui.Peek(m.Tabs)
+	}
 	var replaced string
-	if _, open := ggui.Peek(m.PluginTabs)[id]; !open && pt.Preview {
+	if !slices.Contains(targetTabs, id) && pt.Preview {
 		for other, cur := range ggui.Peek(m.PluginTabs) {
-			if cur.Preview && slices.Contains(ggui.Peek(m.Tabs), other) {
+			if cur.Preview && slices.Contains(targetTabs, other) {
 				replaced = other
 				break
 			}
@@ -143,13 +157,60 @@ func (m *model) openPluginTab(pt pluginTab) {
 		v[id] = pt
 		return v
 	})
+	if sw != nil {
+		if sw.sidebarPage != nil && ggui.Peek(sw.sidebarPage) != "" {
+			sw.sidebarPage.Set("")
+		}
+		key := sw.peekLayoutKey()
+		if replaced != "" {
+			var replacedTab bool
+			focus := m.editLayoutForKey(key, func(root *layoutNode) int {
+				g := root.groupOf(replaced)
+				if g == nil {
+					return 0
+				}
+				i := slices.Index(g.Tabs, replaced)
+				g.Tabs[i] = id
+				g.Active = id
+				replacedTab = true
+				return g.ID
+			})
+			if !replacedTab {
+				focus = m.activateTabInKey(key, ggui.Peek(sw.focusGroup), id)
+			}
+			if sw.focusGroup != nil {
+				sw.focusGroup.Set(focus)
+			}
+			if !slices.Contains(m.allTabs(), replaced) {
+				m.PluginTabs.Update(func(v map[string]pluginTab) map[string]pluginTab {
+					if _, has := v[replaced]; !has {
+						return v
+					}
+					v = maps.Clone(v)
+					delete(v, replaced)
+					return v
+				})
+			}
+		} else {
+			focus := m.activateTabInKey(key, ggui.Peek(sw.focusGroup), id)
+			if sw.focusGroup != nil {
+				sw.focusGroup.Set(focus)
+			}
+		}
+		return
+	}
 	if replaced != "" {
 		m.replaceTab(replaced, id)
-		m.PluginTabs.Update(func(v map[string]pluginTab) map[string]pluginTab {
-			v = maps.Clone(v)
-			delete(v, replaced)
-			return v
-		})
+		if !slices.Contains(m.allTabs(), replaced) {
+			m.PluginTabs.Update(func(v map[string]pluginTab) map[string]pluginTab {
+				if _, has := v[replaced]; !has {
+					return v
+				}
+				v = maps.Clone(v)
+				delete(v, replaced)
+				return v
+			})
+		}
 	}
 	m.showTab(id)
 }
@@ -170,24 +231,42 @@ func (m *model) keepPluginTab(id string) {
 
 // closePluginTab closes a plugin tab and clears its state and cached tree.
 func (m *model) closePluginTab(id string) {
+	m.closePluginTabIn(nil, id)
+}
+
+// closePluginTabIn closes a plugin tab in sw (or the main workspace when sw is
+// nil) and clears its state and cached tree once no layout holds it.
+func (m *model) closePluginTabIn(sw *spaceWindowState, id string) {
 	pt, ok := ggui.Peek(m.PluginTabs)[id]
-	m.closeTab(id)
-	m.PluginTabs.Update(func(v map[string]pluginTab) map[string]pluginTab {
-		if _, has := v[id]; !has {
+	if sw != nil {
+		m.closeTabInKey(sw.peekLayoutKey(), id)
+	} else {
+		m.closeTab(id)
+	}
+	if !slices.Contains(m.allTabs(), id) {
+		m.PluginTabs.Update(func(v map[string]pluginTab) map[string]pluginTab {
+			if _, has := v[id]; !has {
+				return v
+			}
+			v = maps.Clone(v)
+			delete(v, id)
 			return v
+		})
+		if ok {
+			m.deleteCachedBlockInstance(pt.Block, pt.Scope, pt.Key)
 		}
-		v = maps.Clone(v)
-		delete(v, id)
-		return v
-	})
-	if ok {
-		m.deleteCachedBlockInstance(pt.Block, pt.Scope, pt.Key)
 	}
 }
 
 // closePluginTabByKey closes the plugin tab matching (block, key).
 func (m *model) closePluginTabByKey(block, key string) {
-	m.closePluginTab(pluginTabID(block, key))
+	m.closePluginTabByKeyIn(nil, block, key)
+}
+
+// closePluginTabByKeyIn closes the plugin tab matching (block, key) in sw (or
+// the main workspace when sw is nil).
+func (m *model) closePluginTabByKeyIn(sw *spaceWindowState, block, key string) {
+	m.closePluginTabIn(sw, pluginTabID(block, key))
 }
 
 // pluginTabFace draws a custom plugin tab in a pane's tab bar.
@@ -208,6 +287,12 @@ func pluginTabFace(m *model, id string, pt pluginTab, selected, focused bool) gg
 
 // pluginTabView renders a custom workspace plugin tab's live UI tree stream.
 func pluginTabView(m *model, id string) ggui.Widget {
+	return pluginTabViewIn(m, id, nil)
+}
+
+// pluginTabViewIn renders a custom workspace plugin tab's live UI tree stream,
+// routing session/tab intents to sw when hosted inside a Space window.
+func pluginTabViewIn(m *model, id string, sw *spaceWindowState) ggui.Widget {
 	return ggui.Component(func() ggui.Widget {
 		tabSig := ggui.Map(m.PluginTabs, func(v map[string]pluginTab) pluginTab { return v[id] }).WithEqual(func(a, b pluginTab) bool {
 			return a == b
@@ -289,7 +374,7 @@ func pluginTabView(m *model, id string) ggui.Widget {
 			if tb != nil || badge != nil {
 				var bar []ggui.Widget
 				if tb != nil {
-					bar = append(bar, widget.Expanded(renderTreeNodeInstance(m, pt.Block, pt.Scope, pt.Key, pt.PluginID, form, u.GetTree(), tb)))
+					bar = append(bar, widget.Expanded(renderTreeNodeInstanceIn(m, pt.Block, pt.Scope, pt.Key, pt.PluginID, form, u.GetTree(), tb, sw)))
 				} else {
 					bar = append(bar, widget.Spacer())
 				}
@@ -301,7 +386,7 @@ func pluginTabView(m *model, id string) ggui.Widget {
 					hline(),
 				)
 			}
-			body := blockBodyContentInstance(m, pt.Block, pt.Key, origin, st, u, form, tb != nil)
+			body := blockBodyContentIn(m, pt.Block, pt.Key, origin, st, u, form, tb != nil, sw)
 			rows = append(rows, widget.Expanded(widget.Box(body).Fill(skin.Surface0)))
 			return widget.Column(rows...).Stretch()
 		})

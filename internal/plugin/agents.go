@@ -175,8 +175,28 @@ func (h *host) MessagesStartAgent(_ context.Context, req *hostapi.StartAgentRequ
 		return nil, errors.New("another agent the plugin asked to start waits for the user")
 	}
 	parentID := strings.TrimSpace(req.GetParentSessionId())
-	if parentID != "" && (len(parentID) > 128 || !utf8.ValidString(parentID) || strings.HasPrefix(parentID, "plugin:") || strings.ContainsFunc(parentID, uiblock.Spoofing)) {
-		return nil, errors.New("parentSessionId is invalid")
+	if parentID != "" {
+		if len(parentID) > 128 || !utf8.ValidString(parentID) || strings.HasPrefix(parentID, "plugin:") || strings.ContainsFunc(parentID, uiblock.Spoofing) {
+			return nil, errors.New("parentSessionId is invalid")
+		}
+		found := false
+		for _, s := range p.m.cfg.Sessions() {
+			if s.GetId() == parentID {
+				found = true
+				break
+			}
+		}
+		if !found && p.m.cfg.MeshSessions != nil {
+			for _, s := range p.m.cfg.MeshSessions() {
+				if s.GetId() == parentID {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("parentSessionId %q matches no known session", parentID)
+		}
 	}
 	ask := &agentAsk{id: "a" + nonce(), name: project.Name, since: time.Now(),
 		req: AgentStart{Agent: req.GetAgent(), Profile: req.GetProfile(), Project: req.GetProject(), Root: req.GetRoot(), Prompt: prompt, Name: name, ParentSessionID: parentID}}

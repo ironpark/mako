@@ -132,14 +132,14 @@ func (v *treeView) timelineNode(n *protocol.UiNode) ggui.Widget {
 					ui.ButtonOf(widget.Text("+").Size(13).Weight(ggui.WeightMedium).Color(skin.Fg).NoWrap(), func() {
 						st.zoom = clampFloat(st.zoom*1.5, timelineMinZoom, timelineMaxZoom)
 						bump()
-					}).Ghost().Pad(2, 6).Radius(5).Name(T("Zoom in")),
+					}).Ghost().Pad(2, 6).Radius(5).Disabled(n.GetDisabled()).Name(T("Zoom in")),
 					T("Zoom in"),
 				),
 				ui.Tooltip(
 					ui.ButtonOf(widget.Text("−").Size(13).Weight(ggui.WeightMedium).Color(skin.Fg).NoWrap(), func() {
 						st.zoom = clampFloat(st.zoom/1.5, timelineMinZoom, timelineMaxZoom)
 						bump()
-					}).Ghost().Pad(2, 6).Radius(5).Name(T("Zoom out")),
+					}).Ghost().Pad(2, 6).Radius(5).Disabled(n.GetDisabled()).Name(T("Zoom out")),
 					T("Zoom out"),
 				),
 				ui.Tooltip(
@@ -148,7 +148,7 @@ func (v *treeView) timelineNode(n *protocol.UiNode) ggui.Widget {
 						st.scrollX = 0
 						st.scrollY = 0
 						bump()
-					}).Ghost().Pad(4).Radius(5).Name(T("Reset")),
+					}).Ghost().Pad(4).Radius(5).Disabled(n.GetDisabled()).Name(T("Reset")),
 					T("Reset"),
 				),
 			).Gap(2).Align(widget.AlignCenter)).Fill(skin.Surface0).Border(1, skin.Border).Radius(7).Pad(2),
@@ -251,7 +251,21 @@ func (t *pluginTimelineWidget) Describe() ggui.Node {
 
 func (t *pluginTimelineWidget) CaptureDrag() bool      { return !t.IsInert() }
 func (t *pluginTimelineWidget) CaptureTouchDrag() bool { return !t.IsInert() }
-func (t *pluginTimelineWidget) HandleKey(ggui.KeyEvent) {}
+func (t *pluginTimelineWidget) HandleKey(ev ggui.KeyEvent) {
+	t.Keyboard(ev, nil)
+}
+
+func (t *pluginTimelineWidget) Adopt(prev any) {
+	t.Interactive.Adopt(prev)
+	if q, ok := prev.(*pluginTimelineWidget); ok {
+		t.rect = q.rect
+		t.hits = q.hits
+		t.dragging = q.dragging
+		t.moved = q.moved
+		t.downPos = q.downPos
+		t.lastPos = q.lastPos
+	}
+}
 
 func (t *pluginTimelineWidget) trackMetrics(r ggui.Rect) (gutterW, trackX, trackW, contentW, maxScrollX, maxScrollY float64) {
 	gutterW = min(116.0, r.Size.W*0.32)
@@ -390,9 +404,15 @@ func (t *pluginTimelineWidget) Paint(dst *ggui.Canvas, r ggui.Rect) {
 					lo, hi := min(s, e), max(s, e)
 					u0 := (lo - minMs) / totalMs
 					u1 := (hi - minMs) / totalMs
-					x0 := trackX - t.state.scrollX + u0*contentW
-					x1 := trackX - t.state.scrollX + u1*contentW
+					trackStart := trackX - t.state.scrollX
+					trackEnd := trackStart + contentW
+					x0 := trackStart + u0*contentW
+					x1 := trackStart + u1*contentW
 					spanW := max(x1-x0, 8.0)
+					if x1-x0 < 8.0 {
+						mid := (x0 + x1) * 0.5
+						x0 = clampFloat(mid-spanW*0.5, trackStart, max(trackStart, trackEnd-spanW))
+					}
 					if x0+spanW < trackX || x0 > trackX+trackW {
 						continue
 					}

@@ -254,9 +254,23 @@ func (m *model) activeTabID() string {
 // "project:<id>", or "session:<id>") from the window's active context.
 // Returns "" when no active target exists for blockScope. Reactive.
 func (m *model) resolveActiveScope(blockScope string) string {
+	return m.resolveActiveScopeIn(nil, blockScope)
+}
+
+// resolveActiveScopeIn resolves the active canonical scope key from sw (or the
+// main window when sw is nil). Returns "" when no active target exists. Reactive.
+func (m *model) resolveActiveScopeIn(sw *spaceWindowState, blockScope string) string {
 	switch blockScope {
 	case protocol.ScopeSpace:
 		p := m.spaces()
+		if sw != nil {
+			if sw.spaceID != "" && sw.spaceID != allSpaceID {
+				if spaceIndex(p.Spaces, sw.spaceID) >= 0 {
+					return protocol.ScopeSpace + ":" + sw.spaceID
+				}
+			}
+			return ""
+		}
 		if sp, ok := p.spaceOf(p.Space); ok && sp.ID != "" {
 			return protocol.ScopeSpace + ":" + sp.ID
 		}
@@ -265,10 +279,16 @@ func (m *model) resolveActiveScope(blockScope string) string {
 	case protocol.ScopeProject:
 		p := m.spaces()
 		tabID := m.activeTabID()
+		mainScope := m.Scope.Get()
+		curScope := mainScope.scopeKey
+		scopedHere := curScope.Section != "" && (mainScope.Space == "" || mainScope.Space == p.spaceID(p.Space))
+		if sw != nil {
+			tabID = m.spaceWindowActiveTab(sw)
+			curScope = sw.scope.Get()
+			scopedHere = curScope.Section != ""
+		}
 		docs, diffs := m.Docs.Get(), m.Diffs.Get()
 		sessions := m.Sessions.Get()
-		curScope := m.Scope.Get()
-		scopedHere := curScope.Section != "" && (curScope.Space == "" || curScope.Space == p.spaceID(p.Space))
 
 		if d, ok := docs[tabID]; ok && d.Root.Path != "" {
 			if pl := placeIn(p.Projects, d.Root.Node, d.Root.Path, "", ""); pl.At >= 0 {
@@ -311,6 +331,9 @@ func (m *model) resolveActiveScope(blockScope string) string {
 
 	case protocol.ScopeSession:
 		tabID := m.activeTabID()
+		if sw != nil {
+			tabID = m.spaceWindowActiveTab(sw)
+		}
 		sessions := m.Sessions.Get()
 		if isSessionTab(tabID) {
 			if _, ok := sessionIn(sessions, tabID); ok {
@@ -320,6 +343,37 @@ func (m *model) resolveActiveScope(blockScope string) string {
 		return ""
 
 	case protocol.ScopeFolder:
+		if sw != nil {
+			tabID := m.spaceWindowActiveTab(sw)
+			switch {
+			case isDocTab(tabID):
+				if r := m.Docs.Get()[tabID].Root; r.Path != "" {
+					return protocol.FolderScope(m.remoteID(r.Node), r.Path)
+				}
+			case isDiffTab(tabID):
+				if r := m.Diffs.Get()[tabID].Root; r.Path != "" {
+					return protocol.FolderScope(m.remoteID(r.Node), r.Path)
+				}
+			case isPluginTab(tabID):
+				if pt, ok := m.PluginTabs.Get()[tabID]; ok {
+					if pt.Root.Path != "" {
+						return protocol.FolderScope(m.remoteID(pt.Root.Node), pt.Root.Path)
+					}
+					if strings.HasPrefix(pt.Scope, protocol.ScopeFolder+":") {
+						return pt.Scope
+					}
+				}
+			}
+			if cur, ok := sessionIn(m.Sessions.Get(), tabID); ok {
+				if dir := sessionProjectRoot(cur); dir != "" {
+					return protocol.FolderScope(m.remoteID(cur.GetNodeId()), dir)
+				}
+			}
+			if node, dir, ok := m.scopeKeyLocation(sw.scope.Get(), m.spaces()); ok && dir != "" {
+				return protocol.FolderScope(m.remoteID(node), dir)
+			}
+			return ""
+		}
 		r := m.repoFolder()
 		if r.Path == "" {
 			return ""
@@ -532,7 +586,7 @@ func treeBlockView(m *model, name string, origin blockOrigin, title, blockScope 
 		if pinned != "" {
 			return pinned
 		}
-		return m.resolveActiveScope(blockScope)
+		return m.resolveActiveScopeIn(at.SpaceWindow, blockScope)
 	})
 	initScope := ggui.Untrack(resolved.Get)
 	var initFeed blockFeed
@@ -625,7 +679,7 @@ func treeBlockView(m *model, name string, origin blockOrigin, title, blockScope 
 			scopeKey := resolved.Get()
 			u := currentUpdate()
 			st := blockScopeState{BlockScope: blockScope, Pinned: pinned, Key: scopeKey}
-			return blockBodyContent(m, name, origin, st, u, form, true)
+			return blockBodyContentIn(m, name, "", origin, st, u, form, true, at.SpaceWindow)
 		})
 	})
 
@@ -639,7 +693,7 @@ func treeBlockView(m *model, name string, origin blockOrigin, title, blockScope 
 		if tb == nil {
 			return widget.Box()
 		}
-		return renderTreeNode(m, name, resolved.Get(), origin.plugin, form, tree, tb)
+		return renderTreeNodeIn(m, name, resolved.Get(), origin.plugin, form, tree, tb, at.SpaceWindow)
 	})
 
 	var accessory ggui.Widget
@@ -1121,6 +1175,10 @@ func blockBodyContent(m *model, name string, origin blockOrigin, st blockScopeSt
 }
 
 func blockBodyContentInstance(m *model, name, instance string, origin blockOrigin, st blockScopeState, u *protocol.BlockUpdate, form *blockForm, liftTB bool) ggui.Widget {
+	return blockBodyContentIn(m, name, instance, origin, st, u, form, liftTB, nil)
+}
+
+func blockBodyContentIn(m *model, name, instance string, origin blockOrigin, st blockScopeState, u *protocol.BlockUpdate, form *blockForm, liftTB bool, sw *spaceWindowState) ggui.Widget {
 	if origin.plugin != "" && isScoped(st.BlockScope) && st.Key == "" {
 		return emptyScopeCard(m, name, st)
 	}
@@ -1161,6 +1219,7 @@ func blockBodyContentInstance(m *model, name, instance string, origin blockOrigi
 		v := newTreeView(m, name, st.Key, form, tree)
 		v.plugin = origin.plugin
 		v.instance = instance
+		v.spaceWindow = sw
 		if tree.GetFill() {
 			content := v.node(renderRoot, false)
 			if !(lifted && u.GetChrome() == "toolbar") {

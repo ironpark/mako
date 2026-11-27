@@ -174,6 +174,10 @@ func (m *model) blockEvent(block, scope, node, kind, value string, values map[st
 // blockEventInstance tells a block instance (such as a custom plugin tab) of
 // the user acting on a node of it.
 func (m *model) blockEventInstance(block, scope, instance, node, kind, value string, values map[string]string) {
+	m.blockEventInstanceIn(nil, block, scope, instance, node, kind, value, values)
+}
+
+func (m *model) blockEventInstanceIn(sw *spaceWindowState, block, scope, instance, node, kind, value string, values map[string]string) {
 	if m.post == nil {
 		return
 	}
@@ -185,7 +189,7 @@ func (m *model) blockEventInstance(block, scope, instance, node, kind, value str
 			m.connErr(err)
 			return
 		}
-		m.handlePluginDone(done)
+		m.handlePluginDoneIn(sw, done)
 	})
 }
 

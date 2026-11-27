@@ -92,14 +92,16 @@ const autoSplitBreakpoint = 640.0
 // treeView is a block's tree as it is drawn: the block, and what the user
 // set in its fields.
 type treeView struct {
-	m        *model
-	block    string
-	scope    string
-	instance string // custom plugin tab instance key ("" for normal blocks)
-	plugin   string // optional plugin ID override for dialog provenance
-	form     *blockForm
-	menus    map[string]*protocol.UiNode // indexed variant=="context" menu nodes
-	onEvent  func(block, node, kind, value string, values map[string]string)
+	m           *model
+	block       string
+	scope       string
+	instance    string            // custom plugin tab instance key ("" for normal blocks)
+	plugin      string            // optional plugin ID override for dialog provenance
+	spaceWindow *spaceWindowState // optional detached Space window hosting this view
+	openSession func(string)      // optional session-open callback override
+	form        *blockForm
+	menus       map[string]*protocol.UiNode // indexed variant=="context" menu nodes
+	onEvent     func(block, node, kind, value string, values map[string]string)
 }
 
 // newTreeView constructs a treeView with all context menus indexed from root
@@ -127,12 +129,21 @@ func renderTreeNode(m *model, block, scope, pluginID string, form *blockForm, ro
 }
 
 func renderTreeNodeInstance(m *model, block, scope, instance, pluginID string, form *blockForm, root, node *protocol.UiNode) ggui.Widget {
+	return renderTreeNodeInstanceIn(m, block, scope, instance, pluginID, form, root, node, nil)
+}
+
+func renderTreeNodeIn(m *model, block, scope, pluginID string, form *blockForm, root, node *protocol.UiNode, sw *spaceWindowState) ggui.Widget {
+	return renderTreeNodeInstanceIn(m, block, scope, "", pluginID, form, root, node, sw)
+}
+
+func renderTreeNodeInstanceIn(m *model, block, scope, instance, pluginID string, form *blockForm, root, node *protocol.UiNode, sw *spaceWindowState) ggui.Widget {
 	if node == nil {
 		return nil
 	}
 	v := newTreeView(m, block, scope, form, root)
-	v.plugin = pluginID
 	v.instance = instance
+	v.plugin = pluginID
+	v.spaceWindow = sw
 	if node.GetKind() == "row" && node.GetVariant() == "toolbar" {
 		return v.renderToolbar(node)
 	}
@@ -170,52 +181,52 @@ func liftToolbar(t *protocol.UiNode) (toolbar, rest *protocol.UiNode) {
 // children slice, avoiding copying protobuf internal MessageState.
 func shallowCopyUiNode(n *protocol.UiNode, children []*protocol.UiNode) *protocol.UiNode {
 	return &protocol.UiNode{
-		Id:          n.GetId(),
-		Kind:        n.GetKind(),
-		Text:        n.GetText(),
-		Tone:        n.GetTone(),
-		Icon:        n.GetIcon(),
-		Weight:      n.GetWeight(),
-		Size:        n.GetSize(),
-		Value:       n.GetValue(),
-		Checked:     n.GetChecked(),
-		Options:     n.GetOptions(),
-		Progress:    n.GetProgress(),
-		Language:    n.GetLanguage(),
-		Disabled:    n.GetDisabled(),
-		Grow:        n.GetGrow(),
-		Gap:         n.GetGap(),
-		Tap:         n.GetTap(),
-		Change:      n.GetChange(),
-		Children:    children,
-		Chart:       n.GetChart(),
-		Series:      n.GetSeries(),
-		Labels:      n.GetLabels(),
-		Drag:        n.GetDrag(),
-		Drop:        n.GetDrop(),
-		DragGroup:   n.GetDragGroup(),
-		DropAccept:  n.GetDropAccept(),
-		Direction:   n.GetDirection(),
-		MaxHeight:   n.GetMaxHeight(),
-		Variant:     n.GetVariant(),
-		Columns:     n.GetColumns(),
-		Ratio:       n.GetRatio(),
-		Fill:        n.GetFill(),
-		GraphNodes:  n.GetGraphNodes(),
-		GraphEdges:  n.GetGraphEdges(),
-		Badges:      n.GetBadges(),
-		Check:       n.GetCheck(),
-		Checks:      n.GetChecks(),
-		ContextMenu: n.GetContextMenu(),
-		ContextArg:  n.GetContextArg(),
-		Rows:        n.GetRows(),
-		Placeholder: n.GetPlaceholder(),
-		Min:         n.GetMin(),
-		Max:         n.GetMax(),
-		Step:        n.GetStep(),
-		DiffLines:   n.GetDiffLines(),
-		DiffFrom:    n.GetDiffFrom(),
-		DiffTo:      n.GetDiffTo(),
+		Id:             n.GetId(),
+		Kind:           n.GetKind(),
+		Text:           n.GetText(),
+		Tone:           n.GetTone(),
+		Icon:           n.GetIcon(),
+		Weight:         n.GetWeight(),
+		Size:           n.GetSize(),
+		Value:          n.GetValue(),
+		Checked:        n.GetChecked(),
+		Options:        n.GetOptions(),
+		Progress:       n.GetProgress(),
+		Language:       n.GetLanguage(),
+		Disabled:       n.GetDisabled(),
+		Grow:           n.GetGrow(),
+		Gap:            n.GetGap(),
+		Tap:            n.GetTap(),
+		Change:         n.GetChange(),
+		Children:       children,
+		Chart:          n.GetChart(),
+		Series:         n.GetSeries(),
+		Labels:         n.GetLabels(),
+		Drag:           n.GetDrag(),
+		Drop:           n.GetDrop(),
+		DragGroup:      n.GetDragGroup(),
+		DropAccept:     n.GetDropAccept(),
+		Direction:      n.GetDirection(),
+		MaxHeight:      n.GetMaxHeight(),
+		Variant:        n.GetVariant(),
+		Columns:        n.GetColumns(),
+		Ratio:          n.GetRatio(),
+		Fill:           n.GetFill(),
+		GraphNodes:     n.GetGraphNodes(),
+		GraphEdges:     n.GetGraphEdges(),
+		Badges:         n.GetBadges(),
+		Check:          n.GetCheck(),
+		Checks:         n.GetChecks(),
+		ContextMenu:    n.GetContextMenu(),
+		ContextArg:     n.GetContextArg(),
+		Rows:           n.GetRows(),
+		Placeholder:    n.GetPlaceholder(),
+		Min:            n.GetMin(),
+		Max:            n.GetMax(),
+		Step:           n.GetStep(),
+		DiffLines:      n.GetDiffLines(),
+		DiffFrom:       n.GetDiffFrom(),
+		DiffTo:         n.GetDiffTo(),
 		GraphLayout:    n.GetGraphLayout(),
 		Minimap:        n.GetMinimap(),
 		DoubleTap:      n.GetDoubleTap(),
@@ -295,7 +306,7 @@ func (v *treeView) send(id, kind, value string) {
 		v.onEvent(v.block, id, kind, value, v.form.values())
 		return
 	}
-	v.m.blockEventInstance(v.block, v.scope, v.instance, id, kind, value, v.form.values())
+	v.m.blockEventInstanceIn(v.spaceWindow, v.block, v.scope, v.instance, id, kind, value, v.form.values())
 }
 
 // node draws a node of the tree; inLine says it is a row's child, where
@@ -2035,6 +2046,7 @@ type blockForm struct {
 	dags       map[string]*dagViewState
 	canvases   map[string]*canvasViewState
 	timelines  map[string]*timelineViewState
+	heatmapSel map[string]*[2]int
 }
 
 func newBlockForm() *blockForm {
@@ -2048,6 +2060,7 @@ func newBlockForm() *blockForm {
 		dags:       map[string]*dagViewState{},
 		canvases:   map[string]*canvasViewState{},
 		timelines:  map[string]*timelineViewState{},
+		heatmapSel: map[string]*[2]int{},
 	}
 }
 
@@ -2068,6 +2081,7 @@ func (f *blockForm) reset() {
 	f.dags = map[string]*dagViewState{}
 	f.canvases = map[string]*canvasViewState{}
 	f.timelines = map[string]*timelineViewState{}
+	f.heatmapSel = map[string]*[2]int{}
 }
 
 // copyFrom restores cached field, local, graph, and dag state from src into f.
@@ -2084,6 +2098,7 @@ func (f *blockForm) copyFrom(src *blockForm) {
 	f.dags = src.dags
 	f.canvases = src.canvases
 	f.timelines = src.timelines
+	f.heatmapSel = src.heatmapSel
 }
 
 // field is the value of node id, which the tree gives as given.
@@ -2156,6 +2171,22 @@ func (f *blockForm) timelineState(id string) *timelineViewState {
 		f.timelines[id] = st
 	}
 	return st
+}
+
+// heatmapSelection returns persistent [row, col] selection for heatmap node id.
+func (f *blockForm) heatmapSelection(id string) *[2]int {
+	if f == nil {
+		return &[2]int{-1, -1}
+	}
+	if f.heatmapSel == nil {
+		f.heatmapSel = map[string]*[2]int{}
+	}
+	sel, ok := f.heatmapSel[id]
+	if !ok {
+		sel = &[2]int{-1, -1}
+		f.heatmapSel[id] = sel
+	}
+	return sel
 }
 
 // input is an input's text, as field.

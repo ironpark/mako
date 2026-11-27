@@ -162,22 +162,25 @@ func (in *instance) standaloneLocked() bool {
 
 // getOrCreateInstanceLocked returns the instance for (blockID, scopeKey, instID),
 // creating it if absent and evicting LRU unwatched instances beyond
-// maxScopeInstancesPerBlock. Caller must hold p.mu.
-func (p *plugin) getOrCreateInstanceLocked(blockID, scopeKey, instID, params string) (*instance, []string) {
+// maxScopeInstancesPerBlock, along with whether params changed on an existing
+// instance (the caller must clear in.loaded on the plugin actor goroutine).
+// Caller must hold p.mu.
+func (p *plugin) getOrCreateInstanceLocked(blockID, scopeKey, instID, params string) (*instance, []string, bool) {
 	key := instanceKeyOf(blockID, scopeKey, instID)
 	now := time.Now()
 	if in, ok := p.inst[key]; ok {
 		in.lastUsed = now
+		paramsChanged := false
 		if params != "" && params != in.params {
 			in.params = params
-			in.loaded = false
+			paramsChanged = true
 		}
-		return in, nil
+		return in, nil, paramsChanged
 	}
 	in := &instance{key: key, id: blockID, scopeKey: scopeKey, instID: instID, params: params, lastUsed: now}
 	p.inst[key] = in
 	evicted := p.trimBlockInstancesLocked(blockID, key)
-	return in, evicted
+	return in, evicted, false
 }
 
 // trimBlockInstancesLocked evicts the least-recently-used unwatched instances

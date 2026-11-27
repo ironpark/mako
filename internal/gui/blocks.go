@@ -32,7 +32,8 @@ const (
 
 // blockPlace is where the layout draws a block.
 type blockPlace struct {
-	Solo bool // only child of a stack, or a bare panel block
+	Solo        bool // only child of a stack, or a bare panel block
+	SpaceWindow *spaceWindowState
 }
 
 // blockDef is a registered block.

@@ -31,6 +31,8 @@ const (
 	graphLayoutHierarchy = "hierarchy"
 	graphLayoutRadial    = "radial"
 
+	graphCoordLimit = 1e6
+
 	graphDoubleTapWindow = 400 * time.Millisecond
 	graphDoubleTapDist   = 8.0
 )
@@ -70,21 +72,28 @@ type graphViewState struct {
 	zoom       float64
 
 	// Persistent reactive owner & TweenOf/TweenOfWith animations (F1.5).
-	dispose       func()
-	layoutTarget  *ggui.StateValue[map[string]ggui.Point]
-	layoutTween   *ggui.Tweened[map[string]ggui.Point]
-	camZoomTarget *ggui.StateValue[float64]
-	camZoomTween  *ggui.Tweened[float64]
-	camPanTarget  *ggui.StateValue[ggui.Point]
-	camPanTween   *ggui.Tweened[ggui.Point]
-	tweenInit     bool
+	dispose         func()
+	layoutTarget    *ggui.StateValue[map[string]ggui.Point]
+	layoutTween     *ggui.Tweened[map[string]ggui.Point]
+	camZoomTarget   *ggui.StateValue[float64]
+	camZoomTween    *ggui.Tweened[float64]
+	camPanTarget    *ggui.StateValue[ggui.Point]
+	camPanTween     *ggui.Tweened[ggui.Point]
+	camBoundsTarget *ggui.StateValue[graphBounds]
+	camBoundsTween  *ggui.Tweened[graphBounds]
+	tweenInit       bool
 
 	// Layout & mode state (F1.4, F1.8).
-	givenLayout string // last n.GetGraphLayout()
-	layoutMode  string // "force" | "hierarchy" | "radial"
-	pinnedPos   map[string]ggui.Point
-	sig         uint64
-	layout      graphLayout
+	givenLayout  string // last n.GetGraphLayout()
+	layoutMode   string // "force" | "hierarchy" | "radial"
+	pinnedPos    map[string]ggui.Point
+	givenHasPos  map[string]bool
+	sig          uint64
+	structSig    uint64
+	layout       graphLayout
+	camBounds    graphLayout
+	hasCamBounds bool
+	draggingID   string
 
 	// Selection, focus & double-tap tracking (F1.5, F1.9, F1.10).
 	givenSelected string
@@ -98,32 +107,23 @@ type graphViewState struct {
 	// Minimap & popup fallback state (F1.7, F1.9).
 	givenMinimap bool
 	minimapOpen  bool
-	ctxOpen      *ggui.StateValue[bool]
-	ctxItems     *ggui.StateValue[[]ggui.Widget]
-	ctxPopup     *widget.PopupWidget
+	ctxStates    map[*spaceWindowState]*graphCtxState
+}
+
+type graphCtxState struct {
+	open  *ggui.StateValue[bool]
+	items *ggui.StateValue[[]ggui.Widget]
+	popup *widget.PopupWidget
 }
 
 func newGraphViewState() *graphViewState {
 	st := &graphViewState{
-		zoom:       1,
-		layoutMode: graphLayoutForce,
-		pinnedPos:  map[string]ggui.Point{},
-		ctxOpen:    ggui.State(false),
-		ctxItems: ggui.State([]ggui.Widget(nil)).WithEqual(func(a, b []ggui.Widget) bool {
-			return len(a) == 0 && len(b) == 0
-		}),
+		zoom:        1,
+		layoutMode:  graphLayoutForce,
+		pinnedPos:   map[string]ggui.Point{},
+		givenHasPos: map[string]bool{},
+		ctxStates:   map[*spaceWindowState]*graphCtxState{},
 	}
-	ctxContent := ggui.Reactive(func() ggui.Widget {
-		items := st.ctxItems.Get()
-		if len(items) == 0 {
-			return widget.Box()
-		}
-		return widget.Box(widget.Column(items...).Stretch()).
-			Fill(skin.Surface2).Border(1, skin.Border).Radius(8).Pad(4)
-	})
-	st.ctxPopup = widget.Popup(widget.Box(), ctxContent).Gap(0).
-		Side(widget.PopupRight).Align(widget.PopupStart).AlignOffset(4).
-		BindOpen(st.ctxOpen)
 
 	st.dispose = ggui.Root(func() {
 		st.layoutTarget = ggui.State(map[string]ggui.Point{}).WithEqual(maps.Equal[map[string]ggui.Point])
@@ -132,15 +132,68 @@ func newGraphViewState() *graphViewState {
 		st.camZoomTween = ggui.TweenOf(st.camZoomTarget, 240*time.Millisecond).Easing(ggui.EaseOut)
 		st.camPanTarget = ggui.State(ggui.Pt(0, 0))
 		st.camPanTween = ggui.TweenOfWith(st.camPanTarget, 240*time.Millisecond, ggui.LerpPoint).Easing(ggui.EaseOut)
+		st.camBoundsTarget = ggui.State(graphBounds{})
+		st.camBoundsTween = ggui.TweenOfWith(st.camBoundsTarget, 240*time.Millisecond, lerpGraphBounds).Easing(ggui.EaseOut)
 	})
 	return st
 }
 
+func (s *graphViewState) peekCtxState(sw *spaceWindowState) *graphCtxState {
+	if s == nil {
+		return nil
+	}
+	return s.ctxStates[sw]
+}
+
+func (s *graphViewState) ctxStateFor(sw *spaceWindowState) *graphCtxState {
+	if s == nil {
+		return nil
+	}
+	if s.ctxStates == nil {
+		s.ctxStates = map[*spaceWindowState]*graphCtxState{}
+	}
+	if cs := s.ctxStates[sw]; cs != nil {
+		return cs
+	}
+	cs := &graphCtxState{
+		open: ggui.State(false),
+		items: ggui.State([]ggui.Widget(nil)).WithEqual(func(a, b []ggui.Widget) bool {
+			return len(a) == 0 && len(b) == 0
+		}),
+	}
+	s.ctxStates[sw] = cs
+	return cs
+}
+
+func newGraphCtxPopup(st *graphViewState, sw *spaceWindowState) *widget.PopupWidget {
+	if st == nil {
+		return nil
+	}
+	cs := st.ctxStateFor(sw)
+	ctxContent := ggui.Reactive(func() ggui.Widget {
+		items := cs.items.Get()
+		if len(items) == 0 {
+			return widget.Box()
+		}
+		box := widget.Box(widget.Column(items...).Stretch()).
+			Fill(skin.Surface2).Border(1, skin.Border).Radius(8).Pad(4)
+		return &graphCtxPopupSurface{child: box, open: cs.open}
+	})
+	return widget.Popup(widget.Box(), ctxContent).Gap(0).
+		Side(widget.PopupRight).Align(widget.PopupStart).AlignOffset(4).
+		Key(cs).
+		BindOpen(cs.open)
+}
+
 func (s *graphViewState) close() {
-	if s != nil && s.dispose != nil {
+	if s == nil {
+		return
+	}
+	if s.dispose != nil {
 		s.dispose()
 		s.dispose = nil
 	}
+	clear(s.ctxStates)
 }
 
 func (s *graphViewState) setCamera(panX, panY, zoom float64, animate bool) {
@@ -160,7 +213,30 @@ func (s *graphViewState) setCamera(panX, panY, zoom float64, animate bool) {
 	}
 }
 
+func (s *graphViewState) setCamBounds(lay graphLayout, animate bool) {
+	s.camBounds = lay
+	s.hasCamBounds = true
+	b := graphBoundsFromLayout(lay)
+	if s.camBoundsTarget != nil {
+		s.camBoundsTarget.Set(b)
+		if !animate && s.camBoundsTween != nil {
+			s.camBoundsTween.Jump(b)
+		}
+	}
+}
+
+func (s *graphViewState) cameraLayout() graphLayout {
+	if s.hasCamBounds {
+		if s.camBoundsTween != nil {
+			return s.camBoundsTween.Get().toLayout(s.camBounds.pos)
+		}
+		return s.camBounds
+	}
+	return s.layout
+}
+
 func (s *graphViewState) reset() {
+	s.setCamBounds(s.layout, false)
 	s.setCamera(0, 0, 1, false)
 }
 
@@ -180,6 +256,10 @@ func (s *graphViewState) renderedCamera() (panX, panY, zoom float64) {
 }
 
 func (s *graphViewState) renderedPos(id string) (ggui.Point, bool) {
+	if id != "" && id == s.draggingID {
+		p, ok := s.layout.pos[id]
+		return p, ok
+	}
 	if s.layoutTween != nil {
 		if m := s.layoutTween.Get(); m != nil {
 			if p, ok := m[id]; ok {
@@ -199,18 +279,24 @@ func (s *graphViewState) focusNode(id string, r ggui.Rect) {
 	if !ok {
 		return
 	}
+	cam := s.layout
+	if s.hasCamBounds {
+		cam = s.camBounds
+	}
 	z := max(s.zoom, 1.0)
-	scale := graphBaseScale(r, s.layout) * z
-	targetPanX := -(wp.X - s.layout.centerX) * scale
-	targetPanY := -(wp.Y - s.layout.centerY) * scale
+	scale := graphBaseScale(r, cam) * z
+	targetPanX := -(wp.X - cam.centerX) * scale
+	targetPanY := -(wp.Y - cam.centerY) * scale
 	s.setCamera(targetPanX, targetPanY, z, true)
 }
 
 func (s *graphViewState) fitView(r ggui.Rect) {
 	if r.Size.W <= 0 || r.Size.H <= 0 || len(s.layout.pos) == 0 {
+		s.setCamBounds(s.layout, true)
 		s.setCamera(0, 0, 1, true)
 		return
 	}
+	s.setCamBounds(s.layout, true)
 	// Compute optimal zoom that keeps span comfortably within canvas bounds.
 	availW := max(r.Size.W-140, 40)
 	availH := max(r.Size.H-120, 40)
@@ -239,6 +325,62 @@ func lerpGraphPos(a, b map[string]ggui.Point, t float64) map[string]ggui.Point {
 	return out
 }
 
+// graphBounds holds camera-space bounding metrics without the node position map,
+// allowing ggui.Tweened to interpolate bounds cleanly during fitView transitions.
+type graphBounds struct {
+	minX, maxX       float64
+	minY, maxY       float64
+	centerX, centerY float64
+	spanW, spanH     float64
+}
+
+func graphBoundsFromLayout(lay graphLayout) graphBounds {
+	return graphBounds{
+		minX:    lay.minX,
+		maxX:    lay.maxX,
+		minY:    lay.minY,
+		maxY:    lay.maxY,
+		centerX: lay.centerX,
+		centerY: lay.centerY,
+		spanW:   lay.spanW,
+		spanH:   lay.spanH,
+	}
+}
+
+func (b graphBounds) toLayout(pos map[string]ggui.Point) graphLayout {
+	return graphLayout{
+		pos:     pos,
+		minX:    b.minX,
+		maxX:    b.maxX,
+		minY:    b.minY,
+		maxY:    b.maxY,
+		centerX: b.centerX,
+		centerY: b.centerY,
+		spanW:   b.spanW,
+		spanH:   b.spanH,
+	}
+}
+
+func lerpGraphBounds(a, b graphBounds, t float64) graphBounds {
+	if t <= 0 {
+		return a
+	}
+	if t >= 1 {
+		return b
+	}
+	lerp := func(x, y float64) float64 { return x + (y-x)*t }
+	return graphBounds{
+		minX:    lerp(a.minX, b.minX),
+		maxX:    lerp(a.maxX, b.maxX),
+		minY:    lerp(a.minY, b.minY),
+		maxY:    lerp(a.maxY, b.maxY),
+		centerX: lerp(a.centerX, b.centerX),
+		centerY: lerp(a.centerY, b.centerY),
+		spanW:   lerp(a.spanW, b.spanW),
+		spanH:   lerp(a.spanH, b.spanH),
+	}
+}
+
 // graphLayout holds deterministic world-space coordinates for every node.
 type graphLayout struct {
 	pos              map[string]ggui.Point
@@ -252,7 +394,10 @@ func graphBaseScale(r ggui.Rect, lay graphLayout) float64 {
 	availW := max(r.Size.W-96, 40)
 	availH := max(r.Size.H-76, 40)
 	s := min(availW/max(lay.spanW, 1), availH/max(lay.spanH, 1))
-	return clampFloat(s, 10, 95)
+	if math.IsNaN(s) || math.IsInf(s, 0) || s <= 0 {
+		return 10
+	}
+	return clampFloat(s, 1e-5, 95)
 }
 
 func normalizeGraphLayoutMode(mode string) string {
@@ -271,10 +416,24 @@ func graphSignature(nodes []*protocol.UiGraphNode, edges []*protocol.UiGraphEdge
 }
 
 func graphSignatureWithMode(nodes []*protocol.UiGraphNode, edges []*protocol.UiGraphEdge, mode string, isCards bool) uint64 {
+	return hashGraphSignature(nodes, edges, mode, isCards, true, false)
+}
+
+func graphStructSignatureWithMode(nodes []*protocol.UiGraphNode, edges []*protocol.UiGraphEdge, mode string, isCards bool) uint64 {
+	return hashGraphSignature(nodes, edges, mode, isCards, false, true)
+}
+
+func hashGraphSignature(nodes []*protocol.UiGraphNode, edges []*protocol.UiGraphEdge, mode string, isCards, includePos, includeLabel bool) uint64 {
 	h := fnv.New64a()
 	write := func(s string) {
 		_, _ = h.Write([]byte(s))
 		_, _ = h.Write([]byte{0})
+	}
+	writeFloat := func(v float64) {
+		if v == 0 {
+			v = 0
+		}
+		write(strconv.FormatFloat(v, 'g', -1, 64))
 	}
 	write(normalizeGraphLayoutMode(mode))
 	if isCards {
@@ -282,13 +441,16 @@ func graphSignatureWithMode(nodes []*protocol.UiGraphNode, edges []*protocol.UiG
 	}
 	for _, n := range nodes {
 		write(n.GetId())
+		if includeLabel {
+			write(n.GetLabel())
+		}
 		write(n.GetGroup())
 		write(n.GetShape())
-		write(strconv.FormatFloat(n.GetWeight(), 'g', 6, 64))
-		if n.GetHasPos() {
+		writeFloat(n.GetWeight())
+		if includePos && n.GetHasPos() {
 			write("pos")
-			write(strconv.FormatFloat(n.GetX(), 'g', 6, 64))
-			write(strconv.FormatFloat(n.GetY(), 'g', 6, 64))
+			writeFloat(n.GetX())
+			writeFloat(n.GetY())
 		}
 	}
 	_, _ = h.Write([]byte{1})
@@ -298,6 +460,33 @@ func graphSignatureWithMode(nodes []*protocol.UiGraphNode, edges []*protocol.UiG
 		write(e.GetKind())
 	}
 	return h.Sum64()
+}
+
+func refreshGraphBounds(lay graphLayout) graphLayout {
+	if len(lay.pos) == 0 {
+		lay.minX, lay.maxX, lay.minY, lay.maxY = 0, 0, 0, 0
+		lay.centerX, lay.centerY = 0, 0
+		lay.spanW, lay.spanH = 1, 1
+		return lay
+	}
+	first := true
+	var minX, maxX, minY, maxY float64
+	for _, p := range lay.pos {
+		if first {
+			minX, maxX, minY, maxY = p.X, p.X, p.Y, p.Y
+			first = false
+		} else {
+			minX, maxX = min(minX, p.X), max(maxX, p.X)
+			minY, maxY = min(minY, p.Y), max(maxY, p.Y)
+		}
+	}
+	lay.minX, lay.maxX = minX, maxX
+	lay.minY, lay.maxY = minY, maxY
+	lay.centerX = (minX + maxX) / 2
+	lay.centerY = (minY + maxY) / 2
+	lay.spanW = max(maxX-minX, 1.0)
+	lay.spanH = max(maxY-minY, 1.0)
+	return lay
 }
 
 // computeGraphLayout runs the default deterministic force-directed layout.
@@ -311,7 +500,7 @@ func computeGraphLayoutWithMode(nodes []*protocol.UiGraphNode, edges []*protocol
 	n := len(nodes)
 	pos := make(map[string]ggui.Point, n)
 	if n == 0 {
-		return graphLayout{pos: pos, spanW: 1, spanH: 1}
+		return refreshGraphBounds(graphLayout{pos: pos})
 	}
 	if n == 1 {
 		id := nodes[0].GetId()
@@ -323,7 +512,7 @@ func computeGraphLayoutWithMode(nodes []*protocol.UiGraphNode, edges []*protocol
 			pt = p
 		}
 		pos[id] = pt
-		return graphLayout{pos: pos, minX: pt.X, maxX: pt.X, minY: pt.Y, maxY: pt.Y, centerX: pt.X, centerY: pt.Y, spanW: 1, spanH: 1}
+		return refreshGraphBounds(graphLayout{pos: pos})
 	}
 
 	idxByID := make(map[string]int, n)
@@ -351,54 +540,19 @@ func computeGraphLayoutWithMode(nodes []*protocol.UiGraphNode, edges []*protocol
 	cx := (minX + maxX) / 2
 	cy := (minY + maxY) / 2
 
-	hasOverrides := false
 	for i, nd := range nodes {
 		id := nd.GetId()
 		pt := ggui.Pt(xs[i]-cx, ys[i]-cy)
 		if nd.GetHasPos() {
 			pt = ggui.Pt(nd.GetX(), nd.GetY())
-			hasOverrides = true
 		}
 		if p, ok := pinned[id]; ok {
 			pt = p
-			hasOverrides = true
 		}
 		pos[id] = pt
 	}
 
-	if hasOverrides {
-		first := true
-		for _, nd := range nodes {
-			p := pos[nd.GetId()]
-			if first {
-				minX, maxX, minY, maxY = p.X, p.X, p.Y, p.Y
-				first = false
-			} else {
-				minX, maxX = min(minX, p.X), max(maxX, p.X)
-				minY, maxY = min(minY, p.Y), max(maxY, p.Y)
-			}
-		}
-		cx = (minX + maxX) / 2
-		cy = (minY + maxY) / 2
-	} else {
-		minX, maxX = minX-cx, maxX-cx
-		minY, maxY = minY-cy, maxY-cy
-		cx, cy = 0, 0
-	}
-
-	spanW := max(maxX-minX, 1.0)
-	spanH := max(maxY-minY, 1.0)
-	return graphLayout{
-		pos:     pos,
-		minX:    minX,
-		maxX:    maxX,
-		minY:    minY,
-		maxY:    maxY,
-		centerX: cx,
-		centerY: cy,
-		spanW:   spanW,
-		spanH:   spanH,
-	}
+	return refreshGraphBounds(graphLayout{pos: pos})
 }
 
 func layoutForce(nodes []*protocol.UiGraphNode, edges []*protocol.UiGraphEdge, idxByID map[string]int, isCards bool) ([]float64, []float64) {
@@ -752,9 +906,16 @@ func (v *treeView) graphNode(n *protocol.UiNode) ggui.Widget {
 
 	// Sync plugin-specified layout mode when it changes from tree.
 	givenLayout := n.GetGraphLayout()
-	if givenLayout != st.givenLayout {
+	normLayout := normalizeGraphLayoutMode(givenLayout)
+	layoutChanged := st.givenLayout != "" && normLayout != normalizeGraphLayoutMode(st.givenLayout)
+	if !st.tweenInit && givenLayout != "" {
 		st.givenLayout = givenLayout
-		st.layoutMode = normalizeGraphLayoutMode(givenLayout)
+		st.layoutMode = normLayout
+	} else if layoutChanged {
+		st.givenLayout = givenLayout
+		st.layoutMode = normLayout
+	} else if st.givenLayout == "" && givenLayout != "" {
+		st.givenLayout = givenLayout
 	}
 	if st.layoutMode == "" {
 		st.layoutMode = graphLayoutForce
@@ -767,9 +928,58 @@ func (v *treeView) graphNode(n *protocol.UiNode) ggui.Widget {
 	}
 
 	sig := graphSignatureWithMode(nodes, edges, st.layoutMode, isCards)
+	structSig := graphStructSignatureWithMode(nodes, edges, st.layoutMode, isCards)
 	if st.sig != sig || (len(nodes) > 0 && len(st.layout.pos) != len(nodes)) {
+		prevPos := st.layout.pos
+		curIDs := make(map[string]bool, len(nodes))
+		hasPosCleared := false
+		allHasPosMatch := true
+		for _, nd := range nodes {
+			nid := nd.GetId()
+			curIDs[nid] = true
+			if st.givenHasPos[nid] && !nd.GetHasPos() {
+				hasPosCleared = true
+				if !nd.GetPinned() && nid != st.draggingID {
+					delete(st.pinnedPos, nid)
+				}
+			}
+			if nd.GetHasPos() {
+				p, ok := prevPos[nid]
+				if !ok || !(math.Hypot(nd.GetX()-p.X, nd.GetY()-p.Y) <= 0.02) {
+					allHasPosMatch = false
+				}
+			}
+		}
+		for nid := range st.pinnedPos {
+			if !curIDs[nid] {
+				delete(st.pinnedPos, nid)
+			}
+		}
+		for nid := range st.givenHasPos {
+			if !curIDs[nid] {
+				delete(st.givenHasPos, nid)
+			}
+		}
+		if st.draggingID != "" && !curIDs[st.draggingID] {
+			st.draggingID = ""
+		}
+
+		preserveCamBounds := st.tweenInit &&
+			st.hasCamBounds &&
+			(st.draggingID != "" || (!layoutChanged && st.structSig == structSig && len(nodes) == len(prevPos) && !hasPosCleared && allHasPosMatch))
+
 		st.sig = sig
+		st.structSig = structSig
+		if st.givenHasPos == nil {
+			st.givenHasPos = make(map[string]bool, len(nodes))
+		}
+		for _, nd := range nodes {
+			st.givenHasPos[nd.GetId()] = nd.GetHasPos()
+		}
 		st.layout = computeGraphLayoutWithMode(nodes, edges, st.layoutMode, st.pinnedPos, isCards)
+		if !preserveCamBounds {
+			st.setCamBounds(st.layout, false)
+		}
 		if st.layoutTarget != nil {
 			posCopy := maps.Clone(st.layout.pos)
 			st.layoutTarget.Set(posCopy)
@@ -785,7 +995,7 @@ func (v *treeView) graphNode(n *protocol.UiNode) ggui.Widget {
 	if selectedID != st.givenSelected {
 		st.givenSelected = selectedID
 		st.localSelected = selectedID
-		if selectedID != "" && st.lastRect.Size.W > 0 && st.lastRect.Size.H > 0 {
+		if selectedID != "" && st.draggingID == "" && st.lastRect.Size.W > 0 && st.lastRect.Size.H > 0 {
 			st.focusNode(selectedID, st.lastRect)
 		}
 	} else if st.localSelected != "" {
@@ -823,7 +1033,8 @@ func (v *treeView) graphNode(n *protocol.UiNode) ggui.Widget {
 	if n.GetDrop() && !n.GetDisabled() {
 		onDrop = func(nodeID string, pos ggui.Point) {
 			round2 := func(val float64) float64 {
-				r := math.Round(val*100) / 100
+				clamped := clampGraphCoord(val)
+				r := math.Round(clamped*100) / 100
 				if r == 0 {
 					return 0
 				}
@@ -847,6 +1058,8 @@ func (v *treeView) graphNode(n *protocol.UiNode) ggui.Widget {
 
 	canvas := &pluginGraphCanvas{
 		m:           v.m,
+		spaceWindow: v.spaceWindow,
+		openSession: v.openSession,
 		state:       st,
 		variant:     n.GetVariant(),
 		nodes:       nodes,
@@ -869,11 +1082,31 @@ func (v *treeView) graphNode(n *protocol.UiNode) ggui.Widget {
 	canvas.SetName(canvas.name)
 	canvas.SetKey("graph:" + v.block + ":" + v.scope + ":" + id)
 	canvas.SetInert(n.GetDisabled())
+	sw := v.spaceWindow
+	canvas.ctxPopupWidget = ggui.Component(func() ggui.Widget {
+		p := newGraphCtxPopup(st, sw)
+		cs := st.ctxStateFor(sw)
+		canvas.ctxPopup = p
+		if cs != nil {
+			cs.popup = p
+		}
+		ggui.OnCleanup(func() {
+			if canvas.ctxPopup == p {
+				canvas.ctxPopup = nil
+			}
+			if cs != nil && cs.popup == p {
+				cs.popup = nil
+			}
+		})
+		return p
+	})
 
 	recomputeLayout := func(mode string) {
 		st.layoutMode = mode
 		st.sig = graphSignatureWithMode(nodes, edges, mode, isCards)
+		st.structSig = graphStructSignatureWithMode(nodes, edges, mode, isCards)
 		st.layout = computeGraphLayoutWithMode(nodes, edges, mode, st.pinnedPos, isCards)
+		st.setCamBounds(st.layout, false)
 		if st.layoutTarget != nil {
 			st.layoutTarget.Set(maps.Clone(st.layout.pos))
 		}
@@ -887,7 +1120,7 @@ func (v *treeView) graphNode(n *protocol.UiNode) ggui.Widget {
 		}
 		btn := ui.ButtonOf(icon(iconName).Size(12).Color(icColor), func() {
 			recomputeLayout(mode)
-		}).Ghost().Pad(4).Radius(5).Name(label)
+		}).Ghost().Pad(4).Radius(5).Disabled(n.GetDisabled()).Name(label)
 		if st.layoutMode == mode {
 			btn = btn.Secondary()
 		}
@@ -907,37 +1140,39 @@ func (v *treeView) graphNode(n *protocol.UiNode) ggui.Widget {
 				layoutBtn("radar", T("Radial layout"), graphLayoutRadial),
 				ui.Tooltip(
 					ui.ButtonOf(widget.Text("+").Size(13).Weight(ggui.WeightMedium).Color(skin.Fg).NoWrap(), func() {
-						st.setCamera(st.panX, st.panY, st.zoom*1.25, true)
+						_, _, curZoom := st.renderedCamera()
+						st.setCamera(st.panX, st.panY, max(st.zoom, curZoom)*1.25, true)
 						bump()
-					}).Ghost().Pad(2, 6).Radius(5).Name(T("Zoom in")),
+					}).Ghost().Pad(2, 6).Radius(5).Disabled(n.GetDisabled()).Name(T("Zoom in")),
 					T("Zoom in"),
 				),
 				ui.Tooltip(
 					ui.ButtonOf(widget.Text("−").Size(13).Weight(ggui.WeightMedium).Color(skin.Fg).NoWrap(), func() {
-						st.setCamera(st.panX, st.panY, st.zoom/1.25, true)
+						_, _, curZoom := st.renderedCamera()
+						st.setCamera(st.panX, st.panY, min(st.zoom, curZoom)/1.25, true)
 						bump()
-					}).Ghost().Pad(2, 6).Radius(5).Name(T("Zoom out")),
+					}).Ghost().Pad(2, 6).Radius(5).Disabled(n.GetDisabled()).Name(T("Zoom out")),
 					T("Zoom out"),
 				),
 				ui.Tooltip(
 					ui.ButtonOf(icon("maximize-2").Size(12).Color(skin.Muted), func() {
 						st.fitView(st.lastRect)
 						bump()
-					}).Ghost().Pad(4).Radius(5).Name(T("Fit view")),
+					}).Ghost().Pad(4).Radius(5).Disabled(n.GetDisabled()).Name(T("Fit view")),
 					T("Fit view"),
 				),
 				ui.Tooltip(
 					ui.ButtonOf(icon("refresh-cw").Size(12).Color(skin.Muted), func() {
 						st.reset()
 						bump()
-					}).Ghost().Pad(4).Radius(5).Name(T("Reset")),
+					}).Ghost().Pad(4).Radius(5).Disabled(n.GetDisabled()).Name(T("Reset")),
 					T("Reset"),
 				),
 				ui.Tooltip(
 					ui.ButtonOf(icon("layout-grid").Size(12).Color(minimapColor), func() {
 						st.minimapOpen = !st.minimapOpen
 						bump()
-					}).Ghost().Pad(4).Radius(5).Name(T("Toggle minimap")),
+					}).Ghost().Pad(4).Radius(5).Disabled(n.GetDisabled()).Name(T("Toggle minimap")),
 					T("Toggle minimap"),
 				),
 			).Gap(2).Align(widget.AlignCenter)).Fill(skin.Surface0).Border(1, skin.Border).Radius(7).Pad(2),
@@ -967,24 +1202,48 @@ const (
 	graphDragMinimap
 )
 
+type graphCtxPopupSurface struct {
+	child ggui.Widget
+	open  *ggui.StateValue[bool]
+}
+
+func (s *graphCtxPopupSurface) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	return s.child.Layout(c, env)
+}
+
+func (s *graphCtxPopupSurface) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	open := s.open != nil && ggui.Untrack(s.open.Get)
+	dst.Node(r, ggui.Node{
+		Role:     ggui.RoleMenu,
+		Name:     T("Menu"),
+		Expanded: ggui.Expandable(open),
+	}, func(dst *ggui.Canvas) {
+		dst.Paint(s.child, r)
+	})
+}
+
 type pluginGraphCanvas struct {
 	ggui.Interactive
-	m           *model
-	state       *graphViewState
-	variant     string
-	nodes       []*protocol.UiGraphNode
-	edges       []*protocol.UiGraphEdge
-	selectedID  string
-	height      float64
-	fill        bool
-	grow        float64
-	minimapProp bool
-	onSelect    func(string)
-	onDoubleTap func(string)
-	onDrop      func(string, ggui.Point)
-	pluginMenu  func(*protocol.UiGraphNode) ([]ggui.MenuItem, []ggui.Widget)
-	tick        *ggui.StateValue[int]
-	name        string
+	m              *model
+	spaceWindow    *spaceWindowState
+	openSession    func(string)
+	state          *graphViewState
+	variant        string
+	nodes          []*protocol.UiGraphNode
+	edges          []*protocol.UiGraphEdge
+	selectedID     string
+	height         float64
+	fill           bool
+	grow           float64
+	minimapProp    bool
+	onSelect       func(string)
+	onDoubleTap    func(string)
+	onDrop         func(string, ggui.Point)
+	pluginMenu     func(*protocol.UiGraphNode) ([]ggui.MenuItem, []ggui.Widget)
+	tick           *ggui.StateValue[int]
+	name           string
+	ctxPopup       *widget.PopupWidget
+	ctxPopupWidget ggui.Widget
 
 	env     ggui.Env
 	theme   *uitheme.Theme
@@ -1010,6 +1269,9 @@ type pluginGraphCanvas struct {
 	dragMode       graphDragMode
 	dragNodeID     string
 	dragStartWorld ggui.Point
+	dragGrabOffset ggui.Point
+	panStartX      float64
+	panStartY      float64
 	moved          bool
 	downPos        ggui.Point
 	lastPos        ggui.Point
@@ -1038,8 +1300,10 @@ func (g *pluginGraphCanvas) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
 	g.colError = resolveOr(skin.DotDown, env, g.colAccent)
 	g.colDone = resolveOr(skin.DotDone, env, g.colAccent)
 
-	if g.state != nil && g.state.ctxPopup != nil {
-		g.state.ctxPopup.Layout(ggui.Constraints{}, env)
+	if g.ctxPopupWidget != nil {
+		g.ctxPopupWidget.Layout(ggui.Constraints{}, env)
+	} else if cs := g.state.peekCtxState(g.spaceWindow); cs != nil && cs.popup != nil {
+		cs.popup.Layout(ggui.Constraints{}, env)
 	}
 
 	w := c.MaxW
@@ -1082,9 +1346,13 @@ func (g *pluginGraphCanvas) ConsumesKey(ev ggui.KeyEvent) bool {
 func (g *pluginGraphCanvas) Adopt(prev any) {
 	g.Interactive.Adopt(prev)
 	if p, ok := prev.(*pluginGraphCanvas); ok {
+		g.rect = p.rect
 		g.dragMode = p.dragMode
 		g.dragNodeID = p.dragNodeID
 		g.dragStartWorld = p.dragStartWorld
+		g.dragGrabOffset = p.dragGrabOffset
+		g.panStartX = p.panStartX
+		g.panStartY = p.panStartY
 		g.moved = p.moved
 		g.downPos = p.downPos
 		g.lastPos = p.lastPos
@@ -1094,10 +1362,11 @@ func (g *pluginGraphCanvas) Adopt(prev any) {
 
 func (g *pluginGraphCanvas) worldToScreen(r ggui.Rect, pt ggui.Point) ggui.Point {
 	panX, panY, zoom := g.state.renderedCamera()
-	scale := graphBaseScale(r, g.state.layout) * zoom
+	cam := g.state.cameraLayout()
+	scale := graphBaseScale(r, cam) * zoom
 	cx := r.Origin.X + r.Size.W/2 + panX
 	cy := r.Origin.Y + r.Size.H/2 + panY
-	return ggui.Pt(cx+(pt.X-g.state.layout.centerX)*scale, cy+(pt.Y-g.state.layout.centerY)*scale)
+	return ggui.Pt(cx+(pt.X-cam.centerX)*scale, cy+(pt.Y-cam.centerY)*scale)
 }
 
 func (g *pluginGraphCanvas) nodeShape(nd *protocol.UiGraphNode) string {
@@ -1255,10 +1524,12 @@ func (g *pluginGraphCanvas) panToMinimapPoint(r, mmRect ggui.Rect, p ggui.Point)
 	mmCY := mmRect.Origin.Y + mmRect.Size.H/2
 	wx := g.state.layout.centerX + (p.X-mmCX)/mmScale
 	wy := g.state.layout.centerY + (p.Y-mmCY)/mmScale
-	scale := graphBaseScale(r, g.state.layout) * g.state.zoom
+	_, _, curZoom := g.state.renderedCamera()
+	g.state.setCamBounds(g.state.layout, false)
+	scale := graphBaseScale(r, g.state.layout) * curZoom
 	targetPanX := -(wx - g.state.layout.centerX) * scale
 	targetPanY := -(wy - g.state.layout.centerY) * scale
-	g.state.setCamera(targetPanX, targetPanY, g.state.zoom, false)
+	g.state.setCamera(targetPanX, targetPanY, curZoom, false)
 }
 
 func (g *pluginGraphCanvas) activeSelectedID() string {
@@ -1337,8 +1608,10 @@ func (g *pluginGraphCanvas) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		})
 	})
 
-	if g.state.ctxPopup != nil {
-		dst.Paint(g.state.ctxPopup, ggui.Rct(r.Origin, ggui.Sz(0, 0)))
+	if g.ctxPopupWidget != nil {
+		dst.Paint(g.ctxPopupWidget, ggui.Rct(r.Origin, ggui.Sz(0, 0)))
+	} else if cs := g.state.peekCtxState(g.spaceWindow); cs != nil && cs.popup != nil {
+		dst.Paint(cs.popup, ggui.Rct(r.Origin, ggui.Sz(0, 0)))
 	}
 
 	dst.StrokeRoundRect(r, radius, 1, g.colBorder)
@@ -1978,12 +2251,13 @@ func (g *pluginGraphCanvas) paintMinimap(dst *ggui.Canvas, r ggui.Rect) {
 
 	// Current camera viewport rect in minimap coordinates.
 	panX, panY, zoom := g.state.renderedCamera()
-	scale := graphBaseScale(r, g.state.layout) * zoom
+	cam := g.state.cameraLayout()
+	scale := graphBaseScale(r, cam) * zoom
 	if scale > 0 {
-		wMinX := g.state.layout.centerX + (-r.Size.W/2-panX)/scale
-		wMaxX := g.state.layout.centerX + (r.Size.W/2-panX)/scale
-		wMinY := g.state.layout.centerY + (-r.Size.H/2-panY)/scale
-		wMaxY := g.state.layout.centerY + (r.Size.H/2-panY)/scale
+		wMinX := cam.centerX + (-r.Size.W/2-panX)/scale
+		wMaxX := cam.centerX + (r.Size.W/2-panX)/scale
+		wMinY := cam.centerY + (-r.Size.H/2-panY)/scale
+		wMaxY := cam.centerY + (r.Size.H/2-panY)/scale
 		p0 := toMM(ggui.Pt(wMinX, wMinY))
 		p1 := toMM(ggui.Pt(wMaxX, wMaxY))
 		vx0 := clampFloat(p0.X, mmRect.Origin.X+2, mmRect.Origin.X+mmRect.Size.W-2)
@@ -2075,6 +2349,44 @@ func (g *pluginGraphCanvas) paintHoverDetailCard(dst *ggui.Canvas, r ggui.Rect) 
 	})
 }
 
+func (g *pluginGraphCanvas) openSessionTarget(sid string) {
+	if sid == "" {
+		return
+	}
+	if g.openSession != nil {
+		g.openSession(sid)
+		return
+	}
+	if g.m == nil {
+		return
+	}
+	if g.spaceWindow != nil {
+		g.m.spaceWindowSelectSession(g.spaceWindow, sid)
+		return
+	}
+	g.m.clearSidebarPage()
+	if g.m.Page != nil && ggui.Peek(g.m.Page) != "workspace" {
+		g.m.Page.Set("workspace")
+	}
+	g.m.selectSession(sid)
+}
+
+func (g *pluginGraphCanvas) leavePluginSidebarPage() {
+	if g.spaceWindow != nil {
+		if g.spaceWindow.sidebarPage != nil && ggui.Peek(g.spaceWindow.sidebarPage) != "" {
+			g.spaceWindow.sidebarPage.Set("")
+		}
+		return
+	}
+	if g.m == nil {
+		return
+	}
+	g.m.clearSidebarPage()
+	if g.m.Page != nil && ggui.Peek(g.m.Page) != "workspace" {
+		g.m.Page.Set("workspace")
+	}
+}
+
 func (g *pluginGraphCanvas) triggerDoubleTap(nodeID string) {
 	if nodeID == "" {
 		return
@@ -2085,11 +2397,7 @@ func (g *pluginGraphCanvas) triggerDoubleTap(nodeID string) {
 	}
 	if g.m != nil {
 		if sid, ok := g.sessionIDForNode(nodeID); ok {
-			g.m.clearSidebarPage()
-			if g.m.Page != nil && ggui.Peek(g.m.Page) != "workspace" {
-				g.m.Page.Set("workspace")
-			}
-			g.m.selectSession(sid)
+			g.openSessionTarget(sid)
 		}
 	}
 }
@@ -2128,25 +2436,15 @@ func (g *pluginGraphCanvas) openNodeContextMenu(nd *protocol.UiGraphNode, at ggu
 			widgetItems = append(widgetItems, ui.MenuDivider())
 		}
 		openAct := func() {
-			m.clearSidebarPage()
-			if m.Page != nil && ggui.Peek(m.Page) != "workspace" {
-				m.Page.Set("workspace")
-			}
-			m.selectSession(sid)
+			g.openSessionTarget(sid)
 		}
 		sendAct := func() {
-			m.clearSidebarPage()
-			if m.Page != nil && ggui.Peek(m.Page) != "workspace" {
-				m.Page.Set("workspace")
-			}
-			m.askAgent(sid, "")
+			g.leavePluginSidebarPage()
+			m.askAgentIn(g.spaceWindow, sid, "")
 		}
 		subAct := func() {
-			m.clearSidebarPage()
-			if m.Page != nil && ggui.Peek(m.Page) != "workspace" {
-				m.Page.Set("workspace")
-			}
-			m.openSubagent(sid)
+			g.leavePluginSidebarPage()
+			m.openSubagentIn(g.spaceWindow, sid)
 		}
 		killAct := func() {
 			m.askKill(sid)
@@ -2177,9 +2475,14 @@ func (g *pluginGraphCanvas) openNodeContextMenu(nd *protocol.UiGraphNode, at ggu
 			return true
 		}
 	}
-	if g.state.ctxPopup != nil && g.state.ctxItems != nil {
-		g.state.ctxItems.Set(widgetItems)
-		g.state.ctxPopup.ShowAt(at)
+	cs := g.state.ctxStateFor(g.spaceWindow)
+	popup := g.ctxPopup
+	if popup == nil && cs != nil {
+		popup = cs.popup
+	}
+	if popup != nil && cs != nil && cs.items != nil {
+		cs.items.Set(widgetItems)
+		popup.ShowAt(at)
 		ggui.Invalidate(g.env)
 		return true
 	}
@@ -2316,10 +2619,25 @@ func (g *pluginGraphCanvas) HandlePointer(ev ggui.PointerEvent) bool {
 		if hit := g.hitTestNode(g.rect, ev.Pos); hit != "" {
 			g.dragMode = graphDragNode
 			g.dragNodeID = hit
-			g.dragStartWorld = g.state.layout.pos[hit]
+			if rp, ok := g.state.renderedPos(hit); ok {
+				g.dragStartWorld = rp
+			} else {
+				g.dragStartWorld = g.state.layout.pos[hit]
+			}
+			startScreen := g.worldToScreen(g.rect, g.dragStartWorld)
+			g.dragGrabOffset = ggui.Pt(ev.Pos.X-startScreen.X, ev.Pos.Y-startScreen.Y)
 		} else {
 			g.dragMode = graphDragPan
 			g.dragNodeID = ""
+			curPanX, curPanY, curZoom := g.state.renderedCamera()
+			if g.state.hasCamBounds {
+				curCam := g.state.cameraLayout()
+				curCam.pos = g.state.layout.pos
+				g.state.setCamBounds(curCam, false)
+			}
+			g.state.setCamera(curPanX, curPanY, curZoom, false)
+			g.panStartX = curPanX
+			g.panStartY = curPanY
 		}
 		ggui.Invalidate(g.env)
 		return g.Pointer(ev, nil)
@@ -2327,6 +2645,7 @@ func (g *pluginGraphCanvas) HandlePointer(ev ggui.PointerEvent) bool {
 		if g.dragMode == graphDragNone {
 			return false
 		}
+		wasMoved := g.moved
 		if !g.moved && math.Hypot(ev.Pos.X-g.downPos.X, ev.Pos.Y-g.downPos.Y) > 4 {
 			g.moved = true
 		}
@@ -2338,30 +2657,65 @@ func (g *pluginGraphCanvas) HandlePointer(ev ggui.PointerEvent) bool {
 			}
 		case graphDragPan:
 			if g.moved {
-				g.state.setCamera(g.state.panX+(ev.Pos.X-g.lastPos.X), g.state.panY+(ev.Pos.Y-g.lastPos.Y), g.state.zoom, false)
+				dx := ev.Pos.X - g.downPos.X
+				dy := ev.Pos.Y - g.downPos.Y
+				g.state.setCamera(g.panStartX+dx, g.panStartY+dy, g.state.zoom, false)
 				ggui.Invalidate(g.env)
 			}
 		case graphDragNode:
+			if g.findNode(g.dragNodeID) == nil || g.state == nil {
+				g.dragMode = graphDragNone
+				g.dragNodeID = ""
+				g.moved = false
+				if g.state != nil {
+					g.state.draggingID = ""
+				}
+				ggui.Invalidate(g.env)
+				return false
+			}
+			if _, ok := g.state.layout.pos[g.dragNodeID]; !ok {
+				g.dragMode = graphDragNone
+				g.dragNodeID = ""
+				g.moved = false
+				g.state.draggingID = ""
+				ggui.Invalidate(g.env)
+				return false
+			}
 			if g.moved && g.dragNodeID != "" {
-				scale := graphBaseScale(g.rect, g.state.layout) * g.state.zoom
+				if !wasMoved {
+					if g.state.hasCamBounds {
+						curCam := g.state.cameraLayout()
+						curCam.pos = g.state.layout.pos
+						g.state.setCamBounds(curCam, false)
+					}
+					curPanX, curPanY, curZoom := g.state.renderedCamera()
+					g.state.setCamera(curPanX, curPanY, curZoom, false)
+					if rp, ok := g.state.renderedPos(g.dragNodeID); ok {
+						g.dragStartWorld = rp
+					} else {
+						g.dragStartWorld = g.state.layout.pos[g.dragNodeID]
+					}
+					curNodeScreen := g.worldToScreen(g.rect, g.dragStartWorld)
+					g.downPos = ggui.Pt(curNodeScreen.X+g.dragGrabOffset.X, curNodeScreen.Y+g.dragGrabOffset.Y)
+				}
+				g.state.draggingID = g.dragNodeID
+				cam := g.state.cameraLayout()
+				_, _, curZoom := g.state.renderedCamera()
+				scale := graphBaseScale(g.rect, cam) * curZoom
 				if scale <= 0 {
 					scale = 1
 				}
 				dx := (ev.Pos.X - g.downPos.X) / scale
 				dy := (ev.Pos.Y - g.downPos.Y) / scale
-				newPos := ggui.Pt(g.dragStartWorld.X+dx, g.dragStartWorld.Y+dy)
+				newPos := ggui.Pt(
+					clampGraphCoord(g.dragStartWorld.X+dx),
+					clampGraphCoord(g.dragStartWorld.Y+dy),
+				)
 				if g.state.pinnedPos == nil {
 					g.state.pinnedPos = map[string]ggui.Point{}
 				}
 				g.state.pinnedPos[g.dragNodeID] = newPos
 				g.state.layout.pos[g.dragNodeID] = newPos
-				if g.state.layoutTarget != nil {
-					posCopy := maps.Clone(g.state.layout.pos)
-					g.state.layoutTarget.Set(posCopy)
-					if g.state.layoutTween != nil {
-						g.state.layoutTween.Jump(posCopy)
-					}
-				}
 				ggui.Invalidate(g.env)
 			}
 		}
@@ -2372,10 +2726,45 @@ func (g *pluginGraphCanvas) HandlePointer(ev ggui.PointerEvent) bool {
 		g.dragMode = graphDragNone
 		g.dragNodeID = ""
 		g.moved = false
-		if mode == graphDragNode && wasMoved && dragID != "" {
-			if pos, ok := g.state.layout.pos[dragID]; ok && g.onDrop != nil {
-				g.onDrop(dragID, pos)
+		if g.state != nil {
+			g.state.draggingID = ""
+		}
+		if mode == graphDragNode {
+			if g.findNode(dragID) == nil || g.state == nil {
+				ggui.Invalidate(g.env)
+				return g.Pointer(ev, nil)
 			}
+			if _, ok := g.state.layout.pos[dragID]; !ok {
+				ggui.Invalidate(g.env)
+				return g.Pointer(ev, nil)
+			}
+		}
+		if mode == graphDragNode && wasMoved && dragID != "" {
+			g.state.layout = refreshGraphBounds(g.state.layout)
+			if pos, ok := g.state.layout.pos[dragID]; ok {
+				if g.state.layoutTarget != nil {
+					posCopy := maps.Clone(g.state.layout.pos)
+					g.state.layoutTarget.Set(posCopy)
+					if g.state.layoutTween != nil {
+						cur := maps.Clone(g.state.layoutTween.Get())
+						if cur != nil {
+							cur[dragID] = pos
+							if maps.Equal(cur, posCopy) {
+								g.state.layoutTween.Jump(posCopy)
+							} else {
+								g.state.layoutTween.Jump(cur)
+								g.state.layoutTween.Set(posCopy)
+							}
+						} else {
+							g.state.layoutTween.Jump(posCopy)
+						}
+					}
+				}
+				if g.onDrop != nil {
+					g.onDrop(dragID, pos)
+				}
+			}
+			ggui.Invalidate(g.env)
 			return g.Pointer(ev, nil)
 		}
 		if mode != graphDragNone && mode != graphDragMinimap && !wasMoved && ev.Button == ggui.MouseButtonLeft {
@@ -2419,7 +2808,22 @@ func (g *pluginGraphCanvas) HandlePointer(ev ggui.PointerEvent) bool {
 			if factor > 1.35 {
 				factor = 1.35
 			}
-			g.state.setCamera(g.state.panX, g.state.panY, g.state.zoom*factor, false)
+			curPanX, curPanY, curZoom := g.state.renderedCamera()
+			if g.state.hasCamBounds {
+				curCam := g.state.cameraLayout()
+				curCam.pos = g.state.layout.pos
+				g.state.setCamBounds(curCam, false)
+			}
+			nextZoom := clampFloat(curZoom*factor, 0.35, 3.0)
+			newPanX, newPanY := curPanX, curPanY
+			if g.rect.Size.W > 0 && g.rect.Size.H > 0 && curZoom > 0 {
+				rcx := g.rect.Origin.X + g.rect.Size.W/2
+				rcy := g.rect.Origin.Y + g.rect.Size.H/2
+				ratio := nextZoom / curZoom
+				newPanX = ev.Pos.X - rcx - (ev.Pos.X-rcx-curPanX)*ratio
+				newPanY = ev.Pos.Y - rcy - (ev.Pos.Y-rcy-curPanY)*ratio
+			}
+			g.state.setCamera(newPanX, newPanY, nextZoom, false)
 			ggui.Invalidate(g.env)
 			return true
 		}
@@ -2449,6 +2853,13 @@ func graphFade(c color.Color, alpha float64) color.Color {
 	n := color.NRGBAModel.Convert(c).(color.NRGBA)
 	a := clampFloat(float64(n.A)*alpha, 0, 255)
 	return color.NRGBA{R: n.R, G: n.G, B: n.B, A: uint8(a)}
+}
+
+func clampGraphCoord(v float64) float64 {
+	if math.IsNaN(v) {
+		return 0
+	}
+	return clampFloat(v, -graphCoordLimit, graphCoordLimit)
 }
 
 func clampFloat(v, lo, hi float64) float64 {

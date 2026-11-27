@@ -40,14 +40,16 @@ func (v *treeView) chartNode(n *protocol.UiNode) ggui.Widget {
 				v.send(id, protocol.UiChange, payload)
 			}
 		}
+		sel := v.form.heatmapSelection(id)
 		hm := &pluginHeatmapCanvas{
 			series:      n.GetSeries(),
 			labels:      n.GetLabels(),
 			name:        name,
 			interactive: interactive,
 			onSelect:    onHeatSelect,
-			selRow:      -1,
-			selCol:      -1,
+			sel:         sel,
+			selRow:      sel[0],
+			selCol:      sel[1],
 		}
 		hm.Role = ggui.RoleGroup
 		hm.SetName(name)
@@ -218,6 +220,7 @@ type pluginHeatmapCanvas struct {
 	name        string
 	interactive bool
 	onSelect    func(string)
+	sel         *[2]int
 	selRow      int
 	selCol      int
 
@@ -266,7 +269,27 @@ func (h *pluginHeatmapCanvas) Describe() ggui.Node {
 	}
 }
 
-func (h *pluginHeatmapCanvas) HandleKey(ggui.KeyEvent) {}
+func (h *pluginHeatmapCanvas) HandleKey(ev ggui.KeyEvent) {
+	h.Keyboard(ev, nil)
+}
+
+func (h *pluginHeatmapCanvas) Adopt(prev any) {
+	h.Interactive.Adopt(prev)
+	if q, ok := prev.(*pluginHeatmapCanvas); ok {
+		h.rect = q.rect
+		h.cells = q.cells
+		if h.sel == nil {
+			h.sel = q.sel
+		}
+		if h.sel != nil && h.sel[0] >= 0 && h.sel[1] >= 0 {
+			h.selRow = h.sel[0]
+			h.selCol = h.sel[1]
+		} else {
+			h.selRow = q.selRow
+			h.selCol = q.selCol
+		}
+	}
+}
 
 func blendHeatmapColor(base, target color.Color, t float64) color.Color {
 	t = clampFloat(t, 0, 1)
@@ -357,72 +380,84 @@ func (h *pluginHeatmapCanvas) Paint(dst *ggui.Canvas, r ggui.Rect) {
 		cellW := max((gridW-cellGap*float64(cols-1))/float64(cols), 6)
 		cellH := max((gridH-cellGap*float64(rows-1))/float64(rows), 6)
 
-		if hasColLabels && h.font != nil {
-			for c := range cols {
-				lbl := strconv.Itoa(c + 1)
-				if c < len(h.labels) {
-					lbl = h.labels[c]
+		dst.ClipRoundRect(r, 8, func(dst *ggui.Canvas) {
+			if hasColLabels && h.font != nil {
+				for c := range cols {
+					lbl := strconv.Itoa(c + 1)
+					if c < len(h.labels) {
+						lbl = h.labels[c]
+					}
+					cx := gridX + float64(c)*(cellW+cellGap)
+					if cx+cellW <= r.Origin.X || cx >= r.Origin.X+r.Size.W {
+						continue
+					}
+					fitted := dst.FitText(lbl, h.font, 10, cellW)
+					tw := dst.TextWidth(fitted, h.font, 10)
+					dst.DrawText(fitted, h.font, 10, ggui.Pt(cx+(cellW-tw)/2, r.Origin.Y+pad), h.colMuted)
 				}
-				cx := gridX + float64(c)*(cellW+cellGap)
-				fitted := dst.FitText(lbl, h.font, 10, cellW)
-				tw := dst.TextWidth(fitted, h.font, 10)
-				dst.DrawText(fitted, h.font, 10, ggui.Pt(cx+(cellW-tw)/2, r.Origin.Y+pad), h.colMuted)
 			}
-		}
 
-		for rowIdx, s := range h.series {
-			ry := gridY + float64(rowIdx)*(cellH+cellGap)
-			if hasRowLabels && s.GetName() != "" && h.font != nil {
-				fitted := dst.FitText(s.GetName(), h.font, 10.5, max(rowLabelW-6, 12))
-				dst.DrawText(fitted, h.font, 10.5, ggui.Pt(r.Origin.X+pad, ry+(cellH-12)/2), h.colMuted)
-			}
-			rowTone := h.colAccent
-			if s.GetTone() != "" {
-				rowTone = resolveOr(toneColor(s.GetTone()), h.env, h.colAccent)
-			}
-			vals := s.GetValues()
-			for colIdx := range cols {
-				cx := gridX + float64(colIdx)*(cellW+cellGap)
-				cellRect := ggui.Rct(ggui.Pt(cx, ry), ggui.Sz(cellW, cellH))
-				cLabel := strconv.Itoa(colIdx + 1)
-				if colIdx < len(h.labels) {
-					cLabel = h.labels[colIdx]
-				}
-				if colIdx >= len(vals) || math.IsNaN(vals[colIdx]) || math.IsInf(vals[colIdx], 0) {
-					dst.FillRoundRect(cellRect, 4, graphFade(h.colSurface2, 0.35))
+			for rowIdx, s := range h.series {
+				ry := gridY + float64(rowIdx)*(cellH+cellGap)
+				if ry+cellH <= r.Origin.Y || ry >= r.Origin.Y+r.Size.H {
 					continue
 				}
-				val := vals[colIdx]
-				norm := 0.18 + 0.82*((val-minVal)/span)
-				col := blendHeatmapColor(h.colSurface2, rowTone, norm)
-				dst.FillRoundRect(cellRect, 4, col)
-				if rowIdx == h.selRow && colIdx == h.selCol {
-					dst.StrokeRoundRect(cellRect, 4, 1.5, h.colFg)
+				if hasRowLabels && s.GetName() != "" && h.font != nil {
+					fitted := dst.FitText(s.GetName(), h.font, 10.5, max(rowLabelW-6, 12))
+					dst.DrawText(fitted, h.font, 10.5, ggui.Pt(r.Origin.X+pad, ry+(cellH-12)/2), h.colMuted)
 				}
-				if cellW >= 28 && cellH >= 18 && h.font != nil {
-					txt := fmt.Sprintf("%.0f", val)
-					if math.Abs(val-math.Round(val)) > 0.05 {
-						txt = fmt.Sprintf("%.1f", val)
+				rowTone := h.colAccent
+				if s.GetTone() != "" {
+					rowTone = resolveOr(toneColor(s.GetTone()), h.env, h.colAccent)
+				}
+				vals := s.GetValues()
+				for colIdx := range cols {
+					cx := gridX + float64(colIdx)*(cellW+cellGap)
+					rawRect := ggui.Rct(ggui.Pt(cx, ry), ggui.Sz(cellW, cellH))
+					cellRect := rawRect.Intersect(r)
+					if cellRect.Empty() {
+						continue
 					}
-					tw := dst.TextWidth(txt, h.font, 10)
-					dst.DrawText(txt, h.font, 10, ggui.Pt(cx+(cellW-tw)/2, ry+(cellH-12)/2), h.colFg)
+					cLabel := strconv.Itoa(colIdx + 1)
+					if colIdx < len(h.labels) {
+						cLabel = h.labels[colIdx]
+					}
+					if colIdx >= len(vals) || math.IsNaN(vals[colIdx]) || math.IsInf(vals[colIdx], 0) {
+						dst.FillRoundRect(rawRect, 4, graphFade(h.colSurface2, 0.35))
+						continue
+					}
+					val := vals[colIdx]
+					norm := 0.18 + 0.82*((val-minVal)/span)
+					col := blendHeatmapColor(h.colSurface2, rowTone, norm)
+					dst.FillRoundRect(rawRect, 4, col)
+					if rowIdx == h.selRow && colIdx == h.selCol {
+						dst.StrokeRoundRect(rawRect, 4, 1.5, h.colFg)
+					}
+					if cellW >= 28 && cellH >= 18 && h.font != nil {
+						txt := fmt.Sprintf("%.0f", val)
+						if math.Abs(val-math.Round(val)) > 0.05 {
+							txt = fmt.Sprintf("%.1f", val)
+						}
+						tw := dst.TextWidth(txt, h.font, 10)
+						dst.DrawText(txt, h.font, 10, ggui.Pt(cx+(cellW-tw)/2, ry+(cellH-12)/2), h.colFg)
+					}
+					h.cells = append(h.cells, heatmapCellHit{
+						row:    rowIdx,
+						col:    colIdx,
+						val:    val,
+						series: s.GetName(),
+						label:  cLabel,
+						rect:   cellRect,
+					})
+					dst.Leaf(cellRect, ggui.Node{
+						Role:     ggui.RoleCell,
+						Name:     fmt.Sprintf("%s %s: %g", s.GetName(), cLabel, val),
+						Selected: rowIdx == h.selRow && colIdx == h.selCol,
+						Disabled: h.IsInert() || !h.interactive,
+					})
 				}
-				h.cells = append(h.cells, heatmapCellHit{
-					row:    rowIdx,
-					col:    colIdx,
-					val:    val,
-					series: s.GetName(),
-					label:  cLabel,
-					rect:   cellRect,
-				})
-				dst.Leaf(cellRect, ggui.Node{
-					Role:     ggui.RoleCell,
-					Name:     fmt.Sprintf("%s %s: %g", s.GetName(), cLabel, val),
-					Selected: rowIdx == h.selRow && colIdx == h.selCol,
-					Disabled: h.IsInert() || !h.interactive,
-				})
 			}
-		}
+		})
 		dst.StrokeRoundRect(r, 8, 1, h.colBorder)
 	})
 }
@@ -431,11 +466,21 @@ func (h *pluginHeatmapCanvas) HandlePointer(ev ggui.PointerEvent) bool {
 	if h.IsInert() || !h.interactive {
 		return false
 	}
+	if !h.rect.Contains(ev.Pos) {
+		if ev.Kind == ggui.PointerExit {
+			return h.Pointer(ev, nil)
+		}
+		return false
+	}
 	if ev.Kind == ggui.PointerUp && ev.Button == ggui.MouseButtonLeft {
 		for _, cell := range h.cells {
 			if cell.rect.Contains(ev.Pos) {
 				h.selRow = cell.row
 				h.selCol = cell.col
+				if h.sel != nil {
+					h.sel[0] = cell.row
+					h.sel[1] = cell.col
+				}
 				if h.onSelect != nil {
 					payload, err := json.Marshal(struct {
 						Row    int     `json:"row"`

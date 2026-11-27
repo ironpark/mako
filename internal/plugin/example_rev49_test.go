@@ -493,11 +493,11 @@ func TestUIWorkbenchStorageAndReloadResilience(t *testing.T) {
 		t.Fatal(err)
 	}
 	seeded := map[string]string{
-		"graph-pos:huge":               `{"wb-lead":{"x":1e9,"y":1e9},"wb-router":{"x":1e308,"y":-1e308},"wb-explorer":{"x":null,"y":null},"wb-impl":{"x":[],"y":true},"wb-verify":{"x":120,"y":80}}`,
-		"comments:bad-elem:diff-auth":  `[null,"bad",123,[],{"id":"c1","line":1,"text":null},{"id":"c2","line":"bad","text":"nope"},{"id":"c3","line":0,"text":"zero"},{"id":"c4","line":2,"text":"valid\u001b\u202e note"},{"id":"c/bad#id","line":3,"text":"slash hash"},{"id":"c/bad#id","line":4,"text":"dup id"}]`,
-		"comments:only-bad:diff-auth":  `[null,"bad",{"id":"c1","line":1,"text":null}]`,
-		"comments:seq-inst:diff-auth":  `[{"id":"c1","line":1,"text":"existing comment"}]`,
-		"scratch:scratch-inst":         "line1\n\tline2\x00\u202e",
+		"graph-pos:huge":              `{"wb-lead":{"x":1e9,"y":1e9},"wb-router":{"x":1e308,"y":-1e308},"wb-explorer":{"x":null,"y":null},"wb-impl":{"x":[],"y":true},"wb-verify":{"x":120,"y":80}}`,
+		"comments:bad-elem:diff-auth": `[null,"bad",123,[],{"id":"c1","line":1,"text":null},{"id":"c2","line":"bad","text":"nope"},{"id":"c3","line":0,"text":"zero"},{"id":"c4","line":2,"text":"valid\u001b\u202e note"},{"id":"c/bad#id","line":3,"text":"slash hash"},{"id":"c/bad#id","line":4,"text":"dup id"}]`,
+		"comments:only-bad:diff-auth": `[null,"bad",{"id":"c1","line":1,"text":null}]`,
+		"comments:seq-inst:diff-auth": `[{"id":"c1","line":1,"text":"existing comment"}]`,
+		"scratch:scratch-inst":        "line1\n\tline2\x00\u202e",
 	}
 	rawSeed, err := json.Marshal(seeded)
 	if err != nil {
