@@ -361,7 +361,7 @@ export interface Ui {
 export interface HostApi {
   /** GitService reads and changes git work trees this node knows: a folder of a */
   readonly git: GitApi;
-  /** ForgeService reads pull request and CI status for a repository's branch. */
+  /** ForgeService reads pull request, review, and CI status/logs for a repository. */
   readonly forge: ForgeApi;
   /** LogService writes to the daemon's log, under the plugin's name. */
   readonly log: LogApi;
@@ -451,7 +451,7 @@ export interface GitApi {
 }
 
 /**
- * ForgeService reads pull request and CI status for a repository's branch.
+ * ForgeService reads pull request, review, and CI status/logs for a repository.
  * Rate limit: 30/min.
  */
 export interface ForgeApi {
@@ -462,6 +462,19 @@ export interface ForgeApi {
    * Needs forge:read.
    */
   branchStatus(req?: ForgeServiceBranchStatusRequest): Promise<ForgeServiceBranchStatusResponse>;
+  /**
+   * PullRequestDetail reads a pull request's checks, reviews, and inline
+   * review comments. Number 0 reads the currently checked-out branch's PR.
+   *
+   * Needs forge:read.
+   */
+  pullRequestDetail(req?: ForgeServicePullRequestDetailRequest): Promise<ForgeServicePullRequestDetailResponse>;
+  /**
+   * FailedLogs reads the tail of a failed CI run's failed step logs.
+   *
+   * Needs forge:read.
+   */
+  failedLogs(req?: ForgeServiceFailedLogsRequest): Promise<ForgeServiceFailedLogsResponse>;
 }
 
 /** LogService writes to the daemon's log, under the plugin's name. */
@@ -1123,6 +1136,82 @@ export interface ForgeServiceBranchStatusResponse {
   runsState?: string;
   runNumber?: number;
   runHead?: string;
+}
+
+/**
+ * ForgeServicePullRequestDetailRequest asks for a pull request's checks and
+ * review comments.
+ */
+export interface ForgeServicePullRequestDetailRequest {
+  target?: GitTarget | null;
+  /** number is the pull request number; 0 selects the current branch's PR. */
+  number?: number;
+}
+
+/**
+ * ForgeServicePullRequestDetailResponse holds a pull request's metadata,
+ * checks, and review/conversation comments.
+ */
+export interface ForgeServicePullRequestDetailResponse {
+  forge?: string;
+  number?: number;
+  title?: string;
+  state?: string;
+  url?: string;
+  head?: string;
+  base?: string;
+  headOid?: string;
+  checks?: string;
+  body?: string;
+  checkItems?: ForgeCheckEntry[];
+  comments?: ForgeCommentEntry[];
+}
+
+/** ForgeCheckEntry is one CI check run or commit status on a pull request. */
+export interface ForgeCheckEntry {
+  name?: string;
+  workflow?: string;
+  status?: string;
+  conclusion?: string;
+  url?: string;
+}
+
+/**
+ * ForgeCommentEntry is one comment, review, or inline diff review comment on a
+ * pull request.
+ */
+export interface ForgeCommentEntry {
+  author?: string;
+  body?: string;
+  /** time is RFC 3339 formatted. */
+  time?: string;
+  /**
+   * review is "APPROVED", "CHANGES_REQUESTED", "COMMENTED", or "" for plain
+   * conversation comments.
+   */
+  review?: string;
+  path?: string;
+  line?: number;
+}
+
+/** ForgeServiceFailedLogsRequest asks for the tail of a failed CI run's logs. */
+export interface ForgeServiceFailedLogsRequest {
+  target?: GitTarget | null;
+  runNumber?: number;
+  /**
+   * max_lines bounds the number of trailing log lines returned (default 250,
+   * max 400).
+   */
+  maxLines?: number;
+}
+
+/** ForgeServiceFailedLogsResponse holds a failed CI run's trailing error logs. */
+export interface ForgeServiceFailedLogsResponse {
+  logs?: string;
+  truncated?: boolean;
+  workflow?: string;
+  head?: string;
+  url?: string;
 }
 
 /** WriteRequest is a line for the log. */

@@ -70,9 +70,57 @@ type ForgeBranch struct {
 	RunHead   string
 }
 
+// ForgeCheck is one CI check run or commit status on a pull request.
+type ForgeCheck struct {
+	Name       string
+	Workflow   string
+	Status     string
+	Conclusion string
+	URL        string
+}
+
+// ForgeComment is one comment, review, or inline diff comment on a pull request.
+type ForgeComment struct {
+	Author string
+	Body   string
+	Time   string
+	Review string
+	Path   string
+	Line   int32
+}
+
+// ForgePRDetail holds a pull request's metadata, checks, and review comments,
+// backing ForgeService.PullRequestDetail.
+type ForgePRDetail struct {
+	Forge      string
+	Number     int32
+	Title      string
+	State      string
+	URL        string
+	Head       string
+	Base       string
+	HeadOID    string
+	Checks     string
+	Body       string
+	CheckItems []ForgeCheck
+	Comments   []ForgeComment
+}
+
+// ForgeFailedLogs holds a failed CI run's trailing error logs, backing
+// ForgeService.FailedLogs.
+type ForgeFailedLogs struct {
+	Logs      string
+	Truncated bool
+	Workflow  string
+	Head      string
+	URL       string
+}
+
 // ForgeHost is the daemon's side of the forge:read Host API group.
 type ForgeHost interface {
 	BranchStatus(ctx context.Context, t GitTarget, branch string) (*ForgeBranch, error)
+	PullRequestDetail(ctx context.Context, t GitTarget, number int32) (*ForgePRDetail, error)
+	FailedLogs(ctx context.Context, t GitTarget, runNumber int32, maxLines int32) (*ForgeFailedLogs, error)
 }
 
 // LocalGit implements GitHost directly via gitstat on this machine, polling

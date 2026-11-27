@@ -133,7 +133,9 @@ func (f *fakeGitHost) fire(t GitTarget) {
 }
 
 type fakeForgeHost struct {
-	fn func(ctx context.Context, t GitTarget, branch string) (*ForgeBranch, error)
+	fn       func(ctx context.Context, t GitTarget, branch string) (*ForgeBranch, error)
+	detailFn func(ctx context.Context, t GitTarget, number int32) (*ForgePRDetail, error)
+	logsFn   func(ctx context.Context, t GitTarget, runNumber int32, maxLines int32) (*ForgeFailedLogs, error)
 }
 
 func (f *fakeForgeHost) BranchStatus(ctx context.Context, t GitTarget, branch string) (*ForgeBranch, error) {
@@ -152,6 +154,26 @@ func (f *fakeForgeHost) BranchStatus(ctx context.Context, t GitTarget, branch st
 		RunNumber: 101,
 		RunHead:   "abc1234",
 	}, nil
+}
+
+func (f *fakeForgeHost) PullRequestDetail(ctx context.Context, t GitTarget, number int32) (*ForgePRDetail, error) {
+	if f.detailFn != nil {
+		return f.detailFn(ctx, t, number)
+	}
+	return &ForgePRDetail{
+		Forge:   "github",
+		Number:  number,
+		Title:   "Add git plugin",
+		State:   "OPEN",
+		HeadOID: "abc1234",
+	}, nil
+}
+
+func (f *fakeForgeHost) FailedLogs(ctx context.Context, t GitTarget, runNumber int32, maxLines int32) (*ForgeFailedLogs, error) {
+	if f.logsFn != nil {
+		return f.logsFn(ctx, t, runNumber, maxLines)
+	}
+	return &ForgeFailedLogs{Logs: "test failed"}, nil
 }
 
 func TestGitReadForgeAndAsyncRun(t *testing.T) {
@@ -601,6 +623,12 @@ func TestGitUnavailableAndLimits(t *testing.T) {
 	if _, err := h.ForgeBranchStatus(context.Background(), nil); !errors.Is(err, ErrForgeUnavailable) {
 		t.Fatalf("ForgeBranchStatus err = %v; want ErrForgeUnavailable", err)
 	}
+	if _, err := h.ForgePullRequestDetail(context.Background(), nil); !errors.Is(err, ErrForgeUnavailable) {
+		t.Fatalf("ForgePullRequestDetail err = %v; want ErrForgeUnavailable", err)
+	}
+	if _, err := h.ForgeFailedLogs(context.Background(), nil); !errors.Is(err, ErrForgeUnavailable) {
+		t.Fatalf("ForgeFailedLogs err = %v; want ErrForgeUnavailable", err)
+	}
 
 	// Max 16 watches enforced; 17th fails; Unwatch frees a slot.
 	fg := newFakeGitHost()
@@ -676,4 +704,30 @@ func TestGitUnavailableAndLimits(t *testing.T) {
 		t.Fatal("31st git run unexpectedly succeeded")
 	}
 	p3.cancelPending("done")
+
+	// PullRequestDetail & FailedLogs happy path and argument validation.
+	p4 := newPlugin(m2, "test-forge-autofix")
+	h4 := &host{p: p4}
+	if _, err := h4.ForgePullRequestDetail(context.Background(), &hostapi.ForgeServicePullRequestDetailRequest{
+		Target: reqTarget, Number: -1,
+	}); err == nil {
+		t.Fatal("negative PR number should fail")
+	}
+	if _, err := h4.ForgeFailedLogs(context.Background(), &hostapi.ForgeServiceFailedLogsRequest{
+		Target: reqTarget, RunNumber: 0,
+	}); err == nil {
+		t.Fatal("non-positive run number should fail")
+	}
+	det, err := h4.ForgePullRequestDetail(context.Background(), &hostapi.ForgeServicePullRequestDetailRequest{
+		Target: reqTarget, Number: 42,
+	})
+	if err != nil || det.GetNumber() != 42 || det.GetHeadOid() != "abc1234" {
+		t.Fatalf("ForgePullRequestDetail = (%+v, %v)", det, err)
+	}
+	logs, err := h4.ForgeFailedLogs(context.Background(), &hostapi.ForgeServiceFailedLogsRequest{
+		Target: reqTarget, RunNumber: 101, MaxLines: 100,
+	})
+	if err != nil || logs.GetLogs() != "test failed" {
+		t.Fatalf("ForgeFailedLogs = (%+v, %v)", logs, err)
+	}
 }

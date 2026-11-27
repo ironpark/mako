@@ -631,4 +631,10 @@ func TestDaemonForgeHostHelpers(t *testing.T) {
 	if _, err := d.pluginForgeHost().BranchStatus(context.Background(), plugin.GitTarget{Path: repo}, "main"); err == nil {
 		t.Fatal("expected error for local repo without forge remote")
 	}
+	if _, err := d.pluginForgeHost().PullRequestDetail(context.Background(), plugin.GitTarget{Path: repo}, 1); err == nil {
+		t.Fatal("expected PullRequestDetail error for local repo without forge remote")
+	}
+	if _, err := d.pluginForgeHost().FailedLogs(context.Background(), plugin.GitTarget{Path: repo}, 1, 100); err == nil {
+		t.Fatal("expected FailedLogs error for local repo without forge remote")
+	}
 }

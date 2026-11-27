@@ -176,6 +176,72 @@ interface types {
     run-head: string,
   }
 
+  /// ForgeServicePullRequestDetailRequest asks for a pull request's checks and
+  /// review comments.
+  record forge-service-pull-request-detail-request {
+    target: option<git-target>,
+    /// number is the pull request number; 0 selects the current branch's PR.
+    number: s32,
+  }
+
+  /// ForgeServicePullRequestDetailResponse holds a pull request's metadata,
+  /// checks, and review/conversation comments.
+  record forge-service-pull-request-detail-response {
+    forge: string,
+    number: s32,
+    title: string,
+    state: string,
+    url: string,
+    head: string,
+    base: string,
+    head-oid: string,
+    checks: string,
+    body: string,
+    check-items: list<forge-check-entry>,
+    comments: list<forge-comment-entry>,
+  }
+
+  /// ForgeCheckEntry is one CI check run or commit status on a pull request.
+  record forge-check-entry {
+    name: string,
+    workflow: string,
+    status: string,
+    conclusion: string,
+    url: string,
+  }
+
+  /// ForgeCommentEntry is one comment, review, or inline diff review comment on a
+  /// pull request.
+  record forge-comment-entry {
+    author: string,
+    body: string,
+    /// time is RFC 3339 formatted.
+    time: string,
+    /// review is "APPROVED", "CHANGES_REQUESTED", "COMMENTED", or "" for plain
+    /// conversation comments.
+    review: string,
+    path: string,
+    line: s32,
+  }
+
+  /// ForgeServiceFailedLogsRequest asks for the tail of a failed CI run's logs.
+  record forge-service-failed-logs-request {
+    target: option<git-target>,
+    run-number: s32,
+    /// max_lines bounds the number of trailing log lines returned (default 250,
+    /// max 400).
+    max-lines: s32,
+  }
+
+  /// ForgeServiceFailedLogsResponse holds a failed CI run's trailing error logs.
+  record forge-service-failed-logs-response {
+    logs: string,
+    truncated: bool,
+    workflow: string,
+    head: string,
+    url: string,
+  }
+
   /// WriteRequest is a line for the log.
   record write-request {
     /// level is "debug", "info", "warn" or "error"; "" is "info".
@@ -1065,15 +1131,24 @@ interface git {
   run: func(req: git-service-run-request) -> result<git-service-run-response, string>;
 }
 
-/// ForgeService reads pull request and CI status for a repository's branch.
+/// ForgeService reads pull request, review, and CI status/logs for a repository.
 /// Rate limit: 30/min.
 interface forge {
-  use types.{forge-service-branch-status-request, forge-service-branch-status-response};
+  use types.{forge-service-branch-status-request, forge-service-branch-status-response, forge-service-pull-request-detail-request, forge-service-pull-request-detail-response, forge-service-failed-logs-request, forge-service-failed-logs-response};
 
   /// BranchStatus returns the pull request and CI runs of a branch, as the
   /// Git panel's forge line shows them.
   /// Needs the permission forge:read.
   branch-status: func(req: forge-service-branch-status-request) -> result<forge-service-branch-status-response, string>;
+
+  /// PullRequestDetail reads a pull request's checks, reviews, and inline
+  /// review comments. Number 0 reads the currently checked-out branch's PR.
+  /// Needs the permission forge:read.
+  pull-request-detail: func(req: forge-service-pull-request-detail-request) -> result<forge-service-pull-request-detail-response, string>;
+
+  /// FailedLogs reads the tail of a failed CI run's failed step logs.
+  /// Needs the permission forge:read.
+  failed-logs: func(req: forge-service-failed-logs-request) -> result<forge-service-failed-logs-response, string>;
 }
 
 /// LogService writes to the daemon's log, under the plugin's name.

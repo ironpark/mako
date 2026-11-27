@@ -60,6 +60,13 @@ type Handler interface {
 	// BranchStatus returns the pull request and CI runs of a branch, as the
 	// Git panel's forge line shows them.
 	ForgeBranchStatus(ctx context.Context, req *ForgeServiceBranchStatusRequest) (*ForgeServiceBranchStatusResponse, error)
+	// ForgePullRequestDetail carries out forge.pullRequestDetail.
+	// PullRequestDetail reads a pull request's checks, reviews, and inline
+	// review comments. Number 0 reads the currently checked-out branch's PR.
+	ForgePullRequestDetail(ctx context.Context, req *ForgeServicePullRequestDetailRequest) (*ForgeServicePullRequestDetailResponse, error)
+	// ForgeFailedLogs carries out forge.failedLogs.
+	// FailedLogs reads the tail of a failed CI run's failed step logs.
+	ForgeFailedLogs(ctx context.Context, req *ForgeServiceFailedLogsRequest) (*ForgeServiceFailedLogsResponse, error)
 	// LogWrite carries out log.write.
 	// Write puts a line in the daemon's log.
 	LogWrite(ctx context.Context, req *WriteRequest) (*WriteResponse, error)
@@ -253,6 +260,8 @@ var Methods = []Method{
 	{Name: "git.unwatch", Permission: PermGitRead},
 	{Name: "git.run", Permission: PermGitWrite},
 	{Name: "forge.branchStatus", Permission: PermForgeRead},
+	{Name: "forge.pullRequestDetail", Permission: PermForgeRead},
+	{Name: "forge.failedLogs", Permission: PermForgeRead},
 	{Name: "log.write", Permission: PermNone},
 	{Name: "settings.getSetting", Permission: PermNone},
 	{Name: "settings.listSettings", Permission: PermNone},
@@ -346,6 +355,16 @@ func Dispatch(ctx context.Context, grants Grants, h Handler, name string, req []
 			return nil, &DeniedError{Method: name, Permission: PermForgeRead}
 		}
 		return call(ctx, req, new(ForgeServiceBranchStatusRequest), h.ForgeBranchStatus)
+	case "forge.pullRequestDetail":
+		if !grants.Has(PermForgeRead) {
+			return nil, &DeniedError{Method: name, Permission: PermForgeRead}
+		}
+		return call(ctx, req, new(ForgeServicePullRequestDetailRequest), h.ForgePullRequestDetail)
+	case "forge.failedLogs":
+		if !grants.Has(PermForgeRead) {
+			return nil, &DeniedError{Method: name, Permission: PermForgeRead}
+		}
+		return call(ctx, req, new(ForgeServiceFailedLogsRequest), h.ForgeFailedLogs)
 	case "log.write":
 		return call(ctx, req, new(WriteRequest), h.LogWrite)
 	case "settings.getSetting":

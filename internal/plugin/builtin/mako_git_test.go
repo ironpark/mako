@@ -577,6 +577,21 @@ func (f *fakeForgeThrottleHost) BranchStatus(_ context.Context, _ plugin.GitTarg
 	}, nil
 }
 
+func (f *fakeForgeThrottleHost) PullRequestDetail(_ context.Context, _ plugin.GitTarget, number int32) (*plugin.ForgePRDetail, error) {
+	return &plugin.ForgePRDetail{
+		Forge:   "github",
+		Number:  number,
+		Title:   "Polish git plugin",
+		State:   "OPEN",
+		HeadOID: "abc1234",
+		Checks:  "success",
+	}, nil
+}
+
+func (f *fakeForgeThrottleHost) FailedLogs(_ context.Context, _ plugin.GitTarget, _ int32, _ int32) (*plugin.ForgeFailedLogs, error) {
+	return &plugin.ForgeFailedLogs{}, nil
+}
+
 type fakeGitScenarioHost struct {
 	mu       sync.Mutex
 	status   *protocol.GitChanges

@@ -252,18 +252,26 @@ func (d *Daemon) forgeListLocal(ctx context.Context, r *protocol.ForgeList) (*pr
 func (d *Daemon) handleGitHubView(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeForgeDetail,
 		func(r *protocol.ForgeView) (*protocol.ForgeDetail, error) {
-			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.ForgeDetail, error) { return forge.View(ctx, r) })
+			return d.forgeViewLocal(ctx, r)
 		})
+}
+
+func (d *Daemon) forgeViewLocal(ctx context.Context, r *protocol.ForgeView) (*protocol.ForgeDetail, error) {
+	return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.ForgeDetail, error) { return forge.View(ctx, r) })
 }
 
 func (d *Daemon) handleGitHubRun(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeGitResult,
 		func(r *protocol.ForgeRun) (*protocol.GitResult, error) {
-			return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
-				out, err := forge.Run(ctx, r)
-				return &protocol.GitResult{Output: out}, err
-			})
+			return d.forgeRunLocal(ctx, r)
 		})
+}
+
+func (d *Daemon) forgeRunLocal(ctx context.Context, r *protocol.ForgeRun) (*protocol.GitResult, error) {
+	return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
+		out, err := forge.Run(ctx, r)
+		return &protocol.GitResult{Output: out}, err
+	})
 }
 
 func absolute(path string) error {

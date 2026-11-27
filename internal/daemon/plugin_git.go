@@ -805,3 +805,137 @@ func forgeRunsState(runs []*protocol.ForgeItem) string {
 	}
 	return out
 }
+
+// PullRequestDetail reads a pull request's checks, reviews, and inline diff
+// comments from its forge, locally or forwarded to a peer.
+func (f daemonForgeHost) PullRequestDetail(ctx context.Context, t plugin.GitTarget, number int32) (*plugin.ForgePRDetail, error) {
+	d := f.d
+	req := &protocol.ForgeView{
+		Root:   t.Path,
+		Kind:   protocol.ForgePR,
+		Number: int64(number),
+	}
+	var (
+		det *protocol.ForgeDetail
+		err error
+	)
+	if d.isLocalGitNode(t.Node) {
+		det, err = d.forgeViewLocal(ctx, req)
+	} else {
+		req.NodeId = t.Node
+		det, err = forward[*protocol.ForgeDetail](ctx, d, protocol.TypeForgeView, req)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if det == nil || det.GetNone() || det.GetItem() == nil {
+		return &plugin.ForgePRDetail{Forge: det.GetForge()}, nil
+	}
+	it := det.GetItem()
+	out := &plugin.ForgePRDetail{
+		Forge:   det.GetForge(),
+		Number:  int32(it.GetNumber()),
+		Title:   it.GetTitle(),
+		State:   it.GetState(),
+		URL:     it.GetUrl(),
+		Head:    it.GetHead(),
+		Base:    it.GetBase(),
+		HeadOID: it.GetHeadOid(),
+		Checks:  it.GetChecks(),
+		Body:    det.GetBody(),
+	}
+	for _, c := range det.GetChecks() {
+		out.CheckItems = append(out.CheckItems, plugin.ForgeCheck{
+			Name:       c.GetName(),
+			Workflow:   c.GetWorkflow(),
+			Status:     c.GetStatus(),
+			Conclusion: c.GetConclusion(),
+			URL:        c.GetUrl(),
+		})
+	}
+	for _, c := range det.GetComments() {
+		when := ""
+		if ts := protocol.TimeOf(c.GetTime()); !ts.IsZero() {
+			when = ts.UTC().Format(time.RFC3339)
+		}
+		out.Comments = append(out.Comments, plugin.ForgeComment{
+			Author: c.GetAuthor(),
+			Body:   c.GetBody(),
+			Time:   when,
+			Review: c.GetReview(),
+			Path:   c.GetPath(),
+			Line:   int32(c.GetLine()),
+		})
+	}
+	return out, nil
+}
+
+// FailedLogs reads the trailing lines of a failed CI run's failed step logs
+// along with run metadata when available.
+func (f daemonForgeHost) FailedLogs(ctx context.Context, t plugin.GitTarget, runNumber int32, maxLines int32) (*plugin.ForgeFailedLogs, error) {
+	d := f.d
+	local := d.isLocalGitNode(t.Node)
+	runReq := &protocol.ForgeRun{
+		Root:   t.Path,
+		Op:     protocol.ForgeOpFailedLogs,
+		Number: int64(runNumber),
+	}
+	viewReq := &protocol.ForgeView{
+		Root:   t.Path,
+		Kind:   protocol.ForgeRuns,
+		Number: int64(runNumber),
+	}
+
+	var (
+		res    *protocol.GitResult
+		runErr error
+		det    *protocol.ForgeDetail
+	)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if local {
+			det, _ = d.forgeViewLocal(ctx, viewReq)
+		} else {
+			viewReq.NodeId = t.Node
+			det, _ = forward[*protocol.ForgeDetail](ctx, d, protocol.TypeForgeView, viewReq)
+		}
+	}()
+	if local {
+		res, runErr = d.forgeRunLocal(ctx, runReq)
+	} else {
+		runReq.NodeId = t.Node
+		res, runErr = forward[*protocol.GitResult](ctx, d, protocol.TypeForgeRun, runReq)
+	}
+	<-done
+	if runErr != nil {
+		return nil, runErr
+	}
+	raw := strings.TrimSpace(res.GetOutput())
+	limit := int(maxLines)
+	if limit <= 0 {
+		limit = 250
+	}
+	if limit > 400 {
+		limit = 400
+	}
+	truncated := false
+	if raw != "" {
+		lines := strings.Split(raw, "\n")
+		if len(lines) > limit {
+			lines = lines[len(lines)-limit:]
+			truncated = true
+		}
+		raw = strings.Join(lines, "\n")
+	}
+	out := &plugin.ForgeFailedLogs{
+		Logs:      raw,
+		Truncated: truncated,
+	}
+	if it := det.GetItem(); it != nil {
+		out.Workflow = it.GetWorkflow()
+		out.Head = it.GetHead()
+		out.URL = it.GetUrl()
+	}
+	return out, nil
+}
