@@ -62,6 +62,18 @@ exec /bin/sh -c "$*"
 		if err := sshCmd([]string{"test", "GPU Box"}); err != nil {
 			t.Fatalf("ssh test: %v", err)
 		}
+
+		fakeMakod := filepath.Join(t.TempDir(), "makod")
+		if err := os.WriteFile(fakeMakod, []byte("#!/bin/sh\necho 'makod 0.9.0-cli'\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		dest := filepath.Join(t.TempDir(), "bin", "makod")
+		if err := sshCmd([]string{"install", "-binary", fakeMakod, "-dest", dest, "GPU Box"}); err != nil {
+			t.Fatalf("ssh install: %v", err)
+		}
+		if _, err := os.Stat(dest); err != nil {
+			t.Fatalf("installed makod missing at %q: %v", dest, err)
+		}
 	}
 
 	if err := sshCmd([]string{"remove", "GPU Box"}); err != nil {

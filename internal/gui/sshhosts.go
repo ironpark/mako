@@ -47,6 +47,10 @@ type sshHostAsk struct {
 	Testing     *ggui.StateValue[bool]
 	TestOK      *ggui.StateValue[bool]
 	TestMsg     *ggui.StateValue[string]
+	Installing  *ggui.StateValue[bool]
+	InstallOK   *ggui.StateValue[bool]
+	InstallMsg  *ggui.StateValue[string]
+	HasMakod    *ggui.StateValue[bool]
 	Err         *ggui.StateValue[string]
 
 	onSaved func(nodeID string)
@@ -71,6 +75,10 @@ func newSSHHostAsk() *sshHostAsk {
 		Testing:      ggui.State(false),
 		TestOK:       ggui.State(false),
 		TestMsg:      ggui.State(""),
+		Installing:   ggui.State(false),
+		InstallOK:    ggui.State(false),
+		InstallMsg:   ggui.State(""),
+		HasMakod:     ggui.State(false),
 		Err:          ggui.State(""),
 	}
 }
@@ -99,6 +107,10 @@ func (m *model) openAddSSHHost(onSaved func(nodeID string)) {
 	a.Testing.Set(false)
 	a.TestOK.Set(false)
 	a.TestMsg.Set("")
+	a.Installing.Set(false)
+	a.InstallOK.Set(false)
+	a.InstallMsg.Set("")
+	a.HasMakod.Set(false)
 	a.Err.Set("")
 	a.Open.Set(true)
 
@@ -138,6 +150,14 @@ func (m *model) openEditSSHHost(h config.SSHHost) {
 	a.Testing.Set(false)
 	a.TestOK.Set(false)
 	a.TestMsg.Set("")
+	a.Installing.Set(false)
+	a.InstallOK.Set(false)
+	a.InstallMsg.Set("")
+	hasMakod := false
+	if live, ok := nodeIn(ggui.Peek(m.Nodes), h.NodeID()); ok && live.HasFeature(sshremote.FeatureSSHDaemon) {
+		hasMakod = true
+	}
+	a.HasMakod.Set(hasMakod)
 	a.Err.Set("")
 	a.Open.Set(true)
 }
@@ -158,6 +178,8 @@ func (a *sshHostAsk) fillFromConfig(ch sshremote.ConfigHost) {
 	}
 	a.Err.Set("")
 	a.TestMsg.Set("")
+	a.InstallMsg.Set("")
+	a.HasMakod.Set(false)
 }
 
 func (a *sshHostAsk) buildHost() (config.SSHHost, error) {
@@ -231,6 +253,7 @@ func (m *model) testSSHHostDraft() {
 				return
 			}
 			a.TestOK.Set(true)
+			a.HasMakod.Set(res.MakodPath != "")
 			platform := (&protocol.Node{Os: res.OS, Arch: res.Arch}).Platform()
 			modeLabel := T("Direct SSH")
 			if res.MakodPath != "" && h.EffectiveMode() != config.SSHModeDirect {
@@ -245,6 +268,69 @@ func (m *model) testSSHHostDraft() {
 				parts = append(parts, Tf("Agents: %s", strings.Join(res.Agents, ", ")))
 			}
 			a.TestMsg.Set(strings.Join(parts, " · "))
+		}
+		if post != nil {
+			post(finish)
+		} else {
+			finish()
+		}
+	}()
+}
+
+// installSSHHostMakod builds or uploads makod to the host configured in the
+// SSH host dialog and verifies it remotely.
+func (m *model) installSSHHostMakod() {
+	a := m.SSH
+	if ggui.Peek(a.Installing) || ggui.Peek(a.Testing) {
+		return
+	}
+	h, err := a.buildHost()
+	if err != nil {
+		a.Err.Set(err.Error())
+		return
+	}
+	a.Err.Set("")
+	a.Installing.Set(true)
+	a.InstallOK.Set(false)
+	a.InstallMsg.Set(T("Probing remote host…"))
+
+	post := m.post
+	editingID := ggui.Peek(a.EditingID)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+		defer cancel()
+		setStep := func(step string) {
+			update := func() { a.InstallMsg.Set(step) }
+			if post != nil {
+				post(update)
+			} else {
+				update()
+			}
+		}
+		res, err := sshremote.InstallMakod(ctx, h, sshremote.InstallOptions{
+			OnProgress: setStep,
+		})
+		finish := func() {
+			a.Installing.Set(false)
+			if err != nil {
+				a.InstallOK.Set(false)
+				a.InstallMsg.Set(err.Error())
+				return
+			}
+			a.InstallOK.Set(true)
+			a.HasMakod.Set(true)
+			ver := res.Version
+			if ver == "" {
+				ver = "makod"
+			}
+			a.InstallMsg.Set(Tf("Installed %s at %s", ver, res.RemotePath))
+			// If editing an already-saved host, immediately reconnect so it
+			// upgrades from direct SSH to remote makod daemon mode.
+			if editingID != "" {
+				if live, ok := nodeIn(ggui.Peek(m.Nodes), h.NodeID()); ok {
+					m.relink(live)
+				}
+			}
 		}
 		if post != nil {
 			post(finish)
@@ -490,6 +576,53 @@ func sshHostForm(m *model, submitLabel string) ggui.Widget {
 		).Gap(10).Stretch()).Pad(12).Fill(skin.Surface1).Border(1, skin.Border).Radius(8)
 	})
 
+	canAction := ggui.Derived(func() bool {
+		return !a.Testing.Get() && !a.Installing.Get() && strings.TrimSpace(a.Host.Get()) != ""
+	})
+
+	installBtn := ui.ButtonOf(ggui.Reactive(func() ggui.Widget {
+		busy := a.Installing.Get()
+		installed := a.HasMakod.Get()
+		label := T("Install makod")
+		if busy {
+			label = T("Installing…")
+		} else if installed {
+			label = T("Update makod")
+		}
+		return widget.Row(icon("cloud-download").Size(14), widget.Text(label).Size(12.5).NoWrap()).Gap(6).Align(widget.AlignCenter)
+	}), m.installSSHHostMakod).Outline().BindDisabled(ggui.Not(canAction)).Name(T("Install makod"))
+
+	makodBox := widget.Box(widget.Column(
+		widget.Row(
+			widget.Expanded(widget.Column(
+				widget.Text(T("Remote makod daemon")).Size(12.5).Weight(ggui.WeightMedium),
+				muted(widget.Text(T("Install makod to ~/.mako/bin/makod on the remote host for full chat, hooks, approvals, MCP, and persistent sessions.")).Size(11.5)),
+			).Gap(2).Stretch()),
+			installBtn,
+		).Gap(12).Align(widget.AlignCenter),
+		ggui.Reactive(func() ggui.Widget {
+			msg := a.InstallMsg.Get()
+			if msg == "" {
+				return widget.Box()
+			}
+			busy := a.Installing.Get()
+			ok := a.InstallOK.Get()
+			col := skin.DotDown
+			ic := "circle-x"
+			if busy {
+				col = skin.Muted
+				ic = "clock"
+			} else if ok {
+				col = skin.DotRunning
+				ic = "circle-check"
+			}
+			return widget.Row(
+				iconColored(ic, col).Size(14),
+				widget.Expanded(widget.Text(msg).Size(12).Color(col)),
+			).Gap(8).Align(widget.AlignCenter)
+		}),
+	).Gap(8).Stretch()).Pad(10, 12).Fill(skin.Surface1).Border(1, skin.Border).Radius(8)
+
 	testBanner := ggui.Reactive(func() ggui.Widget {
 		msg := a.TestMsg.Get()
 		if msg == "" {
@@ -519,12 +652,9 @@ func sshHostForm(m *model, submitLabel string) ggui.Widget {
 		return widget.Text(s).Size(12).Color(skin.DotDown)
 	})
 
-	canTest := ggui.Derived(func() bool {
-		return !a.Testing.Get() && strings.TrimSpace(a.Host.Get()) != ""
-	})
 	testBtn := ui.ButtonOf(ggui.View(a.Testing, func(busy bool) ggui.Widget {
 		return widget.Text(pick(busy, T("Testing…"), T("Test connection"))).Size(13).NoWrap()
-	}), m.testSSHHostDraft).Outline().BindDisabled(ggui.Not(canTest)).Name(T("Test connection"))
+	}), m.testSSHHostDraft).Outline().BindDisabled(ggui.Not(canAction)).Name(T("Test connection"))
 
 	footer := widget.Row(
 		testBtn,
@@ -540,6 +670,7 @@ func sshHostForm(m *model, submitLabel string) ggui.Widget {
 		hostPortRow,
 		userDirRow,
 		keyRow,
+		makodBox,
 		advToggle,
 		advBody,
 		testBanner,
@@ -619,6 +750,12 @@ func sshHostCardRow(m *model, h config.SSHHost, live *protocol.Node, hasLive boo
 	var actions []ggui.Widget
 	if !h.Disabled && hasLive && reachable(live) {
 		id := hostID(h)
+		if !live.HasFeature(sshremote.FeatureSSHDaemon) {
+			actions = append(actions, iconButton("cloud-download", T("Install makod"), func() {
+				m.openEditSSHHost(h)
+				m.installSSHHostMakod()
+			}))
+		}
 		actions = append(actions,
 			iconButton("hard-drive", T("Browse files"), func() { m.openBrowser(id, cmpOr(h.DefaultDir, "~"), "") }),
 			iconButton("arrow-right-left", T("Forward a port…"), func() { m.askTunnel(id) }),

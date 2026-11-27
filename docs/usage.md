@@ -87,7 +87,9 @@ mako allow <node>             # let in a machine that asked
   installed — or falls back to **Direct SSH** mode with zero remote
   installation required (supporting remote sessions, folder browsing, file
   editing, project search, git status/diff/history, and `localhost` port
-  forwarding).
+  forwarding). You can also click **Install makod** right inside the SSH host
+  configuration dialog (or run `mako ssh install <host>`) to cross-compile and
+  deploy `makod` to `~/.mako/bin/makod` on the remote server.
 - **Prompt templates.** Type `//` in Chat's composer to pick one of your
   [prompt templates](#prompt-templates) by name; Tab completes it, and
   Enter sends the prompt it makes from the arguments after it.

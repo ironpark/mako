@@ -108,4 +108,13 @@ func TestSSHHostDialogFillAndSave(t *testing.T) {
 	if _, ok := p.Semantics().Find(ggui.RoleButton, T("Add SSH host…")); !ok {
 		t.Fatalf("nodeSettings missing Add SSH host button:\n%s", p.Semantics().String())
 	}
+
+	// Verify Host Config modal exposes the Install makod action.
+	m.openEditSSHHost(hosts[0])
+	dp := ggui.ProbeBuilder(func() ggui.Widget { return sshHostForm(m, T("Save")) }, ggui.Sz(560, 620))
+	defer dp.Close()
+	dp.Frame()
+	if _, ok := dp.Semantics().Find(ggui.RoleButton, T("Install makod")); !ok {
+		t.Fatalf("sshHostForm missing Install makod button:\n%s", dp.Semantics().String())
+	}
 }

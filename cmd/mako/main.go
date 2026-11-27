@@ -50,6 +50,8 @@ Remote SSH hosts:
   mako ssh enable|disable <id-or-name>
                                      enable or disable an SSH host
   mako ssh test <id-or-name|host>   test connectivity, platform, and installed agents
+  mako ssh install <id-or-name|host> [-binary <path>] [-dest <remote-path>]
+                                     install or update makod on a remote SSH host
   mako ssh discover                 list concrete Host aliases from ~/.ssh/config
 
 Devices (docs/devices.md: one node's devices, used from another):

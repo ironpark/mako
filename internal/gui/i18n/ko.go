@@ -2002,4 +2002,11 @@ var catalogKo = map[string]string{
 	"Disconnect":          "연결 해제",
 	"Remove SSH host %s?": "SSH 호스트 %s을(를) 제거할까요?",
 	"Its connection closes, and sessions on this host will no longer be reachable from this machine.": "연결이 종료되며 이 호스트의 세션에 더 이상 접근할 수 없게 됩니다.",
+	"Install makod":       "makod 설치",
+	"Installing…":         "설치 중…",
+	"Update makod":        "makod 업데이트",
+	"Remote makod daemon": "원격 makod 데몬",
+	"Install makod to ~/.mako/bin/makod on the remote host for full chat, hooks, approvals, MCP, and persistent sessions.": "원격 호스트의 ~/.mako/bin/makod에 makod를 설치하면 챗, 훅, 승인, MCP 및 영구 세션을 모두 사용할 수 있습니다.",
+	"Probing remote host…": "원격 호스트를 확인하는 중…",
+	"Installed %s at %s":   "%[2]s에 %[1]s 설치 완료",
 }

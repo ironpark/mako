@@ -32,10 +32,12 @@ func sshCmd(args []string) error {
 		return sshSetDisabled(args[1:], true)
 	case "test":
 		return sshTest(args[1:])
+	case "install":
+		return sshInstall(args[1:])
 	case "discover":
 		return sshDiscover()
 	default:
-		return fmt.Errorf("unknown ssh subcommand %q (want list, add, remove, enable, disable, test, or discover)", args[0])
+		return fmt.Errorf("unknown ssh subcommand %q (want list, add, remove, enable, disable, test, install, or discover)", args[0])
 	}
 }
 
@@ -205,6 +207,47 @@ func sshTest(args []string) error {
 	} else {
 		fmt.Printf("  Agents:   shell only\n")
 	}
+	return nil
+}
+
+func sshInstall(args []string) error {
+	fs := flag.NewFlagSet("mako ssh install", flag.ContinueOnError)
+	localBin := fs.String("binary", "", "local makod binary to upload instead of auto-detecting/cross-compiling")
+	dest := fs.String("dest", "", "remote install path (default: host remote_binary or ~/.mako/bin/makod)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	pos := fs.Args()
+	if len(pos) != 1 {
+		return errors.New("ssh install takes one configured host ID/name or an SSH target: mako ssh install <host> [-binary <path>] [-dest <remote-path>]")
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	var host config.SSHHost
+	if idx, err := matchSSHHost(cfg.SSHHosts, pos[0]); err == nil {
+		host = cfg.SSHHosts[idx]
+	} else {
+		host = config.SSHHost{Host: strings.TrimSpace(pos[0])}
+		if err := host.Validate(); err != nil {
+			return err
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	res, err := sshremote.InstallMakod(ctx, host, sshremote.InstallOptions{
+		LocalBinary: *localBin,
+		DestPath:    *dest,
+		OnProgress: func(step string) {
+			fmt.Println("  " + step)
+		},
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Installed %s (%s/%s) to %s via %s in %s\n",
+		res.Version, res.OS, res.Arch, res.RemotePath, res.Method, res.Duration.Round(time.Millisecond))
 	return nil
 }
 
