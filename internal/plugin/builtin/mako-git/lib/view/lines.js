@@ -3,6 +3,7 @@
 // - Busy spinner / dismissible git output note (matching gitops.go:250-264)
 // - Conflict / in-progress operation banner (matching gitactions.go:345-392)
 
+import { isPrOpen } from "../autofix.js";
 import { shortHash } from "../i18n.js";
 import { isRepo, sanitizeText, truncateRunes } from "../state.js";
 
@@ -30,6 +31,135 @@ function checkRollup(checks) {
     default:
       return null;
   }
+}
+
+// autoFixLook is how an enabled Auto-fix shows in each phase: the forge line
+// button's badge, and the strip's icon, tone, and headline.
+function autoFixLook(af, t) {
+  const count = { used: af.attempts, max: af.maxAttempts };
+  switch (af.phase) {
+    case "starting":
+      return { icon: "loader-circle", tone: "warning", badge: t("Working"), headline: t("Auto-fix: starting an agent") };
+    case "fixing":
+      return {
+        icon: "loader-circle",
+        tone: "warning",
+        badge: t("Working"),
+        headline: af.lastTrigger === "reviews"
+          ? t("Auto-fix: addressing review comments")
+          : t("Auto-fix: fixing CI ({used}/{max})", count),
+      };
+    case "waiting_ci":
+      return { icon: "clock", tone: "warning", badge: t("On"), headline: t("Auto-fix: waiting for CI") };
+    case "waiting_session":
+      return { icon: "clock", tone: "warning", badge: t("On"), headline: t("Auto-fix: waiting for the agent to finish its turn") };
+    case "paused":
+      return { icon: "shield-alert", tone: "warning", badge: t("Paused"), headline: t("Auto-fix: CI fixes paused ({used}/{max})", count) };
+    case "error":
+      return { icon: "shield-alert", tone: "danger", badge: t("Error"), headline: t("Auto-fix: needs attention") };
+    default: {
+      let headline = t("Auto-fix: on");
+      if (af.fixCi && af.fixReviews) headline = t("Auto-fix: watching CI and reviews");
+      else if (af.fixCi) headline = t("Auto-fix: watching CI");
+      else if (af.fixReviews) headline = t("Auto-fix: watching reviews");
+      return { icon: "sparkles", tone: "accent", badge: t("On"), headline };
+    }
+  }
+}
+
+function renderAutoFixButton(af, ui, t) {
+  const on = Boolean(af && af.enabled);
+  const look = on ? autoFixLook(af, t) : null;
+  const btn = ui.button(t("Auto-fix"), {
+    key: "forge-autofix",
+    icon: look ? look.icon : "sparkles",
+    tone: look ? look.tone : "muted",
+    variant: "ghost",
+    size: "small",
+    placeholder: look ? look.headline : t("Fix failing checks and review comments automatically"),
+    onTap: ["toggleAutoFix"],
+  });
+  if (look) btn.badges([{ text: look.badge, tone: look.tone, variant: "soft" }]);
+  return btn;
+}
+
+function renderAutoFixStrip(s, ui, ctx) {
+  const f = s.forge;
+  const af = s.autofix;
+  if (!f || !f.hasPr || !f.prNumber || !af) return null;
+  if (!af.enabled && af.phase !== "error") return null;
+
+  const t = ctx.t;
+  const look = autoFixLook(af, t);
+  const headRow = [
+    ui.icon(look.icon, { key: "af-icon", size: "small", tone: look.tone }),
+    ui.text(look.headline, { key: "af-status", size: "small", weight: "medium", tone: look.tone, grow: 1 }),
+  ];
+
+  if (af.activeSessionId) {
+    headRow.push(ui.button(truncateRunes(sanitizeText(af.activeSessionName || t("Session")), 18), {
+      key: "af-session",
+      icon: "bot",
+      variant: "ghost",
+      size: "small",
+      tone: "accent",
+      placeholder: t("Open the Auto-fix session"),
+      onTap: ["openAutoFixSession", af.activeSessionId],
+    }));
+  }
+
+  if (af.phase === "paused") {
+    headRow.push(ui.button(t("Reset"), {
+      key: "af-reset",
+      variant: "ghost",
+      size: "small",
+      placeholder: t("Start the attempts again"),
+      onTap: ["resetAutoFix"],
+    }));
+  }
+
+  headRow.push(
+    ui.button("", {
+      key: "af-fix-now",
+      icon: "send-horizontal",
+      variant: "ghost",
+      size: "small",
+      placeholder: t("Fix now"),
+      disabled: af.phase === "starting",
+      onTap: ["fixNow"],
+    }),
+    ui.button("", {
+      key: "af-settings",
+      icon: "sliders-horizontal",
+      variant: "ghost",
+      size: "small",
+      placeholder: t("Auto-fix settings"),
+      onTap: ["openAutoFixSettings"],
+    }),
+    ui.button("", {
+      key: "af-off",
+      icon: "x",
+      variant: "ghost",
+      size: "small",
+      placeholder: t("Turn off Auto-fix"),
+      onTap: ["disableAutoFix"],
+    }),
+  );
+
+  const cardKids = [ui.row(headRow, { key: "af-row", gap: 4 })];
+  if (af.lastError) {
+    cardKids.push(ui.text(sanitizeText(af.lastError), { key: "af-detail", size: "small", tone: "danger" }));
+  } else if (af.lastSummary) {
+    cardKids.push(ui.text(t("Last sent: {summary}", { summary: sanitizeText(af.lastSummary) }), {
+      key: "af-detail",
+      size: "small",
+      tone: "muted",
+    }));
+  }
+
+  return ui.card([
+    ui.card(cardKids, { key: "af-card", variant: "soft", tone: look.tone, gap: 4 }),
+  ], { key: "af-strip", variant: "ghost", gap: 0 });
 }
 
 export function renderForgeLine(s, ui, ctx) {
@@ -82,10 +212,18 @@ export function renderForgeLine(s, ui, ctx) {
     }));
   }
 
-  return ui.column([
+  if (f.hasPr && f.prNumber > 0 && isPrOpen(f.prState)) {
+    parts.push(renderAutoFixButton(s.autofix, ui, t));
+  }
+
+  const colKids = [
     ui.card([ui.row(parts, { key: "forge-row", gap: 4 })], { key: "forge-pad", variant: "ghost", gap: 0 }),
-    ui.divider({ key: "forge-div" }),
-  ], { key: "forge-line", gap: 0 });
+  ];
+  const strip = renderAutoFixStrip(s, ui, ctx);
+  if (strip) colKids.push(strip);
+  colKids.push(ui.divider({ key: "forge-div" }));
+
+  return ui.column(colKids, { key: "forge-line", gap: 0 });
 }
 
 export function renderStatusLine(s, ui, ctx) {

@@ -1,5 +1,17 @@
 // Event handlers (block `on`) and async `gitDone` handler for mako-git.
 
+import {
+  MAX_ATTEMPT_CHOICES,
+  disableAutoFix as turnOffAutoFix,
+  enableAutoFix as turnOnAutoFix,
+  ensureSessionSubscription,
+  evaluateAutoFix,
+  formatAgentChoice,
+  isPrOpen,
+  listAvailableAgents,
+  loadAutoFixState,
+  saveAutoFixState,
+} from "./autofix.js";
 import { lastLines, shortHash } from "./i18n.js";
 import { loadCommitDetail } from "./data.js";
 import {
@@ -325,6 +337,140 @@ export function createActions(mako) {
         kind: "runs",
         number: Number(number) || 0,
       });
+    },
+
+    // Pull request Auto-fix ---------------------------------------------------
+    async toggleAutoFix(s) {
+      const ctx = getCtx();
+      const t = ctx.t;
+      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber || !isPrOpen(s.forge.prState)) return;
+      const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber);
+      if (af.enabled) {
+        turnOffAutoFix(af);
+        await saveAutoFixState(s, ctx, mako);
+        return;
+      }
+      turnOnAutoFix(af);
+      await ensureSessionSubscription(mako);
+      await saveAutoFixState(s, ctx, mako);
+      const res = await evaluateAutoFix(s, ctx, mako, { manual: false });
+      if (res && res.dispatched) {
+        await sendIntent(ctx, mako, "toast", "mako.toast", t("Auto-fix sent a fix for PR #{number}.", { number: s.forge.prNumber }));
+      }
+    },
+
+    async disableAutoFix(s) {
+      const ctx = getCtx();
+      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber) return;
+      turnOffAutoFix(await loadAutoFixState(s, ctx, mako, s.forge.prNumber));
+      await saveAutoFixState(s, ctx, mako);
+    },
+
+    async fixNow(s) {
+      const ctx = getCtx();
+      const t = ctx.t;
+      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber || !isPrOpen(s.forge.prState)) return;
+      if (s.dialog && s.dialog.kind === "autofix") closeDialog(s);
+      const res = await evaluateAutoFix(s, ctx, mako, { manual: true });
+      if (res && res.dispatched) {
+        await sendIntent(ctx, mako, "toast", "mako.toast", t("Auto-fix sent a fix for PR #{number}.", { number: s.forge.prNumber }));
+      } else if (res && res.reason === "nothing_to_fix") {
+        setNote(s, t("Checks pass and no review comments are open."), false);
+      } else if (res && res.reason === "busy") {
+        setNote(s, t("Auto-fix is already checking this pull request."), false);
+      } else if (res && res.error) {
+        setNote(s, res.error, true);
+      }
+    },
+
+    async resetAutoFix(s) {
+      const ctx = getCtx();
+      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber) return;
+      const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber);
+      af.attempts = 0;
+      af.lastHandledCiKey = "";
+      af.lastCheckAt = 0;
+      af.inFlight = false;
+      af.sawBusy = false;
+      af.pendingRequestId = "";
+      af.lastError = "";
+      af.phase = af.enabled ? "watching" : "off";
+      await saveAutoFixState(s, ctx, mako);
+      if (af.enabled) await evaluateAutoFix(s, ctx, mako, { manual: false });
+    },
+
+    async openAutoFixSession(_s, sessionId) {
+      const sid = String(sessionId || "");
+      if (!sid) return;
+      await sendIntent(getCtx(), mako, "openSession", "mako.openSession", { sessionId: sid });
+    },
+
+    async openAutoFixSettings(s) {
+      const ctx = getCtx();
+      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber) return;
+      const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber);
+      const agentOptions = [{ value: "", label: ctx.t("Auto (default agent)") }];
+      for (const a of await listAvailableAgents(mako)) {
+        if (!a || !a.agent || a.agent === "shell" || a.installed === false) continue;
+        const value = formatAgentChoice(a.agent, a.profile || "");
+        const label = a.label || (a.profile ? `${a.agent} (${a.profile})` : a.agent);
+        if (!agentOptions.some((o) => o.value === value)) agentOptions.push({ value, label });
+      }
+      openDialog(s, {
+        kind: "autofix",
+        prNumber: s.forge.prNumber,
+        enabled: Boolean(af.enabled),
+        fixCi: af.fixCi !== false,
+        fixReviews: af.fixReviews !== false,
+        replyOnGitHub: af.replyOnGitHub !== false,
+        maxAttempts: Number(af.maxAttempts) || 3,
+        preferredAgent: af.preferredAgent || "",
+        instructions: af.instructions || "",
+        agentOptions,
+      });
+    },
+
+    setAutoFixDialogField(s, field, val) {
+      if (!s.dialog || s.dialog.kind !== "autofix") return;
+      const d = s.dialog;
+      if (field === "enabled" || field === "fixCi" || field === "fixReviews" || field === "replyOnGitHub") {
+        d[field] = isTruthyCheck(val);
+      } else if (field === "maxAttempts") {
+        const n = Number(val);
+        if (MAX_ATTEMPT_CHOICES.includes(n)) d.maxAttempts = n;
+      } else if (field === "preferredAgentLabel") {
+        const opts = Array.isArray(d.agentOptions) ? d.agentOptions : [];
+        const found = opts.find((o) => o.label === String(val || ""));
+        d.preferredAgent = found ? found.value : "";
+      } else if (field === "instructions") {
+        d.instructions = String(val ?? "");
+      }
+    },
+
+    async saveAutoFixSettings(s) {
+      if (!s.dialog || s.dialog.kind !== "autofix") return;
+      const ctx = getCtx();
+      const d = s.dialog;
+      const vals = mako.blocks.values("panel") || {};
+      const instructions = vals["af-instructions"] !== undefined
+        ? String(vals["af-instructions"])
+        : String(d.instructions || "");
+      const af = await loadAutoFixState(s, ctx, mako, d.prNumber);
+      af.fixCi = Boolean(d.fixCi);
+      af.fixReviews = Boolean(d.fixReviews);
+      af.replyOnGitHub = Boolean(d.replyOnGitHub);
+      af.maxAttempts = MAX_ATTEMPT_CHOICES.includes(Number(d.maxAttempts)) ? Number(d.maxAttempts) : 3;
+      af.preferredAgent = String(d.preferredAgent || "");
+      af.instructions = instructions.trim();
+      if (d.enabled) {
+        turnOnAutoFix(af);
+        await ensureSessionSubscription(mako);
+      } else {
+        turnOffAutoFix(af);
+      }
+      closeDialog(s);
+      await saveAutoFixState(s, ctx, mako);
+      if (af.enabled) await evaluateAutoFix(s, ctx, mako, { manual: false });
     },
 
     // Branches ---------------------------------------------------------------

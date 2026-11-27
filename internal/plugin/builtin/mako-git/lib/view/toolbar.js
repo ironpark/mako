@@ -1,6 +1,7 @@
 // Top toolbar (row with variant "toolbar"): lifted into the dock header when
 // standalone and drawn cleanly under the tab strip when tabbed.
 
+import { isPrOpen } from "../autofix.js";
 import { lineCount } from "../i18n.js";
 import { folderName, isRepo, safeKey, sanitizeText } from "../state.js";
 
@@ -114,6 +115,18 @@ export function renderToolbar(s, ui, ctx) {
     ui.menuItem(t("Pull (rebase)"), { key: "op-pull-rebase", disabled: busy, onTap: ["pullRebase"] }),
     ui.menuItem(t("Push"), { key: "op-push", disabled: busy, onTap: ["push"] }),
     ui.menuItem(t("Create pull request…"), { key: "op-pr", onTap: ["createPR"] }),
+  ];
+
+  if (s.forge && s.forge.hasPr && s.forge.prNumber > 0 && isPrOpen(s.forge.prState)) {
+    moreItems.push(ui.menuItem(t("Auto-fix settings"), {
+      key: "op-autofix",
+      icon: "sparkles",
+      checked: Boolean(s.autofix && s.autofix.enabled),
+      onTap: ["openAutoFixSettings"],
+    }));
+  }
+
+  moreItems.push(
     ui.divider({ key: "more-div-1" }),
     ui.menuItem(t("Stash changes…"), { key: "op-stash", disabled: busy, onTap: ["askStash"] }),
     ui.menuItem(t("Discard all changes…"), {
@@ -122,7 +135,7 @@ export function renderToolbar(s, ui, ctx) {
       disabled: busy || files.length === 0,
       onTap: ["askDiscardAll"],
     }),
-  ];
+  );
 
   if (wt) {
     const mergeLabel = wt.base

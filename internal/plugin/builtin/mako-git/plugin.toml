@@ -3,7 +3,7 @@ version = "1.0.0"
 publisher = "mako"
 api = 1
 entry = "main.js"
-permissions = ["git:read", "git:write", "forge:read"]
+permissions = ["git:read", "git:write", "forge:read", "storage", "sessions:read", "sessions:write", "agents:ask"]
 
 [[contributes.block]]
 id = "panel"
