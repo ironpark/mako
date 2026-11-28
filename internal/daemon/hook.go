@@ -385,7 +385,9 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.ReportToolStatus(protocol.AgentWaiting, msg.Seq)
 	case agent.Stopped:
 		d.refreshActivity(s)
-		s.ReportStatus(protocol.AgentDone, msg.Seq)
+		if s.ReportStatus(protocol.AgentDone, msg.Seq) {
+			d.turnDoneHooks(s)
+		}
 	case agent.Ended, agent.Idle:
 		if ev.Kind == agent.Ended || ev.AuthError != nil {
 			d.live.clearSuggestion(msg.Session)
@@ -393,6 +395,9 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.ReportStatus(protocol.AgentIdle, msg.Seq)
 		if ev.AuthError != nil {
 			s.ReportAuthError(ev.AuthError, msg.Seq)
+		}
+		if ev.Kind == agent.Ended {
+			d.sessionEndHooks(s)
 		}
 	case agent.ChildStarted, agent.ChildStopped:
 		s.ReportSubagent(ev.SessionID, ev.AgentID, ev.Kind == agent.ChildStarted, msg.Seq)

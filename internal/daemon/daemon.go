@@ -122,6 +122,9 @@ type Daemon struct {
 	// in the configuration directory; see repo_trust.go. nil before Run,
 	// which trusts nothing.
 	repoTrust *repotrust.Store
+	// hookRuns are the sessions' lifecycle hooks waiting and running; see
+	// lifecycle.go.
+	hookRuns hookRuns
 
 	hookBinary  string // the program agents run as their hook; see HookMain
 	hookCommand string // the shell command agents run as their hook; "" for none
@@ -266,6 +269,11 @@ func (d *Daemon) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	d.ctx = ctx
+	// The lifecycle hooks running end with ctx, and are waited for.
+	defer func() {
+		cancel()
+		d.hookRuns.closeAndWait()
+	}()
 	d.listenHooks(ctx, run)
 	d.listenLive(ctx, run)
 	if err := d.projectAgents.messages.load(dir); err != nil {
