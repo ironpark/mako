@@ -334,7 +334,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 					// clear an active in-app approval (e.g. save_template, layout).
 					s.ReportToolStatus(protocol.AgentWorking, msg.Seq)
 				case agent.Idle:
-					d.turns.end(s.ID())
+					d.turns.end(s.ID(), msg.Seq)
 					// Clear waiting state once a terminal confirmation finishes,
 					// without clobbering an active in-app approval or AgentDone.
 					if s.Info().GetStatus() == protocol.AgentWaiting {
@@ -361,7 +361,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	}
 	switch ev.Kind {
 	case agent.Started, agent.Stopped, agent.Ended, agent.Idle:
-		d.turns.end(s.ID())
+		d.turns.end(s.ID(), msg.Seq)
 	}
 	switch ev.Kind {
 	case agent.Started:
@@ -389,7 +389,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 			}
 		}
 		// Last, as the hook waits for it: the turn waits on the hook.
-		d.checkpointTurn(ctx, s, ev)
+		d.checkpointTurn(ctx, s, msg.Seq, ev)
 	case agent.Compacting:
 		s.ReportToolStatus(protocol.AgentCompacting, msg.Seq)
 	case agent.Waiting:

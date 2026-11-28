@@ -78,7 +78,10 @@ func TestPromptHooksCheckpointTheirTurnFirst(t *testing.T) {
 	if l := list(); len(l) != 2 || l[0].Prompt != gitstat.PromptKey("and this") {
 		t.Fatalf("a second prompt: %+v", l)
 	}
+	// The hook of an event that starts no turn does not wait for the
+	// daemon to read it.
 	hook(`{"hook_event_name":"Stop"}`)
+	waitFor(t, "the turn did not end", func() bool { return !underWay(&d.turns, s.ID()) })
 	hook(`{"hook_event_name":"UserPromptSubmit"}`)
 	if l := list(); len(l) != 3 || l[0].Prompt != "" {
 		t.Fatalf("the next turn's first call: %+v", l)
@@ -103,4 +106,33 @@ func TestPromptHooksOutsideARepository(t *testing.T) {
 	if s.Info().GetStatus() != protocol.AgentWorking {
 		t.Fatalf("status %v", s.Info().GetStatus())
 	}
+}
+
+// An event that ends a turn ends only a turn that started before the
+// agent ran it, though the daemon reads it after.
+func TestALateEndKeepsTheTurnAfterIt(t *testing.T) {
+	var turns turnCheckpoints
+	if !turns.start("s", 10, false) || turns.start("s", 11, false) {
+		t.Fatal("a turn's later calls start turns")
+	}
+	turns.end("s", 5)
+	if !underWay(&turns, "s") {
+		t.Fatal("an end the agent ran before the turn ended it")
+	}
+	turns.end("s", 12)
+	if underWay(&turns, "s") || !turns.start("s", 13, false) {
+		t.Fatal("the turn did not end")
+	}
+	turns.drop("s")
+	if underWay(&turns, "s") {
+		t.Fatal("a closed session's turn is under way")
+	}
+}
+
+// underWay reports whether session id's turn is under way in turns.
+func underWay(turns *turnCheckpoints, id string) bool {
+	turns.mu.Lock()
+	defer turns.mu.Unlock()
+	_, ok := turns.open[id]
+	return ok
 }

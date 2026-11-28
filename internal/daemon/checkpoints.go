@@ -38,36 +38,48 @@ func startsTurn(event string) bool { return slices.Contains(turnHooks, event) }
 // model, and only the first since the last turn ended starts one.
 type turnCheckpoints struct {
 	mu   sync.Mutex
-	open map[string]bool
+	open map[string]int64 // the hook seq each session's turn under way started at
 }
 
-// start reports whether a turn of session id starts with a prompt event,
-// one the agent said the prompt of, or not, marking it under way.
-func (t *turnCheckpoints) start(id string, prompted bool) bool {
+// start reports whether a turn of session id starts with a prompt event
+// of hook seq seq, one the agent said the prompt of, or not, marking it
+// under way.
+func (t *turnCheckpoints) start(id string, seq int64, prompted bool) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.open[id] && !prompted {
+	if _, ok := t.open[id]; ok && !prompted {
 		return false
 	}
 	if t.open == nil {
-		t.open = map[string]bool{}
+		t.open = map[string]int64{}
 	}
-	t.open[id] = true
+	t.open[id] = seq
 	return true
 }
 
-// end marks session id's turn over.
-func (t *turnCheckpoints) end(id string) {
+// end marks session id's turn over, on an event of hook seq seq: one the
+// agent ran before the turn started, and the daemon reads late, ends an
+// earlier turn.
+func (t *turnCheckpoints) end(id string, seq int64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if started, ok := t.open[id]; ok && started <= seq {
+		delete(t.open, id)
+	}
+}
+
+// drop forgets session id, closed for good.
+func (t *turnCheckpoints) drop(id string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.open, id)
 }
 
-// checkpointTurn captures the checkpoint of the turn ev starts, if it
-// starts one, within checkpointTimeout of ctx, the daemon's.
-func (d *Daemon) checkpointTurn(ctx context.Context, s *session.Session, ev agent.Event) {
+// checkpointTurn captures the checkpoint of the turn ev, of hook seq seq,
+// starts, if it starts one, within checkpointTimeout of ctx, the daemon's.
+func (d *Daemon) checkpointTurn(ctx context.Context, s *session.Session, seq int64, ev agent.Event) {
 	root := s.Info().GetProject()
-	if root == "" || !d.turns.start(s.ID(), ev.Prompt != "") {
+	if root == "" || !d.turns.start(s.ID(), seq, ev.Prompt != "") {
 		return
 	}
 	ctx, cancel := context.WithTimeout(ctx, checkpointTimeout)
@@ -81,7 +93,7 @@ func (d *Daemon) checkpointTurn(ctx context.Context, s *session.Session, ev agen
 // dropCheckpoints drops the turn checkpoints of session id, closed for
 // good, in its project at root.
 func (d *Daemon) dropCheckpoints(id, root string) {
-	d.turns.end(id)
+	d.turns.drop(id)
 	if root == "" {
 		return
 	}
