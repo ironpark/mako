@@ -196,8 +196,11 @@ type model struct {
 	AgentBlocks *ggui.StateValue[[]*protocol.AgentBlock]
 	winBase     *layoutdoc.Doc
 
-	diffChanges *diffChangesState // open diff tabs' change lists; see diffchanges.go
-	RepoPick    *ggui.StateValue[repoPick]
+	diffChanges    *diffChangesState // open diff tabs' change lists; see diffchanges.go
+	DraftReview    *ggui.StateValue[[]draftReviewComment]
+	draftReviewSeq int
+	Rewind         *rewindDialogState
+	RepoPick       *ggui.StateValue[repoPick]
 	// Roots are the folders the Files, Git and forge tabs show; see
 	// panelRoots.
 	Roots *ggui.DerivedValue[panelRoots] // the project's folder the tab shows; see repoFolder
@@ -389,6 +392,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		usages:              map[string]*usageState{},
 		AccountUsage:        newAccountUsageState(),
 		diffChanges:         newDiffChangesState(),
+		DraftReview:         ggui.State([]draftReviewComment(nil)),
+		Rewind:              newRewindDialogState(),
 		RepoPick:            ggui.State(repoPick{}),
 		// Its functions do not compare: each asking is new.
 		Confirmation:  ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),

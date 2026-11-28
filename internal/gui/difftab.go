@@ -256,6 +256,31 @@ func (m *model) stepDiff(dir int) {
 	m.openDiffFrom(d, files[i+dir], d.Preview)
 }
 
+// stageHunk stages or unstages a single hunk of a work tree's diff.
+func (m *model) stageHunk(id string, hunk []*protocol.DiffLine, unstage bool) {
+	d, ok := ggui.Peek(m.Diffs)[id]
+	if !ok {
+		return
+	}
+	m.keepDiff(id)
+	op := protocol.GitOpStageHunk
+	if unstage {
+		op = protocol.GitOpUnstageHunk
+	}
+	req := &protocol.GitRun{NodeId: m.remoteID(d.Root.Node), Root: d.Repo, Op: op, Paths: []string{d.File.GetPath()}, Hunk: hunk}
+	fetch(m, gitOpTimeout, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
+		return c.GitRun(ctx, req)
+	}, func(_ *protocol.GitResult, err error) {
+		if err != nil {
+			m.toaster.Push(ui.Toast(pick(unstage, T("Could not unstage hunk"), T("Could not stage hunk")), nodeErr(err)).Destructive())
+			return
+		}
+		m.toaster.Push(ui.Toast(pick(unstage, T("Hunk unstaged"), T("Hunk staged")), d.File.GetPath()))
+		m.readDiff(id)
+		m.loadDiffChanges(d.group(), true)
+	})
+}
+
 // askDiscardHunk undoes a hunk of a work tree's diff, once confirmed.
 func (m *model) askDiscardHunk(id string, hunk []*protocol.DiffLine) {
 	discard := func() {
@@ -380,7 +405,11 @@ func diffTabView(m *model, id string) ggui.Widget {
 				iconButton("send-horizontal", T("Ask an agent about this hunk"), func() { sel.Set(lineSel{start + 1, start + len(lines)}) }),
 			}
 			if dt.workTree() && (dt.File.GetStatus() == protocol.GitModified || dt.File.GetStatus() == protocol.GitRenamed) {
-				actions = append(actions, iconButton("undo-2", T("Discard this hunk"), func() { m.askDiscardHunk(id, lines) }))
+				actions = append(actions,
+					iconButton("plus", T("Stage this hunk"), func() { m.stageHunk(id, lines, false) }),
+					iconButton("minus", T("Unstage this hunk"), func() { m.stageHunk(id, lines, true) }),
+					iconButton("undo-2", T("Discard this hunk"), func() { m.askDiscardHunk(id, lines) }),
+				)
 			}
 			return widget.Row(actions...).Gap(2)
 		}
@@ -398,6 +427,7 @@ func diffTabView(m *model, id string) ggui.Widget {
 		if !v.Sel.empty() {
 			rows = append(rows, selectionBar(m, dt.Root, joinPath(subfolder(dt.Repo, dt.Root.Path), dt.File.GetPath()), dt.Diff.GetLines(), sel))
 		}
+		rows = append(rows, draftReviewBar(m, dt.Root))
 		return widget.Column(rows...).Stretch()
 	})
 }

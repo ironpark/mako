@@ -16,6 +16,7 @@ import (
 	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/transport"
@@ -365,6 +366,17 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	case agent.Prompted:
 		if !s.ReportStatus(protocol.AgentWorking, msg.Seq) {
 			return
+		}
+		// Capture a lightweight shadow git snapshot before the agent edits
+		// files on this turn, enabling file-inclusive rewind later.
+		if proj := s.Info().GetProject(); proj != "" {
+			sid := msg.Session
+			key := fmt.Sprintf("turn-%d", time.Now().UnixMilli())
+			go func() {
+				snapCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				_, _ = gitstat.CaptureSnapshot(snapCtx, proj, sid, key)
+			}()
 		}
 		// Only a prompt of this turn makes the suggestion stale, not a
 		// late hook of an earlier one.

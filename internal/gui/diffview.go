@@ -417,6 +417,12 @@ func selectionBar(m *model, root fileRoot, path string, lines []*protocol.DiffLi
 		}
 		target = ui.MenuOf(widget.Text(T("Ask agent")), items...).Width(240).Name(T("Ask agent"))
 	}
+	addToReview := func() {
+		s := ggui.Peek(sel)
+		m.addDraftReviewComment(root, path, lines[s.From:s.To+1], ggui.Peek(note))
+		note.Set("")
+		sel.Set(noSel)
+	}
 	count := ggui.Map(sel, func(s lineSel) string {
 		return lineRef(baseName(path), lines[s.From:s.To+1])
 	})
@@ -429,6 +435,7 @@ func selectionBar(m *model, root fileRoot, path string, lines []*protocol.DiffLi
 					send(agents[0].GetId())()
 				}
 			})),
+		ui.Button(T("Add to review"), addToReview).Outline(),
 		target,
 		iconButton("x", T("Clear selection"), func() { sel.Set(noSel) }),
 	).Gap(10).Align(widget.AlignCenter)).Pad(8, 12).Fill(skin.Surface1)).Stretch()

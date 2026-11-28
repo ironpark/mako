@@ -901,7 +901,7 @@ func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name 
 	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(name)
 }
 
-func canRewindTurn(info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, fullHistory bool) bool {
+func canRewindConversation(info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, fullHistory bool) bool {
 	if info == nil || msg == nil || msg.GetRole() != "user" || userTurnIndex < 0 {
 		return false
 	}
@@ -916,6 +916,14 @@ func canRewindTurn(info *protocol.SessionInfo, msg *protocol.ChatMessage, userTu
 	default:
 		return false
 	}
+}
+
+func canRewindTurn(info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, fullHistory bool) bool {
+	if canRewindConversation(info, msg, userTurnIndex, fullHistory) {
+		return true
+	}
+	// Any agent running in a git repository can still rewind code via shadow checkpoints.
+	return info != nil && msg != nil && msg.GetRole() == "user" && userTurnIndex >= 0 && info.GetBranch() != ""
 }
 
 func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, canRewind bool) ggui.Widget {
@@ -953,17 +961,8 @@ func rewindButton(m *model, id string, info *protocol.SessionInfo, msg *protocol
 }
 
 func (m *model) askRewindSession(id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int) {
-	messageID := msg.GetId()
-	promptText := msg.GetText()
-	m.askConfirm(confirmation{
-		Title:  T("Rewind conversation from here?"),
-		Body:   T("Opens a new forked session from right before this message without modifying the current session. This message will be placed in the new session's composer so you can edit and resend it."),
-		Action: T("Rewind"),
-		Safe:   true,
-		Run: func() {
-			m.rewindSession(id, info, messageID, userTurnIndex, promptText)
-		},
-	})
+	canConv := canRewindConversation(info, msg, userTurnIndex, true)
+	m.openRewindDialog(id, info, msg, userTurnIndex, canConv)
 }
 
 func (m *model) rewindSession(id string, info *protocol.SessionInfo, messageID string, userTurnIndex int, promptText string) {
