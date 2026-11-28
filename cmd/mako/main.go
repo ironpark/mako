@@ -92,6 +92,14 @@ Access (trust runs one way: a node you let in can drive this one):
   mako trust <public key line>      let a key in, as authorized_keys writes it
   mako revoke <fingerprint>         take a key out
 
+Repository commands (a file a repository tracks that names commands for mako
+to run on its own has them run only while you trust it as it reads):
+  mako repo-trust [list]            list the command files trusted
+  mako repo-trust show <file>       print a command file, and whether it is trusted
+  mako repo-trust allow <file>      print a command file, ask, and trust it as it reads
+  mako repo-trust revoke <file|repo>
+                                     forget a file, or every file of a repository
+
 Plugins (docs/plugins.md; each a folder of plugins/ in the configuration directory):
   mako plugins                      list this node's plugins and how they stand
   mako plugins grant <id>           allow what a plugin asks for
@@ -260,6 +268,8 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 			return fmt.Errorf("revoke needs a key's fingerprint")
 		}
 		return access(ctx, c, &protocol.Access{Op: "revoke", Key: args[1]})
+	case "repo-trust":
+		return repoTrust(ctx, c.RepoTrust, nodeID, args[1:], os.Stdin, os.Stdout)
 	case "devices":
 		return listDevices(ctx, c)
 	case "borrow":
