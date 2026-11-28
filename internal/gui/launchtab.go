@@ -156,11 +156,32 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 	errLine := reveal(hasErr, func() ggui.Widget {
 		return widget.Box(widget.TextOf(l.Err).Size(12).Color(skin.DotDown)).Pad(0, 6)
 	})
+	quotaWarn := ggui.Reactive(func() ggui.Widget {
+		f := l.Form.Get()
+		data := m.AccountUsage.Data.Get()
+		avail := targets.Get()
+		high, fallback := suggestFallbackAgent(data, f.Agent, avail, m.Minute.Get())
+		if !high {
+			return widget.Box()
+		}
+		items := []ggui.Widget{
+			icon("shield-alert").Size(13).Color(skin.DotWaiting),
+			widget.Expanded(widget.Text(Tf("%s is nearing its quota limit.", targetLabel(f.Agent))).Size(12).Color(skin.DotWaiting)),
+		}
+		if fallback != "" {
+			fb := fallback
+			items = append(items, ui.Button(Tf("Switch to %s", targetLabel(fb)), func() {
+				l.Form.Update(func(cur newSession) newSession { cur.Agent = fb; return cur })
+			}).Ghost().Pad(2, 8).Radius(6))
+		}
+		return widget.Box(widget.Row(items...).Gap(6).Align(widget.AlignCenter)).Pad(2, 6)
+	})
 	content := widget.Column(
 		top,
 		field,
 		branchRow,
-		widget.Row(agents, launchTeamMenu(m, l, where), widget.Spacer(),
+		quotaWarn,
+		widget.Row(agents, launchCompareMenu(m, l, where), launchTeamMenu(m, l, where), widget.Spacer(),
 			roundButton("arrow-up", T("Start session"), start, l.Starting)).Gap(6).Align(widget.AlignCenter),
 		errLine,
 	).Gap(6).Stretch()

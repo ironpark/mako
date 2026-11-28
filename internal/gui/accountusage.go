@@ -1,9 +1,11 @@
 package gui
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"image/color"
+	"slices"
 	"strings"
 	"time"
 
@@ -13,12 +15,109 @@ import (
 	"github.com/ironpark/ggui/widget"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-const accountUsageRefreshInterval = 3 * time.Minute
+const (
+	accountUsageRefreshInterval = 3 * time.Minute
+	quotaWarnThreshold          = 85.0
+)
+
+type projectUsageSummary struct {
+	Project  string
+	Sessions int
+	Input    int64
+	Output   int64
+	CostUSD  float64
+}
+
+func agentPeakQuota(acc *protocol.AgentAccountUsage, now time.Time) float64 {
+	if acc == nil || acc.GetStatus() != "available" {
+		return -1
+	}
+	var maxUsed float64
+	for _, lim := range acc.GetLimits() {
+		if lim.GetDisabled() {
+			continue
+		}
+		if used, _ := accountLimitNow(lim, now); used > maxUsed {
+			maxUsed = used
+		}
+	}
+	return maxUsed
+}
+
+// suggestFallbackAgent reports whether currentTarget's agent is at or above
+// quotaWarnThreshold and suggests the lowest-utilization available alternative.
+func suggestFallbackAgent(data *protocol.AccountUsage, currentTarget string, availableTargets []string, now time.Time) (bool, string) {
+	if data == nil {
+		return false, ""
+	}
+	curAgent, _ := agentspec.SplitTarget(currentTarget)
+	usageByAgent := map[string]float64{}
+	for _, acc := range data.GetAccounts() {
+		if peak := agentPeakQuota(acc, now); peak >= 0 {
+			usageByAgent[acc.GetAgent()] = peak
+		}
+	}
+	curUsed, ok := usageByAgent[curAgent]
+	if !ok || curUsed < quotaWarnThreshold {
+		return false, ""
+	}
+	bestTarget := ""
+	bestUsed := 101.0
+	for _, tgt := range availableTargets {
+		if isShellTarget(tgt) {
+			continue
+		}
+		ag, _ := agentspec.SplitTarget(tgt)
+		if ag == curAgent {
+			continue
+		}
+		if u, ok := usageByAgent[ag]; ok && u < bestUsed {
+			bestUsed = u
+			bestTarget = tgt
+		}
+	}
+	return true, bestTarget
+}
+
+func aggregateProjectUsage(sessions []*protocol.SessionInfo, usageBySession map[string]*protocol.Usage) []projectUsageSummary {
+	byProj := map[string]*projectUsageSummary{}
+	for _, s := range sessions {
+		u := usageBySession[s.GetId()]
+		if u == nil || (u.GetInput() == 0 && u.GetCachedInput() == 0 && u.GetOutput() == 0 && u.GetCostUsd() == 0) {
+			continue
+		}
+		proj := cmp.Or(s.GetProject(), "(unknown)")
+		row := byProj[proj]
+		if row == nil {
+			row = &projectUsageSummary{Project: proj}
+			byProj[proj] = row
+		}
+		row.Sessions++
+		row.Input += u.GetInput() + u.GetCachedInput()
+		row.Output += u.GetOutput()
+		row.CostUSD += u.GetCostUsd()
+	}
+	out := make([]projectUsageSummary, 0, len(byProj))
+	for _, row := range byProj {
+		out = append(out, *row)
+	}
+	slices.SortFunc(out, func(a, b projectUsageSummary) int {
+		if a.CostUSD != b.CostUSD {
+			return cmp.Compare(b.CostUSD, a.CostUSD)
+		}
+		if a.Input+a.Output != b.Input+b.Output {
+			return cmp.Compare(b.Input+b.Output, a.Input+a.Output)
+		}
+		return strings.Compare(a.Project, b.Project)
+	})
+	return out
+}
 
 type accountUsageState struct {
 	Open     *ggui.StateValue[bool]
@@ -151,6 +250,7 @@ func accountLimitNow(l *protocol.AccountLimit, now time.Time) (used float64, res
 
 func accountUsageDialog(m *model) ggui.Widget {
 	st := m.AccountUsage
+	tab := ggui.State("quotas")
 	ggui.Effect(func() ggui.Cleanup {
 		if !st.Open.Get() {
 			return nil
@@ -166,7 +266,27 @@ func accountUsageDialog(m *model) ggui.Widget {
 		loading := st.Loading.Get()
 		errText := st.Err.Get()
 		now := m.Minute.Get()
-		mode := m.Prefs.Get().UsageDisplay
+		prefsVal := m.Prefs.Get()
+		mode := prefsVal.UsageDisplay
+		curTab := tab.Get()
+		defaultAgent := cmp.Or(prefsVal.DefaultAgent, "claude")
+
+		tabBtn := func(id, label string) ggui.Widget {
+			b := ui.Button(label, func() { tab.Set(id) }).Pad(4, 10).Radius(7)
+			if curTab != id {
+				b = b.Ghost()
+			}
+			return b
+		}
+		tabBar := widget.Row(
+			tabBtn("quotas", T("Quotas & switching")),
+			tabBtn("analytics", T("Project & session usage")),
+			widget.Spacer(),
+		).Gap(6).Align(widget.AlignCenter)
+
+		if curTab == "analytics" {
+			return widget.Column(tabBar, accountAnalyticsView(m)).Gap(10).Stretch()
+		}
 
 		var refreshIcon ggui.Widget = icon("refresh-cw").Size(13).Color(skin.Muted)
 		if loading {
@@ -179,7 +299,25 @@ func accountUsageDialog(m *model) ggui.Widget {
 			}).Ghost().Pad(4, 8).Radius(6).Disabled(loading).Name(T("Refresh")),
 		).Gap(8).Align(widget.AlignCenter)
 
-		rows := []ggui.Widget{topBar}
+		rows := []ggui.Widget{tabBar, topBar}
+
+		availTargets := sessionAgentTargets(nodeTargets(m.Nodes.Get(), m.Conn.Get().Self.GetId(), m.Agents.Get()))
+		if high, fallback := suggestFallbackAgent(data, defaultAgent, availTargets, now); high {
+			warnItems := []ggui.Widget{
+				icon("shield-alert").Size(14).Color(skin.DotWaiting),
+				widget.Expanded(widget.Text(Tf("%s is nearing its quota limit.", targetLabel(defaultAgent))).Size(12.5).Weight(ggui.WeightMedium)),
+			}
+			if fallback != "" {
+				fb := fallback
+				warnItems = append(warnItems, ui.Button(Tf("Switch default to %s", targetLabel(fb)), func() {
+					m.Prefs.Update(func(p prefs) prefs { p.DefaultAgent = fb; return p })
+					m.toaster.Push(ui.Toast(T("Default agent updated"), targetLabel(fb)))
+				}).Pad(4, 10).Radius(6))
+			}
+			rows = append(rows, widget.Box(widget.Row(warnItems...).Gap(8).Align(widget.AlignCenter)).
+				Fill(skin.DotWaiting.Alpha(0.12)).Border(1, skin.DotWaiting).Radius(8).Pad(8, 12))
+		}
+
 		if errText != "" {
 			rows = append(rows, widget.Box(widget.Row(
 				icon("info").Size(14).Color(skin.DotDown),
@@ -199,16 +337,76 @@ func accountUsageDialog(m *model) ggui.Widget {
 			}
 		} else {
 			for _, acc := range accounts {
-				rows = append(rows, accountUsageCard(acc, now, mode))
+				rows = append(rows, accountUsageCard(m, acc, now, mode, defaultAgent))
 			}
 		}
 		return widget.Column(rows...).Gap(10).Stretch()
 	})
-	return keyedDialog(st.Open, body).Title(T("Account usage & quotas")).Width(560)
+	return keyedDialog(st.Open, body).Title(T("Account usage & quotas")).Width(600)
 }
 
-func accountUsageCard(acc *protocol.AgentAccountUsage, now time.Time, displayMode string) ggui.Widget {
+func accountAnalyticsView(m *model) ggui.Widget {
+	sessions := m.Sessions.Get()
+	usageBySession := map[string]*protocol.Usage{}
+	for _, s := range sessions {
+		id := s.GetId()
+		if st := m.chats[id]; st != nil {
+			if res := st.result.Get(); res.Chat != nil && res.Chat.GetUsage() != nil {
+				usageBySession[id] = res.Chat.GetUsage()
+				continue
+			}
+		}
+		if us := m.usages[id]; us != nil {
+			if u := us.usage.Get(); u != nil {
+				usageBySession[id] = u
+			}
+		}
+	}
+	projects := aggregateProjectUsage(sessions, usageBySession)
+	var totalIn, totalOut int64
+	var totalCost float64
+	for _, p := range projects {
+		totalIn += p.Input
+		totalOut += p.Output
+		totalCost += p.CostUSD
+	}
+
+	rows := []ggui.Widget{
+		widget.Row(
+			widget.Expanded(muted(widget.Text(Tf("Loaded sessions total: %s in · %s out · $%.2f", tokens(totalIn), tokens(totalOut), totalCost)).Size(12.5))),
+			ui.Button(T("Refresh"), func() {
+				for _, s := range ggui.Peek(m.Sessions) {
+					if hasCap(s, protocol.CapChat) {
+						m.loadUsage(s.GetId(), m.usageState(s.GetId()))
+					}
+				}
+			}).Ghost().Pad(4, 8).Radius(6),
+		).Gap(8).Align(widget.AlignCenter),
+	}
+	if len(projects) == 0 {
+		rows = append(rows, muted(widget.Text(T("No session token usage loaded yet. Click Refresh or open a session's Chat to populate usage metrics.")).Size(12.5)))
+		return widget.Column(rows...).Gap(10).Stretch()
+	}
+	for _, p := range projects[:min(len(projects), 10)] {
+		costStr := "-"
+		if p.CostUSD > 0 {
+			costStr = fmt.Sprintf("$%.2f", p.CostUSD)
+		}
+		rows = append(rows, widget.Box(widget.Row(
+			widget.Expanded(widget.Column(
+				widget.Text(projectName(p.Project)).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
+				muted(widget.Text(Tf("%d sessions · %s in · %s out", p.Sessions, tokens(p.Input), tokens(p.Output))).Size(11.5).NoWrap()),
+			).Gap(2).Stretch()),
+			widget.Text(costStr).Size(12.5).Weight(ggui.WeightSemibold).NoWrap(),
+		).Gap(8).Align(widget.AlignCenter)).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(8, 12))
+	}
+	return widget.Column(rows...).Gap(8).Stretch()
+}
+
+func accountUsageCard(m *model, acc *protocol.AgentAccountUsage, now time.Time, displayMode, defaultAgent string) ggui.Widget {
 	name := acc.GetAgent()
+	defBase, _ := agentspec.SplitTarget(defaultAgent)
+	isDefault := defBase == name
 	headItems := []ggui.Widget{
 		agentGlyph(name, skin.Muted).Size(16),
 		widget.Text(name).Size(14).Weight(ggui.WeightSemibold).NoWrap(),
@@ -217,7 +415,17 @@ func accountUsageCard(acc *protocol.AgentAccountUsage, now time.Time, displayMod
 		headItems = append(headItems, widget.Box(widget.Text(plan).Size(11).Color(skin.Muted).NoWrap()).
 			Fill(skin.Surface2).Radius(5).Pad(2, 6))
 	}
+	if isDefault {
+		headItems = append(headItems, widget.Box(widget.Text(T("Default")).Size(11).Color(skin.AccentBright).NoWrap()).
+			Fill(skin.AccentBright.Alpha(0.14)).Radius(5).Pad(2, 6))
+	}
 	headItems = append(headItems, widget.Spacer())
+	if acc.GetStatus() == "available" && !isDefault {
+		headItems = append(headItems, ui.Button(T("Set as default"), func() {
+			m.Prefs.Update(func(p prefs) prefs { p.DefaultAgent = name; return p })
+			m.toaster.Push(ui.Toast(T("Default agent updated"), name))
+		}).Ghost().Pad(3, 8).Radius(6))
+	}
 	if acc.Credits != nil {
 		headItems = append(headItems, widget.Box(widget.Text(Tf("Credits $%.2f", acc.GetCredits())).Size(11.5).Color(skin.Fg).NoWrap()).
 			Fill(skin.Surface2).Radius(5).Pad(2, 7))

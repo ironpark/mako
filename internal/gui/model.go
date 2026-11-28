@@ -41,6 +41,9 @@ type newSession struct {
 	// Team is the name of the team the agent leads, started with it; ""
 	// for none.
 	Team string
+	// RaceTargets are extra agent targets run in parallel isolated worktrees
+	// alongside Agent for A/B comparison.
+	RaceTargets []string
 }
 
 // model is the GUI's state. Signals are touched on the UI goroutine only;
@@ -172,6 +175,7 @@ type model struct {
 	chatImages   *imageCache
 	usages       map[string]*usageState // for the usage overlay
 	AccountUsage *accountUsageState     // session-independent global account quotas; see accountusage.go
+	Races        *raceState             // multi-agent A/B comparison races; see race.go
 
 	files *filesState // the Files tab's; see filesstate.go
 
@@ -388,6 +392,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		chatImages:          newImageCache(),
 		usages:              map[string]*usageState{},
 		AccountUsage:        newAccountUsageState(),
+		Races:               newRaceState(),
 		diffChanges:         newDiffChangesState(),
 		RepoPick:            ggui.State(repoPick{}),
 		// Its functions do not compare: each asking is new.
@@ -826,7 +831,12 @@ func (m *model) submitLaunch(id string) {
 	if ggui.Peek(l.Starting) {
 		return
 	}
-	m.startSession(id, ggui.Peek(l.Form))
+	f := ggui.Peek(l.Form)
+	if len(f.RaceTargets) > 0 {
+		m.startRace(id, f)
+		return
+	}
+	m.startSession(id, f)
 }
 
 // startSession starts the session f describes, with its prompt and its
