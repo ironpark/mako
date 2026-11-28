@@ -327,8 +327,10 @@ func TestClaudeGoalTranscriptTrackingAndActionControl(t *testing.T) {
 		t.Skip("POSIX shell PTY fixture")
 	}
 	prevWait, prevPoll := claudeGoalConfirmWait, claudeGoalConfirmPoll
-	claudeGoalConfirmWait = 1500 * time.Millisecond
-	claudeGoalConfirmPoll = 50 * time.Millisecond
+	// The fake agent below confirms as soon as it reads each command, so a
+	// long wait costs nothing and keeps a loaded machine from timing out.
+	claudeGoalConfirmWait = 10 * time.Second
+	claudeGoalConfirmPoll = 20 * time.Millisecond
 	t.Cleanup(func() {
 		claudeGoalConfirmWait, claudeGoalConfirmPoll = prevWait, prevPoll
 	})
@@ -401,16 +403,38 @@ func TestClaudeGoalTranscriptTrackingAndActionControl(t *testing.T) {
 		t.Fatal("expected empty objective error")
 	}
 
+	// confirmWhenRead plays Claude: once cmd has reached the PTY's reader
+	// (cat copies each submitted line to cmdLog), it appends the goal_status
+	// line that the command makes Claude write. Tying the confirmation to the
+	// input, not to a timer, means a GoalAction returns only after its
+	// command was read, so no command is still unread when the test closes
+	// the session.
+	confirmWhenRead := func(cmd, line string) {
+		go func() {
+			tick := time.NewTicker(10 * time.Millisecond)
+			defer tick.Stop()
+			for {
+				if raw, _ := os.ReadFile(cmdLog); strings.Contains(string(raw), cmd) {
+					break
+				}
+				select {
+				case <-t.Context().Done():
+					return
+				case <-tick.C:
+				}
+			}
+			f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0)
+			if err != nil {
+				return
+			}
+			_, _ = f.WriteString(line + "\n")
+			_ = f.Close()
+		}()
+	}
+
 	// 3. Edit goal at idle prompt submits `/goal ...` and observes transcript confirmation.
-	go func() {
-		time.Sleep(150 * time.Millisecond)
-		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0)
-		if err != nil {
-			return
-		}
-		_, _ = f.WriteString(`{"type":"attachment","isSidechain":false,"uuid":"rev-2","sessionId":"` + convID + `","timestamp":"2026-06-19T14:39:00.000Z","attachment":{"type":"goal_status","met":false,"sentinel":true,"condition":"refactor parser cleanly"}}` + "\n")
-		_ = f.Close()
-	}()
+	confirmWhenRead("/goal refactor parser cleanly",
+		`{"type":"attachment","isSidechain":false,"uuid":"rev-2","sessionId":"`+convID+`","timestamp":"2026-06-19T14:39:00.000Z","attachment":{"type":"goal_status","met":false,"sentinel":true,"condition":"refactor parser cleanly"}}`)
 	updated, err := cli.GoalAction(t.Context(), &protocol.GoalAction{
 		SessionId: s.ID(),
 		Action:    protocol.GoalActionEdit,
@@ -424,15 +448,8 @@ func TestClaudeGoalTranscriptTrackingAndActionControl(t *testing.T) {
 	}
 
 	// 4. Clear goal at idle prompt submits `/goal clear` and observes cleared sentinel.
-	go func() {
-		time.Sleep(150 * time.Millisecond)
-		f, err := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0)
-		if err != nil {
-			return
-		}
-		_, _ = f.WriteString(`{"type":"attachment","isSidechain":false,"uuid":"rev-3","sessionId":"` + convID + `","timestamp":"2026-06-19T14:40:00.000Z","attachment":{"type":"goal_status","met":true,"sentinel":true,"condition":"refactor parser cleanly"}}` + "\n")
-		_ = f.Close()
-	}()
+	confirmWhenRead("/goal clear",
+		`{"type":"attachment","isSidechain":false,"uuid":"rev-3","sessionId":"`+convID+`","timestamp":"2026-06-19T14:40:00.000Z","attachment":{"type":"goal_status","met":true,"sentinel":true,"condition":"refactor parser cleanly"}}`)
 	cleared, err := cli.GoalAction(t.Context(), &protocol.GoalAction{
 		SessionId: s.ID(),
 		Action:    protocol.GoalActionClear,
