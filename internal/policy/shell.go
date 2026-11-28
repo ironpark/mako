@@ -60,7 +60,11 @@ func (r *shellReader) read(line string, depth int) (simple bool) {
 		p := syntax.NewParser(syntax.Variant(lang), syntax.KeepComments(true))
 		// A shell runs each line it read before one it cannot read, so
 		// the statements read before an error are read as well.
-		err := p.Stmts(strings.NewReader(line), func(st *syntax.Stmt) bool {
+		for st, err := range p.StmtsSeq(strings.NewReader(line)) {
+			if err != nil {
+				simple = false
+				break
+			}
 			if !plainStmt(st) {
 				simple = false
 			}
@@ -70,10 +74,6 @@ func (r *shellReader) read(line string, depth int) (simple bool) {
 				}
 				return true
 			})
-			return true
-		})
-		if err != nil {
-			simple = false
 		}
 	}
 	return simple
