@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -18,33 +20,89 @@ import (
 // named after it: ../<repo>.worktrees/<branch>.
 
 // AddWorktree makes a worktree for branch, new, from base ("" for HEAD), in
-// the repository dir is in, and returns the repository's main work tree
-// and the new worktree's path.
-func AddWorktree(ctx context.Context, dir, branch, base string) (repo, path string, err error) {
-	if err := checkBranch(ctx, dir, branch); err != nil {
-		return "", "", err
+// the repository dir is in, and returns the repository's main work tree,
+// the new worktree's path and its branch. Without a branch it names one
+// after the repository and a short random ID, such as mako-k3x9q2.
+func AddWorktree(ctx context.Context, dir, branch, base string) (repo, path, made string, err error) {
+	if branch != "" {
+		if err := checkBranch(ctx, dir, branch); err != nil {
+			return "", "", "", err
+		}
 	}
 	if base != "" && strings.HasPrefix(base, "-") {
-		return "", "", fmt.Errorf("%q is not a branch or commit", base)
+		return "", "", "", fmt.Errorf("%q is not a branch or commit", base)
 	}
 	// The main work tree, even from inside another worktree.
 	common, err := gitOut(ctx, dir, nil, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	repo = filepath.Dir(strings.TrimSpace(string(common)))
-	path = filepath.Join(filepath.Dir(repo), filepath.Base(repo)+".worktrees", strings.ReplaceAll(branch, "/", "-"))
+	parent := filepath.Join(filepath.Dir(repo), filepath.Base(repo)+".worktrees")
+	if branch == "" {
+		if branch, err = freeBranch(ctx, repo, parent); err != nil {
+			return "", "", "", err
+		}
+	}
+	path = filepath.Join(parent, strings.ReplaceAll(branch, "/", "-"))
 	if _, err := os.Stat(path); err == nil {
-		return "", "", fmt.Errorf("%s already exists", path)
+		return "", "", "", fmt.Errorf("%s already exists", path)
 	}
 	args := []string{"worktree", "add", "-b", branch, path}
 	if base != "" {
 		args = append(args, base)
 	}
 	if _, err := run(ctx, repo, nil, args...); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	return repo, path, nil
+	return repo, path, branch, nil
+}
+
+// idAlphabet is what a worktree's random ID is made of, as nanoid makes
+// its IDs of an alphabet: lowercase letters and digits, which git takes in
+// a branch and every file system in a folder's name, told apart even where
+// case is not.
+const idAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+// idLen is how long a worktree's random ID is: 36^6, about two billion
+// IDs, which a repository's worktrees do not run out of.
+const idLen = 6
+
+// shortID is a random ID of idLen characters of idAlphabet.
+func shortID() string {
+	b := make([]byte, idLen)
+	for i := range b {
+		b[i] = idAlphabet[rand.IntN(len(idAlphabet))]
+	}
+	return string(b)
+}
+
+// freeBranch names a new worktree's branch after repo and a short random
+// ID, one no branch and no folder in parent has yet.
+func freeBranch(ctx context.Context, repo, parent string) (string, error) {
+	name := branchStem(filepath.Base(repo))
+	for range 8 {
+		b := name + "-" + shortID()
+		if _, err := os.Stat(filepath.Join(parent, b)); err == nil {
+			continue
+		}
+		if _, err := gitOut(ctx, repo, nil, "show-ref", "--verify", "--quiet", "refs/heads/"+b); err == nil {
+			continue
+		}
+		return b, nil
+	}
+	return "", errors.New("no free name for the worktree's branch")
+}
+
+// nonBranch is a run of what a worktree's branch does not take of its
+// repository's folder name.
+var nonBranch = regexp.MustCompile(`[^A-Za-z0-9_]+`)
+
+// branchStem is a repository's folder name as a branch begins with it:
+// each run of what is not a letter, a digit or _ becomes one -, and a name
+// with nothing left is "worktree".
+func branchStem(name string) string {
+	return cmp.Or(strings.Trim(nonBranch.ReplaceAllString(name, "-"), "-"), "worktree")
 }
 
 // checkBranch refuses what is not a name a new branch can have.

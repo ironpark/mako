@@ -101,7 +101,7 @@ func TestGitStatTier1(t *testing.T) {
 		git("add", "base.txt")
 		git("commit", "-qm", "base")
 
-		repo, wtPath, err := gitstat.AddWorktree(ctx, root, "feat/e2e", "main")
+		repo, wtPath, _, err := gitstat.AddWorktree(ctx, root, "feat/e2e", "main")
 		if err != nil {
 			t.Fatalf("AddWorktree: %v", err)
 		}

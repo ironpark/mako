@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -18,15 +19,15 @@ func TestWorktreeLifecycle(t *testing.T) {
 	run("add", "-A")
 	run("commit", "-q", "-m", "first")
 
-	if _, _, err := AddWorktree(ctx, root, "-x", ""); err == nil {
+	if _, _, _, err := AddWorktree(ctx, root, "-x", ""); err == nil {
 		t.Fatal("an option taken for a branch")
 	}
-	repo, path, err := AddWorktree(ctx, root, "feat/x", "main")
+	repo, path, made, err := AddWorktree(ctx, root, "feat/x", "main")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if repo != root && !sameDir(repo, root) || filepath.Base(path) != "feat-x" || filepath.Base(filepath.Dir(path)) != filepath.Base(root)+".worktrees" {
-		t.Fatalf("repo %s path %s", repo, path)
+	if made != "feat/x" || repo != root && !sameDir(repo, root) || filepath.Base(path) != "feat-x" || filepath.Base(filepath.Dir(path)) != filepath.Base(root)+".worktrees" {
+		t.Fatalf("repo %s path %s branch %s", repo, path, made)
 	}
 	t.Cleanup(func() { os.RemoveAll(filepath.Dir(path)) })
 	if Branch(path) != "feat/x" {
@@ -73,6 +74,45 @@ func TestWorktreeLifecycle(t *testing.T) {
 	}
 	if strings.Contains(run("branch"), "feat/x") {
 		t.Fatal("merged branch left")
+	}
+}
+
+func TestWorktreeWithoutBranchIsNamedAfterRepo(t *testing.T) {
+	root, run := cliRepo(t)
+	ctx := context.Background()
+	write(t, root, "a.txt", "one\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "first")
+
+	named := regexp.MustCompile(`^` + regexp.QuoteMeta(branchStem(filepath.Base(root))) + `-[0-9a-z]{6}$`)
+	seen := map[string]bool{}
+	for range 2 {
+		_, path, made, err := AddWorktree(ctx, root, "", "main")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(filepath.Dir(path)) })
+		if !named.MatchString(made) || filepath.Base(path) != made || Branch(path) != made || seen[made] {
+			t.Fatalf("branch %q path %s", made, path)
+		}
+		seen[made] = true
+	}
+}
+
+func TestBranchStem(t *testing.T) {
+	for name, want := range map[string]string{
+		"mako":        "mako",
+		"My Repo":     "My-Repo",
+		"web.app":     "web-app",
+		"a--b__c":     "a-b__c",
+		"-.lock.":     "lock",
+		"..":          "worktree",
+		"한글":          "worktree",
+		"repo (copy)": "repo-copy",
+	} {
+		if got := branchStem(name); got != want {
+			t.Errorf("branchStem(%q) = %q, want %q", name, got, want)
+		}
 	}
 }
 

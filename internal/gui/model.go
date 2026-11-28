@@ -30,7 +30,8 @@ type newSession struct {
 	NodeID          string
 	Project         string
 	ParentSessionID string
-	// Worktree starts the session in a new git worktree, on Branch.
+	// Worktree starts the session in a new git worktree, on Branch, or
+	// without one on a branch the node names after the repository.
 	Worktree bool
 	Branch   string
 	Base     string // the branch the worktree merges into, "" for the one checked out
@@ -854,12 +855,8 @@ func (m *model) startSession(tab string, f newSession) {
 		}
 	}
 	if f.Worktree {
-		branch := strings.TrimSpace(f.Branch)
-		if branch == "" {
-			fail(T("Name the branch the worktree is made on."))
-			return
-		}
-		req.Worktree = &protocol.Worktree{Branch: branch, Base: f.Base, Start: f.Start}
+		// Without a branch the node names one after the repository.
+		req.Worktree = &protocol.Worktree{Branch: strings.TrimSpace(f.Branch), Base: f.Base, Start: f.Start}
 	}
 	ggui.Async(func() (*protocol.SessionInfo, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

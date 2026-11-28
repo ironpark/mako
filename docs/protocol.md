@@ -558,8 +558,10 @@ is the working directory; empty starts in the node's home. `args` and `env` add
 to the node's own. `cols` and `rows` size the PTY. With `worktree` set, the
 daemon first makes a git worktree on a new `branch` from `base` (the
 branch checked out when empty), or from the commit `start` when set, in the
-repository `project` is in, and starts there. `base` stays the branch the
-worktree merges and opens its pull request into.
+repository `project` is in, and starts there. If `branch` is empty, the
+daemon names it after the repository's folder and a random 6-character ID,
+for example `mako-k3x9q2`. The session's `worktree` reports that name.
+`base` stays the branch the worktree merges and opens its pull request into.
 
 **`SessionInfo`** is what listings and most replies describe a session with.
 The fields a front-end usually needs:
