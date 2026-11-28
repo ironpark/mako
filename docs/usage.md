@@ -575,21 +575,29 @@ but port 4243 faces the network, and it can face the internet.
 
 ## Repository commands
 
-A repository can track a file that tells mako to run commands for it, such
-as the `setup_cmd` of `.mako/worktree.toml`. Anyone who can commit to the
-repository can write such a file, and so can an agent that works in it.
-So mako runs these commands only after you read the file and trust it.
-Each trust is for one file of one repository, as the file reads now. When
-the file changes, mako stops running its commands until you trust it
-again. Agents cannot trust a file for you.
+A repository can track a file that tells mako to run commands for it on
+its own, such as a command to run in each new worktree or on a session's
+events. Each feature that reads such a file says which file it reads.
+Anyone who can commit to the repository can write such a file, and so
+can an agent that works in it. So mako runs these commands only after
+you read the file and trust it. Each trust is for one file of one
+repository, as the file reads now. When the file changes, mako stops
+running its commands until you trust it again. Agents cannot trust a
+file for you.
 
 ```sh
-mako repo-trust allow .mako/worktree.toml   # show the file, ask, and trust it as it reads
-mako repo-trust show .mako/worktree.toml    # show the file, and if it is trusted
-mako repo-trust                             # list the files you trust
-mako repo-trust revoke ~/src/app            # forget every file of a repository
+mako repo-trust allow path/to/file   # show the file, ask, and trust it as it reads
+mako repo-trust show path/to/file    # show the file, and if it is trusted
+mako repo-trust                      # list the files you trust
+mako repo-trust revoke ~/src/app     # forget every file of a repository
 ```
 
+With `-node`, give the file's absolute path on that node: mako sends it as
+you typed it. A file of a linked worktree stands for the same file of the
+repository's main work tree, which is the one mako reads and trusts.
+
 The desktop app shows the whole file in a dialog with a Trust button when
-mako skips its commands. The trust is kept on the machine of the
+mako skips its commands, in the window you are in. If the file changes
+before you trust it, mako refuses the trust, and the dialog offers Reload
+to show the file as it reads now. The trust is kept on the machine of the
 repository, in `repo-trust.json` in its configuration folder.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -76,5 +77,54 @@ func TestRepoTrustPathsAndTrustedFiles(t *testing.T) {
 	f.asked = nil
 	if err := repoTrust(t.Context(), f.ask, "", nil, nil, &out); err != nil || f.asked[0].GetOp() != protocol.RepoTrustList {
 		t.Fatalf("no command lists: %v, %v", f.asked, err)
+	}
+}
+
+// A path for another node is sent as it was given: it is of that node's
+// system, which this one cannot make absolute, nor read.
+func TestRepoTrustLeavesAnotherNodesPathAsGiven(t *testing.T) {
+	for _, p := range []string{`C:\src\app\.mako\x.toml`, "/home/me/app/x.toml", "relative/x.toml"} {
+		for _, op := range []string{"show", "allow", "revoke"} {
+			f := &fakeTrust{file: &protocol.TrustedFile{Root: "/repo", Path: "f", Sha256: "h", Trusted: true}}
+			var out bytes.Buffer
+			if err := repoTrust(t.Context(), f.ask, "node1", []string{op, p}, strings.NewReader(""), &out); err != nil {
+				t.Fatal(err)
+			}
+			if len(f.asked) == 0 || f.asked[0].GetPath() != p || f.asked[0].GetNodeId() != "node1" {
+				t.Fatalf("%s %s asked %v", op, p, f.asked)
+			}
+		}
+	}
+}
+
+// show says how to trust a file it shows untrusted, with the path quoted
+// so the command pastes as it is into this system's shell, and the node
+// named; a Windows node's file is named with its own separator.
+func TestRepoTrustShowQuotesTheCommandToTrust(t *testing.T) {
+	for _, tc := range []struct {
+		node, root, want string
+	}{
+		{"", "/Users/me/My Projects/app", "trust it with: mako repo-trust allow '/Users/me/My Projects/app/.mako/x.toml'\n"},
+		{"node1", `C:\src\app`, `trust it with: mako -node node1 repo-trust allow 'C:\src\app\.mako\x.toml'` + "\n"},
+	} {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows quotes in its own way; see repotrust.AllowCommand")
+		}
+		f := &fakeTrust{file: &protocol.TrustedFile{Root: tc.root, Path: ".mako/x.toml", Sha256: "h"}}
+		var out bytes.Buffer
+		if err := repoTrust(t.Context(), f.ask, tc.node, []string{"show", "/x"}, nil, &out); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasSuffix(out.String(), tc.want) {
+			t.Fatalf("show printed:\n%s\nwant it to end in %q", out.String(), tc.want)
+		}
+	}
+	f := &fakeTrust{file: &protocol.TrustedFile{Root: "/repo", Path: "x", Sha256: "h", Trusted: true}}
+	var out bytes.Buffer
+	if err := repoTrust(t.Context(), f.ask, "", []string{"show", "/repo/x"}, nil, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "trust it with") {
+		t.Fatalf("asked to trust a trusted file:\n%s", out.String())
 	}
 }

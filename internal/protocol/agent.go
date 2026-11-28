@@ -29,11 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 54
+const Revision = 55
 
 // RevisionRepoTrust adds the user's trust in repositories' command files:
-// RepoTrust and RepoTrustInfo (Envelope 170 and 171).
-const RevisionRepoTrust = 54
+// RepoTrust and RepoTrustInfo (Envelope 178 and 179), whose trust of a
+// file that changed since it was shown is refused with CodeChanged.
+const RevisionRepoTrust = 55
 
 // RevisionRoutines adds a node's routines, read and changed through its
 // daemon (ListRoutines, Routines and RoutineAction, Envelope 167 to 169),

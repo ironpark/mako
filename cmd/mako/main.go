@@ -93,8 +93,8 @@ Access (trust runs one way: a node you let in can drive this one):
   mako trust <public key line>      let a key in, as authorized_keys writes it
   mako revoke <fingerprint>         take a key out
 
-Repository commands (a command file a repository tracks, as .mako/worktree.toml,
-has its commands run only while you trust it as it reads):
+Repository commands (a file a repository tracks that names commands for mako
+to run on its own has them run only while you trust it as it reads):
   mako repo-trust [list]            list the command files trusted
   mako repo-trust show <file>       print a command file, and whether it is trusted
   mako repo-trust allow <file>      print a command file, ask, and trust it as it reads

@@ -1940,7 +1940,7 @@ var catalogKo = map[string]string{
 	"Command copied":                 "명령어를 복사했습니다",
 	"Run %s on the host":             "호스트에서 %s 실행",
 
-	// Revision 54: trust in a repository's command files
+	// Revision 55: trust in a repository's command files
 	"Trust this repository's commands?": "이 저장소의 명령을 신뢰할까요?",
 	"Trust":                             "신뢰",
 	"Trusted":                           "신뢰함",
@@ -1949,6 +1949,7 @@ var catalogKo = map[string]string{
 	"Could not read the repository's commands":                   "저장소의 명령을 읽지 못했습니다",
 	"Mako runs the commands of %s while it reads as you saw it.": "%s 파일이 지금 본 내용 그대로인 동안 Mako가 그 명령을 실행합니다.",
 	"Mako runs the commands this file gives with your permissions. Trust it only if you have read all of it and know what it does. If the file changes, it is not trusted until you trust it again.": "Mako는 이 파일에 적힌 명령을 사용자 권한으로 실행합니다. 파일 전체를 읽고 무엇을 하는지 알 때만 신뢰하세요. 파일이 바뀌면 다시 신뢰할 때까지 신뢰하지 않은 상태가 됩니다.",
+	"The file changed since it was shown. Reload it to read it as it is now, and trust it only once you have read it again.":                                                                         "이 파일은 표시된 뒤에 바뀌었습니다. 다시 읽어 지금 내용을 확인하고, 다시 읽은 뒤에만 신뢰하세요.",
 
 	// Goal status banner and dialog
 	"Goal":                                  "목표",

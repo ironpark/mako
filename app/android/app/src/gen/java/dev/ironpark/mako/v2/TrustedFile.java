@@ -30,7 +30,7 @@ public  final class TrustedFile extends
   private java.lang.String root_;
   /**
    * <pre>
-   * the repository's root, links resolved
+   * the repository's main work tree, links resolved
    * </pre>
    *
    * <code>string root = 1 [json_name = "root"];</code>
@@ -42,7 +42,7 @@ public  final class TrustedFile extends
   }
   /**
    * <pre>
-   * the repository's root, links resolved
+   * the repository's main work tree, links resolved
    * </pre>
    *
    * <code>string root = 1 [json_name = "root"];</code>
@@ -55,7 +55,7 @@ public  final class TrustedFile extends
   }
   /**
    * <pre>
-   * the repository's root, links resolved
+   * the repository's main work tree, links resolved
    * </pre>
    *
    * <code>string root = 1 [json_name = "root"];</code>
@@ -69,7 +69,7 @@ public  final class TrustedFile extends
   }
   /**
    * <pre>
-   * the repository's root, links resolved
+   * the repository's main work tree, links resolved
    * </pre>
    *
    * <code>string root = 1 [json_name = "root"];</code>
@@ -80,7 +80,7 @@ public  final class TrustedFile extends
   }
   /**
    * <pre>
-   * the repository's root, links resolved
+   * the repository's main work tree, links resolved
    * </pre>
    *
    * <code>string root = 1 [json_name = "root"];</code>
@@ -480,7 +480,7 @@ public  final class TrustedFile extends
 
     /**
      * <pre>
-     * the repository's root, links resolved
+     * the repository's main work tree, links resolved
      * </pre>
      *
      * <code>string root = 1 [json_name = "root"];</code>
@@ -492,7 +492,7 @@ public  final class TrustedFile extends
     }
     /**
      * <pre>
-     * the repository's root, links resolved
+     * the repository's main work tree, links resolved
      * </pre>
      *
      * <code>string root = 1 [json_name = "root"];</code>
@@ -505,7 +505,7 @@ public  final class TrustedFile extends
     }
     /**
      * <pre>
-     * the repository's root, links resolved
+     * the repository's main work tree, links resolved
      * </pre>
      *
      * <code>string root = 1 [json_name = "root"];</code>
@@ -520,7 +520,7 @@ public  final class TrustedFile extends
     }
     /**
      * <pre>
-     * the repository's root, links resolved
+     * the repository's main work tree, links resolved
      * </pre>
      *
      * <code>string root = 1 [json_name = "root"];</code>
@@ -533,7 +533,7 @@ public  final class TrustedFile extends
     }
     /**
      * <pre>
-     * the repository's root, links resolved
+     * the repository's main work tree, links resolved
      * </pre>
      *
      * <code>string root = 1 [json_name = "root"];</code>

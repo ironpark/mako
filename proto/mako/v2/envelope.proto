@@ -214,9 +214,9 @@ message Envelope {
     Routines routines = 168;
     RoutineAction routine_action = 169;
 
-    // The user's trust in repositories' command files (revision 54).
-    RepoTrust repo_trust = 170;
-    RepoTrustInfo repo_trust_info = 171;
+    // The user's trust in repositories' command files (revision 55).
+    RepoTrust repo_trust = 178;
+    RepoTrustInfo repo_trust_info = 179;
   }
 }
 

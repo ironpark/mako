@@ -55,12 +55,30 @@ func branchOf(gitDir string) string {
 // repository's worktrees and folders all name the same; "" outside a
 // repository. Links in it are resolved, as git resolves the paths it
 // records for a linked work tree. Like Branch it reads files alone.
+//
+// A work tree is taken for a linked one of a repository only when that
+// repository lists it as one (see registered). A .git file, or a
+// commondir file, is anyone's to write, and one that points into another
+// repository's git directory does not make its folder that repository's:
+// such a folder is its own. So what keys a repository's trust, its
+// projects or its sessions by Repo is not led to another repository.
 func Repo(dir string) string {
 	gitDir, top := findGitDir(dir)
 	if gitDir == "" {
 		return ""
 	}
 	return repoOf(gitDir, commonDir(gitDir), top)
+}
+
+// WorkTree is the top of the work tree dir is in, linked or not, and the
+// main work tree of its repository, as Repo says; both "" outside a
+// repository. top is as dir names it, its links not resolved.
+func WorkTree(dir string) (top, repo string) {
+	gitDir, top := findGitDir(dir)
+	if gitDir == "" {
+		return "", ""
+	}
+	return top, repoOf(gitDir, commonDir(gitDir), top)
 }
 
 // originURL is the URL the origin remote in the config of the git
@@ -139,14 +157,50 @@ func urlRemote(url string) string {
 // whose common git directory is common.
 func repoOf(gitDir, common, top string) string {
 	// One added to a bare repository, which has no work tree of its own,
-	// stays its own.
-	if common != gitDir && filepath.Base(common) == ".git" {
+	// stays its own, and so does one the repository does not list.
+	if common != gitDir && filepath.Base(common) == ".git" && registered(gitDir, common, top) {
 		top = filepath.Dir(common)
 	}
 	if real, err := filepath.EvalSymlinks(top); err == nil {
 		return real
 	}
 	return top
+}
+
+// registered reports whether the repository whose git directory is common
+// lists the work tree at top, of the git directory gitDir, as one of its
+// linked work trees, both ways as git worktree add records one: gitDir is
+// a folder of common's worktrees folder, and its gitdir file names top's
+// .git back. Only who can write the repository's git directory can make
+// that so. top's .git must be that very file, not a link to it, which an
+// archive can carry.
+func registered(gitDir, common, top string) bool {
+	worktrees, err := os.Stat(filepath.Join(common, "worktrees"))
+	if err != nil || !worktrees.IsDir() {
+		return false
+	}
+	parent, err := os.Stat(filepath.Dir(filepath.Clean(gitDir)))
+	if err != nil || !os.SameFile(worktrees, parent) {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(gitDir, "gitdir"))
+	if err != nil {
+		return false
+	}
+	back := strings.TrimSpace(string(b))
+	if back == "" {
+		return false
+	}
+	if !filepath.IsAbs(back) {
+		// As git writes it with worktree.useRelativePaths: from gitDir.
+		back = filepath.Join(gitDir, back)
+	}
+	want, err := os.Lstat(filepath.Join(top, ".git"))
+	if err != nil {
+		return false
+	}
+	got, err := os.Lstat(back)
+	return err == nil && os.SameFile(want, got)
 }
 
 // commonDir is the git directory a linked work tree's gitDir shares with
