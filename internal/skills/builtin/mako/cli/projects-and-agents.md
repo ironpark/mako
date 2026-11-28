@@ -65,6 +65,7 @@ mako-msg profiles [--node <node-id>]                     # list spawnable agent 
 mako-msg send <to-session-id> <message...>               # send a message (or '-' for stdin)
 mako-msg read [--after <id>] [--ack <id>] [--limit <n>]  # read inbox messages
 mako-msg wait [--all-children | --session <id1,id2>] [--from <id>] [--timeout <sec>]
+mako-msg inspect [--turns <n>] <session-id>             # read another agent: status, waits, latest turns
 ```
 
 - Prefer native push notifications and `watch_agent` over polling loops.
@@ -72,7 +73,7 @@ mako-msg wait [--all-children | --session <id1,id2>] [--from <id>] [--timeout <s
 
 ## 4. Built-in `mako` MCP Server Tools
 
-- **Agents**: `list_agents`, `list_agent_profiles`, `spawn_agent`, `send_message`, `read_messages`, `watch_agent`, `stop_agent`
+- **Agents**: `list_agents`, `list_agent_profiles`, `spawn_agent`, `send_message`, `read_messages`, `watch_agent`, `read_agent`, `stop_agent`
 - **Window layout**: `get_layout`, `list_blocks` (returns `plugin_dir`), `patch_layout`, `set_layout`, `undo_layout`
 - **Ephemeral UI**: `show_ui`, `update_ui`, `close_ui` (for temporary forms/views; build a plugin for persistent panels)
 - **Templates**: `save_template` (validates and writes `<configDir>/templates/<name>.md`)

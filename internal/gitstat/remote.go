@@ -57,6 +57,29 @@ func parseConfigBytes(b []byte) *config.Config {
 		if m := s.Option("merge"); m != "" && !plumbing.ReferenceName(m).IsBranch() {
 			s.RemoveOption("merge")
 		}
+		if r := s.Option("rebase"); r != "" && r != "true" && r != "false" && r != "interactive" {
+			s.RemoveOption("rebase")
+		}
+	}
+	for _, s := range stripped.Section("remote").Subsections {
+		fetches := s.OptionAll("fetch")
+		if len(fetches) == 0 {
+			continue
+		}
+		valid := make([]string, 0, len(fetches))
+		for _, f := range fetches {
+			if config.RefSpec(f).Validate() == nil {
+				valid = append(valid, f)
+			}
+		}
+		if len(valid) == len(fetches) {
+			continue
+		}
+		if len(valid) == 0 {
+			s.RemoveOption("fetch")
+		} else {
+			s.SetOption("fetch", valid...)
+		}
 	}
 	var buf bytes.Buffer
 	if format.NewEncoder(&buf).Encode(stripped) != nil {
