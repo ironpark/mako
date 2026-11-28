@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/repotrust"
 )
 
 // repoTrustAsker sends a RepoTrust to the daemon: the client's, or a
@@ -27,6 +28,11 @@ func repoTrust(ctx context.Context, ask repoTrustAsker, nodeID string, args []st
 	path := func() (string, error) {
 		if len(args) != 1 {
 			return "", fmt.Errorf("repo-trust %s needs one path", op)
+		}
+		// Another node's path is of its own system, which this one cannot
+		// make absolute, nor tell is: that node takes it or says why not.
+		if nodeID != "" {
+			return args[0], nil
 		}
 		return filepath.Abs(args[0])
 	}
@@ -61,6 +67,9 @@ func repoTrust(ctx context.Context, ask repoTrustAsker, nodeID string, args []st
 		f := info.GetFiles()[0]
 		printTrustedFile(out, f)
 		if op == "show" {
+			if !f.GetTrusted() {
+				fmt.Fprintf(out, "trust it with: %s\n", protocol.Printable(repotrust.AllowCommand(nodeID, nodePath(f.GetRoot(), f.GetPath()))))
+			}
 			return nil
 		}
 		if f.GetTrusted() {
@@ -102,7 +111,7 @@ func repoTrust(ctx context.Context, ask repoTrustAsker, nodeID string, args []st
 // is, its hash, whether it is trusted, and all it says, every control
 // character made visible, so nothing in it hides a command.
 func printTrustedFile(out io.Writer, f *protocol.TrustedFile) {
-	fmt.Fprintf(out, "%s\n", protocol.Printable(filepath.Join(f.GetRoot(), filepath.FromSlash(f.GetPath()))))
+	fmt.Fprintf(out, "%s\n", protocol.Printable(nodePath(f.GetRoot(), f.GetPath())))
 	fmt.Fprintf(out, "  sha256   %s\n", f.GetSha256())
 	if f.GetTrusted() {
 		fmt.Fprintf(out, "  trusted  yes, since %s\n", f.GetTrustedAt().AsTime().Local().Format(time.DateTime))
@@ -116,6 +125,16 @@ func printTrustedFile(out io.Writer, f *protocol.TrustedFile) {
 		fmt.Fprintln(out)
 	}
 	fmt.Fprintln(out, "----")
+}
+
+// nodePath is the file rel, slash-separated, of the folder root of the
+// node the file is on, joined with the separator root is written with,
+// which on another node may not be this system's.
+func nodePath(root, rel string) string {
+	if strings.Contains(root, `\`) && !strings.Contains(root, "/") {
+		return strings.TrimSuffix(root, `\`) + `\` + strings.ReplaceAll(rel, "/", `\`)
+	}
+	return strings.TrimSuffix(root, "/") + "/" + rel
 }
 
 func shortHash(h string) string {

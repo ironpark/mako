@@ -529,6 +529,10 @@ mako repo-trust                      # list the files you trust
 mako repo-trust revoke ~/src/app     # forget every file of a repository
 ```
 
+With `-node`, give the file's absolute path on that node: mako sends it as
+you typed it. A file of a linked worktree stands for the same file of the
+repository's main work tree, which is the one mako reads and trusts.
+
 The desktop app shows the whole file in a dialog with a Trust button when
 mako skips its commands. The trust is kept on the machine of the
 repository, in `repo-trust.json` in its configuration folder.
