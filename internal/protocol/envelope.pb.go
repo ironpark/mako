@@ -1965,12 +1965,12 @@ type Envelope_RoutineAction struct {
 }
 
 type Envelope_RepoTrust struct {
-	// The user's trust in repositories' command files (revision 54).
-	RepoTrust *RepoTrust `protobuf:"bytes,170,opt,name=repo_trust,json=repoTrust,proto3,oneof"`
+	// The user's trust in repositories' command files (revision 55).
+	RepoTrust *RepoTrust `protobuf:"bytes,178,opt,name=repo_trust,json=repoTrust,proto3,oneof"`
 }
 
 type Envelope_RepoTrustInfo struct {
-	RepoTrustInfo *RepoTrustInfo `protobuf:"bytes,171,opt,name=repo_trust_info,json=repoTrustInfo,proto3,oneof"`
+	RepoTrustInfo *RepoTrustInfo `protobuf:"bytes,179,opt,name=repo_trust_info,json=repoTrustInfo,proto3,oneof"`
 }
 
 func (*Envelope_Hello) isEnvelope_Body() {}
@@ -2465,8 +2465,8 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\broutines\x18\xa8\x01 \x01(\v2\x11.mako.v2.RoutinesH\x00R\broutines\x12@\n" +
 	"\x0eroutine_action\x18\xa9\x01 \x01(\v2\x16.mako.v2.RoutineActionH\x00R\rroutineAction\x124\n" +
 	"\n" +
-	"repo_trust\x18\xaa\x01 \x01(\v2\x12.mako.v2.RepoTrustH\x00R\trepoTrust\x12A\n" +
-	"\x0frepo_trust_info\x18\xab\x01 \x01(\v2\x16.mako.v2.RepoTrustInfoH\x00R\rrepoTrustInfoB\x06\n" +
+	"repo_trust\x18\xb2\x01 \x01(\v2\x12.mako.v2.RepoTrustH\x00R\trepoTrust\x12A\n" +
+	"\x0frepo_trust_info\x18\xb3\x01 \x01(\v2\x16.mako.v2.RepoTrustInfoH\x00R\rrepoTrustInfoB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +

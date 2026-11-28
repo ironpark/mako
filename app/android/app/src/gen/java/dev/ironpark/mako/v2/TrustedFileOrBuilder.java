@@ -12,7 +12,7 @@ public interface TrustedFileOrBuilder extends
 
   /**
    * <pre>
-   * the repository's root, links resolved
+   * the repository's main work tree, links resolved
    * </pre>
    *
    * <code>string root = 1 [json_name = "root"];</code>
@@ -21,7 +21,7 @@ public interface TrustedFileOrBuilder extends
   java.lang.String getRoot();
   /**
    * <pre>
-   * the repository's root, links resolved
+   * the repository's main work tree, links resolved
    * </pre>
    *
    * <code>string root = 1 [json_name = "root"];</code>

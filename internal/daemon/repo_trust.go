@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/repotrust"
 	"github.com/ironpark/mako/internal/transport"
@@ -35,11 +37,14 @@ func (d *Daemon) repoTrustLocal(r *protocol.RepoTrust) (*protocol.RepoTrustInfo,
 	}
 	switch r.GetOp() {
 	case protocol.RepoTrustShow, protocol.RepoTrustAllow:
-		root, rel, err := trustTarget(r.GetPath())
+		root, rel, top, err := trustTarget(r.GetPath())
 		if err != nil {
 			return nil, err
 		}
 		data, err := repotrust.Read(root, rel)
+		if errors.Is(err, fs.ErrNotExist) && top != root {
+			return nil, fmt.Errorf("%s is not in %s, the main work tree of its repository, which mako reads it from for every worktree", rel, root)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -49,7 +54,8 @@ func (d *Daemon) repoTrustLocal(r *protocol.RepoTrust) (*protocol.RepoTrustInfo,
 				return nil, errors.New("trusting a file needs the SHA-256 of the content shown")
 			}
 			if !strings.EqualFold(r.GetSha256(), sum) {
-				return nil, fmt.Errorf("%s changed since it was shown; read it again before trusting it", r.GetPath())
+				return nil, &protocol.CodedError{Code: protocol.CodeChanged,
+					Message: fmt.Sprintf("%s changed since it was shown; read it again before trusting it", r.GetPath())}
 			}
 			rec, err := store.Trust(root, rel, sum)
 			if err != nil {
@@ -68,7 +74,19 @@ func (d *Daemon) repoTrustLocal(r *protocol.RepoTrust) (*protocol.RepoTrustInfo,
 		return &protocol.RepoTrustInfo{Files: []*protocol.TrustedFile{f}}, nil
 	case protocol.RepoTrustRevoke:
 		recs, err := store.Revoke(r.GetPath())
-		return trustedFiles(recs), err
+		if err != nil {
+			return nil, err
+		}
+		// A linked worktree's file, or the worktree, stands for the main
+		// work tree's, as it does to show and trust.
+		if main := mainWorkTreePath(r.GetPath()); main != "" {
+			more, err := store.Revoke(main)
+			if err != nil {
+				return nil, err
+			}
+			recs = append(recs, more...)
+		}
+		return trustedFiles(recs), nil
 	case protocol.RepoTrustList:
 		recs, err := store.List()
 		return trustedFiles(recs), err
@@ -76,26 +94,54 @@ func (d *Daemon) repoTrustLocal(r *protocol.RepoTrust) (*protocol.RepoTrustInfo,
 	return nil, fmt.Errorf("unknown repository trust operation %q", r.GetOp())
 }
 
-// trustTarget is the repository a file is of, by the root of the git work
-// tree it is in, and the file's path from that root.
-func trustTarget(path string) (root, rel string, err error) {
+// trustTarget is the repository a file is of, by its main work tree
+// (gitstat.Repo), and the file's path from the top of the work tree it is
+// in, which top is. What runs a repository's commands reads its command
+// files from its main work tree, for a session in any worktree of it, and
+// checks their trust there. So a file of a linked worktree is taken for
+// the same file of the main work tree, the one read, shown and trusted.
+// A folder whose .git points into a repository that does not list it as
+// a worktree is its own repository.
+func trustTarget(path string) (root, rel, top string, err error) {
 	if err := absolute(path); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	path = filepath.Clean(path)
 	dir, err := filepath.EvalSymlinks(filepath.Dir(path))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	root = gitWorkTreeTop(dir)
-	if root == "" {
-		return "", "", fmt.Errorf("%s is not in a git work tree", path)
+	top, root = gitstat.WorkTree(dir)
+	if top == "" {
+		return "", "", "", fmt.Errorf("%s is not in a git work tree", path)
 	}
-	rel, err = filepath.Rel(root, filepath.Join(dir, filepath.Base(path)))
+	rel, err = filepath.Rel(top, filepath.Join(dir, filepath.Base(path)))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	return root, rel, nil
+	return root, rel, top, nil
+}
+
+// mainWorkTreePath is path, a linked worktree or a file or folder in one,
+// as the same of the main work tree of its repository; "" for a path that
+// is not in a linked worktree.
+func mainWorkTreePath(path string) string {
+	if !filepath.IsAbs(path) {
+		return ""
+	}
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return ""
+	}
+	top, root := gitstat.WorkTree(real)
+	if top == "" || top == root {
+		return ""
+	}
+	rel, err := filepath.Rel(top, real)
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(root, rel)
 }
 
 func trustedFile(r repotrust.Record) *protocol.TrustedFile {

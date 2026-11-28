@@ -1,9 +1,9 @@
 // Package repotrust keeps which command files of repositories the user of
-// a node trusts. A command file is one a repository tracks whose commands
-// mako would run for it on its own, such as the setup_cmd of
-// .mako/worktree.toml. Anyone who can commit to the repository, or an agent
-// working in it, can write one, so mako runs its commands only once the
-// user has read the file and trusted it as it is.
+// a node trusts. A command file is a file a repository tracks that names
+// commands mako would run for it on its own, such as a command to run in
+// each new worktree or on a session's events. Anyone who can commit to the
+// repository, or an agent working in it, can write one, so mako runs its
+// commands only once the user has read the file and trusted it as it is.
 //
 // A trust is of one file of one repository as it reads: the repository's
 // root with its links resolved, the file's path from that root, and the
@@ -26,6 +26,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -47,6 +48,25 @@ type Record struct {
 	Path      string    `json:"path"`   // the file, slash-separated, from Root
 	SHA256    string    `json:"sha256"` // of the content trusted, lowercase hex
 	TrustedAt time.Time `json:"trusted_at"`
+}
+
+// is reports whether r is of the file p of the repository at root, both
+// as Key gives them.
+func (r Record) is(root, p string) bool { return samePath(r.Root, root) && samePath(r.Path, p) }
+
+// foldCase says whether paths are matched without regard to case, as the
+// file systems of macOS and Windows take them by default: there the same
+// repository can be named in two cases, and filepath.EvalSymlinks keeps
+// the case it was given.
+var foldCase = runtime.GOOS == "darwin" || runtime.GOOS == "windows"
+
+// samePath reports whether a and b name the same file, as far as their
+// names tell.
+func samePath(a, b string) bool {
+	if foldCase {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 // stored is the file the records are kept in.
@@ -97,22 +117,30 @@ func Key(root, rel string) (string, string, error) {
 }
 
 // Read reads the file rel of the repository at root to be shown and
-// trusted: a regular file, links followed, of at most MaxSize bytes.
+// trusted: a regular file of at most MaxSize bytes. It is opened from the
+// repository's root with its links resolved, so links in rel are
+// followed only while they stay inside the repository: one that leads
+// out of it, to a file anyone could have put there, is refused.
 func Read(root, rel string) ([]byte, error) {
 	real, p, err := Key(root, rel)
 	if err != nil {
 		return nil, err
 	}
-	full := filepath.Join(real, filepath.FromSlash(p))
+	in, err := os.OpenRoot(real)
+	if err != nil {
+		return nil, err
+	}
+	defer in.Close()
+	name := filepath.FromSlash(p)
 	// Stat first: opening a FIFO waits for a writer.
-	before, err := os.Stat(full)
+	before, err := in.Stat(name)
 	if err != nil {
 		return nil, err
 	}
 	if !before.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", p)
 	}
-	f, err := os.Open(full)
+	f, err := in.Open(name)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +186,7 @@ func (s *Store) Lookup(root, rel string) (Record, bool) {
 	if err != nil {
 		return Record{}, false
 	}
-	i := slices.IndexFunc(files, func(r Record) bool { return r.Root == real && r.Path == p })
+	i := slices.IndexFunc(files, func(r Record) bool { return r.is(real, p) })
 	if i < 0 {
 		return Record{}, false
 	}
@@ -186,7 +214,7 @@ func (s *Store) Trust(root, rel, sum string) (Record, error) {
 		return Record{}, err
 	}
 	rec := Record{Root: real, Path: p, SHA256: sum, TrustedAt: s.now().UTC().Truncate(time.Second)}
-	files = slices.DeleteFunc(files, func(r Record) bool { return r.Root == real && r.Path == p })
+	files = slices.DeleteFunc(files, func(r Record) bool { return r.is(real, p) })
 	files = append(files, rec)
 	if err := s.save(files); err != nil {
 		return Record{}, err
@@ -197,7 +225,7 @@ func (s *Store) Trust(root, rel, sum string) (Record, error) {
 // Revoke forgets the file at path, or every file of the repository whose
 // root is path, and returns the records it forgot. path is taken as it is
 // and with its links resolved, so a repository no longer there is
-// forgotten too.
+// forgotten too, and in any case where the file system ignores case.
 func (s *Store) Revoke(path string) ([]Record, error) {
 	if s == nil {
 		return nil, errors.New("no configuration directory to keep trust in")
@@ -217,7 +245,8 @@ func (s *Store) Revoke(path string) ([]Record, error) {
 	}
 	var gone []Record
 	kept := slices.DeleteFunc(files, func(r Record) bool {
-		match := slices.Contains(names, r.Root) || slices.Contains(names, filepath.Join(r.Root, filepath.FromSlash(r.Path)))
+		file := filepath.Join(r.Root, filepath.FromSlash(r.Path))
+		match := slices.ContainsFunc(names, func(n string) bool { return samePath(n, r.Root) || samePath(n, file) })
 		if match {
 			gone = append(gone, r)
 		}
