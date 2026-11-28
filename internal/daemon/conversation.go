@@ -12,6 +12,8 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/session"
@@ -464,6 +466,36 @@ func (d *Daemon) chatForSession(ctx context.Context, s *session.Session, span tr
 		return transcript.ReadBound(info, path, span)
 	}
 	return transcript.Read(ctx, info, s.TranscriptEnv())
+}
+
+// chatForSaved reads span of a stopped or asleep saved session's conversation.
+func (d *Daemon) chatForSaved(ctx context.Context, info *protocol.SessionInfo, saved savedSession, span transcript.Span) (*protocol.Chat, error) {
+	if !transcript.Supported(info.GetAgent()) || config.IsSSHNodeID(info.GetNodeId()) {
+		return &protocol.Chat{Supported: false}, nil
+	}
+	if saved.TranscriptPath != "" {
+		return transcript.ReadBound(info, saved.TranscriptPath, span)
+	}
+	return transcript.Read(ctx, info, d.savedTranscriptEnv(saved))
+}
+
+func (d *Daemon) savedTranscriptEnv(saved savedSession) map[string]string {
+	req := saved.Request
+	if req == nil {
+		return transcript.Env(os.Environ(), nil)
+	}
+	launch, err := agentspec.ResolveWith(req.GetAgent(), req.GetProfile(), req.GetArgs(), req.GetEnv(), agentspec.ResolveOptions{
+		Model:  req.GetModel(),
+		Effort: req.GetEffort(),
+		Yolo:   req.Yolo,
+	}, d.agents())
+	if err != nil {
+		return transcript.Env(os.Environ(), req.GetEnv())
+	}
+	if d.isolateHome() {
+		_ = agentspec.ApplyIsolatedHome(req.GetAgent(), &launch)
+	}
+	return transcript.Env(os.Environ(), launch.Env)
 }
 
 // usageForSession reads only the tokens of the conversation bound to s,

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -176,13 +177,19 @@ func (d *Daemon) readProjectAgent(ctx context.Context, peer *agentPeer, in readA
 
 	var info *protocol.SessionInfo
 	var read func(context.Context) (*protocol.Chat, error)
-	if s, ok := d.sessions.get(id); ok && d.inProject(scope, s.Info()) {
-		info = s.Info()
-		d.sessionMu.Lock()
-		if saved, ok := d.saved[id]; ok && info.GetParentSessionId() == "" {
-			info.ParentSessionId = saved.ParentID
+	if s, ok := d.sessions.get(id); ok {
+		if !d.inProject(scope, s.Info()) {
+			return readAgentResult{}, errors.New("session is not an agent of this project")
 		}
-		d.sessionMu.Unlock()
+		info = d.withHead(s.Info())
+		if saved, ok := d.savedSession(id); ok {
+			if info.GetParentSessionId() == "" {
+				info.ParentSessionId = saved.ParentID
+			}
+			if info.GetParentNodeId() == "" {
+				info.ParentNodeId = saved.ParentNodeID
+			}
+		}
 		info.AgentMessaging = d.takesMessages(info)
 		read = func(ctx context.Context) (*protocol.Chat, error) {
 			chat, err := d.chatForSession(ctx, s, transcript.Span{})
@@ -192,6 +199,18 @@ func (d *Daemon) readProjectAgent(ctx context.Context, peer *agentPeer, in readA
 			reply := shallow(chat)
 			reply.Usage = withReported(chat.GetUsage(), s.Reported())
 			return reply, nil
+		}
+	} else if saved, ok := d.savedSession(id); ok && saved.Info != nil {
+		savedInfo := proto.CloneOf(saved.Info)
+		savedInfo.ParentSessionId = saved.ParentID
+		savedInfo.ParentNodeId = saved.ParentNodeID
+		if !d.inProject(scope, savedInfo) {
+			return readAgentResult{}, errors.New("session is not an agent of this project")
+		}
+		info = d.withHead(savedInfo)
+		info.AgentMessaging = false
+		read = func(ctx context.Context) (*protocol.Chat, error) {
+			return d.chatForSaved(ctx, info, saved, transcript.Span{})
 		}
 	} else if remote := d.remoteAgent(scope, id); remote != nil {
 		info = remote
@@ -226,7 +245,8 @@ func (d *Daemon) readProjectAgent(ctx context.Context, peer *agentPeer, in readA
 	}
 	out.Session.Usage = agentUsageOf(chat.GetUsage())
 	out.Session.Subagents = agentSubagentsOf(chat.GetAgents())
-	all := agentTurns(chat.GetMessages(), atWorkOrWaiting(info.GetStatus()))
+	active := info.GetState() == protocol.StateRunning && atWorkOrWaiting(info.GetStatus())
+	all := agentTurns(chat.GetMessages(), active)
 	out.Truncated = chat.GetTruncated() || chat.GetStart() > 0
 	if len(all) > turns {
 		out.EarlierTurns = len(all) - turns
@@ -234,7 +254,9 @@ func (d *Daemon) readProjectAgent(ctx context.Context, peer *agentPeer, in readA
 	}
 	kept, dropped := fitTurns(all, readAgentBudget)
 	out.EarlierTurns += dropped
-	out.Turns = kept
+	if len(kept) > 0 {
+		out.Turns = kept
+	}
 	return out, nil
 }
 
@@ -366,17 +388,17 @@ func agentTurns(msgs []*protocol.ChatMessage, active bool) []agentTurn {
 		t := &out[len(out)-1]
 		t.Parts = append(t.Parts, agentPartOf(m))
 	}
+	if n := len(out); n > 0 {
+		last := &out[n-1]
+		if active || hasPending(last.Parts) {
+			last.State = turnInProgress
+		}
+	}
 	for i := range out {
 		t := &out[i]
 		if n := len(t.Parts); n > readAgentParts {
 			t.OmittedParts = n - readAgentParts
 			t.Parts = t.Parts[n-readAgentParts:]
-		}
-	}
-	if n := len(out); n > 0 {
-		last := &out[n-1]
-		if active || hasPending(last.Parts) {
-			last.State = turnInProgress
 		}
 	}
 	return out
