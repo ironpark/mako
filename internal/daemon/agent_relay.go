@@ -130,6 +130,9 @@ func (d *Daemon) remoteSummary(info *protocol.SessionInfo) agentSummary {
 // to: into its inbox when it is this daemon's, else to the daemon of the
 // node it is on, when it is in peer's project there.
 func (d *Daemon) sendAgentMessage(ctx context.Context, peer *agentPeer, to, text string) (agentMessage, error) {
+	if err := d.sandboxReach(peer.id, to, true); err != nil {
+		return agentMessage{}, err
+	}
 	scope := d.projectScope(peer.session.Info())
 	if d.projectAgents.peer(to) != nil {
 		if _, err := d.projectTarget(scope, to); err != nil {

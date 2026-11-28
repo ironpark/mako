@@ -1223,6 +1223,13 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 	}
 
 	tuiCmd, tuiEnv := buildCodexRemoteTUICommand(cfg.split, started.tr, started.remoteAddr, threadID, false)
+	tuiCmd, err = sandboxedTUI(cfg.sandbox, tuiCmd)
+	if err != nil {
+		_ = started.client.Close()
+		stopCodexServerCmd(started.cmd, started.exited)
+		started.tr.cleanupFiles()
+		return nil, err
+	}
 	if agent.IsLoopbackURL(started.remoteAddr) {
 		tmp := agent.Launch{Env: map[string]string{}}
 		if v, ok := cfg.serverEnv["NO_PROXY"]; ok {
@@ -1253,6 +1260,16 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 		tuiCmd:        tuiCmd,
 		tuiEnv:        tuiEnv,
 	}, nil
+}
+
+// sandboxedTUI is the command of a restarted session's TUI, in box when
+// the session is sandboxed, as it was at the start: the TUI runs the
+// session's shell and its ! commands.
+func sandboxedTUI(box *sandbox.Spec, tuiCmd []string) ([]string, error) {
+	if box == nil {
+		return tuiCmd, nil
+	}
+	return sandbox.Command(*box, tuiCmd)
 }
 
 // prepareCodexAppServer starts a per-session `codex app-server` for native Codex

@@ -107,18 +107,12 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 	}
 	// What a session in the sandbox asks runs in it too.
 	d.sessionMu.Lock()
-	if d.sandboxedLocked(strings.TrimSpace(req.GetParentSessionId())) {
-		launch.Sandbox = agentspec.SandboxWorkspace
-	}
+	launch.Sandbox = agentspec.InheritedSandbox(d.saved[strings.TrimSpace(req.GetParentSessionId())].Sandbox, launch.Sandbox)
 	d.sessionMu.Unlock()
 	if launch.Sandbox != "" {
 		if err := sandbox.Supported(); err != nil {
 			return nil, fmt.Errorf("agent %q runs in the workspace sandbox: %w", agentspec.Target(agentName, req.GetProfile()), err)
 		}
-	}
-	sandboxHome, err := d.withSandboxHome(agentName, &launch)
-	if err != nil {
-		return nil, err
 	}
 
 	workDir := req.GetProject()
@@ -148,6 +142,16 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 	}
 	extraDirs := d.projectDirs(workDir)
 	launch.Command = withProjectDirs(agentName, launch.Command, extraDirs)
+	runID := "oneshot-" + newSessionID()
+	if launch.Sandbox != "" {
+		if err := d.checkSandbox(runID, agentName, launch.Sandbox, sandboxRoots(workDir, extraDirs)); err != nil {
+			return nil, err
+		}
+	}
+	sandboxHome, err := d.withSandboxHome(agentName, &launch)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(launch.Command) == 0 {
 		return nil, fmt.Errorf("agent %q has an empty command", agentName)
@@ -164,14 +168,14 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 	var box *sandbox.Spec
 	var tempDir string
 	if launch.Sandbox != "" {
-		spec, removeTemp, err := d.newSandbox("oneshot-"+newSessionID(), agentName, sandboxRoots(workDir, extraDirs), sandboxHome, &launch.Launch)
+		spec, removeTemp, err := d.newSandbox(runID, agentName, launch.Sandbox, sandboxRoots(workDir, extraDirs), sandboxHome, &launch.Launch)
 		if err != nil {
 			return nil, err
 		}
 		defer removeTemp()
 		box, tempDir = spec, spec.Temp
 		if agentName == "codex" {
-			launch.Command = codex.WithoutOwnSandbox(launch.Command)
+			launch.Command = codex.WithoutOwnSandboxTopLevel(launch.Command)
 		}
 	} else {
 		runDir, err := config.RunDir(d.dir)

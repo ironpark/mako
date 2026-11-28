@@ -355,29 +355,49 @@ const FullAccess = "danger-full-access"
 // own sandbox, for a session Mako runs in its workspace sandbox: macOS
 // cannot apply a sandbox inside another, so each command Codex ran in its
 // own would fail. Every -s/--sandbox the command has is set to
-// FullAccess, and one is put first, where a later --full-auto or
-// --approve-for-me leaves it be; a -c override sets it for the app-server
-// and for `codex exec`, which takes no top-level -s. Approval modes stay
-// as they are.
+// FullAccess, in each of its forms (-s X, -sX, -s=X, --sandbox X,
+// --sandbox=X), and so is every -c/--config override of sandbox_mode
+// (-c K=V, -cK=V, -c=K=V, --config K=V, --config=K=V); a -c override put
+// first sets it for the app-server, which takes no -s. Approval modes
+// stay as they are.
 func WithoutOwnSandbox(command []string) []string {
 	if len(command) == 0 {
 		return command
 	}
-	out := []string{command[0], "-c", "sandbox_mode=" + tomlString(FullAccess)}
+	full := "sandbox_mode=" + tomlString(FullAccess)
+	out := []string{command[0], "-c", full}
 	for i := 1; i < len(command); i++ {
 		arg := command[i]
 		if arg == "--" {
 			return append(out, command[i:]...)
 		}
-		switch name, _, hasEq := strings.Cut(arg, "="); {
+		name, value, hasEq := strings.Cut(arg, "=")
+		short := !strings.HasPrefix(arg, "--") && len(arg) > 2
+		switch {
 		case (name == "-s" || name == "--sandbox") && hasEq:
 			out = append(out, name+"="+FullAccess)
 		case (name == "-s" || name == "--sandbox") && i+1 < len(command):
 			out = append(out, name, FullAccess)
 			i++
-		case (name == "-c" || name == "--config") && !hasEq && i+1 < len(command) && isSandboxMode(command[i+1]):
-			out = append(out, arg, "sandbox_mode="+tomlString(FullAccess))
+		case short && strings.HasPrefix(arg, "-s"):
+			out = append(out, "-s"+FullAccess)
+		case (name == "-c" || name == "--config") && hasEq:
+			if isSandboxMode(value) {
+				arg = name + "=" + full
+			}
+			out = append(out, arg)
+		case (name == "-c" || name == "--config") && i+1 < len(command):
+			value := command[i+1]
+			if isSandboxMode(value) {
+				value = full
+			}
+			out = append(out, arg, value)
 			i++
+		case short && strings.HasPrefix(arg, "-c"):
+			if isSandboxMode(arg[2:]) {
+				arg = "-c" + full
+			}
+			out = append(out, arg)
 		default:
 			out = append(out, arg)
 		}
@@ -391,21 +411,29 @@ func isSandboxMode(override string) bool {
 	return strings.TrimSpace(key) == "sandbox_mode"
 }
 
-// WithoutOwnSandboxTUI is WithoutOwnSandbox for an interactive session,
-// whose brand-new TUI sends the sandbox it was started with in
-// thread/start, which only -s sets: one is added when the command has
-// none, as Codex takes it only once.
-func WithoutOwnSandboxTUI(command []string) []string {
-	out := WithoutOwnSandbox(command)
-	for _, arg := range out[min(1, len(out)):] {
+// hasSandboxFlag reports whether command, before any --, has a -s or
+// --sandbox in any of its forms.
+func hasSandboxFlag(command []string) bool {
+	for _, arg := range command[min(1, len(command)):] {
 		if arg == "--" {
-			break
+			return false
 		}
-		if name, _, _ := strings.Cut(arg, "="); name == "-s" || name == "--sandbox" {
-			return out
+		name, _, _ := strings.Cut(arg, "=")
+		if name == "-s" || name == "--sandbox" || !strings.HasPrefix(arg, "--") && strings.HasPrefix(arg, "-s") {
+			return true
 		}
 	}
-	if len(out) == 0 {
+	return false
+}
+
+// WithoutOwnSandboxTopLevel is WithoutOwnSandbox with a top-level -s of
+// FullAccess, added when the command has none, as Codex takes it only
+// once: a brand-new TUI sends the sandbox it was started with in
+// thread/start, which only -s sets, and `codex exec` with --full-auto or
+// --approve-for-me takes Codex's own sandbox back without one.
+func WithoutOwnSandboxTopLevel(command []string) []string {
+	out := WithoutOwnSandbox(command)
+	if len(out) == 0 || hasSandboxFlag(out) {
 		return out
 	}
 	return slices.Insert(out, 1, "-s", FullAccess)

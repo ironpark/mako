@@ -54,6 +54,10 @@ type Daemon struct {
 	// starting are the sessions whose launch is being made ready, each
 	// closed as its start ends; guarded by sessionMu.
 	starting map[string]chan struct{}
+	// sandboxSeeds are the sandboxes sessions about to start for the
+	// first time run in, at least: a rewind's of the session it rewinds.
+	// Guarded by sessionMu; a start takes its own.
+	sandboxSeeds map[string]string
 
 	sessions      *registry
 	codexMu       sync.Mutex

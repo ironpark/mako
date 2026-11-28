@@ -37,7 +37,26 @@ const (
 	// them write to their project but not to the files that would make
 	// code run outside it. See internal/sandbox.
 	SandboxWorkspace = "workspace"
+	// SandboxWorkspaceSSH is SandboxWorkspace with the user's SSH agent,
+	// which lets sessions sign in to SSH hosts and git remotes: what they
+	// run there runs outside the sandbox.
+	SandboxWorkspaceSSH = "workspace-ssh"
 )
+
+// InheritedSandbox is the sandbox a session runs in that a session in the
+// sandbox parent starts, or that is the rewind of one, when its own agent
+// would run it in own: always a sandbox, and the SSH agent only when both
+// give it.
+func InheritedSandbox(parent, own string) string {
+	switch {
+	case parent == "":
+		return own
+	case parent == SandboxWorkspaceSSH && own == SandboxWorkspaceSSH:
+		return SandboxWorkspaceSSH
+	default:
+		return SandboxWorkspace
+	}
+}
 
 // ClaudeSettings holds Claude Code-specific settings for an agent or profile.
 type ClaudeSettings struct {
@@ -68,8 +87,8 @@ type Agent struct {
 	// Yolo skips permission prompts and sandboxing when the agent's driver
 	// supports it. Synchronized with Permission == "yolo" for backward compatibility.
 	Yolo bool `json:"yolo,omitempty"`
-	// Sandbox runs its sessions in an OS sandbox: "workspace", or "" or
-	// "off" for none.
+	// Sandbox runs its sessions in an OS sandbox: "workspace", or
+	// "workspace-ssh" with the user's SSH agent, or "" or "off" for none.
 	Sandbox string `json:"sandbox,omitempty"`
 	// Enabled offers the agent to start sessions with, or not; unset, it
 	// is offered while its program is installed.
@@ -142,8 +161,8 @@ type Profile struct {
 	Permission string `json:"permission,omitempty"`
 	// Yolo overrides the agent's YOLO switch for this profile when set.
 	Yolo *bool `json:"yolo,omitempty"`
-	// Sandbox overrides the agent's sandbox when set: "workspace", or
-	// "off" for none; "" takes the agent's.
+	// Sandbox overrides the agent's sandbox when set: "workspace",
+	// "workspace-ssh", or "off" for none; "" takes the agent's.
 	Sandbox string `json:"sandbox,omitempty"`
 	// ContextServers picks the MCP servers its sessions get, by ID, an
 	// empty list none; unset, they get every server enabled. A server
@@ -222,8 +241,10 @@ func sandboxMode(mode string) (string, error) {
 		return "", nil
 	case SandboxWorkspace:
 		return SandboxWorkspace, nil
+	case SandboxWorkspaceSSH:
+		return SandboxWorkspaceSSH, nil
 	}
-	return "", fmt.Errorf("unknown sandbox %q (want %q or %q)", mode, SandboxWorkspace, SandboxOff)
+	return "", fmt.Errorf("unknown sandbox %q (want %q, %q or %q)", mode, SandboxWorkspace, SandboxWorkspaceSSH, SandboxOff)
 }
 
 // EffectiveYolo reports whether profile p of agent name runs in YOLO mode:
@@ -343,8 +364,8 @@ type Launch struct {
 	// adds its hooks and MCP servers: those are long, and sent with every
 	// state. Nil reports Command.
 	Shown []string
-	// Sandbox is the sandbox the session runs in: SandboxWorkspace, or ""
-	// for none.
+	// Sandbox is the sandbox the session runs in: SandboxWorkspace or
+	// SandboxWorkspaceSSH, or "" for none.
 	Sandbox string
 }
 

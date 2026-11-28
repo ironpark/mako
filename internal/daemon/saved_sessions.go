@@ -451,22 +451,23 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	if err != nil {
 		return nil, err
 	}
-	// A session that ran in the sandbox, or that one in it starts, runs
-	// in it whatever its agent's configuration says.
+	// A session runs in the sandbox it started in, whatever its agent's
+	// configuration says now: its agent's settings and conversation are
+	// in the home of that sandbox, or of none. One that a session in the
+	// sandbox starts, or that rewinds one, runs in it too.
 	d.sessionMu.Lock()
-	prior := d.saved[id]
-	if prior.Sandbox != "" || d.sandboxedLocked(cmp.Or(prior.ParentID, parent)) {
-		launch.Sandbox = agentspec.SandboxWorkspace
-	}
+	prior, resumed := d.saved[id]
+	inherited := cmp.Or(d.saved[cmp.Or(prior.ParentID, parent)].Sandbox, d.sandboxSeeds[id])
+	delete(d.sandboxSeeds, id)
 	d.sessionMu.Unlock()
+	if resumed {
+		launch.Sandbox = prior.Sandbox
+	}
+	launch.Sandbox = agentspec.InheritedSandbox(inherited, launch.Sandbox)
 	if launch.Sandbox != "" {
 		if err := sandbox.Supported(); err != nil {
 			return nil, fmt.Errorf("agent %q runs in the workspace sandbox: %w", agentspec.Target(req.GetAgent(), req.GetProfile()), err)
 		}
-	}
-	sandboxHome, err := d.withSandboxHome(req.GetAgent(), &launch)
-	if err != nil {
-		return nil, err
 	}
 	if req.GetProject() == "" {
 		req.Project, err = os.UserHomeDir()
@@ -484,6 +485,17 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		project = real
 	}
 	req.Project = project
+	// A sandbox that would be refused is refused before its home, or a
+	// worktree, is made for it.
+	if launch.Sandbox != "" {
+		if err := d.checkSandbox(id, req.GetAgent(), launch.Sandbox, sandboxRoots(project, d.projectDirs(project))); err != nil {
+			return nil, err
+		}
+	}
+	sandboxHome, err := d.withSandboxHome(req.GetAgent(), &launch)
+	if err != nil {
+		return nil, err
+	}
 	// A session of its own worktree gets it made once, when it first
 	// starts; the saved request then names it. If startSessionWithParent
 	// fails before the session starts, roll back the freshly created
@@ -615,7 +627,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	d.trustLaunchDirs(req.GetAgent(), req.GetProject(), extraDirs, &launch.Launch)
 	var box *sandbox.Spec
 	if launch.Sandbox != "" {
-		spec, removeTemp, err := d.newSandbox(id, req.GetAgent(), sandboxRoots(req.GetProject(), extraDirs), sandboxHome, &launch.Launch)
+		spec, removeTemp, err := d.newSandbox(id, req.GetAgent(), launch.Sandbox, sandboxRoots(req.GetProject(), extraDirs), sandboxHome, &launch.Launch)
 		if err != nil {
 			cleanup()
 			return nil, err
@@ -627,7 +639,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 			removeTemp()
 		}
 		if req.GetAgent() == "codex" && len(launch.Command) > 0 && isNative("codex", launch.Command[0]) {
-			launch.Command = codex.WithoutOwnSandboxTUI(launch.Command)
+			launch.Command = codex.WithoutOwnSandboxTopLevel(launch.Command)
 			d.withCodexSocket(box, id)
 		}
 	}

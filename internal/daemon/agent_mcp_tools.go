@@ -287,7 +287,7 @@ func (d *Daemon) agentInstructions(peer *agentPeer) string {
 }
 
 func (d *Daemon) usablePluginIDs(peer *agentPeer) []string {
-	if d.plugins == nil || peer == nil || peer.session == nil {
+	if d.plugins == nil || peer == nil || peer.session == nil || d.sandboxed(peer.id) {
 		return nil
 	}
 	scopeCtx := d.sessionScopeContext(peer.session.ID(), peer.session.Info())

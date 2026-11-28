@@ -517,6 +517,26 @@ body = { type = "string", description = "Body text" }
 	if code != 0 || strings.Contains(out, "combine") {
 		t.Fatalf("list with AGENT_MAKO_PLUGINS=none should hide all tools: code=%d out=%q stderr=%q", code, out, stderr)
 	}
+
+	// 6. A sandboxed session has no plugin tools: they run in the daemon,
+	// outside its sandbox.
+	t.Setenv("AGENT_MAKO_PLUGINS", "echo:combine")
+	d.sessionMu.Lock()
+	entry := d.saved[peer.id]
+	entry.Sandbox = agentspec.SandboxWorkspace
+	d.saved[peer.id] = entry
+	d.sessionMu.Unlock()
+	code, out, stderr = runPluginCLI("", "list")
+	if code != 0 || strings.Contains(out, "combine") {
+		t.Fatalf("a sandboxed session listed plugin tools: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	code, out, stderr = runPluginCLI("", "call", "echo", "combine", "--title", "Escaped")
+	if code == 0 || strings.Contains(out, "Escaped") || !strings.Contains(stderr, "sandboxed") {
+		t.Fatalf("a sandboxed session called a plugin tool: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	if ids := d.usablePluginIDs(peer); len(ids) != 0 {
+		t.Fatalf("a sandboxed session is told of plugins %v", ids)
+	}
 }
 
 func TestAgySidecarRejectsUnauthorized(t *testing.T) {

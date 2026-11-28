@@ -83,7 +83,9 @@ func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, tempD
 		Stdin:   prompt,
 		Cleanup: cleanup,
 		Parse: func(stdout, _ []byte) (string, error) {
-			raw, err := os.ReadFile(outPath)
+			// Read in its folder, which in the workspace sandbox the run
+			// could write a link in to a file it may not read.
+			raw, err := readIn(tempDir, filepath.Base(outPath))
 			text := strings.TrimSpace(string(raw))
 			if err != nil || text == "" {
 				text = strings.TrimSpace(string(stdout))
@@ -94,4 +96,14 @@ func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, tempD
 			return text, nil
 		},
 	}, nil
+}
+
+// readIn reads the file name in dir, following no link out of dir.
+func readIn(dir, name string) ([]byte, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	return root.ReadFile(name)
 }

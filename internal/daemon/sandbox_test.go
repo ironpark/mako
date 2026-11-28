@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -185,5 +186,174 @@ func TestTheSandboxHidesTheConfigurationFolderRunUses(t *testing.T) {
 	d.workspace.dir = t.TempDir()
 	if got, _ := d.configDir(); got != d.workspace.dir {
 		t.Fatalf("configDir = %q, want the folder Run loaded %q", got, d.workspace.dir)
+	}
+}
+
+func TestASandboxedSessionReachesOnlyTheSandbox(t *testing.T) {
+	d := New(&config.Config{NodeID: "node"}, slog.New(slog.DiscardHandler))
+	d.sessionMu.Lock()
+	d.saved = map[string]savedSession{
+		"parent":  {Info: &protocol.SessionInfo{Id: "parent"}},
+		"peer":    {Info: &protocol.SessionInfo{Id: "peer"}},
+		"boxed":   {Info: &protocol.SessionInfo{Id: "boxed"}, ParentID: "parent", Sandbox: agentspec.SandboxWorkspace},
+		"sibling": {Info: &protocol.SessionInfo{Id: "sibling"}, ParentID: "parent", Sandbox: agentspec.SandboxWorkspace},
+	}
+	d.sessionMu.Unlock()
+	for _, c := range []struct {
+		from, to string
+		message  bool
+		ok       bool
+	}{
+		{"boxed", "parent", true, true},   // it reports to its parent
+		{"boxed", "parent", false, false}, // but does not read it
+		{"boxed", "peer", true, false},    // nor tells another what to do
+		{"boxed", "peer", false, false},   // nor reads it
+		{"boxed", "remote", true, false},  // nor reaches another node's
+		{"boxed", "sibling", true, true},  // in the sandbox, it may
+		{"boxed", "sibling", false, true}, //
+		{"peer", "boxed", true, true},     // and outside it, all may
+		{"parent", "peer", false, true},   //
+		{"sibling", "boxed", false, true}, //
+		{"boxed", "", true, false},        //
+	} {
+		err := d.sandboxReach(c.from, c.to, c.message)
+		if (err == nil) != c.ok {
+			t.Errorf("sandboxReach(%s, %s, message %v) = %v, want ok %v", c.from, c.to, c.message, err, c.ok)
+		}
+	}
+}
+
+func TestTheSandboxSpecKeepsWhatAgentsOutsideItRun(t *testing.T) {
+	home, makoHome := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("MAKO_HOME", "")
+	t.Setenv("SSH_AUTH_SOCK", filepath.Join(home, "agent.sock"))
+	d := New(&config.Config{NodeID: "node"}, slog.New(slog.DiscardHandler))
+	d.dir = makoHome
+	run, err := config.RunDir(makoHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"pi-hooks-0a1b2c.js", "omp-hooks-0a1b2c.js", "omo-hooks-0a1b2c.js", "opencode-mako-0a1b2c.js", sidecarTokenFile} {
+		if err := os.WriteFile(filepath.Join(run, name), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	spec, err := d.sandboxSpec("s1", "agy", agentspec.SandboxWorkspace, []string{t.TempDir()}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{makoHome, filepath.Join(home, ".mako", "home"), filepath.Join(home, ".mako", "sandbox"), filepath.Join(home, ".ssh")} {
+		if !slices.Contains(spec.Hidden, want) {
+			t.Errorf("Hidden lacks %s: %q", want, spec.Hidden)
+		}
+	}
+	for _, name := range []string{"pi-hooks-0a1b2c.js", "omp-hooks-0a1b2c.js", "omo-hooks-0a1b2c.js", "opencode-mako-0a1b2c.js"} {
+		if !slices.Contains(spec.Readable, filepath.Join(run, name)) {
+			t.Errorf("Readable lacks the hook extension %s: %q", name, spec.Readable)
+		}
+	}
+	if slices.Contains(spec.Readable, filepath.Join(run, sidecarTokenFile)) {
+		t.Errorf("a sandboxed agy reads the sidecar token: %q", spec.Readable)
+	}
+	if slices.Contains(spec.Sockets, os.Getenv("SSH_AUTH_SOCK")) || slices.Contains(spec.Readable, filepath.Join(home, ".ssh", "known_hosts")) {
+		t.Errorf("the SSH agent is in a sandbox that does not give it: %q, %q", spec.Sockets, spec.Readable)
+	}
+	ssh, err := d.sandboxSpec("s1", "agy", agentspec.SandboxWorkspaceSSH, []string{t.TempDir()}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(ssh.Sockets, os.Getenv("SSH_AUTH_SOCK")) || !slices.Contains(ssh.Readable, filepath.Join(home, ".ssh", "known_hosts")) {
+		t.Errorf("the SSH agent is not in the sandbox that gives it: %q, %q", ssh.Sockets, ssh.Readable)
+	}
+	if slices.Contains(ssh.Readable, filepath.Join(home, ".ssh", "id_ed25519")) {
+		t.Errorf("the sandbox reads SSH keys: %q", ssh.Readable)
+	}
+}
+
+func TestAResumedSessionKeepsTheSandboxItStartedIn(t *testing.T) {
+	d, project := sandboxDaemon(t)
+	// One that started before its agent ran in the sandbox: its
+	// conversation is in the home outside it.
+	d.sessionMu.Lock()
+	d.saved["old"] = savedSession{Info: &protocol.SessionInfo{Id: "old", Agent: "claude", Project: project}, Request: &protocol.OpenSession{Agent: "claude", Project: project}}
+	d.sessionMu.Unlock()
+	s, err := d.startSession(t.Context(), "old", &protocol.OpenSession{Agent: "claude", Project: project})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sandboxResult(t, project, s.ID()); got["control-write"] != "yes" || strings.Contains(got["home"], filepath.Join("sandbox", "claude")) {
+		t.Fatalf("a session that started outside the sandbox moved into it: %v", got)
+	}
+	d.sessionMu.Lock()
+	box := d.saved["old"].Sandbox
+	d.sessionMu.Unlock()
+	if box != "" {
+		t.Fatalf("saved sandbox = %q", box)
+	}
+}
+
+func TestARewindKeepsTheSandboxOfTheSession(t *testing.T) {
+	d, project := sandboxDaemon(t)
+	// A sandboxed session of the open profile, as a sandboxed parent's
+	// child is; rewound to before its first turn, it starts anew.
+	d.sessionMu.Lock()
+	d.saved["boxed"] = savedSession{
+		Info:    &protocol.SessionInfo{Id: "boxed", Agent: "claude", Profile: "open", Project: project},
+		Request: &protocol.OpenSession{Agent: "claude", Profile: "open", Project: project},
+		Sandbox: agentspec.SandboxWorkspace,
+	}
+	d.sessionMu.Unlock()
+	info, err := d.rewindSession(t.Context(), &protocol.RewindSession{SessionId: "boxed"})
+	if runtime.GOOS != "darwin" {
+		if !errors.Is(err, sandbox.ErrUnsupported) {
+			t.Fatalf("rewind = %v, want the sandbox's refusal, which only a sandboxed start meets", err)
+		}
+		return
+	}
+	if exec.Command("/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)", "/usr/bin/true").Run() != nil {
+		t.Skip("sandbox-exec cannot apply a profile here, as inside another sandbox")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := sandboxResult(t, project, info.GetId()); got["control-write"] != "no" {
+		t.Fatalf("the rewound session ran outside the sandbox: %v", got)
+	}
+	d.sessionMu.Lock()
+	box := d.saved[info.GetId()].Sandbox
+	d.sessionMu.Unlock()
+	if box != agentspec.SandboxWorkspace {
+		t.Fatalf("saved sandbox = %q", box)
+	}
+}
+
+func TestARefusedSandboxMakesNoHome(t *testing.T) {
+	d, _ := sandboxDaemon(t)
+	// The home folder as the project, which the sandbox refuses.
+	_, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: os.Getenv("HOME")})
+	if err == nil {
+		t.Fatal("a sandboxed session of the home folder started")
+	}
+	if _, err := os.Stat(filepath.Join(os.Getenv("MAKO_HOME"), "sandbox", "claude")); err == nil {
+		t.Fatal("a refused session made its sandbox home")
+	}
+}
+
+func TestARestartedCodexTUIStaysInTheSandbox(t *testing.T) {
+	tui := []string{"codex", "--remote", "unix:///tmp/x.sock", "resume", "t1"}
+	if got, err := sandboxedTUI(nil, tui); err != nil || !slices.Equal(got, tui) {
+		t.Fatalf("an unsandboxed TUI = %q, %v", got, err)
+	}
+	box := &sandbox.Spec{Roots: []string{t.TempDir()}, UserHome: t.TempDir()}
+	got, err := sandboxedTUI(box, tui)
+	if sandbox.Supported() != nil {
+		if got != nil || !errors.Is(err, sandbox.ErrUnsupported) {
+			t.Fatalf("a sandboxed TUI where there is no sandbox = %q, %v", got, err)
+		}
+		return
+	}
+	if err != nil || got[0] != "/usr/bin/sandbox-exec" || !slices.Equal(got[len(got)-len(tui):], tui) {
+		t.Fatalf("a restarted sandboxed TUI = %q, %v", got, err)
 	}
 }
