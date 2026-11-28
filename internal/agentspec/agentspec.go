@@ -54,6 +54,8 @@ type Agent struct {
 	// Yolo skips permission prompts and sandboxing when the agent's driver
 	// supports it. Synchronized with Permission == "yolo" for backward compatibility.
 	Yolo bool `json:"yolo,omitempty"`
+	// Sandbox configures an optional OS-level filesystem sandbox ("", "off", or "workspace").
+	Sandbox string `json:"sandbox,omitempty"`
 	// Enabled offers the agent to start sessions with, or not; unset, it
 	// is offered while its program is installed.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -122,6 +124,8 @@ type Profile struct {
 	Permission string `json:"permission,omitempty"`
 	// Yolo overrides the agent's YOLO switch for this profile when set.
 	Yolo *bool `json:"yolo,omitempty"`
+	// Sandbox overrides the agent's OS-level sandbox mode ("", "off", or "workspace").
+	Sandbox string `json:"sandbox,omitempty"`
 	// ContextServers picks the MCP servers its sessions get, by ID, an
 	// empty list none; unset, they get every server enabled. A server
 	// picked here is given even when turned off for the node.
@@ -293,6 +297,8 @@ type Launch struct {
 	// adds its hooks and MCP servers: those are long, and sent with every
 	// state. Nil reports Command.
 	Shown []string
+	// Sandbox is the resolved OS sandbox mode ("", "off", or "workspace").
+	Sandbox string
 }
 
 // ResolveOptions overrides a profile's or agent's model, effort, and YOLO
@@ -417,9 +423,20 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 	command = append(command, modelArgs(name, path, effectiveModel)...)
 	command = append(command, effortArgs(name, path, effectiveEffort)...)
 
+	effectiveSandbox := a.Sandbox
+	if profile != "" && strings.TrimSpace(p.Sandbox) != "" {
+		if strings.EqualFold(strings.TrimSpace(p.Sandbox), "off") {
+			effectiveSandbox = ""
+		} else {
+			effectiveSandbox = strings.TrimSpace(p.Sandbox)
+		}
+	} else if strings.EqualFold(strings.TrimSpace(effectiveSandbox), "off") {
+		effectiveSandbox = ""
+	}
 	launch := Launch{ContextServers: p.ContextServers,
 		Command: command,
-		Env:     merged}
+		Env:     merged,
+		Sandbox: effectiveSandbox}
 	if effectivePerm == PermissionYOLO {
 		if yoloDriver != nil {
 			yoloDriver.WithYolo(&launch.Launch)

@@ -16,6 +16,7 @@ import (
 	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/policy"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/transport"
@@ -386,6 +387,20 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	case agent.Stopped:
 		d.refreshActivity(s)
 		s.ReportStatus(protocol.AgentDone, msg.Seq)
+		if info := s.Info(); info != nil {
+			hctx := policy.HookContext{
+				SessionID: msg.Session,
+				Agent:     info.GetAgent(),
+				Project:   info.GetProject(),
+				Branch:    info.GetBranch(),
+				Event:     policy.EventTurnDone,
+			}
+			go func() {
+				if err := policy.RunHooks(context.Background(), d.dir, hctx); err != nil {
+					d.log.Warn("hooks: on_turn_done failed", "session", hctx.SessionID, "err", err)
+				}
+			}()
+		}
 	case agent.Ended, agent.Idle:
 		if ev.Kind == agent.Ended || ev.AuthError != nil {
 			d.live.clearSuggestion(msg.Session)
@@ -394,9 +409,52 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		if ev.AuthError != nil {
 			s.ReportAuthError(ev.AuthError, msg.Seq)
 		}
+		if ev.Kind == agent.Ended {
+			if info := s.Info(); info != nil {
+				hctx := policy.HookContext{
+					SessionID: msg.Session,
+					Agent:     info.GetAgent(),
+					Project:   info.GetProject(),
+					Branch:    info.GetBranch(),
+					Event:     policy.EventSessionEnd,
+				}
+				go func() {
+					if err := policy.RunHooks(context.Background(), d.dir, hctx); err != nil {
+						d.log.Warn("hooks: on_session_end failed", "session", hctx.SessionID, "err", err)
+					}
+				}()
+			}
+		}
 	case agent.ChildStarted, agent.ChildStopped:
 		s.ReportSubagent(ev.SessionID, ev.AgentID, ev.Kind == agent.ChildStarted, msg.Seq)
 	case agent.Approval:
+		// Evaluate cross-agent Mako permission policy rules before holding the
+		// approval for user interaction.
+		kind, canon := "", agent.Fields(ev.Input)
+		if tools, ok := agents.As[agent.Tools](name); ok {
+			if k, read := tools.Tool(ev.Tool, ev.Input); read != nil {
+				kind, canon = k, read
+			}
+		}
+		detail := agent.Detail(kind, canon)
+		if dec := policy.Evaluate(d.dir, s.Info().GetProject(), name, kind, ev.Tool, detail); dec.Matched {
+			reply := hookReply{Decision: string(dec.Action), Message: dec.Reason}
+			if len(reply.Output) == 0 {
+				reply.Output = hooks.Reply(reply.Decision, reply.Message)
+			}
+			_ = policy.AppendAudit(d.dir, policy.AuditEntry{
+				Session: msg.Session,
+				Agent:   name,
+				Tool:    ev.Tool,
+				Detail:  detail,
+				Action:  dec.Action,
+				RuleID:  dec.Rule.ID,
+				Rule:    dec.Rule.Name,
+			})
+			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+			_ = json.NewEncoder(conn).Encode(reply)
+			return
+		}
 		if !s.ReportStatus(protocol.AgentWaiting, msg.Seq) {
 			return
 		}

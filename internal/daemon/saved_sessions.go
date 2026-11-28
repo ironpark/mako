@@ -19,6 +19,7 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gitstat"
+	"github.com/ironpark/mako/internal/policy"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/skills"
@@ -531,11 +532,37 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		cleanup()
 		return nil, fmt.Errorf("conversation %s already belongs to another session", conversationID)
 	}
+	if launch.Sandbox != "" {
+		writable := append(policy.DefaultAgentWritableDirs(), extraDirs...)
+		if d.dir != "" {
+			writable = append(writable, d.dir)
+		}
+		wrapped, ok, note := policy.WrapCommand(launch.Sandbox, req.GetProject(), writable, launch.Command)
+		if ok {
+			launch.Command = wrapped
+		} else if note != "" {
+			d.log.Warn("sandbox: fallback", "session", id, "mode", launch.Sandbox, "note", note)
+		}
+	}
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.config().NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
 		Project: req.GetProject(), Command: launch.Command, Shown: launch.Shown, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree(), OnChange: d.pokeStatus})
 	if err != nil {
 		cleanup()
 		return nil, err
+	}
+	if d.dir != "" {
+		hctx := policy.HookContext{
+			SessionID: id,
+			Agent:     req.GetAgent(),
+			Project:   req.GetProject(),
+			Branch:    req.GetWorktree().GetBranch(),
+			Event:     policy.EventSessionStart,
+		}
+		go func() {
+			if err := policy.RunHooks(context.Background(), d.dir, hctx); err != nil {
+				d.log.Warn("hooks: on_session_start failed", "session", id, "err", err)
+			}
+		}()
 	}
 	s.SetConversation(conversationID, transcriptPath)
 	if existed {
