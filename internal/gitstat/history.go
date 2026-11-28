@@ -322,11 +322,6 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 			return "", errors.New("a discard is of one file")
 		}
 		return "", DiscardHunk(r.GetRoot(), r.GetPaths()[0], r.GetHunk())
-	case protocol.GitOpStageHunk, protocol.GitOpUnstageHunk:
-		if len(r.GetPaths()) != 1 {
-			return "", errors.New("staging a hunk is of one file")
-		}
-		return "", StageHunk(ctx, r.GetRoot(), r.GetPaths()[0], r.GetHunk(), r.GetOp() == protocol.GitOpUnstageHunk)
 	case protocol.GitOpCheckpoint, protocol.GitOpRestoreCheckpoint, protocol.GitOpListCheckpoints:
 		out, _, err := runCheckpointOp(ctx, r.GetOp(), r.GetRoot(), r.GetCommit(), r.GetMessage())
 		return out, err

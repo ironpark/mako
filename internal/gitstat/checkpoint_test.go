@@ -6,57 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/ironpark/mako/internal/protocol"
 )
-
-func TestStageAndUnstageHunk(t *testing.T) {
-	root, runGit := cliRepo(t)
-	ctx := context.Background()
-
-	var lines []string
-	for i := range 20 {
-		lines = append(lines, string(rune('a'+i)))
-	}
-	write(t, root, "f.txt", strings.Join(lines, "\n")+"\n")
-	runGit("add", "-A")
-	runGit("commit", "-q", "-m", "init")
-
-	lines[1] = "B"
-	lines[15] = "P"
-	write(t, root, "f.txt", strings.Join(lines, "\n")+"\n")
-
-	d, err := Diff(root, "f.txt", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var hunks [][]*protocol.DiffLine
-	for _, l := range d.GetLines() {
-		if l.GetOp() == "@" {
-			hunks = append(hunks, nil)
-			continue
-		}
-		hunks[len(hunks)-1] = append(hunks[len(hunks)-1], l)
-	}
-	if len(hunks) != 2 {
-		t.Fatalf("expected 2 hunks, got %d", len(hunks))
-	}
-
-	if err := StageHunk(ctx, root, "f.txt", hunks[0], false); err != nil {
-		t.Fatalf("StageHunk: %v", err)
-	}
-	staged := runGit("diff", "--cached")
-	if !strings.Contains(staged, "+B") || strings.Contains(staged, "+P") {
-		t.Fatalf("expected only first hunk staged, got:\n%s", staged)
-	}
-
-	if err := StageHunk(ctx, root, "f.txt", hunks[0], true); err != nil {
-		t.Fatalf("UnstageHunk: %v", err)
-	}
-	if stagedAfter := strings.TrimSpace(runGit("diff", "--cached")); stagedAfter != "" {
-		t.Fatalf("expected empty staged diff after unstage, got:\n%s", stagedAfter)
-	}
-}
 
 func TestCaptureListAndRestoreSnapshot(t *testing.T) {
 	root, runGit := cliRepo(t)
