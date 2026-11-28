@@ -1180,7 +1180,12 @@ func (s *Session) Close() error {
 	var err error
 	if p != nil {
 		p.kill()
-		err = p.Close()
+		// The pump closes the terminal as the program exits, which may be
+		// before this Close takes it out of s.proc: a terminal already closed
+		// is that, not a failure.
+		if err = p.Close(); errors.Is(err, os.ErrClosed) {
+			err = nil
+		}
 	}
 	<-s.done
 	return err
