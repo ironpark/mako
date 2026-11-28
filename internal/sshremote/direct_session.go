@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"os/exec"
 	"slices"
 	"sort"
@@ -184,49 +185,83 @@ func runSSHStdin(ctx context.Context, h config.SSHHost, controlPath, script stri
 }
 
 // AddWorktree creates a new git worktree on the remote SSH host beside repoDir
-// and returns the repository root and created worktree path.
-func AddWorktree(ctx context.Context, h config.SSHHost, controlPath, repoDir, branch, startPoint string) (repoRoot, wtPath string, err error) {
+// and returns the repository root, the created worktree path and its branch.
+// Without a branch it names one as a local worktree's is named: after the
+// repository's folder and a short random ID, such as mako-k3x9q2.
+func AddWorktree(ctx context.Context, h config.SSHHost, controlPath, repoDir, branch, startPoint string) (repoRoot, wtPath, made string, err error) {
 	branch = strings.TrimSpace(branch)
-	if branch == "" {
-		return "", "", fmt.Errorf("worktree branch name is required")
-	}
 	if strings.HasPrefix(branch, "-") {
-		return "", "", fmt.Errorf("invalid worktree branch name %q", branch)
+		return "", "", "", fmt.Errorf("invalid worktree branch name %q", branch)
 	}
 	startPoint = strings.TrimSpace(startPoint)
 	if strings.HasPrefix(startPoint, "-") {
-		return "", "", fmt.Errorf("invalid worktree start point %q", startPoint)
+		return "", "", "", fmt.Errorf("invalid worktree start point %q", startPoint)
 	}
-	safeName := sanitizeWorktreeSlug(branch)
 	var b strings.Builder
 	b.WriteString(remotePathPrelude)
 	b.WriteString("; set -e; ")
 	fmt.Fprintf(&b, "_dir=%s; ", ShellQuote(repoDir))
 	b.WriteString(`_root="$(git -C "$_dir" rev-parse --show-toplevel)"; `)
 	b.WriteString(`_parent="$(dirname "$_root")"; _base="$(basename "$_root")"; `)
-	fmt.Fprintf(&b, `_wt="$_parent/${_base}-"%s; `, ShellQuote(safeName))
-	if startPoint != "" {
-		fmt.Fprintf(&b, `git -C "$_root" worktree add -b %s "$_wt" %s >/dev/null; `, ShellQuote(branch), ShellQuote(startPoint))
+	if branch != "" {
+		fmt.Fprintf(&b, "_branch=%s; ", ShellQuote(branch))
+		fmt.Fprintf(&b, `_wt="$_parent/${_base}-"%s; `, ShellQuote(sanitizeWorktreeSlug(branch)))
 	} else {
-		fmt.Fprintf(&b, `git -C "$_root" worktree add -b %s "$_wt" >/dev/null; `, ShellQuote(branch))
+		// The folder's name as a branch begins with it: each run of what
+		// is not a letter, a digit or _ one -, and "worktree" when nothing
+		// is left; then the first of a few random IDs that names no branch
+		// or folder yet.
+		b.WriteString(`_stem="$(printf '%s' "$_base" | LC_ALL=C tr -c 'A-Za-z0-9_' '-' | sed 's/--*/-/g; s/^-//; s/-$//')"; `)
+		b.WriteString(`[ -n "$_stem" ] || _stem=worktree; _branch=; `)
+		b.WriteString(`for _id in`)
+		for range 8 {
+			b.WriteString(" " + shortID())
+		}
+		b.WriteString(`; do _wt="$_parent/${_base}-${_stem}-$_id"; `)
+		b.WriteString(`if [ ! -e "$_wt" ] && ! git -C "$_root" show-ref --verify --quiet "refs/heads/${_stem}-$_id"; then _branch="${_stem}-$_id"; break; fi; done; `)
+		b.WriteString(`[ -n "$_branch" ] || { echo "no free name for the worktree's branch" >&2; exit 1; }; `)
 	}
-	b.WriteString(`printf 'ROOT=%s\nPATH=%s\n' "$_root" "$_wt"`)
+	if startPoint != "" {
+		fmt.Fprintf(&b, `git -C "$_root" worktree add -b "$_branch" "$_wt" %s >/dev/null; `, ShellQuote(startPoint))
+	} else {
+		b.WriteString(`git -C "$_root" worktree add -b "$_branch" "$_wt" >/dev/null; `)
+	}
+	b.WriteString(`printf 'ROOT=%s\nPATH=%s\nBRANCH=%s\n' "$_root" "$_wt" "$_branch"`)
 
 	out, err := runSSH(ctx, h, controlPath, b.String())
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "ROOT="); ok {
+	for line := range strings.Lines(string(out)) {
+		line = strings.TrimSpace(line)
+		if v, ok := strings.CutPrefix(line, "ROOT="); ok {
 			repoRoot = v
-		} else if v, ok := strings.CutPrefix(strings.TrimSpace(line), "PATH="); ok {
+		} else if v, ok := strings.CutPrefix(line, "PATH="); ok {
 			wtPath = v
+		} else if v, ok := strings.CutPrefix(line, "BRANCH="); ok {
+			made = v
 		}
 	}
-	if wtPath == "" {
-		return "", "", fmt.Errorf("failed to create remote worktree")
+	if wtPath == "" || made == "" {
+		return "", "", "", fmt.Errorf("failed to create remote worktree")
 	}
-	return repoRoot, wtPath, nil
+	return repoRoot, wtPath, made, nil
+}
+
+// idAlphabet and idLen make a worktree's random ID as gitstat makes a
+// local one's.
+const (
+	idAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+	idLen      = 6
+)
+
+// shortID is a random ID of idLen characters of idAlphabet.
+func shortID() string {
+	b := make([]byte, idLen)
+	for i := range b {
+		b[i] = idAlphabet[rand.IntN(len(idAlphabet))]
+	}
+	return string(b)
 }
 
 // EnsureWorktree prepares req.Worktree on a direct SSH host when requested.
@@ -239,12 +274,13 @@ func EnsureWorktree(ctx context.Context, h config.SSHHost, controlPath string, r
 	if start == "" {
 		start = w.GetBase()
 	}
-	root, wtPath, err := AddWorktree(ctx, h, controlPath, req.GetProject(), w.GetBranch(), start)
+	root, wtPath, branch, err := AddWorktree(ctx, h, controlPath, req.GetProject(), w.GetBranch(), start)
 	if err != nil {
 		return err
 	}
 	w.Repo = root
 	w.Path = wtPath
+	w.Branch = branch
 	req.Project = wtPath
 	return nil
 }

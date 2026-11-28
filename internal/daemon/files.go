@@ -256,6 +256,9 @@ func (d *Daemon) gitRunLocal(ctx context.Context, r *protocol.GitRun) (*protocol
 		}
 		return &protocol.GitResult{Output: clonedPath}, nil
 	}
+	if r.GetOp() == protocol.GitOpRemoveWT {
+		return d.removeWorktreeLocal(ctx, r)
+	}
 	return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
 		run := gitstat.Run
 		if r.GetOp() == protocol.GitOpPR {
@@ -270,6 +273,25 @@ func (d *Daemon) gitRunLocal(ctx context.Context, r *protocol.GitRun) (*protocol
 		out, err := run(ctx, r)
 		return &protocol.GitResult{Output: out}, err
 	})
+}
+
+// removeWorktreeLocal removes the worktree r names, which gitstat checks
+// is one git has of its repository, with the changes it has when r says
+// to force it. The repository's teardown_cmd runs only while the user
+// trusts its file as it reads, in time of its own within
+// gitstat.RemoveWorktreeTimeout, more than gitTimeout, so that one that
+// runs out of time does not fail the removal.
+func (d *Daemon) removeWorktreeLocal(ctx context.Context, r *protocol.GitRun) (*protocol.GitResult, error) {
+	if err := absolute(r.GetRoot()); err != nil {
+		return nil, err
+	}
+	if r.GetWorktree() == nil {
+		return nil, errors.New("no worktree named")
+	}
+	ctx, cancel := context.WithTimeout(ctx, gitstat.RemoveWorktreeTimeout)
+	defer cancel()
+	out, err := gitstat.RemoveWorktree(ctx, r.GetWorktree(), gitstat.RemoveWorktreeOptions{Force: r.GetForce(), Trusted: d.repoTrust.Trusted})
+	return &protocol.GitResult{Output: out}, err
 }
 
 func (d *Daemon) gitAuthLocal(ctx context.Context, r *protocol.GitRun) (*protocol.GitResult, error) {

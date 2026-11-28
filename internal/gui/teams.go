@@ -14,6 +14,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -27,8 +28,9 @@ import (
 
 // agentTeam is a team as gui.json keeps it.
 type agentTeam struct {
-	Name    string       `json:"name"`
-	Members []teamMember `json:"members,omitempty"`
+	Name             string       `json:"name"`
+	IsolateWorktrees bool         `json:"isolate_worktrees,omitempty"`
+	Members          []teamMember `json:"members,omitempty"`
 }
 
 // teamMember is one agent of a team: its name, the target it runs (an
@@ -43,7 +45,11 @@ type teamMember struct {
 // what it is asked.
 func teamBrief(team agentTeam) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[Mako team %s: you lead these agents, started as ones you spawned. They report to you with send_message; message them the same way.]\n", team.Name)
+	if team.IsolateWorktrees {
+		fmt.Fprintf(&b, "[Mako team %s: you lead these agents, started as ones you spawned, each in its own isolated git worktree and branch. They report to you with send_message; message them the same way.]\n", team.Name)
+	} else {
+		fmt.Fprintf(&b, "[Mako team %s: you lead these agents, started as ones you spawned. They report to you with send_message; message them the same way.]\n", team.Name)
+	}
 	for _, mb := range team.Members {
 		fmt.Fprintf(&b, "- %s (%s)", mb.Name, targetLabel(mb.Agent))
 		if role := strings.TrimSpace(mb.Role); role != "" {
@@ -78,29 +84,74 @@ func (m *model) teamNamed(name string) (agentTeam, bool) {
 
 // startTeam starts team's agents as ones session parent spawned, in its
 // folder on its node, each with its role and task; and says which did
-// not start.
+// not start. Agents isolated in worktrees start one after another, as
+// the repository's setup_cmd for one could fight another's over the
+// paths they share.
 func (m *model) startTeam(parent string, team agentTeam, task string) {
 	s, ok := m.session(parent)
 	if !ok {
 		return
 	}
 	node := m.remoteID(s.GetNodeId())
-	for _, mb := range team.Members {
-		agent, profile := agentspec.SplitTarget(mb.Agent)
-		req := &protocol.OpenSession{NodeId: node, Agent: agent, Profile: profile, Project: s.GetProject(), Worktree: s.GetWorktree(),
-			Cols: 120, Rows: 36, ParentSessionId: parent, Name: mb.Name, Prompt: memberPrompt(mb, task)}
-		fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
+	reqs := make([]*protocol.OpenSession, len(team.Members))
+	for i, mb := range team.Members {
+		reqs[i] = memberOpen(s, node, team, mb, task)
+	}
+	var open func(i int)
+	open = func(i int) {
+		mb, req := team.Members[i], reqs[i]
+		fetch(m, openTimeout(req, 20*time.Second), func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
 			return c.Open(ctx, req)
 		}, func(info *protocol.SessionInfo, err error) {
+			if team.IsolateWorktrees && i+1 < len(reqs) {
+				defer open(i + 1)
+			}
 			if err != nil {
-				m.toaster.Push(ui.Toast(Tf("%s did not start", mb.Name), err.Error()).Destructive())
+				m.toast(ui.Toast(Tf("%s did not start", mb.Name), err.Error()).Destructive())
 				return
 			}
 			if _, known := m.session(info.GetId()); !known {
 				m.Sessions.Set(append(slices.Clone(ggui.Peek(m.Sessions)), info))
 			}
+			m.noteSkippedHooks(info)
 		})
 	}
+	if team.IsolateWorktrees {
+		if len(reqs) > 0 {
+			open(0)
+		}
+		return
+	}
+	for i := range reqs {
+		open(i)
+	}
+}
+
+// memberOpen is the request that starts mb of team on node, as an agent
+// the leader s spawned, in its folder.
+func memberOpen(s *protocol.SessionInfo, node string, team agentTeam, mb teamMember, task string) *protocol.OpenSession {
+	agent, profile := agentspec.SplitTarget(mb.Agent)
+	project := s.GetProject()
+	wt := s.GetWorktree()
+	if team.IsolateWorktrees {
+		// Off the leader's start and base when it works in a worktree, as
+		// origin/main of base main; otherwise as the repository's base_ref
+		// says, or off its checked-out branch, which the node works out.
+		project = cmp.Or(s.GetWorktree().GetRepo(), s.GetProject())
+		wt = &protocol.Worktree{Base: s.GetWorktree().GetBase(), Start: s.GetWorktree().GetStart()}
+	}
+	return &protocol.OpenSession{NodeId: node, Agent: agent, Profile: profile, Project: project, Worktree: wt,
+		Cols: 120, Rows: 36, ParentSessionId: s.GetId(), Name: mb.Name, Prompt: memberPrompt(mb, task)}
+}
+
+// openTimeout is how long to wait for the session req opens, wait at
+// most when it starts in no new worktree: making one, its setup_cmd
+// included, can take the node gitstat.WorktreeTimeout more.
+func openTimeout(req *protocol.OpenSession, wait time.Duration) time.Duration {
+	if w := req.GetWorktree(); w != nil && w.GetPath() == "" {
+		return wait + gitstat.WorktreeTimeout
+	}
+	return wait
 }
 
 // startable are the teams with agents to start.
@@ -202,10 +253,20 @@ func teamCard(m *model, i, n int, targets ggui.Readable[[]string]) ggui.Widget {
 		})
 	}
 	name := ui.TextField(team(func(t *agentTeam) *string { return &t.Name })).Placeholder(T("Team name")).Name(T("Team name"))
+	isolate := m.Prefs.Field(func(p *prefs) *bool { return &p.Teams[i].IsolateWorktrees })
 	remove := ui.Button(T("Delete team"), func() {
 		m.Prefs.Update(func(p prefs) prefs { p.Teams = slices.Delete(slices.Clone(p.Teams), i, i+1); return p })
 	}).Outline()
-	rows := []ggui.Widget{widget.Box(widget.Row(widget.Expanded(name), remove).Gap(12).Align(widget.AlignCenter)).Pad(12, 16)}
+	isolateRow := widget.Column(
+		ui.Switch(isolate, T("Isolate each member in its own worktree")),
+		muted(widget.Text(T("Gives every teammate a fresh git worktree and branch so parallel edits never collide.")).Size(12)),
+	).Gap(4).Stretch()
+	rows := []ggui.Widget{
+		widget.Box(widget.Column(
+			widget.Row(widget.Expanded(name), remove).Gap(12).Align(widget.AlignCenter),
+			isolateRow,
+		).Gap(10).Stretch()).Pad(12, 16),
+	}
 	for j := range n {
 		agent := ui.Select(member(j, func(mb *teamMember) *string { return &mb.Agent })).BindOptions(targets).Format(targetLabel).Name(T("Agent"))
 		who := ui.TextField(member(j, func(mb *teamMember) *string { return &mb.Name })).Placeholder(T("Name")).Name(T("Name"))

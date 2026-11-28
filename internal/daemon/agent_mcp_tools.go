@@ -31,7 +31,9 @@ type agentSummary struct {
 	Messaging bool   `json:"messaging"`
 	// Folder is where it works: in a project of several folders, which
 	// of them.
-	Folder string `json:"folder,omitempty"`
+	Folder   string `json:"folder,omitempty"`
+	Worktree string `json:"worktree,omitempty"`
+	Branch   string `json:"branch,omitempty"`
 	// Node names the node it is on when it is another's: an agent of the
 	// project there.
 	Node   string `json:"node,omitempty"`
@@ -104,12 +106,15 @@ type listAgentsResult struct {
 	Available   []availableAgent `json:"available"`
 }
 type spawnAgentArgs struct {
-	Agent   string `json:"agent,omitempty" jsonschema:"Agent to launch; defaults to this session's agent. Use list_agent_profiles for spawnable choices on the target node."`
-	Profile string `json:"profile,omitempty" jsonschema:"Exact profile name from list_agent_profiles. Choose a spawnable profile whose description fits the task, and set agent to its owning agent name. Omit for the agent's default settings."`
-	Name    string `json:"name,omitempty"`
-	Node    string `json:"node,omitempty" jsonschema:"Target node ID or name from list_agents/list_agent_profiles to spawn on another node of this project; omit to spawn on this node."`
-	Folder  string `json:"folder,omitempty" jsonschema:"Optional working directory on the target node from that node's folders in this project; omit to use your folder locally or the project's default folder on the target node."`
-	Prompt  string `json:"prompt" jsonschema:"The task for the new agent. It starts in this project's directory (or the chosen project folder on the target node)."`
+	Agent    string `json:"agent,omitempty" jsonschema:"Agent to launch; defaults to this session's agent. Use list_agent_profiles for spawnable choices on the target node."`
+	Profile  string `json:"profile,omitempty" jsonschema:"Exact profile name from list_agent_profiles. Choose a spawnable profile whose description fits the task, and set agent to its owning agent name. Omit for the agent's default settings."`
+	Name     string `json:"name,omitempty"`
+	Node     string `json:"node,omitempty" jsonschema:"Target node ID or name from list_agents/list_agent_profiles to spawn on another node of this project; omit to spawn on this node."`
+	Folder   string `json:"folder,omitempty" jsonschema:"Optional working directory on the target node from that node's folders in this project; omit to use your folder locally or the project's default folder on the target node."`
+	Worktree bool   `json:"worktree,omitempty" jsonschema:"Set true to isolate the spawned agent in a new git worktree on its own branch so parallel code edits do not conflict."`
+	Branch   string `json:"branch,omitempty" jsonschema:"Optional branch name for the new worktree (implies worktree=true). Omit to generate a branch name automatically."`
+	Base     string `json:"base,omitempty" jsonschema:"Optional base branch or commit for the new worktree (e.g. main or origin/main)."`
+	Prompt   string `json:"prompt" jsonschema:"The task for the new agent. It starts in this project's directory (or a dedicated worktree when worktree=true)."`
 }
 type sendMessageArgs struct {
 	To   string `json:"to"`
@@ -163,7 +168,7 @@ func (d *Daemon) agentMCPSnapshot() agentMCPSnapshot {
 	agentSummaryText := summarizeAvailableForSchema(available)
 	listAgentsDesc := "List active and saved agent sessions in this project, on this node and on other nodes of the same project, with their IDs, status and messaging support, plus project nodes (with folders and available agents) and local agent types and profiles."
 	listAgentProfilesDesc := "List only the spawnable agent configurations and profile presets available on this node (or another node of this project via the node parameter), with each preset's target, description, model, effort and YOLO setting, plus other project nodes and their presets. Call this before spawn_agent to pick the best configuration and node for a task."
-	spawnAgentDesc := "Start a new Mako agent session in the current project with a task, on this node or on another node of the same project (pass node and optionally folder from list_agent_profiles or list_agents). First inspect list_agent_profiles and choose a spawnable preset by its description and settings; supply its agent and profile names. The spawned agent runs asynchronously and reports results back via send_message, which Mako pushes into your session automatically across nodes. After spawning, continue other work or end your turn to receive its reply (or register a one-shot notification with watch_agent)."
+	spawnAgentDesc := "Start a new Mako agent session in the current project with a task, on this node or on another node of this project (pass node and optionally folder from list_agent_profiles or list_agents). Pass worktree=true (and optionally branch/base) when delegating parallel code edits so the worker runs in an isolated git worktree without file conflicts. First inspect list_agent_profiles and choose a spawnable preset by its description and settings; supply its agent and profile names. The spawned agent runs asynchronously and reports results back via send_message, which Mako pushes into your session automatically across nodes. After spawning, continue other work or end your turn to receive its reply (or register a one-shot notification with watch_agent)."
 	if agentSummaryText != "" {
 		listAgentsDesc += " Current agents: " + agentSummaryText
 		spawnAgentDesc += " Current choices: " + agentSummaryText

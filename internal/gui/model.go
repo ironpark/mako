@@ -126,6 +126,7 @@ type model struct {
 	AccessNote  *ggui.StateValue[string] // the last access change's outcome
 	AccessKey   *ggui.StateValue[string] // a key being let in, as typed
 	asked       map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
+	hooksNoted  map[string]time.Time     // command files told of as skipped, when; see worktreehooks.go
 	ws          *wsState                 // how the workspace is kept and written down; see wsstate.go
 	prefsWriter *fileWriter              // writes gui.json
 	titleCache  *titleCache              // titles.json; see titlecache.go
@@ -212,7 +213,10 @@ type model struct {
 	openChat ggui.Readable[bool]
 	// An operation that loses work, asking to be sure; see confirm.go.
 	Confirmation *ggui.StateValue[confirmation]
-	AgentsSplit  *ggui.StateValue[float64] // the agents panel's agents over its messages
+	// A repository's command file the user is asked to trust; see
+	// repotrust.go.
+	RepoTrust   *ggui.StateValue[repoTrustAsk]
+	AgentsSplit *ggui.StateValue[float64] // the agents panel's agents over its messages
 
 	SidebarOpen *ggui.StateValue[bool]
 	SidebarPage *ggui.StateValue[string] // "" for Projects/Agents, or "plugin:<id>/<block>" for a sidebar plugin page
@@ -404,6 +408,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		RepoPick:            ggui.State(repoPick{}),
 		// Its functions do not compare: each asking is new.
 		Confirmation:  ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),
+		RepoTrust:     ggui.State(repoTrustAsk{}),
 		AgentsSplit:   ggui.State(0.4),
 		SidebarOpen:   ggui.State(true),
 		SidebarPage:   ggui.State(""),
@@ -876,8 +881,9 @@ func (m *model) startSession(tab string, f newSession) {
 		// Without a branch the node names one after the repository.
 		req.Worktree = &protocol.Worktree{Branch: strings.TrimSpace(f.Branch), Base: f.Base, Start: f.Start}
 	}
+	wait := openTimeout(req, 10*time.Second)
 	ggui.Async(func() (*protocol.SessionInfo, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), wait)
 		defer cancel()
 		c, err := m.link.client(ctx)
 		if err != nil {
@@ -894,6 +900,7 @@ func (m *model) startSession(tab string, f newSession) {
 		}
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
+		m.noteSkippedHooks(info)
 		inMain := slices.Contains(ggui.Peek(m.Tabs), tab)
 		otherKey := ""
 		if tab != "" && !inMain {

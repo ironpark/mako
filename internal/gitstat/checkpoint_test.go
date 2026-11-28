@@ -340,10 +340,11 @@ func TestPreRestoreCheckpointsIsolatedAcrossWorktrees(t *testing.T) {
 	runGit("add", "-A")
 	runGit("commit", "-q", "-m", "init")
 
-	_, wtPath, _, err := AddWorktree(ctx, root, "feat-wt", "HEAD")
+	made, err := AddWorktree(ctx, root, NewWorktree{Branch: "feat-wt", Start: "HEAD"})
 	if err != nil {
 		t.Fatalf("AddWorktree: %v", err)
 	}
+	wtPath := made.Path
 	wtCP := turn(t, wtPath, "sess-wt", "wt turn")
 	write(t, wtPath, "a.txt", "wt-v2\n")
 	safety, err := RestoreSnapshot(ctx, wtPath, wtCP.Commit)

@@ -63,6 +63,62 @@ func TestRepoIsTheMainWorkTree(t *testing.T) {
 	}
 }
 
+// A folder is a linked work tree of a repository only when the repository
+// lists it as one, both ways. A .git file or a commondir file that points
+// into a repository's git directory, as anyone can write one, leaves the
+// folder its own, so nothing checked by the repository's root, such as its
+// trusted commands, is taken for it.
+func TestRepoTakesOnlyAWorktreeItsRepositoryLists(t *testing.T) {
+	root, run := cliRepo(t)
+	write(t, root, "a.txt", "a\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "first")
+	want, _ := filepath.EvalSymlinks(root)
+	linked := filepath.Join(t.TempDir(), "linked")
+	run("worktree", "add", "-q", "-b", "other", linked)
+	// git 2.48 and later can record a worktree by relative paths.
+	relative := filepath.Join(t.TempDir(), "relative")
+	run("-c", "worktree.useRelativePaths=true", "worktree", "add", "-q", "-b", "rel", relative)
+	for _, dir := range []string{linked, relative} {
+		if got := Repo(dir); got != want {
+			t.Errorf("Repo(%s) = %q, want %q", dir, got, want)
+		}
+		if top, repo := WorkTree(filepath.Join(dir, ".")); top != dir || repo != want {
+			t.Errorf("WorkTree(%s) = %q, %q", dir, top, repo)
+		}
+	}
+	gitDir := filepath.Join(root, ".git", "worktrees", "linked")
+
+	// A .git file naming the linked work tree's git directory.
+	spoof := t.TempDir()
+	write(t, spoof, ".git", "gitdir: "+gitDir+"\n")
+	// A git directory of its own whose commondir is the repository's.
+	fake := t.TempDir()
+	write(t, fake, ".git", "gitdir: "+filepath.Join(fake, "g")+"\n")
+	write(t, fake, "g/HEAD", "ref: refs/heads/main\n")
+	write(t, fake, "g/commondir", filepath.Join(root, ".git")+"\n")
+	write(t, fake, "g/gitdir", filepath.Join(fake, ".git")+"\n")
+	// A .git folder whose commondir is the repository's.
+	folder := t.TempDir()
+	write(t, folder, ".git/HEAD", "ref: refs/heads/main\n")
+	write(t, folder, ".git/commondir", filepath.Join(root, ".git")+"\n")
+	dirs := []string{spoof, fake, folder}
+	// A link to the linked work tree's own .git file.
+	link := t.TempDir()
+	if err := os.Symlink(filepath.Join(linked, ".git"), filepath.Join(link, ".git")); err == nil {
+		dirs = append(dirs, link)
+	}
+	for _, dir := range dirs {
+		own, _ := filepath.EvalSymlinks(dir)
+		if got := Repo(dir); got != own {
+			t.Errorf("Repo(%s) = %q, want the folder itself", dir, got)
+		}
+		if _, repo, _, _ := Head(dir); repo != own {
+			t.Errorf("Head(%s) names %q, want the folder itself", dir, repo)
+		}
+	}
+}
+
 // A repository is named the same however its remote reaches it.
 func TestTheRemoteNamesTheRepository(t *testing.T) {
 	for url, want := range map[string]string{

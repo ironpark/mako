@@ -1940,6 +1940,17 @@ var catalogKo = map[string]string{
 	"Command copied":                 "명령어를 복사했습니다",
 	"Run %s on the host":             "호스트에서 %s 실행",
 
+	// Revision 55: trust in a repository's command files
+	"Trust this repository's commands?": "이 저장소의 명령을 신뢰할까요?",
+	"Trust":                             "신뢰",
+	"Trusted":                           "신뢰함",
+	"Already trusted":                   "이미 신뢰함",
+	"SHA-256 %s":                        "SHA-256 %s",
+	"Could not read the repository's commands":                   "저장소의 명령을 읽지 못했습니다",
+	"Mako runs the commands of %s while it reads as you saw it.": "%s 파일이 지금 본 내용 그대로인 동안 Mako가 그 명령을 실행합니다.",
+	"Mako runs the commands this file gives with your permissions. Trust it only if you have read all of it and know what it does. If the file changes, it is not trusted until you trust it again.": "Mako는 이 파일에 적힌 명령을 사용자 권한으로 실행합니다. 파일 전체를 읽고 무엇을 하는지 알 때만 신뢰하세요. 파일이 바뀌면 다시 신뢰할 때까지 신뢰하지 않은 상태가 됩니다.",
+	"The file changed since it was shown. Reload it to read it as it is now, and trust it only once you have read it again.":                                                                         "이 파일은 표시된 뒤에 바뀌었습니다. 다시 읽어 지금 내용을 확인하고, 다시 읽은 뒤에만 신뢰하세요.",
+
 	// Goal status banner and dialog
 	"Goal":                                  "목표",
 	"Paused":                                "일시 중지됨",
@@ -2109,4 +2120,12 @@ var catalogKo = map[string]string{
 	"Sessions at work at once":                "동시에 작업하는 세션 수",
 	"Also run for pull requests and CI runs from forks or outside contributors":                          "포크나 외부 기여자의 풀 리퀘스트와 CI 실행에도 실행",
 	"The event's title, branch and author are given to the agent after the prompt, marked as untrusted.": "이벤트의 제목, 브랜치, 작성자는 프롬프트 뒤에 신뢰할 수 없는 데이터로 표시되어 에이전트에 전달됩니다.",
+
+	// Worktree isolation
+	"Isolate each member in its own worktree":                                               "각 팀원을 별도 워크트리로 격리",
+	"Gives every teammate a fresh git worktree and branch so parallel edits never collide.": "팀원마다 새 Git 워크트리와 브랜치를 만들어 병렬 수정 시 파일 충돌을 방지합니다.",
+	"Worktree setup skipped":                                                                "워크트리 설정 명령을 건너뜀",
+	"Review…":                                                                               "검토…",
+	"%s is not trusted, so its setup_cmd did not run.":                                      "%s 파일을 신뢰하지 않아 setup_cmd를 실행하지 않았습니다.",
+	"Mako made the worktree but did not run the setup_cmd this file gives, since you have not trusted the file as it reads. Once you trust it, it runs for the worktrees made after.": "Mako가 워크트리는 만들었지만, 이 파일을 지금 내용 그대로 신뢰하지 않았기 때문에 파일에 적힌 setup_cmd는 실행하지 않았습니다. 신뢰하면 이후에 만드는 워크트리부터 실행합니다.",
 }

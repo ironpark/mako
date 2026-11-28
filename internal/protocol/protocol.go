@@ -146,6 +146,16 @@ const (
 	TypeListRoutines          Type = "list_routines"
 	TypeRoutines              Type = "routines"
 	TypeRoutineAction         Type = "routine_action"
+	TypeRepoTrust             Type = "repo_trust"
+	TypeRepoTrustInfo         Type = "repo_trust_info"
+)
+
+// The ops of a RepoTrust.
+const (
+	RepoTrustShow   = ""       // the file at path, as it reads, and whether it is trusted so
+	RepoTrustAllow  = "trust"  // the file at path as it reads, which must hash to sha256
+	RepoTrustRevoke = "revoke" // the file at path, or every file of the repository there
+	RepoTrustList   = "list"   // every file trusted
 )
 
 // Newer reports whether the edit made at version v on node is newer than
@@ -451,8 +461,8 @@ func WriteError(w io.Writer, id string, err error) error {
 
 // Codes of an Error.
 const (
-	// CodeChanged is a WriteFile refused because the file changed since it
-	// was read.
+	// CodeChanged is a WriteFile, or a RepoTrust that trusts a file,
+	// refused because the file changed since it was read.
 	CodeChanged = "changed"
 	// CodeUnsupported is a request its daemon does not know, being older
 	// than the requester.

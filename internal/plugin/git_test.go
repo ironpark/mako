@@ -182,9 +182,13 @@ func TestGitReadForgeAndAsyncRun(t *testing.T) {
 	fg := newFakeGitHost()
 	var ranWorktree atomic.Bool
 	var ranOp atomic.Value
+	var forcedRemove atomic.Bool
 	fg.runFn = func(_ context.Context, _ GitTarget, r *protocol.GitRun, wt bool) (string, error) {
 		ranOp.Store(r.GetOp())
 		ranWorktree.Store(wt)
+		if r.GetOp() == protocol.GitOpRemoveWT {
+			forcedRemove.Store(r.GetForce())
+		}
 		if r.GetOp() == protocol.GitOpPush {
 			return "", errors.New("rejected by remote")
 		}
@@ -235,6 +239,7 @@ scope = "folder"
           ui.button("Commit").onTap("commit"),
           ui.button("Push").onTap("push"),
           ui.button("BadOp").onTap("badop"),
+          ui.button("RemoveWT").onTap("removewt"),
         ]);
       },
       on: {
@@ -249,6 +254,10 @@ scope = "folder"
         async badop(state) {
           const ctx = mako.blocks.context("panel");
           await ctx.git.run({ op: "discard_hunk" });
+        },
+        async removewt(state) {
+          const ctx = mako.blocks.context("panel");
+          await ctx.git.run({ op: "remove_worktree", force: true, worktree: true });
         },
       },
     });
@@ -308,6 +317,19 @@ scope = "folder"
 	w.until("gitDone push error", func(tr *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		return hasText(tr, "done=push:false::rejected by remote")
 	})
+
+	// A plugin's remove_worktree never forces the removal, which would
+	// lose the worktree's work.
+	removeBtn := find(tree, "RemoveWT")
+	if _, err := r.m.Event(ctx, &protocol.BlockEvent{Block: "plugin:gitplug/panel", Scope: scopeKey, Node: removeBtn.GetId(), Kind: "tap"}); err != nil {
+		t.Fatalf("remove tap failed: %v", err)
+	}
+	w.until("gitDone remove_worktree", func(tr *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(tr, "done=remove_worktree:true:")
+	})
+	if forcedRemove.Load() {
+		t.Fatal("a plugin's remove_worktree was forced")
+	}
 }
 
 func TestGitWatchDebounceDirtyReloadAndCleanup(t *testing.T) {

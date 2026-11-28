@@ -255,7 +255,7 @@ error { message: "unknown session \"7f3a…\"", code: "" }
 
 | Code | Meaning |
 |---|---|
-| `changed` | A `write_file` was refused because the file changed since the writer read it. |
+| `changed` | A `write_file` was refused because the file changed since the writer read it, or a `repo_trust` `trust` because the file changed since it was shown (revision 55). |
 | `unsupported` | The daemon does not know the request's type; it predates the caller. |
 | `no_plugin` | A `watch_block` or `block_event` of a plugin the node does not have, or a node that runs no plugins: asking again changes nothing until the plugin is installed (revision 31). |
 
@@ -556,12 +556,21 @@ instead, which is routed.
 for that launch. `project`
 is the working directory; empty starts in the node's home. `args` and `env` add
 to the node's own. `cols` and `rows` size the PTY. With `worktree` set, the
-daemon first makes a git worktree on a new `branch` from `base` (the
-branch checked out when empty), or from the commit `start` when set, in the
-repository `project` is in, and starts there. If `branch` is empty, the
+daemon first makes a git worktree on a new `branch` in the repository
+`project` is in, and starts there. The worktree starts at the commit `start`
+when set, else at `base`. If both are empty, it starts at the repository's
+`base_ref` from `.mako/worktree.toml`, else at `project`'s HEAD. If `base` is
+empty, the daemon sets it to the local branch the worktree came off: `main`
+for a `base_ref` of `origin/main`, or else the branch `project` has checked
+out. If `branch` is empty, the
 daemon names it after the repository's folder and a random 6-character ID,
 for example `mako-k3x9q2`. The session's `worktree` reports that name.
 `base` stays the branch the worktree merges and opens its pull request into.
+The repository's `.mako/worktree.toml` can give a `setup_cmd`. The daemon
+runs it only if the user trusts that file as it reads (Repository trust).
+If not, the daemon makes the worktree without it and sets the worktree's
+`skipped_hooks` to the file's absolute path. A daemon that does not know
+`skipped_hooks` leaves it empty, so it needs no revision.
 
 **`SessionInfo`** is what listings and most replies describe a session with.
 The fields a front-end usually needs:
@@ -831,7 +840,7 @@ leaves the commits out.
 | `stash`, `stash_apply`, `stash_pop`, `stash_drop` | Stash every change, untracked files too, as `message`; or apply, pop or drop stash `stash`. |
 | `detach`, `cherry_pick`, `revert`, `tag` | Of `commit`: check it out on no branch, apply it, undo it as a new commit, or tag it `tag` (annotated with `message`). |
 | `continue`, `abort` | Go on with the `operation` under way, adding what was resolved, or abandon it. |
-| `merge`, `pull_request`, `remove_worktree` | Of a session's `worktree`: merge its branch into its base, push it and open a pull request, or remove it once nothing is left in it. |
+| `merge`, `pull_request`, `remove_worktree` | Of a session's `worktree`: merge its branch into its base, push it and open a pull request, or remove it once nothing is left in it. Removing refuses a `worktree` whose `path` is not a worktree that git lists for the main work tree `repo`, or whose `branch` is not a branch name. It refuses a worktree with changes before it does anything else, unless `force`, which also deletes the branch when it is not merged; a plugin's request is never forced. Then it runs the repository's `teardown_cmd` if the user trusts its file, and takes out the links and unchanged copies the bootstrap made. The `teardown_cmd` has two minutes of the removal's three, so one that runs out of time does not fail the removal. If the `teardown_cmd` did not run or failed, the worktree is still removed, and the output ends with a line that says so. |
 | `list_checkpoints`, `restore_checkpoint` | List turn and pre-restore code checkpoints for session `message` at `root` as JSON, or restore `root` to checkpoint `commit` after capturing a pre-restore safety snapshot returned as JSON (revision 53). |
 
 Diff lines are `{op, text, old, new}`, where `op` is `+`, `-`, a space for
@@ -841,6 +850,41 @@ side, 0 where a line has none.
 A `git_diff` with `pull` set is a file of that pull request's change, read
 from its forge as the Forges section says; `commit` is then the pull request's
 head as the asker saw it.
+
+### Repository trust
+
+A command file is a file in a repository that names commands for mako to
+run for it on its own, such as a command to run in each new worktree or
+on a session's events. Each feature that reads such a file says which
+file it reads. Anyone who can commit to the repository can write one. An
+agent that works in it can write one too. So a node runs these commands
+only while its user trusts the file as it reads now.
+
+A trust is for one file of one repository. The node keeps it by three
+values: the root of the repository's main work tree with its links
+resolved, the path of the file from that root (slash-separated), and the
+SHA-256 of the file's content. On macOS and Windows, whose file systems
+ignore case by default, the node matches the root and the path without
+regard to case. The node keeps these in `repo-trust.json` in its
+configuration directory. When the file changes, it is not trusted. The
+user must trust it again as it reads then. The node reads the file from
+the repository's root, and follows a link in its path only while the
+link stays inside the repository. These requests need revision 55.
+
+| Request | Payload | Reply | |
+|---|---|---|---|
+| `repo_trust` | `RepoTrust` | `repo_trust_info` | Shows, trusts, forgets or lists command files, by `op`. Routed by `node_id`. A direct SSH host keeps no trust. |
+
+| `op` | |
+|---|---|
+| `""` | Show the file at `path` (absolute). Its repository is the main work tree of the git work tree it is in. A file of a linked worktree stands for the same file of the main work tree, which is the one shown and trusted: features read a repository's command files from its main work tree, for a session in any worktree of it. A folder whose `.git` points into a repository that does not list it as a worktree, both ways, is a repository of its own. The reply gives its `root`, `path`, `sha256` and `content` as it reads now, and `trusted` if the user trusts it as it reads now. |
+| `trust` | Trust the file at `path` as it reads now. Its content must hash to `sha256`, the content the user saw. If the file changed, the node refuses with code `changed`, and the front-end shows the file again before it asks again. |
+| `revoke` | Forget the file at `path`, or every file of the repository whose root is `path`, also when the repository is gone. A path in a linked worktree stands for the same path of the main work tree. |
+| `list` | List every file trusted, with the hash it is trusted at. |
+
+A front-end shows the user the whole file before it asks to trust it,
+with its control characters made visible (`protocol.Printable`). The MCP
+tools of agents cannot trust a file.
 
 ### Forges
 
@@ -1169,7 +1213,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 46) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 55) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end

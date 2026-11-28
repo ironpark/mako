@@ -295,12 +295,17 @@ func (x *OpenSession) GetYolo() bool {
 
 // Worktree is a git worktree made for one session.
 type Worktree struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Repo          string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`     // the main work tree
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`     // the session's, once made
-	Branch        string                 `protobuf:"bytes,3,opt,name=branch,proto3" json:"branch,omitempty"` // made for the session
-	Base          string                 `protobuf:"bytes,4,opt,name=base,proto3" json:"base,omitempty"`     // the branch it merges into, or opens a pull request into; empty for HEAD's
-	Start         string                 `protobuf:"bytes,5,opt,name=start,proto3" json:"start,omitempty"`   // the commit it starts at, when not base, as a pull request's head
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Repo   string                 `protobuf:"bytes,1,opt,name=repo,proto3" json:"repo,omitempty"`     // the main work tree
+	Path   string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`     // the session's, once made
+	Branch string                 `protobuf:"bytes,3,opt,name=branch,proto3" json:"branch,omitempty"` // made for the session
+	Base   string                 `protobuf:"bytes,4,opt,name=base,proto3" json:"base,omitempty"`     // the branch it merges into, or opens a pull request into; empty for HEAD's
+	Start  string                 `protobuf:"bytes,5,opt,name=start,proto3" json:"start,omitempty"`   // the commit it starts at, when not base, as a pull request's head
+	// skipped_hooks is the repository's command file, an absolute path on
+	// the node, whose setup_cmd mako did not run as it made the worktree,
+	// since the user does not trust the file as it reads (RepoTrust); ""
+	// when none was skipped, as a daemon that does not know it leaves it.
+	SkippedHooks  string `protobuf:"bytes,6,opt,name=skipped_hooks,json=skippedHooks,proto3" json:"skipped_hooks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -366,6 +371,13 @@ func (x *Worktree) GetBase() string {
 func (x *Worktree) GetStart() string {
 	if x != nil {
 		return x.Start
+	}
+	return ""
+}
+
+func (x *Worktree) GetSkippedHooks() string {
+	if x != nil {
+		return x.SkippedHooks
 	}
 	return ""
 }
@@ -3822,13 +3834,14 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\a\n" +
-	"\x05_yolo\"t\n" +
+	"\x05_yolo\"\x99\x01\n" +
 	"\bWorktree\x12\x12\n" +
 	"\x04repo\x18\x01 \x01(\tR\x04repo\x12\x12\n" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\tR\x05start\"\xcd\v\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\x12#\n" +
+	"\rskipped_hooks\x18\x06 \x01(\tR\fskippedHooks\"\xcd\v\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +

@@ -15,7 +15,9 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/repotrust"
 	"rsc.io/qr"
 )
 
@@ -92,6 +94,14 @@ Access (trust runs one way: a node you let in can drive this one):
   mako trust <public key line>      let a key in, as authorized_keys writes it
   mako revoke <fingerprint>         take a key out
 
+Repository commands (a file a repository tracks that names commands for mako
+to run on its own has them run only while you trust it as it reads):
+  mako repo-trust [list]            list the command files trusted
+  mako repo-trust show <file>       print a command file, and whether it is trusted
+  mako repo-trust allow <file>      print a command file, ask, and trust it as it reads
+  mako repo-trust revoke <file|repo>
+                                     forget a file, or every file of a repository
+
 Plugins (docs/plugins.md; each a folder of plugins/ in the configuration directory):
   mako plugins                      list this node's plugins and how they stand
   mako plugins grant <id>           allow what a plugin asks for
@@ -129,6 +139,8 @@ Flags:
   -daemon <path>   the daemon's socket (default: the configuration directory's)
   -node <id>       run on / target this node instead of the local one
   -project <dir>   working directory for a new session (default: cwd)
+  -worktree        with run, start the session in a new git worktree
+  -branch <name>   with run, branch name for the new worktree (implies -worktree)
   -device <dev>    with run, borrow a device for the session (repeatable,
                     or comma-separated)
 `
@@ -137,6 +149,8 @@ func main() {
 	daemonAddr := flag.String("daemon", "", "the daemon's socket")
 	nodeID := flag.String("node", "", "target node ID")
 	project := flag.String("project", "", "project directory")
+	worktree := flag.Bool("worktree", false, "start run session in a new git worktree")
+	branch := flag.String("branch", "", "branch name for the new worktree (implies -worktree)")
 	var devices deviceFlag
 	flag.Var(&devices, "device", "a device to borrow for the session")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
@@ -148,13 +162,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(args, *daemonAddr, *nodeID, *project, devices); err != nil {
+	if err := run(args, *daemonAddr, *nodeID, *project, *worktree || strings.TrimSpace(*branch) != "", strings.TrimSpace(*branch), devices); err != nil {
 		fmt.Fprintln(os.Stderr, "mako:", protocol.Printable(err.Error()))
 		os.Exit(1)
 	}
 }
 
-func run(args []string, daemonAddr, nodeID, project string, devices []string) error {
+func run(args []string, daemonAddr, nodeID, project string, useWorktree bool, branch string, devices []string) error {
 	if args[0] == "plugins" && len(args) > 1 && publishOps[args[1]] {
 		return publish(args[1], args[2:])
 	}
@@ -200,7 +214,7 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 		if len(args) < 2 {
 			return fmt.Errorf("run needs an agent name")
 		}
-		return runAgent(ctx, c, nodeID, project, args[1], args[2:], devices)
+		return runAgent(ctx, c, nodeID, project, useWorktree, branch, args[1], args[2:], devices)
 	case "attach":
 		if len(args) < 2 {
 			return fmt.Errorf("attach needs a session ID")
@@ -260,6 +274,8 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 			return fmt.Errorf("revoke needs a key's fingerprint")
 		}
 		return access(ctx, c, &protocol.Access{Op: "revoke", Key: args[1]})
+	case "repo-trust":
+		return repoTrust(ctx, c.RepoTrust, nodeID, args[1:], os.Stdin, os.Stdout)
 	case "devices":
 		return listDevices(ctx, c)
 	case "borrow":
@@ -493,7 +509,7 @@ func listSessions(ctx context.Context, c *client.Client) error {
 	return nil
 }
 
-func runAgent(ctx context.Context, c *client.Client, nodeID, project, target string, extra, devices []string) error {
+func runAgent(ctx context.Context, c *client.Client, nodeID, project string, useWorktree bool, branch, target string, extra, devices []string) error {
 	agent, profile := agentspec.SplitTarget(target)
 	// "mako run <agent> -- args" separates agent arguments; the separator
 	// itself is not one of them.
@@ -513,7 +529,7 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project, target str
 	}
 	cols, rows := client.WindowSize()
 
-	info, err := c.Open(ctx, &protocol.OpenSession{
+	req := &protocol.OpenSession{
 		Devices: devices,
 		NodeId:  nodeID,
 		Agent:   agent,
@@ -522,12 +538,40 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project, target str
 		Args:    extra,
 		Cols:    uint32(cols),
 		Rows:    uint32(rows),
-	})
+	}
+	openCtx := ctx
+	if useWorktree {
+		req.Worktree = &protocol.Worktree{Branch: branch}
+		// The node makes the worktree first, the repository's setup_cmd
+		// included, which takes longer than a node waits for another's
+		// reply to a request with no deadline.
+		var cancel context.CancelFunc
+		openCtx, cancel = context.WithTimeout(ctx, worktreeOpenWait)
+		defer cancel()
+	}
+	info, err := c.Open(openCtx, req)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "[mako] session %s on %s\r\n", info.GetId(), short(info.GetNodeId()))
+	fmt.Fprint(os.Stderr, skippedHooksNotice(nodeID, info.GetWorktree()))
 	return c.Attach(ctx, &protocol.Attach{SessionId: info.GetId(), NodeId: nodeID, Replay: false})
+}
+
+// worktreeOpenWait is how long mako run waits for a session that starts
+// in a new worktree: what making the worktree can take, and its start.
+const worktreeOpenWait = gitstat.WorktreeTimeout + 30*time.Second
+
+// skippedHooksNotice says, for a worktree made without its repository's
+// setup_cmd, which file was not trusted and how to trust it; "" for any
+// other.
+func skippedHooksNotice(nodeID string, w *protocol.Worktree) string {
+	f := w.GetSkippedHooks()
+	if f == "" {
+		return ""
+	}
+	return fmt.Sprintf("[mako] the setup_cmd of %s did not run: the file is not trusted as it reads\r\n"+
+		"[mako] review it and trust it with: %s\r\n", protocol.Printable(f), protocol.Printable(repotrust.AllowCommand(nodeID, f)))
 }
 
 func short(id string) string {

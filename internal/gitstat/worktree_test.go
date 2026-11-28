@@ -19,13 +19,14 @@ func TestWorktreeLifecycle(t *testing.T) {
 	run("add", "-A")
 	run("commit", "-q", "-m", "first")
 
-	if _, _, _, err := AddWorktree(ctx, root, "-x", ""); err == nil {
+	if _, err := AddWorktree(ctx, root, NewWorktree{Branch: "-x"}); err == nil {
 		t.Fatal("an option taken for a branch")
 	}
-	repo, path, made, err := AddWorktree(ctx, root, "feat/x", "main")
+	wt, err := AddWorktree(ctx, root, NewWorktree{Branch: "feat/x", Start: "main"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	repo, path, made := wt.Repo, wt.Path, wt.Branch
 	if made != "feat/x" || repo != root && !sameDir(repo, root) || filepath.Base(path) != "feat-x" || filepath.Base(filepath.Dir(path)) != filepath.Base(root)+".worktrees" {
 		t.Fatalf("repo %s path %s branch %s", repo, path, made)
 	}
@@ -56,7 +57,7 @@ func TestWorktreeLifecycle(t *testing.T) {
 	}
 
 	w := &protocol.Worktree{Repo: repo, Path: path, Branch: "feat/x", Base: "main"}
-	if _, err := RemoveWorktree(ctx, w); err == nil {
+	if _, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{}); err == nil {
 		t.Fatal("removed a worktree with changes")
 	}
 	os.Remove(filepath.Join(path, "b.txt"))
@@ -66,7 +67,7 @@ func TestWorktreeLifecycle(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(root, "a.txt")); string(b) != "one\nTWO\n" {
 		t.Fatalf("merged a.txt %q", b)
 	}
-	if _, err := RemoveWorktree(ctx, w); err != nil {
+	if _, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -87,10 +88,11 @@ func TestWorktreeWithoutBranchIsNamedAfterRepo(t *testing.T) {
 	named := regexp.MustCompile(`^` + regexp.QuoteMeta(branchStem(filepath.Base(root))) + `-[0-9a-z]{6}$`)
 	seen := map[string]bool{}
 	for range 2 {
-		_, path, made, err := AddWorktree(ctx, root, "", "main")
+		wt, err := AddWorktree(ctx, root, NewWorktree{Start: "main"})
 		if err != nil {
 			t.Fatal(err)
 		}
+		path, made := wt.Path, wt.Branch
 		t.Cleanup(func() { os.RemoveAll(filepath.Dir(path)) })
 		if !named.MatchString(made) || filepath.Base(path) != made || Branch(path) != made || seen[made] {
 			t.Fatalf("branch %q path %s", made, path)

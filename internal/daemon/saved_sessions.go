@@ -469,23 +469,29 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	var createdWorktree *protocol.Worktree
 	startedOK := false
 	if w := req.GetWorktree(); w != nil && w.GetPath() == "" {
-		if w.GetBase() == "" {
-			w.Base = gitstat.Branch(project)
-		}
-		wtCtx, cancel := context.WithTimeout(ctx, time.Minute)
-		repo, path, branch, err := gitstat.AddWorktree(wtCtx, project, w.GetBranch(), cmp.Or(w.GetStart(), w.GetBase()))
+		wtCtx, cancel := context.WithTimeout(ctx, gitstat.WorktreeTimeout)
+		// It starts at the start or base the request names, or the
+		// repository's base_ref, or the project's HEAD. The repository's
+		// setup_cmd runs only while the user trusts its file as it reads;
+		// the worktree says it was skipped otherwise.
+		made, err := gitstat.AddWorktree(wtCtx, project, gitstat.NewWorktree{Branch: w.GetBranch(), Start: cmp.Or(w.GetStart(), w.GetBase()), Base: w.GetBase(), Trusted: d.repoTrust.Trusted})
 		cancel()
 		if err != nil {
 			return nil, err
 		}
-		w.Repo, w.Path, w.Branch = repo, path, branch
+		w.Repo, w.Path, w.Branch, w.SkippedHooks = made.Repo, made.Path, made.Branch, made.SkippedHooks
+		w.Base = made.Base
+		if w.GetStart() == "" && made.Start != w.GetBase() {
+			w.Start = made.Start // as origin/main, of base main
+		}
 		req.Project = w.GetPath()
 		createdWorktree = proto.CloneOf(w)
 		defer func() {
 			if !startedOK && createdWorktree != nil {
-				rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				// Its teardown_cmd undoes what its setup_cmd did.
+				rmCtx, rmCancel := context.WithTimeout(context.Background(), gitstat.RemoveWorktreeTimeout)
 				defer rmCancel()
-				if _, rmErr := gitstat.RemoveWorktree(rmCtx, createdWorktree); rmErr != nil {
+				if _, rmErr := gitstat.RemoveWorktree(rmCtx, createdWorktree, gitstat.RemoveWorktreeOptions{Trusted: d.repoTrust.Trusted}); rmErr != nil {
 					d.log.Warn("failed to roll back worktree after session start error", "path", createdWorktree.GetPath(), "err", rmErr)
 				}
 			}

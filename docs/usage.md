@@ -8,6 +8,8 @@
 mako nodes                    # the machines on the mesh
 mako agents                   # the agents and profiles this machine can start
 mako run claude               # start Claude in the current folder, and attach
+mako -worktree run claude     # ...in a new isolated git worktree
+mako -branch feat/x run claude # ...in a new git worktree on branch feat/x
 mako run claude:opus          # ...with its "opus" profile
 mako -node <id> run codex     # ...on another machine
 mako ls                       # every session on the mesh
@@ -269,6 +271,67 @@ their inboxes.
 `mako access` prints, and SSH keys. Edit it by hand or with `mako access`,
 `allow`, `deny`, `trust` and `revoke`; a change holds at once.
 
+**Worktree bootstrap (`.mako/worktree.toml`).** A Git repository can include
+`.mako/worktree.toml` at its root so every new worktree (from the Launch tab,
+`-worktree`, `spawn_agent`, or an isolated team) automatically links shared
+directories, copies local env files, and runs setup/teardown hooks:
+
+```toml
+base_ref = "origin/main"
+shared_paths = ["node_modules", ".cache"]
+copy_paths = [".env", ".env.local"]
+setup_cmd = "npm ci --prefer-offline"
+teardown_cmd = ""
+```
+
+A path in `shared_paths` is a link to the same folder in the main
+repository, so every worktree and the main repository write into it.
+Mako makes and removes the worktrees of one repository one at a time, so
+two `setup_cmd` runs do not change a shared folder at the same time. An
+agent in a worktree can still change a shared folder while it works.
+
+A path in `copy_paths` is copied into the worktree. Mako copies only
+folders, regular files, and links that lead to files of the repository,
+also through the links they lead on to. Mako refuses a link that leads
+out of the repository, and leaves out a link that leads nowhere. Mako also
+leaves out a `.git` in a copied folder, so that git does not use the
+config or hooks of a repository inside it in the worktree.
+
+When you remove a worktree, Mako first refuses it if it has changes.
+Then Mako runs `teardown_cmd`, and takes out the links and the unchanged
+copies that it made. If `teardown_cmd` fails, Mako removes the worktree
+anyway and shows the failure. Mako removes only a worktree that git lists
+for the repository.
+
+Mako gives the two commands the worktree only in environment variables:
+`MAKO_WORKTREE_PATH`, `MAKO_WORKTREE_REPO`, `MAKO_WORKTREE_BRANCH`, and
+`MAKO_WORKTREE_BASE`, the branch that the worktree came off. Both commands
+get the same base. Each command can run for two minutes. When the time
+is up, Mako stops the command and, on macOS and Linux, all that it
+started. A removal then continues without the command.
+
+On Windows, the commands run with `cmd /C`, which puts in the value of
+each `%NAME%` before it reads the line. So Mako does not run them for a
+branch or base whose name has one of `& | < > ^ % ! " ( )`. Put quotes
+around the paths in a command, as in `"%MAKO_WORKTREE_PATH%"`.
+
+Mako reads the file from the main work tree of the repository, also
+when you start in a folder of it or in another worktree. `base_ref` is
+where a new worktree starts when you do not name a base or a start.
+
+If `.mako/worktree.toml` is absent and `orca.yaml` defines
+`worktree.sharedDirectories`, Mako honors those shared directories
+automatically. Mako reads each file only if it is a regular file of at
+most 256 KiB in the repository.
+
+`setup_cmd` and `teardown_cmd` run with your permissions, so Mako runs
+them only after you trust the file as it reads (see Repository commands
+below). Until then, Mako still makes and removes the worktree, but skips
+the two commands. The app, `mako run` and `spawn_agent` then say so and
+tell you what to run. When the file changes, Mako skips them again until
+you trust it again. Set `MAKO_NO_WORKTREE_HOOKS=1` in the daemon's
+environment to never run them, trusted or not.
+
 **Networking.** The CLI and the app talk to their daemon on a Unix socket
 in the configuration folder, and daemons talk to each other on port 4243
 (UDP and TCP), which `p2p.listen` can change. When a machine
@@ -509,3 +572,32 @@ Between daemons, each side is held to its own key, and one whose key is not
 let in gets nothing: no requests, no sessions, no relay. The CLI and the app
 talk to their own daemon on a socket only your user can open, so nothing
 but port 4243 faces the network, and it can face the internet.
+
+## Repository commands
+
+A repository can track a file that tells mako to run commands for it on
+its own, such as a command to run in each new worktree or on a session's
+events. Each feature that reads such a file says which file it reads.
+Anyone who can commit to the repository can write such a file, and so
+can an agent that works in it. So mako runs these commands only after
+you read the file and trust it. Each trust is for one file of one
+repository, as the file reads now. When the file changes, mako stops
+running its commands until you trust it again. Agents cannot trust a
+file for you.
+
+```sh
+mako repo-trust allow path/to/file   # show the file, ask, and trust it as it reads
+mako repo-trust show path/to/file    # show the file, and if it is trusted
+mako repo-trust                      # list the files you trust
+mako repo-trust revoke ~/src/app     # forget every file of a repository
+```
+
+With `-node`, give the file's absolute path on that node: mako sends it as
+you typed it. A file of a linked worktree stands for the same file of the
+repository's main work tree, which is the one mako reads and trusts.
+
+The desktop app shows the whole file in a dialog with a Trust button when
+mako skips its commands, in the window you are in. If the file changes
+before you trust it, mako refuses the trust, and the dialog offers Reload
+to show the file as it reads now. The trust is kept on the machine of the
+repository, in `repo-trust.json` in its configuration folder.
