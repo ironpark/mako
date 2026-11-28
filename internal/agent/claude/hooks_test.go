@@ -182,3 +182,53 @@ func TestClaudeWithCommitSignature(t *testing.T) {
 		t.Fatalf("expected attribution=false preserved, got %+v", doc3)
 	}
 }
+
+func TestClaudeWithFastInitialFastModeAndStatus(t *testing.T) {
+	c := New()
+
+	// WithFast merges with WithCommitSignature and WithHooks cleanly.
+	l := agent.Launch{Command: []string{"claude", "--model", "opus"}}
+	c.WithCommitSignature(&l, false)
+	c.WithFast(&l, true)
+	if !c.WithHooks(&l, "/bin/makod hook /s", "/bin/makod statusline /s", "") {
+		t.Fatal("WithHooks failed after WithFast")
+	}
+	if fast, ok := c.InitialFastMode(l); !ok || !fast {
+		t.Fatalf("InitialFastMode(--settings fastMode=true) = %v, %v; want true, true", fast, ok)
+	}
+
+	// Explicit false overrides user settings.json fastMode: true.
+	cfgDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cfgDir, "settings.json"), []byte(`{"fastMode":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lUserOnly := agent.Launch{Command: []string{"claude"}, Env: map[string]string{"CLAUDE_CONFIG_DIR": cfgDir}}
+	if fast, ok := c.InitialFastMode(lUserOnly); !ok || !fast {
+		t.Fatalf("InitialFastMode(user settings) = %v, %v; want true, true", fast, ok)
+	}
+	c.WithFast(&lUserOnly, false)
+	if fast, ok := c.InitialFastMode(lUserOnly); !ok || fast {
+		t.Fatalf("InitialFastMode(explicit false over user true) = %v, %v; want false, true", fast, ok)
+	}
+
+	// Status parses fast_mode boolean when present.
+	uOn := c.Status([]byte(`{"fast_mode":true,"context_window":{"context_window_size":200000}}`))
+	if uOn.FastMode == nil || !uOn.GetFastMode() {
+		t.Fatalf("Status(fast_mode=true) = %+v", uOn)
+	}
+	uOff := c.Status([]byte(`{"fast_mode":false}`))
+	if uOff.FastMode == nil || uOff.GetFastMode() {
+		t.Fatalf("Status(fast_mode=false) = %+v", uOff)
+	}
+	uUnset := c.Status([]byte(`{"context_window":{"context_window_size":200000}}`))
+	if uUnset.FastMode != nil {
+		t.Fatalf("Status(omitted fast_mode) = %+v", uUnset)
+	}
+
+	if got := c.FastModeCommand(true); got != "/fast on" {
+		t.Fatalf("FastModeCommand(true) = %q", got)
+	}
+	if got := c.FastModeCommand(false); got != "/fast off" {
+		t.Fatalf("FastModeCommand(false) = %q", got)
+	}
+}

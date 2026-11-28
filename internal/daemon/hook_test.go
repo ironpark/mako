@@ -138,6 +138,12 @@ func TestHookReportsFollowTheConversation(t *testing.T) {
 // it, and the hook socket.
 func hookedDaemon(t *testing.T) (*Daemon, *session.Session, string) {
 	t.Helper()
+	return hookedDaemonIn(t, t.TempDir())
+}
+
+// hookedDaemonIn is hookedDaemon with its session's project at project.
+func hookedDaemonIn(t *testing.T, project string) (*Daemon, *session.Session, string) {
+	t.Helper()
 	command, root := fakeAgent(t, "claude")
 	cfg := &config.Config{NodeID: "node", Agents: map[string]agentspec.Agent{"claude": {Command: []string{command}, Env: map[string]string{"MAKO_FAKE_AGENT": "claude", "MAKO_FAKE_ROOT": root, "CLAUDE_CONFIG_DIR": root}}}}
 	d := New(cfg, nil)
@@ -153,7 +159,7 @@ func hookedDaemon(t *testing.T) (*Daemon, *session.Session, string) {
 	t.Cleanup(func() { os.RemoveAll(run) })
 	d.hookBinary = "/bin/makod"
 	d.listenHooks(t.Context(), run)
-	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: t.TempDir()})
+	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: project})
 	if err != nil {
 		t.Fatal(err)
 	}

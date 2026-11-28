@@ -43,6 +43,7 @@ type agentDraft struct {
 	Servers               string
 	Model                 string // "" for default (agent) or inherit (profile)
 	Effort                string // "" for default (agent) or inherit (profile)
+	Fast                  string // "", "on", or "off"
 	Permission            string // "", "default", driver mode, or "yolo"
 	AllowAgent            bool   // allow models/agents to spawn via MCP
 	AllowTemplate         bool   // allow prompt templates to run
@@ -66,7 +67,7 @@ func draftAgents(configured map[string]agentspec.Agent) []agentDraft {
 		d := agentDraft{
 			ID: len(out) + 1, Agent: name,
 			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(agentArgs), Env: envText(a.Env),
-			Model: a.Model, Effort: a.Effort, Permission: agentPerm,
+			Model: a.Model, Effort: a.Effort, Fast: boolOptionString(a.Fast), Permission: agentPerm,
 			AllowAgent: a.AgentAllowed(), AllowTemplate: a.TemplateAllowed(),
 			ClaudeCommitSignature: a.Claude.CommitSignature,
 		}
@@ -91,7 +92,7 @@ func draftAgents(configured map[string]agentspec.Agent) []agentDraft {
 			d := agentDraft{
 				ID: len(out) + 1, Agent: name, Profile: p.Name, IsProfile: true,
 				Description: p.Description, Args: agentspec.JoinArgs(pArgs), ReplaceArgs: p.ReplaceArgs, Env: envText(p.Env),
-				Model: p.Model, Effort: p.Effort, Permission: profPerm,
+				Model: p.Model, Effort: p.Effort, Fast: boolOptionString(p.Fast), Permission: profPerm,
 				AllowAgent: p.AgentAllowed(), AllowTemplate: p.TemplateAllowed(),
 				ClaudeCommitSignature: p.Claude.CommitSignature,
 			}
@@ -152,6 +153,7 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			Env:        env,
 			Model:      strings.TrimSpace(r.Model),
 			Effort:     strings.TrimSpace(r.Effort),
+			Fast:       parseBoolOption(r.Fast),
 			Permission: perm,
 			Yolo:       perm == agentspec.PermissionYOLO,
 			Claude:     agentspec.ClaudeSettings{CommitSignature: r.ClaudeCommitSignature},
@@ -203,6 +205,7 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			Env:         env,
 			Model:       strings.TrimSpace(r.Model),
 			Effort:      strings.TrimSpace(r.Effort),
+			Fast:        parseBoolOption(r.Fast),
 			Permission:  perm,
 			Claude:      agentspec.ClaudeSettings{CommitSignature: r.ClaudeCommitSignature},
 		}
@@ -560,6 +563,9 @@ func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[stri
 		if d.Model != "" {
 			parts = append(parts, modelName(d.Model))
 		}
+		if d.Fast == "on" {
+			parts = append(parts, T("Fast mode"))
+		}
 		if d.Permission != "" {
 			parts = append(parts, permissionOptionLabel(d.Permission, false))
 		}
@@ -704,6 +710,9 @@ func agentBaseBody(m *model, a agentDraft, mono ggui.TextStyle, showCommand bool
 	if rowCtrl := modelEffortPermissionRow(m, a, a.Agent, mono, false); rowCtrl != nil {
 		children = append(children, rowCtrl)
 	}
+	if fastCtrl := fastModeSection(m, a.ID, a.Agent, a.Agent, false); fastCtrl != nil {
+		children = append(children, fastCtrl)
+	}
 	if claudeCtrl := claudeSettingsSection(m, a.ID, a.Agent, a.Agent); claudeCtrl != nil {
 		children = append(children, claudeCtrl)
 	}
@@ -818,6 +827,9 @@ func profileCardWithState(m *model, p agentDraft, mono ggui.TextStyle, advancedO
 	}
 	if rowCtrl := modelEffortPermissionRow(m, p, target, mono, true); rowCtrl != nil {
 		body = append(body, rowCtrl)
+	}
+	if fastCtrl := fastModeSection(m, id, p.Agent, target, true); fastCtrl != nil {
+		body = append(body, fastCtrl)
 	}
 	if claudeCtrl := claudeSettingsSection(m, id, p.Agent, target); claudeCtrl != nil {
 		body = append(body, claudeCtrl)
@@ -950,6 +962,29 @@ func advancedOptionsSection(m *model, rowDraft agentDraft, target string, mono g
 
 	return widget.Box(widget.Column(head, body).Stretch()).
 		Fill(skin.Surface0).Border(1, skin.Border).Radius(8)
+}
+
+func fastModeSection(m *model, id int, agentName, target string, isProfile bool) ggui.Widget {
+	entry, ok := agents.Lookup(agentName)
+	if !ok {
+		return nil
+	}
+	if _, ok := entry.Driver.(agent.FastFlag); !ok {
+		return nil
+	}
+	fastBind := m.agentField(id, func(d *agentDraft) *string { return &d.Fast })
+	fastCtrl := ui.Select(fastBind).Options([]string{"", "on", "off"}).Format(func(s string) string {
+		return fastOptionLabel(s, isProfile)
+	}).Name(Tf("%s fast mode", target))
+	row := widget.Row(
+		widget.Expanded(widget.Column(
+			widget.Text(T("Fast mode")).Size(12.5).Weight(ggui.WeightMedium),
+			muted(widget.Text(T("Start sessions with fast mode enabled or disabled, over the agent's default.")).Size(11.5)),
+		).Gap(2).Stretch()),
+		widget.Box(fastCtrl).Width(164),
+	).Gap(10).Align(widget.AlignCenter)
+	return widget.Box(row).
+		Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(10, 12)
 }
 
 func claudeSettingsSection(m *model, id int, agentName, target string) ggui.Widget {
@@ -1235,6 +1270,45 @@ func permissionOptionLabel(mode string, isProfile bool) string {
 		return T("YOLO")
 	default:
 		return modeLabel(mode)
+	}
+}
+
+func boolOptionString(v *bool) string {
+	if v == nil {
+		return ""
+	}
+	if *v {
+		return "on"
+	}
+	return "off"
+}
+
+func parseBoolOption(s string) *bool {
+	switch strings.TrimSpace(s) {
+	case "on":
+		v := true
+		return &v
+	case "off":
+		v := false
+		return &v
+	default:
+		return nil
+	}
+}
+
+func fastOptionLabel(mode string, isProfile bool) string {
+	switch mode {
+	case "":
+		if isProfile {
+			return T("Inherit from agent")
+		}
+		return T("The agent's default")
+	case "on":
+		return T("On")
+	case "off":
+		return T("Off")
+	default:
+		return mode
 	}
 }
 

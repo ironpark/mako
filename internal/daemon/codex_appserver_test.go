@@ -2158,10 +2158,10 @@ func TestCodexAbortRestartPropagatesAndClearsGoal(t *testing.T) {
 }
 
 func TestCodexBridgeFastModeEndToEnd(t *testing.T) {
-	t.Run("non-codex session rejects fast_mode configure", func(t *testing.T) {
+	t.Run("unsupported agent rejects fast_mode configure", func(t *testing.T) {
 		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
 		s, err := session.Start(session.Spec{
-			ID: "claude-no-fast", NodeID: "test-node", Agent: "claude", Project: t.TempDir(),
+			ID: "agy-no-fast", NodeID: "test-node", Agent: "agy", Project: t.TempDir(),
 			Command: testSleepCommand(), Cols: 80, Rows: 24,
 		})
 		if err != nil {
@@ -2171,7 +2171,7 @@ func TestCodexBridgeFastModeEndToEnd(t *testing.T) {
 		d.sessions.add(s)
 
 		if s.Info().GetControls().GetFastMode() {
-			t.Fatalf("claude session should not advertise Controls.FastMode")
+			t.Fatalf("agy session should not advertise Controls.FastMode")
 		}
 		_, done := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
 			return d.handleConfigureAgent(t.Context(), st, env)
@@ -2181,6 +2181,56 @@ func TestCodexBridgeFastModeEndToEnd(t *testing.T) {
 		})
 		if err := <-done; err == nil || !strings.Contains(err.Error(), "does not support fast mode") {
 			t.Fatalf("expected unsupported fast mode error, got %v", err)
+		}
+	})
+
+	t.Run("claude session advertises and toggles fast_mode", func(t *testing.T) {
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		s, err := session.Start(session.Spec{
+			ID: "claude-fast", NodeID: "test-node", Agent: "claude", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+		d.sessions.add(s)
+
+		if !s.Info().GetControls().GetFastMode() {
+			t.Fatalf("claude session should advertise Controls.FastMode")
+		}
+		st, done := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+			return d.handleConfigureAgent(t.Context(), st, env)
+		}, protocol.TypeConfigureAgent, &protocol.ConfigureAgent{
+			SessionId: s.ID(),
+			FastMode:  proto.Bool(true),
+		})
+		env, err := st.Recv()
+		if err != nil || env.Type() != protocol.TypeSessionInfo {
+			t.Fatalf("claude enable reply = %v, %v", env, err)
+		}
+		if err := <-done; err != nil {
+			t.Fatalf("claude fast mode enable failed: %v", err)
+		}
+		if !env.GetSessionInfo().GetFastMode() || !s.Info().GetFastMode() {
+			t.Fatalf("expected claude fast mode enabled, info=%v session=%v", env.GetSessionInfo().GetFastMode(), s.Info().GetFastMode())
+		}
+
+		st, done = ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+			return d.handleConfigureAgent(t.Context(), st, env)
+		}, protocol.TypeConfigureAgent, &protocol.ConfigureAgent{
+			SessionId: s.ID(),
+			FastMode:  proto.Bool(false),
+		})
+		env, err = st.Recv()
+		if err != nil || env.Type() != protocol.TypeSessionInfo {
+			t.Fatalf("claude disable reply = %v, %v", env, err)
+		}
+		if err := <-done; err != nil {
+			t.Fatalf("claude fast mode disable failed: %v", err)
+		}
+		if env.GetSessionInfo().GetFastMode() || s.Info().GetFastMode() {
+			t.Fatalf("expected claude fast mode disabled, info=%v session=%v", env.GetSessionInfo().GetFastMode(), s.Info().GetFastMode())
 		}
 	})
 
