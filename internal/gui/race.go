@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -46,7 +47,10 @@ type raceState struct {
 	Groups  *ggui.StateValue[[]raceGroup]
 	Active  *ggui.StateValue[string]
 	Changes *ggui.StateValue[map[string]*protocol.GitChanges] // sessionID -> changes since base
-	seq     int
+	// Busy is the race whose winner is being checked, committed or merged,
+	// "" for none: no other winner is picked until it is done.
+	Busy *ggui.StateValue[string]
+	seq  int
 }
 
 func newRaceState() *raceState {
@@ -55,6 +59,7 @@ func newRaceState() *raceState {
 		Groups:  ggui.State([]raceGroup(nil)),
 		Active:  ggui.State(""),
 		Changes: ggui.State(map[string]*protocol.GitChanges{}),
+		Busy:    ggui.State(""),
 	}
 }
 
@@ -91,6 +96,24 @@ func partitionRaceEntries(entries []raceEntry, winnerSessionID string) (raceEntr
 		}
 	}
 	return winner, losers, found
+}
+
+// raceCommitSubjectLen is the most of a race's prompt a commit's subject
+// keeps.
+const raceCommitSubjectLen = 60
+
+// raceCommitMessage is what the winner's uncommitted work is committed as
+// before it is merged: its agent, and the prompt's first line.
+func raceCommitMessage(target, prompt string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(prompt), "\n")
+	line = strings.TrimSpace(line)
+	if utf8.RuneCountInString(line) > raceCommitSubjectLen {
+		line = strings.TrimSpace(string([]rune(line)[:raceCommitSubjectLen])) + "..."
+	}
+	if line == "" {
+		return "Race winner " + target
+	}
+	return "Race winner " + target + ": " + line
 }
 
 // startRace launches every contestant in its own isolated git worktree with the
@@ -234,77 +257,212 @@ func (m *model) refreshActiveRaceDiffs() {
 	}
 }
 
+// raceWorktree is the worktree e runs in: as its session now says, or as
+// it said when it started.
+func (m *model) raceWorktree(e raceEntry) *protocol.Worktree {
+	if s, ok := m.session(e.SessionID); ok && s.GetWorktree() != nil {
+		return s.GetWorktree()
+	}
+	return e.Worktree
+}
+
+// uncommittedFiles counts what the work tree at path, on node, has not
+// committed, untracked files included, and hands done the count.
+func (m *model) uncommittedFiles(node, path string, done func(int, error)) {
+	req := &protocol.GitStatus{NodeId: m.remoteID(node), Path: path}
+	fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitChanges, error) {
+		return c.GitStatus(ctx, req)
+	}, func(ch *protocol.GitChanges, err error) {
+		done(len(ch.GetFiles()), err)
+	})
+}
+
+// raceWinnerBody says what merging winner does: what it commits first,
+// where it merges, and what of the others it deletes.
+func raceWinnerBody(winner raceEntry, wt *protocol.Worktree, prompt string, dirty int) string {
+	branch := cmp.Or(wt.GetBranch(), winner.Branch)
+	var parts []string
+	if dirty > 0 {
+		parts = append(parts, Tf("Its worktree has %d uncommitted file(s). Mako commits them on %s first, as \"%s\".", dirty, branch, raceCommitMessage(winner.Target, prompt)))
+	}
+	parts = append(parts,
+		Tf("Then %s is merged into %s.", branch, cmp.Or(wt.GetBase(), "HEAD")),
+		T("The other race sessions are stopped, and their worktrees and branches are deleted with any work left in them."))
+	return strings.Join(parts, " ")
+}
+
+// askPickRaceWinner asks before merging the winner. It first reads what
+// the winner's worktree has not committed, so the question says what is
+// committed for it; an agent still at work is not picked at all, as its
+// files are still changing.
 func (m *model) askPickRaceWinner(group raceGroup, winnerSessionID string) {
+	st := m.Races
+	if ggui.Peek(st.Busy) != "" {
+		return
+	}
 	winner, losers, ok := partitionRaceEntries(group.Entries, winnerSessionID)
 	if !ok {
 		return
 	}
-	m.askConfirm(confirmation{
-		Title:  Tf("Merge %s and clean up %d other worktree(s)?", targetLabel(winner.Target), len(losers)),
-		Body:   T("Merges the winning branch into its base branch, then stops the other race sessions and attempts to remove their worktrees."),
-		Action: T("Merge winner"),
-		Safe:   true,
-		Run: func() {
-			m.applyRaceWinner(group.ID, winner, losers)
-		},
-	})
-}
-
-func (m *model) applyRaceWinner(raceID string, winner raceEntry, losers []raceEntry) {
-	wt := winner.Worktree
-	if s, ok := m.session(winner.SessionID); ok && s.GetWorktree() != nil {
-		wt = s.GetWorktree()
-	}
+	wt := m.raceWorktree(winner)
 	if wt == nil {
 		m.toaster.Push(ui.Toast(T("Could not merge winner"), T("Winning session has no worktree")).Destructive())
 		return
 	}
-	req := &protocol.GitRun{
-		NodeId:   m.remoteID(winner.NodeID),
-		Root:     wt.GetRepo(),
-		Op:       protocol.GitOpMerge,
-		Worktree: wt,
+	if s, ok := m.session(winner.SessionID); ok && ggui.Untrack(func() dotState { return m.dotOf(s) }) == dotWorking {
+		m.toaster.Push(ui.Toast(Tf("%s is still working", targetLabel(winner.Target)),
+			T("Wait for it to finish, or stop it, before you pick it as the winner.")).Destructive())
+		return
 	}
-	fetch(m, 25*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
-		return c.GitRun(ctx, req)
-	}, func(_ *protocol.GitResult, err error) {
+	st.Busy.Set(group.ID)
+	m.uncommittedFiles(winner.NodeID, wt.GetPath(), func(dirty int, err error) {
+		st.Busy.Set("")
 		if err != nil {
-			m.toaster.Push(ui.Toast(T("Could not merge winner"), nodeErr(err)).Destructive())
+			m.toaster.Push(ui.Toast(T("Could not read the winner's changes"), nodeErr(err)).Destructive())
 			return
 		}
-		m.Races.Groups.Update(func(list []raceGroup) []raceGroup {
-			next := slices.Clone(list)
-			for i := range next {
-				if next[i].ID == raceID {
-					next[i].WinnerID = winner.SessionID
-					break
-				}
-			}
-			return next
+		m.askConfirm(confirmation{
+			Title:  Tf("Merge %s and clean up %d other worktree(s)?", targetLabel(winner.Target), len(losers)),
+			Body:   raceWinnerBody(winner, wt, group.Prompt, dirty),
+			Action: T("Merge winner"),
+			Run: func() {
+				m.applyRaceWinner(group, winner, losers, dirty > 0)
+			},
 		})
-		var loserIDs []string
-		for _, loser := range losers {
-			loserIDs = append(loserIDs, loser.SessionID)
-			lwt := loser.Worktree
-			if s, ok := m.session(loser.SessionID); ok && s.GetWorktree() != nil {
-				lwt = s.GetWorktree()
+	})
+}
+
+// raceLoser is a losing contestant with the worktree it ran in, read
+// before its session stops and leaves the list.
+type raceLoser struct {
+	raceEntry
+	wt *protocol.Worktree
+}
+
+// applyRaceWinner merges the winner's branch, committing first what its
+// worktree has not when commit says the user agreed to it, then stops the
+// losers and deletes their worktrees. Work that appeared in the winner's
+// worktree after the user was asked is not committed unasked: the merge
+// stops, and says so.
+func (m *model) applyRaceWinner(group raceGroup, winner raceEntry, losers []raceEntry, commit bool) {
+	st := m.Races
+	if ggui.Peek(st.Busy) != "" {
+		return
+	}
+	wt := m.raceWorktree(winner)
+	if wt == nil {
+		m.toaster.Push(ui.Toast(T("Could not merge winner"), T("Winning session has no worktree")).Destructive())
+		return
+	}
+	cleanup := make([]raceLoser, len(losers))
+	for i, l := range losers {
+		cleanup[i] = raceLoser{l, m.raceWorktree(l)}
+	}
+	node := m.remoteID(winner.NodeID)
+	st.Busy.Set(group.ID)
+	fail := func(title string, err error) {
+		st.Busy.Set("")
+		m.toaster.Push(ui.Toast(title, nodeErr(err)).Destructive())
+	}
+	merge := func() {
+		req := &protocol.GitRun{NodeId: node, Root: wt.GetRepo(), Op: protocol.GitOpMerge, Worktree: wt}
+		fetch(m, 2*time.Minute, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
+			return c.GitRun(ctx, req)
+		}, func(_ *protocol.GitResult, err error) {
+			if err != nil {
+				fail(T("Could not merge winner"), err)
+				return
 			}
-			if lwt != nil {
-				rmReq := &protocol.GitRun{
-					NodeId:   m.remoteID(loser.NodeID),
-					Root:     lwt.GetRepo(),
-					Op:       protocol.GitOpRemoveWT,
-					Worktree: lwt,
+			st.Groups.Update(func(list []raceGroup) []raceGroup {
+				next := slices.Clone(list)
+				for i := range next {
+					if next[i].ID == group.ID {
+						next[i].WinnerID = winner.SessionID
+						break
+					}
 				}
-				fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
-					return c.GitRun(ctx, rmReq)
-				}, func(_ *protocol.GitResult, _ error) {})
+				return next
+			})
+			st.Busy.Set("")
+			m.toaster.Push(ui.Toast(Tf("Merged winner %s", targetLabel(winner.Target)), cmp.Or(wt.GetBranch(), winner.Branch)))
+			m.cleanUpRaceLosers(cleanup)
+		})
+	}
+	m.uncommittedFiles(winner.NodeID, wt.GetPath(), func(dirty int, err error) {
+		switch {
+		case err != nil:
+			fail(T("Could not read the winner's changes"), err)
+		case dirty == 0:
+			merge()
+		case !commit:
+			st.Busy.Set("")
+			m.toaster.Push(ui.Toast(T("The winner's worktree changed"),
+				Tf("It has %d uncommitted file(s) now. Pick the winner again to commit and merge them.", dirty)).Destructive())
+		default:
+			req := &protocol.GitRun{NodeId: node, Root: wt.GetPath(), Op: protocol.GitOpCommit, Message: raceCommitMessage(winner.Target, group.Prompt)}
+			fetch(m, 2*time.Minute, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
+				return c.GitRun(ctx, req)
+			}, func(_ *protocol.GitResult, err error) {
+				if err != nil {
+					fail(T("Could not commit the winner's changes"), err)
+					return
+				}
+				merge()
+			})
+		}
+	})
+}
+
+// cleanUpRaceLosers stops the losing sessions and, once they have stopped,
+// deletes their worktrees and branches with whatever is left in them, which
+// the user agreed to when they picked the winner. A session that did not
+// stop keeps its worktree, and every worktree not deleted is said.
+func (m *model) cleanUpRaceLosers(losers []raceLoser) {
+	if len(losers) == 0 {
+		return
+	}
+	ids := make([]string, len(losers))
+	for i, l := range losers {
+		ids[i] = l.SessionID
+	}
+	m.killAll(ids, func() {
+		var failed []string
+		removed, left := 0, 0
+		report := func() {
+			if len(failed) > 0 {
+				m.toaster.Push(ui.Toast(Tf("Could not clean up %d race worktree(s)", len(failed)), strings.Join(failed, "\n")).Destructive())
+			}
+			if removed > 0 {
+				m.toaster.Push(ui.Toast(Tf("Removed %d other race worktree(s)", removed), T("Their sessions stopped, and their branches were deleted.")))
 			}
 		}
-		if len(loserIDs) > 0 {
-			m.killAll(loserIDs, nil)
+		for _, l := range losers {
+			label := targetLabel(l.Target)
+			if _, alive := m.session(l.SessionID); alive {
+				failed = append(failed, Tf("%s: its session did not stop, so its worktree was kept", label))
+				continue
+			}
+			if l.wt == nil {
+				continue
+			}
+			left++
+			req := &protocol.GitRun{NodeId: m.remoteID(l.NodeID), Root: l.wt.GetRepo(), Op: protocol.GitOpRemoveWT, Worktree: l.wt, Force: true}
+			fetch(m, 2*time.Minute, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
+				return c.GitRun(ctx, req)
+			}, func(_ *protocol.GitResult, err error) {
+				if err != nil {
+					failed = append(failed, label+": "+nodeErr(err))
+				} else {
+					removed++
+				}
+				if left--; left == 0 {
+					report()
+				}
+			})
 		}
-		m.toaster.Push(ui.Toast(Tf("Merged winner %s", targetLabel(winner.Target)), winner.Branch))
+		if left == 0 {
+			report()
+		}
 	})
 }
 
@@ -392,6 +550,7 @@ func raceDialog(m *model) ggui.Widget {
 		}
 		changes := st.Changes.Get()
 		sessions := m.Sessions.Get()
+		busy := st.Busy.Get() != ""
 
 		topRow := []ggui.Widget{
 			widget.Expanded(widget.Text(firstLine(cur.Prompt)).Size(13.5).Weight(ggui.WeightSemibold).NoWrap().Ellipsis()),
@@ -482,7 +641,7 @@ func raceDialog(m *model) ggui.Widget {
 				grp := *cur
 				footer = append(footer, ui.Button(T("Pick winner & merge"), func() {
 					m.askPickRaceWinner(grp, e.SessionID)
-				}).Pad(4, 10).Radius(6))
+				}).Pad(4, 10).Radius(6).Disabled(busy))
 			}
 			cardRows = append(cardRows, widget.Row(footer...).Gap(8).Align(widget.AlignCenter))
 
