@@ -555,6 +555,9 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 			if m.ghostKey(id, state, field.Input(), ev) {
 				return true
 			}
+			if deleteLineKey(field.Input(), ev) {
+				return true
+			}
 			plain := !ev.Mods.Shift && !ev.Mods.Alt && !ev.Mods.Ctrl && !ev.Mods.Meta
 			switch {
 			case (ev.Key == ggui.KeyEnter || ev.Key == ggui.KeyNumpadEnter) && !ev.Mods.Shift && !ev.Mods.Alt:
