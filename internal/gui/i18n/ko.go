@@ -2017,8 +2017,31 @@ var catalogKo = map[string]string{
 	"Update makod":        "makod 업데이트",
 	"Remote makod daemon": "원격 makod 데몬",
 	"Install makod to ~/.mako/bin/makod on the remote host for full chat, hooks, approvals, MCP, and persistent sessions.": "원격 호스트의 ~/.mako/bin/makod에 makod를 설치하면 챗, 훅, 승인, MCP 및 영구 세션을 모두 사용할 수 있습니다.",
-	"Probing remote host…":                             "원격 호스트를 확인하는 중…",
-	"Installed %s at %s":                               "%[2]s에 %[1]s 설치 완료",
+	"Probing remote host…": "원격 호스트를 확인하는 중…",
+	"Installed %s at %s":   "%[2]s에 %[1]s 설치 완료",
+
+	// mako-git plugin settings
+	"Auto-fix pull requests by default":                                                  "풀 리퀘스트 자동 수정 기본으로 켜기",
+	"Turn on Auto-fix automatically for open pull requests you have not configured yet.": "아직 설정하지 않은 열린 풀 리퀘스트에 자동 수정을 자동으로 켭니다.",
+
+	// Needs You inbox
+	"Needs you":                        "확인 필요",
+	"Open Needs You inbox":             "확인 필요 받은함 열기",
+	"%d items across all nodes":        "전체 노드에서 %d건",
+	"Approvals":                        "승인 요청",
+	"Unread":                           "읽지 않음",
+	"Allow all approvals (%d)":         "승인 요청 모두 허용 (%d)",
+	"Allow %d pending tool approvals?": "대기 중인 도구 승인 %d건을 모두 허용할까요?",
+	"Allow all":                        "모두 허용",
+	"Mark unread seen":                 "읽지 않음 모두 확인 처리",
+	"All caught up — no agents need your attention right now.": "모두 확인했습니다 — 지금 확인이 필요한 에이전트가 없습니다.",
+	"No items match this filter.":                              "이 필터에 해당하는 항목이 없습니다.",
+	"Approval":                                                 "승인",
+	"Auth error":                                               "인증 오류",
+	"Send a quick reply…":                                      "빠른 답장 보내기…",
+	"Quick reply":                                              "빠른 답장",
+
+	// Multi-agent races & usage actions
 	"Race · %s":                                        "비교 · %s",
 	"Could not start any race session":                 "비교 세션을 시작할 수 없음",
 	"Started %d-agent comparison race":                 "%d개 에이전트 비교 실행을 시작했습니다",

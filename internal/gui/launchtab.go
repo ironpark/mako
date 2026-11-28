@@ -328,14 +328,19 @@ func launchField(prompt ggui.Binding[string], shell bool, start func()) *ui.Text
 	if shell {
 		hint = T("A command for the shell, typed at its prompt. Enter starts it")
 	}
-	return ui.TextField(prompt).Lines(2).Placeholder(hint).Name(T("First prompt")).
+	var field *ui.TextFieldWidget
+	field = ui.TextField(prompt).Lines(2).Placeholder(hint).Name(T("First prompt")).
 		OnKey(func(ev ggui.KeyEvent) bool {
+			if deleteLineKey(field.Input(), ev) {
+				return true
+			}
 			if (ev.Key == ggui.KeyEnter || ev.Key == ggui.KeyNumpadEnter) && !ev.Mods.Shift && !ev.Mods.Alt {
 				start()
 				return true
 			}
 			return false
 		})
+	return field
 }
 
 // launchTeamMenu picks a team for the new session's agent to lead, started

@@ -44,6 +44,7 @@ var shortcutList = []shortcutSpec{
 	{ID: "find_in_session", Chord: "cmd+f", Action: "Find in the session"},
 	{ID: "next_diff", Chord: "alt+cmd+down", Action: "Next changed file"},
 	{ID: "prev_diff", Chord: "alt+cmd+up", Action: "Previous changed file"},
+	{ID: "open_inbox", Chord: "cmd+shift+i", Action: "Open Needs You inbox"},
 }
 
 // secondaryPaletteChord keeps Cmd+Shift+P opening the command palette unless
@@ -302,6 +303,8 @@ func (m *model) shortcutAction(id string) func() {
 		return m.toggleSelectedPreview
 	case "toggle_chat":
 		return m.toggleChat
+	case "open_inbox":
+		return m.toggleInbox
 	case "next_waiting":
 		return m.nextWaiting
 	case "allow_approval":

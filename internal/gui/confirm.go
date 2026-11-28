@@ -10,7 +10,8 @@ import (
 type confirmation struct {
 	Title, Body, Action string
 	Run                 func()
-	Safe                bool // the action loses nothing, and is not marked as one that does
+	Safe                bool   // the action loses nothing, and is not marked as one that does
+	Owner               string // "" for the main window, or a Space window's spaceID
 }
 
 // askConfirm asks to be sure of c, in the window's confirmation dialog.
@@ -28,15 +29,27 @@ func (m *model) confirmPaste(text string, paste func()) {
 	})
 }
 
-// confirmDialog asks to be sure of what askConfirm was given, a
-// destructive button carrying it out.
+// confirmDialog asks to be sure of what askConfirm was given in the main window.
 func confirmDialog(m *model) ggui.Widget {
-	open := ggui.Bind(func() bool { return m.Confirmation.Get().Title != "" }, func(v bool) {
-		if !v {
+	return confirmDialogFor(m, "")
+}
+
+// confirmDialogFor renders the confirmation dialog only in the window matching
+// owner ("" for the main window, or sw.spaceID for a Space window), preventing
+// modals from duplicating across windows.
+func confirmDialogFor(m *model, owner string) ggui.Widget {
+	open := ggui.Bind(func() bool {
+		c := m.Confirmation.Get()
+		return c.Title != "" && c.Owner == owner
+	}, func(v bool) {
+		if !v && ggui.Peek(m.Confirmation).Owner == owner {
 			m.Confirmation.Set(confirmation{})
 		}
 	})
 	return ggui.View(m.Confirmation, func(c confirmation) ggui.Widget {
+		if c.Owner != owner {
+			return alertDialog(alertAsk{Open: open})
+		}
 		return alertDialog(alertAsk{
 			Open:        open,
 			Title:       c.Title,

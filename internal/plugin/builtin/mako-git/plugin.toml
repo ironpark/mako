@@ -11,3 +11,10 @@ title = "Git"
 scope = "folder"
 chrome = "toolbar"
 hidden = true
+
+[contributes.settings.autofix_default]
+type = "boolean"
+label = "Auto-fix pull requests by default"
+description = "Turn on Auto-fix automatically for open pull requests you have not configured yet."
+default = false
+scope = "project"

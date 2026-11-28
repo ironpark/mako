@@ -836,6 +836,9 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 			delete(n, spaceID)
 			m.SpaceWindows.Set(n)
 		}
+		if ggui.Peek(m.Confirmation).Owner == spaceID {
+			m.Confirmation.Set(confirmation{})
+		}
 		m.dockOwnedPanes(sw)
 	}
 	w, err := m.window.App().OpenWindow(ggui.Config{
@@ -907,6 +910,9 @@ func (m *model) closeSpaceWindow(spaceID string) {
 		n := maps.Clone(cur)
 		delete(n, spaceID)
 		m.SpaceWindows.Set(n)
+	}
+	if ggui.Peek(m.Confirmation).Owner == spaceID {
+		m.Confirmation.Set(confirmation{})
 	}
 	m.dockOwnedPanes(sw)
 }
@@ -1029,6 +1035,9 @@ func spaceWindowView(m *model, sw *spaceWindowState) ggui.Widget {
 		if blockName == "" {
 			return keyedLayoutViewIn(m, sw.layoutKey, sw.focusGroup, sw)
 		}
+		if blockName == sidebarPageInbox {
+			return inboxView(m, sw)
+		}
 		pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
 		if !ok {
 			return keyedLayoutViewIn(m, sw.layoutKey, sw.focusGroup, sw)
@@ -1040,7 +1049,10 @@ func spaceWindowView(m *model, sw *spaceWindowState) ggui.Widget {
 		hline(),
 		widget.Expanded(center),
 	).Stretch()
-	return widget.Row(left, widget.Expanded(right)).Stretch()
+	return widget.Stack(
+		widget.Row(left, widget.Expanded(right)).Stretch(),
+		confirmDialogFor(m, sw.spaceID),
+	).Expand()
 }
 
 func spaceWindowSidebarEdge(sw *spaceWindowState) ggui.Widget {
@@ -1083,7 +1095,7 @@ func spaceWindowSidebar(m *model, sw *spaceWindowState) ggui.Widget {
 		column := widget.Column(
 			header,
 			hline(),
-			sidebarPluginMenu(m, sw.sidebarPage),
+			sidebarPluginMenuIn(m, sw.sidebarPage, sw),
 			widget.Expanded(body),
 		).Stretch()
 		washed := ggui.Reactive(func() ggui.Widget {

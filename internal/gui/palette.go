@@ -210,6 +210,7 @@ func (m *model) commands() []command {
 	// The window's layout is put right from here, outside it, whatever it
 	// has become.
 	return append(cmds,
+		command{ID: "Open Needs You inbox", Category: "Session", Keys: []string{"inbox", "triage", "approval", "waiting", "attention", "needs"}, Shortcut: m.shortcutChord("open_inbox"), Run: m.toggleInbox},
 		command{ID: "Compare agent races", Category: "Session", Keys: []string{"race", "compare", "ab", "parallel", "worktree"}, Run: m.openRaceDialog},
 		command{ID: "Reset window layout", Category: "View", Keys: []string{"layout", "default", "panels", "restore"}, Run: m.resetWindowDoc},
 		command{ID: "Reload window layout", Category: "View", Keys: []string{"layout", "layout.json", "panels"}, Run: m.reloadWindowDoc},

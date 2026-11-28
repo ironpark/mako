@@ -6,9 +6,8 @@ import (
 	"image"
 	"math"
 
-	"github.com/ironpark/ggfx"
-	ggsvg "github.com/ironpark/ggfx/svg"
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/svgx"
 	xdraw "golang.org/x/image/draw"
 )
 
@@ -60,11 +59,12 @@ func Draw(data []byte) (pic Picture, ok bool) {
 // too large. One that would take more than maxPixels at that scale is
 // drawn at a smaller one, as it is shown at its box's size either way.
 func raster(cleaned []byte, k func(w float64) float64) (px *image.RGBA, x, y, w, h float64, ok bool) {
-	doc, err := ggsvg.Parse(bytes.NewReader(cleaned))
+	doc, err := svgx.Parse(bytes.NewReader(cleaned))
 	if err != nil {
 		return nil, 0, 0, 0, 0, false
 	}
-	x, y, w, h = doc.ViewBox()
+	vb := doc.ViewBox()
+	x, y, w, h = vb.X, vb.Y, vb.W, vb.H
 	if w <= 0 || h <= 0 || math.IsNaN(w+h) || w*h > 4096*4096 {
 		return nil, 0, 0, 0, 0, false
 	}
@@ -76,10 +76,10 @@ func raster(cleaned []byte, k func(w float64) float64) (px *image.RGBA, x, y, w,
 		s = math.Sqrt(maxPixels / (w * h))
 	}
 	px = image.NewRGBA(image.Rect(0, 0, int(math.Ceil(w*s)), int(math.Ceil(h*s))))
-	var g ggfx.GeoM
-	g.Translate(-x, -y)
-	g.Scale(s, s)
-	doc.Draw(px, g)
+	var m svgx.Matrix
+	m.Translate(-x, -y)
+	m.Scale(s, s)
+	_ = doc.Draw(px, m, &svgx.DrawOptions{Static: true})
 	return px, x, y, w, h, true
 }
 
