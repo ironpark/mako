@@ -29,8 +29,9 @@ func cronSpec(name, project string) *protocol.Routine {
 // as one given -daemon or an external daemon does.
 func TestRoutinesAreServedOverTheSocket(t *testing.T) {
 	_, c := startTestDaemonForGoal(t)
-	proj := t.TempDir()
-	reply, err := c.ActRoutine(t.Context(), &protocol.RoutineAction{Op: "add", Spec: cronSpec("Nightly", proj)})
+	spec := cronSpec("Nightly", t.TempDir())
+	spec.Enabled = false // the daemon's scheduler runs, and must not start an agent
+	reply, err := c.ActRoutine(t.Context(), &protocol.RoutineAction{Op: "add", Spec: spec})
 	if err != nil {
 		t.Fatal(err)
 	}
