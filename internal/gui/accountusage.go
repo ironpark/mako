@@ -51,7 +51,9 @@ func agentPeakQuota(acc *protocol.AgentAccountUsage, now time.Time) float64 {
 }
 
 // suggestFallbackAgent reports whether currentTarget's agent is at or above
-// quotaWarnThreshold and suggests the lowest-utilization available alternative.
+// quotaWarnThreshold and suggests the lowest-utilization available
+// alternative: one below the threshold, and so below the current agent too,
+// or none when every other agent is as spent.
 func suggestFallbackAgent(data *protocol.AccountUsage, currentTarget string, availableTargets []string, now time.Time) (bool, string) {
 	if data == nil {
 		return false, ""
@@ -68,7 +70,7 @@ func suggestFallbackAgent(data *protocol.AccountUsage, currentTarget string, ava
 		return false, ""
 	}
 	bestTarget := ""
-	bestUsed := 101.0
+	bestUsed := min(quotaWarnThreshold, curUsed)
 	for _, tgt := range availableTargets {
 		if isShellTarget(tgt) {
 			continue

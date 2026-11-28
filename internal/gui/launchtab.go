@@ -141,6 +141,15 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 	targets := ggui.Derived(func() []string {
 		return sessionAgentTargets(nodeTargets(m.Nodes.Get(), where.Get().NodeID, m.Agents.Get()))
 	}).WithEqual(slices.Equal)
+	// The accounts' quotas are read as the tab opens, and again once the
+	// window connects, so the warning below needs no visit to Account usage.
+	connected := ggui.Map(m.Conn, func(c connState) bool { return c.OK })
+	ggui.Effect(func() ggui.Cleanup {
+		if connected.Get() {
+			m.loadAccountUsage(false)
+		}
+		return nil
+	})
 	agents := borderless(ui.Select(agent).BindOptions(targets).Format(targetLabel).Name(T("Agent")))
 	gitToggle := ui.Tooltip(ui.ButtonOf(ggui.View(worktree, func(on bool) ggui.Widget {
 		return widget.Row(icon("git-branch").Size(14).Color(pick(on, skin.AccentBright, skin.Muted)),
@@ -156,22 +165,21 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 	errLine := reveal(hasErr, func() ggui.Widget {
 		return widget.Box(widget.TextOf(l.Err).Size(12).Color(skin.DotDown)).Pad(0, 6)
 	})
+	// It reads what the tab picks, not its prompt, so typing does not
+	// rebuild it.
 	quotaWarn := ggui.Reactive(func() ggui.Widget {
-		f := l.Form.Get()
-		data := m.AccountUsage.Data.Get()
-		avail := targets.Get()
-		high, fallback := suggestFallbackAgent(data, f.Agent, avail, m.Minute.Get())
+		agent := where.Get().Agent
+		high, fallback := suggestFallbackAgent(m.AccountUsage.Data.Get(), agent, targets.Get(), m.Minute.Get())
 		if !high {
 			return widget.Box()
 		}
 		items := []ggui.Widget{
 			icon("shield-alert").Size(13).Color(skin.DotWaiting),
-			widget.Expanded(widget.Text(Tf("%s is nearing its quota limit.", targetLabel(f.Agent))).Size(12).Color(skin.DotWaiting)),
+			widget.Expanded(widget.Text(Tf("%s is nearing its quota limit.", targetLabel(agent))).Size(12).Color(skin.DotWaiting)),
 		}
 		if fallback != "" {
-			fb := fallback
-			items = append(items, ui.Button(Tf("Switch to %s", targetLabel(fb)), func() {
-				l.Form.Update(func(cur newSession) newSession { cur.Agent = fb; return cur })
+			items = append(items, ui.Button(Tf("Switch to %s", targetLabel(fallback)), func() {
+				l.Form.Update(func(cur newSession) newSession { cur.Agent = fallback; return cur })
 			}).Ghost().Pad(2, 8).Radius(6))
 		}
 		return widget.Box(widget.Row(items...).Gap(6).Align(widget.AlignCenter)).Pad(2, 6)

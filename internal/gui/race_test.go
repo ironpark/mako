@@ -4,7 +4,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -50,37 +49,6 @@ func TestRaceWinnerBodySaysWhatIsCommitted(t *testing.T) {
 	dirty := raceWinnerBody(winner, wt, "Fix it", 3)
 	if !strings.Contains(dirty, "3 uncommitted") || !strings.Contains(dirty, `"Race winner codex: Fix it"`) {
 		t.Fatalf("dirty body %q", dirty)
-	}
-}
-
-func TestSuggestFallbackAgent(t *testing.T) {
-	now := time.Now()
-	data := &protocol.AccountUsage{
-		Accounts: []*protocol.AgentAccountUsage{
-			{
-				Agent:  "claude",
-				Status: "available",
-				Limits: []*protocol.AccountLimit{{Used: 94}},
-			},
-			{
-				Agent:  "codex",
-				Status: "available",
-				Limits: []*protocol.AccountLimit{{Used: 25}},
-			},
-			{
-				Agent:  "agy",
-				Status: "available",
-				Limits: []*protocol.AccountLimit{{Used: 60}},
-			},
-		},
-	}
-	high, fallback := suggestFallbackAgent(data, "claude", []string{"claude", "codex", "agy"}, now)
-	if !high || fallback != "codex" {
-		t.Fatalf("suggestFallbackAgent(claude) = (%v, %q), want (true, codex)", high, fallback)
-	}
-	high2, _ := suggestFallbackAgent(data, "codex", []string{"claude", "codex"}, now)
-	if high2 {
-		t.Fatalf("codex at 25%% should not trigger high-usage warning")
 	}
 }
 

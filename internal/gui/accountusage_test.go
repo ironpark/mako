@@ -102,3 +102,61 @@ func TestCanRewindTurnAndUserTurnIndices(t *testing.T) {
 			turns[0].UserTurnIndex, turns[1].UserTurnIndex, turns[2].UserTurnIndex, turns[3].UserTurnIndex)
 	}
 }
+
+func TestSuggestFallbackAgent(t *testing.T) {
+	now := time.Now()
+	data := &protocol.AccountUsage{
+		Accounts: []*protocol.AgentAccountUsage{
+			{
+				Agent:  "claude",
+				Status: "available",
+				Limits: []*protocol.AccountLimit{{Used: 94}},
+			},
+			{
+				Agent:  "codex",
+				Status: "available",
+				Limits: []*protocol.AccountLimit{{Used: 25}},
+			},
+			{
+				Agent:  "agy",
+				Status: "available",
+				Limits: []*protocol.AccountLimit{{Used: 60}},
+			},
+		},
+	}
+	high, fallback := suggestFallbackAgent(data, "claude", []string{"claude", "codex", "agy"}, now)
+	if !high || fallback != "codex" {
+		t.Fatalf("suggestFallbackAgent(claude) = (%v, %q), want (true, codex)", high, fallback)
+	}
+	high2, _ := suggestFallbackAgent(data, "codex", []string{"claude", "codex"}, now)
+	if high2 {
+		t.Fatalf("codex at 25%% should not trigger high-usage warning")
+	}
+}
+
+func TestSuggestFallbackAgentSkipsSpentAlternatives(t *testing.T) {
+	now := time.Now()
+	usage := func(used map[string]float64) *protocol.AccountUsage {
+		var accs []*protocol.AgentAccountUsage
+		for agent, u := range used {
+			accs = append(accs, &protocol.AgentAccountUsage{Agent: agent, Status: "available", Limits: []*protocol.AccountLimit{{Used: u}}})
+		}
+		return &protocol.AccountUsage{Accounts: accs}
+	}
+	targets := []string{"claude", "codex", "agy"}
+	for _, tc := range []struct {
+		name string
+		used map[string]float64
+		want string
+	}{
+		{"90% against an exhausted 100%", map[string]float64{"claude": 90, "codex": 100}, ""},
+		{"90% against another one past the threshold", map[string]float64{"claude": 90, "codex": 88}, ""},
+		{"100% against one at the threshold", map[string]float64{"claude": 100, "codex": quotaWarnThreshold}, ""},
+		{"the one below the threshold of two", map[string]float64{"claude": 90, "codex": 100, "agy": 50}, "agy"},
+	} {
+		high, fallback := suggestFallbackAgent(usage(tc.used), "claude", targets, now)
+		if !high || fallback != tc.want {
+			t.Errorf("%s: suggestFallbackAgent = (%v, %q), want (true, %q)", tc.name, high, fallback, tc.want)
+		}
+	}
+}
