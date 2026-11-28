@@ -154,14 +154,12 @@ func (h *hscroll) Paint(dst *ggui.Canvas, r ggui.Rect) { dst.Paint(h.child, r) }
 // ghost control in both light and dark themes, while preserving theme borders
 // for dividers inside its popup menu.
 func composerMenuTrigger(menu *ui.MenuWidget) ggui.Widget {
-	return ggui.WithEnv(func(env ggui.Env) ggui.Env {
-		t := uitheme.From(env)
+	return uitheme.Override(func(t *uitheme.Theme) {
 		t.ButtonPad = ggui.Insets(0)
 		t.CardShadow = ggui.ShadowStyle{}
-		t = ui.ButtonOutline.Restyle(t, func(th *uitheme.Theme) ui.ButtonStyle {
+		*t = *ui.ButtonOutline.Restyle(t, func(th *uitheme.Theme) ui.ButtonStyle {
 			return ui.ButtonGhost.Style(th)
 		})
-		return t.Apply(env)
 	}, menu)
 }
 
@@ -359,12 +357,17 @@ func effortMenu(m *model, id, current string, efforts []string) ggui.Widget {
 		}),
 	).Align(widget.AlignCenter)
 
+	var sliderFrom, sliderDerived *uitheme.Theme
 	slider := ggui.WithEnv(func(env ggui.Env) ggui.Env {
-		t := uitheme.From(env)
-		if track := ggui.ResolveColor(skin.Surface3, env); track != nil {
-			t.Muted = track
+		cur := uitheme.Of(env)
+		if cur != sliderFrom || sliderDerived == nil {
+			t := cur.Clone()
+			if track := ggui.ResolveColor(skin.Surface3, env); track != nil {
+				t.Muted = track
+			}
+			sliderFrom, sliderDerived = cur, t
 		}
-		return t.Apply(env)
+		return sliderDerived.Apply(env)
 	}, ui.Slider(sliderVal, 0, float64(max(len(efforts)-1, 0))).
 		Step(1).LargeStep(1).
 		Name(T("Reasoning effort")).

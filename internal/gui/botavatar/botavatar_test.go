@@ -6,8 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ironpark/ggfx"
-	"github.com/ironpark/ggfx/svg"
+	"github.com/ironpark/svgx"
 )
 
 func TestAllBuiltinAvatarsValidAndAnimate(t *testing.T) {
@@ -71,11 +70,11 @@ func TestAnimatedSVGRasterChangesOverTime(t *testing.T) {
 		}
 		renderAt := func(ts time.Duration) []byte {
 			img := image.NewRGBA(image.Rect(0, 0, 64, 64))
-			vx, vy, vw, vh := doc.ViewBox()
-			var m ggfx.GeoM
-			m.Translate(-vx, -vy)
-			m.Scale(64.0/vw, 64.0/vh)
-			doc.DrawWith(img, m, &svg.DrawOptions{Time: ts})
+			vb := doc.ViewBox()
+			var m svgx.Matrix
+			m.Translate(-vb.X, -vb.Y)
+			m.Scale(64.0/vb.W, 64.0/vb.H)
+			_ = doc.Draw(img, m, &svgx.DrawOptions{Time: ts})
 			return img.Pix
 		}
 		f0 := renderAt(0)
