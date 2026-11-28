@@ -13,7 +13,7 @@ var builtins = []agent.Command{
 	{Name: "agents", Description: "List available custom agents"},
 	{Name: "artifact", Description: "View and review artifacts"},
 	{Name: "boost", Description: "Deep thinking, strategic planning and rigorous verification"},
-	{Name: "btw", Description: "Ask a side question without interrupting the current task"},
+	{Name: "btw", Description: "Ask a side question without interrupting the current task", Args: "<question>"},
 	{Name: "changelog", Description: "Show release notes and changes"},
 	{Name: "compact", Description: "Compact conversation context to free up the context window"},
 	{Name: "config", Description: "Open settings"},

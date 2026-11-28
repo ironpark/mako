@@ -1306,6 +1306,133 @@ func (x *RewindSession) GetUserTurnIndex() int32 {
 	return 0
 }
 
+// AskSideQuestion asks a quick side question (/btw) about a session without
+// interrupting an active turn or adding the exchange to the session's history
+// (revision 54).
+type AskSideQuestion struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Question      string                 `protobuf:"bytes,3,opt,name=question,proto3" json:"question,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AskSideQuestion) Reset() {
+	*x = AskSideQuestion{}
+	mi := &file_mako_v2_chat_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AskSideQuestion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AskSideQuestion) ProtoMessage() {}
+
+func (x *AskSideQuestion) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AskSideQuestion.ProtoReflect.Descriptor instead.
+func (*AskSideQuestion) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *AskSideQuestion) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *AskSideQuestion) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *AskSideQuestion) GetQuestion() string {
+	if x != nil {
+		return x.Question
+	}
+	return ""
+}
+
+// SideQuestionAnswer answers AskSideQuestion (revision 54).
+type SideQuestionAnswer struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Question string                 `protobuf:"bytes,1,opt,name=question,proto3" json:"question,omitempty"`
+	Answer   string                 `protobuf:"bytes,2,opt,name=answer,proto3" json:"answer,omitempty"`
+	// mode is how the answer was produced: "native" (the agent's own /btw or
+	// /side overlay), "appserver" (Codex's ephemeral forked thread), or
+	// "fallback" (a read-only one-shot call over the session's transcript).
+	Mode          string `protobuf:"bytes,3,opt,name=mode,proto3" json:"mode,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SideQuestionAnswer) Reset() {
+	*x = SideQuestionAnswer{}
+	mi := &file_mako_v2_chat_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SideQuestionAnswer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SideQuestionAnswer) ProtoMessage() {}
+
+func (x *SideQuestionAnswer) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_v2_chat_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SideQuestionAnswer.ProtoReflect.Descriptor instead.
+func (*SideQuestionAnswer) Descriptor() ([]byte, []int) {
+	return file_mako_v2_chat_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *SideQuestionAnswer) GetQuestion() string {
+	if x != nil {
+		return x.Question
+	}
+	return ""
+}
+
+func (x *SideQuestionAnswer) GetAnswer() string {
+	if x != nil {
+		return x.Answer
+	}
+	return ""
+}
+
+func (x *SideQuestionAnswer) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
 var File_mako_v2_chat_proto protoreflect.FileDescriptor
 
 const file_mako_v2_chat_proto_rawDesc = "" +
@@ -1430,7 +1557,16 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x03 \x01(\tR\tmessageId\x12&\n" +
-	"\x0fuser_turn_index\x18\x04 \x01(\x05R\ruserTurnIndexB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
+	"\x0fuser_turn_index\x18\x04 \x01(\x05R\ruserTurnIndex\"e\n" +
+	"\x0fAskSideQuestion\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1a\n" +
+	"\bquestion\x18\x03 \x01(\tR\bquestion\"\\\n" +
+	"\x12SideQuestionAnswer\x12\x1a\n" +
+	"\bquestion\x18\x01 \x01(\tR\bquestion\x12\x16\n" +
+	"\x06answer\x18\x02 \x01(\tR\x06answer\x12\x12\n" +
+	"\x04mode\x18\x03 \x01(\tR\x04modeB,Z*github.com/ironpark/mako/internal/protocolb\x06proto3"
 
 var (
 	file_mako_v2_chat_proto_rawDescOnce sync.Once
@@ -1444,26 +1580,28 @@ func file_mako_v2_chat_proto_rawDescGZIP() []byte {
 	return file_mako_v2_chat_proto_rawDescData
 }
 
-var file_mako_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_mako_v2_chat_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_mako_v2_chat_proto_goTypes = []any{
-	(*ReadChat)(nil),          // 0: mako.v2.ReadChat
-	(*ChatMessage)(nil),       // 1: mako.v2.ChatMessage
-	(*WatchChat)(nil),         // 2: mako.v2.WatchChat
-	(*ChatLive)(nil),          // 3: mako.v2.ChatLive
-	(*LiveBlock)(nil),         // 4: mako.v2.LiveBlock
-	(*Chat)(nil),              // 5: mako.v2.Chat
-	(*SubAgent)(nil),          // 6: mako.v2.SubAgent
-	(*Usage)(nil),             // 7: mako.v2.Usage
-	(*RateLimit)(nil),         // 8: mako.v2.RateLimit
-	(*ReadAccountUsage)(nil),  // 9: mako.v2.ReadAccountUsage
-	(*AccountUsage)(nil),      // 10: mako.v2.AccountUsage
-	(*AgentAccountUsage)(nil), // 11: mako.v2.AgentAccountUsage
-	(*AccountLimit)(nil),      // 12: mako.v2.AccountLimit
-	(*RewindSession)(nil),     // 13: mako.v2.RewindSession
-	(*Question)(nil),          // 14: mako.v2.Question
+	(*ReadChat)(nil),           // 0: mako.v2.ReadChat
+	(*ChatMessage)(nil),        // 1: mako.v2.ChatMessage
+	(*WatchChat)(nil),          // 2: mako.v2.WatchChat
+	(*ChatLive)(nil),           // 3: mako.v2.ChatLive
+	(*LiveBlock)(nil),          // 4: mako.v2.LiveBlock
+	(*Chat)(nil),               // 5: mako.v2.Chat
+	(*SubAgent)(nil),           // 6: mako.v2.SubAgent
+	(*Usage)(nil),              // 7: mako.v2.Usage
+	(*RateLimit)(nil),          // 8: mako.v2.RateLimit
+	(*ReadAccountUsage)(nil),   // 9: mako.v2.ReadAccountUsage
+	(*AccountUsage)(nil),       // 10: mako.v2.AccountUsage
+	(*AgentAccountUsage)(nil),  // 11: mako.v2.AgentAccountUsage
+	(*AccountLimit)(nil),       // 12: mako.v2.AccountLimit
+	(*RewindSession)(nil),      // 13: mako.v2.RewindSession
+	(*AskSideQuestion)(nil),    // 14: mako.v2.AskSideQuestion
+	(*SideQuestionAnswer)(nil), // 15: mako.v2.SideQuestionAnswer
+	(*Question)(nil),           // 16: mako.v2.Question
 }
 var file_mako_v2_chat_proto_depIdxs = []int32{
-	14, // 0: mako.v2.ChatMessage.questions:type_name -> mako.v2.Question
+	16, // 0: mako.v2.ChatMessage.questions:type_name -> mako.v2.Question
 	4,  // 1: mako.v2.ChatLive.blocks:type_name -> mako.v2.LiveBlock
 	1,  // 2: mako.v2.Chat.messages:type_name -> mako.v2.ChatMessage
 	7,  // 3: mako.v2.Chat.usage:type_name -> mako.v2.Usage
@@ -1493,7 +1631,7 @@ func file_mako_v2_chat_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_v2_chat_proto_rawDesc), len(file_mako_v2_chat_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

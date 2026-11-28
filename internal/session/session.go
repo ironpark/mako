@@ -845,6 +845,12 @@ func (s *Session) Send(text string, keys []byte) error {
 	return s.send(text, keys)
 }
 
+// SendDirect pastes text and types keys directly into the terminal without
+// running recall first. Callers are responsible for verifying the screen state.
+func (s *Session) SendDirect(text string, keys []byte) error {
+	return s.send(text, keys)
+}
+
 // send is Send as typed, wherever the screen is.
 func (s *Session) send(text string, keys []byte) error {
 	if text != "" {
@@ -999,6 +1005,21 @@ func (s *Session) snapshotLocked(styled bool) (*protocol.Snapshot, error) {
 // plainTextLocked is the text the screen shows, without its styles.
 func (s *Session) plainTextLocked() (string, error) {
 	return s.term.FormatString(gostty.FormatOptions{Format: gostty.FormatterFormatPlain})
+}
+
+// ScreenState returns the active plain-text terminal screen and title while
+// the session is running.
+func (s *Session) ScreenState() (screen, title string, ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state != protocol.StateRunning {
+		return "", "", false
+	}
+	text, err := s.plainTextLocked()
+	if err != nil {
+		return "", "", false
+	}
+	return text, s.title, true
 }
 
 // PlainTextUnwrapped renders the active screen and scrollback as plain text

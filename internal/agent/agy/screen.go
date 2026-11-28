@@ -39,6 +39,16 @@ var overlayView = detect.Rule{
 	},
 }
 
+// btwOverlay matches agy's /btw side-question overlay so opening it never
+// misclassifies the session as blocked on a dialog.
+var btwOverlay = detect.Rule{
+	ID: "btw_overlay", Priority: 360, Region: detect.Bottom(20), Hold: true,
+	Lines: []string{
+		`(?i)^\s*(?:[│┃]\s*)?(?:/btw(?:\s|$)|side\s+question\b)`,
+		`(?i)esc\s+to\s+(?:dismiss|close)\b`,
+	},
+}
+
 // questionPromptGates match agy's ask_question choice dialog footers
 // (single-select, multi-select, write-in selection, and final Submit All).
 var questionPromptGates = []detect.Gate{
@@ -50,6 +60,7 @@ var questionPromptGates = []detect.Gate{
 }
 
 var screenRules = detect.MustCompile([]detect.Rule{
+	btwOverlay,
 	overlayView,
 	{
 		ID: "permission_prompt", State: detect.Blocked, Priority: 300, Region: detect.Bottom(5),

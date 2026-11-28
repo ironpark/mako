@@ -49,6 +49,9 @@ func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, _ str
 	if !slices.Contains(cmd, "--dangerously-skip-permissions") && !slices.Contains(cmd, "--permission-prompts") {
 		cmd = append(cmd, "--permission-prompts", "none")
 	}
+	if req.NoTools && !slices.Contains(cmd, "--tools") {
+		cmd = append(cmd, "--tools", "")
+	}
 	prompt := req.Prompt
 	if req.Format == "json" {
 		cmd = append(cmd, "--output-format", "json")

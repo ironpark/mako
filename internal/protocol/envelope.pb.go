@@ -172,6 +172,8 @@ type Envelope struct {
 	//	*Envelope_ListRoutines
 	//	*Envelope_Routines
 	//	*Envelope_RoutineAction
+	//	*Envelope_AskSideQuestion
+	//	*Envelope_SideQuestionAnswer
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1398,6 +1400,24 @@ func (x *Envelope) GetRoutineAction() *RoutineAction {
 	return nil
 }
 
+func (x *Envelope) GetAskSideQuestion() *AskSideQuestion {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_AskSideQuestion); ok {
+			return x.AskSideQuestion
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetSideQuestionAnswer() *SideQuestionAnswer {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SideQuestionAnswer); ok {
+			return x.SideQuestionAnswer
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1944,6 +1964,15 @@ type Envelope_RoutineAction struct {
 	RoutineAction *RoutineAction `protobuf:"bytes,169,opt,name=routine_action,json=routineAction,proto3,oneof"`
 }
 
+type Envelope_AskSideQuestion struct {
+	// Side questions (/btw) asked without interrupting a turn (revision 54).
+	AskSideQuestion *AskSideQuestion `protobuf:"bytes,170,opt,name=ask_side_question,json=askSideQuestion,proto3,oneof"`
+}
+
+type Envelope_SideQuestionAnswer struct {
+	SideQuestionAnswer *SideQuestionAnswer `protobuf:"bytes,171,opt,name=side_question_answer,json=sideQuestionAnswer,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -2204,6 +2233,10 @@ func (*Envelope_Routines) isEnvelope_Body() {}
 
 func (*Envelope_RoutineAction) isEnvelope_Body() {}
 
+func (*Envelope_AskSideQuestion) isEnvelope_Body() {}
+
+func (*Envelope_SideQuestionAnswer) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -2273,7 +2306,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x16mako/v2/routines.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\xb3:\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x16mako/v2/routines.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\xce;\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -2430,7 +2463,9 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"goalAction\x12=\n" +
 	"\rlist_routines\x18\xa7\x01 \x01(\v2\x15.mako.v2.ListRoutinesH\x00R\flistRoutines\x120\n" +
 	"\broutines\x18\xa8\x01 \x01(\v2\x11.mako.v2.RoutinesH\x00R\broutines\x12@\n" +
-	"\x0eroutine_action\x18\xa9\x01 \x01(\v2\x16.mako.v2.RoutineActionH\x00R\rroutineActionB\x06\n" +
+	"\x0eroutine_action\x18\xa9\x01 \x01(\v2\x16.mako.v2.RoutineActionH\x00R\rroutineAction\x12G\n" +
+	"\x11ask_side_question\x18\xaa\x01 \x01(\v2\x18.mako.v2.AskSideQuestionH\x00R\x0faskSideQuestion\x12P\n" +
+	"\x14side_question_answer\x18\xab\x01 \x01(\v2\x1b.mako.v2.SideQuestionAnswerH\x00R\x12sideQuestionAnswerB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2582,6 +2617,8 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*ListRoutines)(nil),          // 128: mako.v2.ListRoutines
 	(*Routines)(nil),              // 129: mako.v2.Routines
 	(*RoutineAction)(nil),         // 130: mako.v2.RoutineAction
+	(*AskSideQuestion)(nil),       // 131: mako.v2.AskSideQuestion
+	(*SideQuestionAnswer)(nil),    // 132: mako.v2.SideQuestionAnswer
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2714,11 +2751,13 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	128, // 127: mako.v2.Envelope.list_routines:type_name -> mako.v2.ListRoutines
 	129, // 128: mako.v2.Envelope.routines:type_name -> mako.v2.Routines
 	130, // 129: mako.v2.Envelope.routine_action:type_name -> mako.v2.RoutineAction
-	130, // [130:130] is the sub-list for method output_type
-	130, // [130:130] is the sub-list for method input_type
-	130, // [130:130] is the sub-list for extension type_name
-	130, // [130:130] is the sub-list for extension extendee
-	0,   // [0:130] is the sub-list for field type_name
+	131, // 130: mako.v2.Envelope.ask_side_question:type_name -> mako.v2.AskSideQuestion
+	132, // 131: mako.v2.Envelope.side_question_answer:type_name -> mako.v2.SideQuestionAnswer
+	132, // [132:132] is the sub-list for method output_type
+	132, // [132:132] is the sub-list for method input_type
+	132, // [132:132] is the sub-list for extension type_name
+	132, // [132:132] is the sub-list for extension extendee
+	0,   // [0:132] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2870,6 +2909,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_ListRoutines)(nil),
 		(*Envelope_Routines)(nil),
 		(*Envelope_RoutineAction)(nil),
+		(*Envelope_AskSideQuestion)(nil),
+		(*Envelope_SideQuestionAnswer)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

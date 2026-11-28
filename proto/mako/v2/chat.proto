@@ -205,3 +205,22 @@ message RewindSession {
   // conversation (used by Codex and as a fallback when message_id is empty).
   int32 user_turn_index = 4;
 }
+
+// AskSideQuestion asks a quick side question (/btw) about a session without
+// interrupting an active turn or adding the exchange to the session's history
+// (revision 54).
+message AskSideQuestion {
+  string node_id = 1;
+  string session_id = 2;
+  string question = 3;
+}
+
+// SideQuestionAnswer answers AskSideQuestion (revision 54).
+message SideQuestionAnswer {
+  string question = 1;
+  string answer = 2;
+  // mode is how the answer was produced: "native" (the agent's own /btw or
+  // /side overlay), "appserver" (Codex's ephemeral forked thread), or
+  // "fallback" (a read-only one-shot call over the session's transcript).
+  string mode = 3;
+}

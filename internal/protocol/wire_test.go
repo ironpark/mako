@@ -37,6 +37,7 @@ func TestEveryTypeHasABody(t *testing.T) {
 		TypeReadAccountUsage, TypeAccountUsage, TypeRewindSession,
 		TypeGoalAction,
 		TypeListRoutines, TypeRoutines, TypeRoutineAction,
+		TypeAskSideQuestion, TypeSideQuestionAnswer,
 	}
 	for _, typ := range types {
 		if _, ok := bodyFields[typ]; !ok {

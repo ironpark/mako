@@ -146,6 +146,8 @@ const (
 	TypeListRoutines          Type = "list_routines"
 	TypeRoutines              Type = "routines"
 	TypeRoutineAction         Type = "routine_action"
+	TypeAskSideQuestion       Type = "ask_side_question"
+	TypeSideQuestionAnswer    Type = "side_question_answer"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

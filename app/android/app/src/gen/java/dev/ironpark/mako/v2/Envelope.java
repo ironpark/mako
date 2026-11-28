@@ -156,6 +156,8 @@ public  final class Envelope extends
     LIST_ROUTINES(167),
     ROUTINES(168),
     ROUTINE_ACTION(169),
+    ASK_SIDE_QUESTION(170),
+    SIDE_QUESTION_ANSWER(171),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -301,6 +303,8 @@ public  final class Envelope extends
         case 167: return LIST_ROUTINES;
         case 168: return ROUTINES;
         case 169: return ROUTINE_ACTION;
+        case 170: return ASK_SIDE_QUESTION;
+        case 171: return SIDE_QUESTION_ANSWER;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -7379,6 +7383,126 @@ public  final class Envelope extends
     }
   }
 
+  public static final int ASK_SIDE_QUESTION_FIELD_NUMBER = 170;
+  /**
+   * <pre>
+   * Side questions (/btw) asked without interrupting a turn (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+   */
+  @java.lang.Override
+  public boolean hasAskSideQuestion() {
+    return bodyCase_ == 170;
+  }
+  /**
+   * <pre>
+   * Side questions (/btw) asked without interrupting a turn (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.AskSideQuestion getAskSideQuestion() {
+    if (bodyCase_ == 170) {
+       return (dev.ironpark.mako.v2.AskSideQuestion) body_;
+    }
+    return dev.ironpark.mako.v2.AskSideQuestion.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Side questions (/btw) asked without interrupting a turn (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+   */
+  private void setAskSideQuestion(dev.ironpark.mako.v2.AskSideQuestion value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 170;
+  }
+  /**
+   * <pre>
+   * Side questions (/btw) asked without interrupting a turn (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+   */
+  private void mergeAskSideQuestion(dev.ironpark.mako.v2.AskSideQuestion value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 170 &&
+        body_ != dev.ironpark.mako.v2.AskSideQuestion.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.AskSideQuestion.newBuilder((dev.ironpark.mako.v2.AskSideQuestion) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 170;
+  }
+  /**
+   * <pre>
+   * Side questions (/btw) asked without interrupting a turn (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+   */
+  private void clearAskSideQuestion() {
+    if (bodyCase_ == 170) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SIDE_QUESTION_ANSWER_FIELD_NUMBER = 171;
+  /**
+   * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSideQuestionAnswer() {
+    return bodyCase_ == 171;
+  }
+  /**
+   * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SideQuestionAnswer getSideQuestionAnswer() {
+    if (bodyCase_ == 171) {
+       return (dev.ironpark.mako.v2.SideQuestionAnswer) body_;
+    }
+    return dev.ironpark.mako.v2.SideQuestionAnswer.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+   */
+  private void setSideQuestionAnswer(dev.ironpark.mako.v2.SideQuestionAnswer value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 171;
+  }
+  /**
+   * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+   */
+  private void mergeSideQuestionAnswer(dev.ironpark.mako.v2.SideQuestionAnswer value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 171 &&
+        body_ != dev.ironpark.mako.v2.SideQuestionAnswer.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SideQuestionAnswer.newBuilder((dev.ironpark.mako.v2.SideQuestionAnswer) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 171;
+  }
+  /**
+   * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+   */
+  private void clearSideQuestionAnswer() {
+    if (bodyCase_ == 171) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -14382,6 +14506,126 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Side questions (/btw) asked without interrupting a turn (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+     */
+    @java.lang.Override
+    public boolean hasAskSideQuestion() {
+      return instance.hasAskSideQuestion();
+    }
+    /**
+     * <pre>
+     * Side questions (/btw) asked without interrupting a turn (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.AskSideQuestion getAskSideQuestion() {
+      return instance.getAskSideQuestion();
+    }
+    /**
+     * <pre>
+     * Side questions (/btw) asked without interrupting a turn (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+     */
+    public Builder setAskSideQuestion(dev.ironpark.mako.v2.AskSideQuestion value) {
+      copyOnWrite();
+      instance.setAskSideQuestion(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Side questions (/btw) asked without interrupting a turn (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+     */
+    public Builder setAskSideQuestion(
+        dev.ironpark.mako.v2.AskSideQuestion.Builder builderForValue) {
+      copyOnWrite();
+      instance.setAskSideQuestion(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Side questions (/btw) asked without interrupting a turn (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+     */
+    public Builder mergeAskSideQuestion(dev.ironpark.mako.v2.AskSideQuestion value) {
+      copyOnWrite();
+      instance.mergeAskSideQuestion(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Side questions (/btw) asked without interrupting a turn (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+     */
+    public Builder clearAskSideQuestion() {
+      copyOnWrite();
+      instance.clearAskSideQuestion();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSideQuestionAnswer() {
+      return instance.hasSideQuestionAnswer();
+    }
+    /**
+     * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SideQuestionAnswer getSideQuestionAnswer() {
+      return instance.getSideQuestionAnswer();
+    }
+    /**
+     * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+     */
+    public Builder setSideQuestionAnswer(dev.ironpark.mako.v2.SideQuestionAnswer value) {
+      copyOnWrite();
+      instance.setSideQuestionAnswer(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+     */
+    public Builder setSideQuestionAnswer(
+        dev.ironpark.mako.v2.SideQuestionAnswer.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSideQuestionAnswer(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+     */
+    public Builder mergeSideQuestionAnswer(dev.ironpark.mako.v2.SideQuestionAnswer value) {
+      copyOnWrite();
+      instance.mergeSideQuestionAnswer(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+     */
+    public Builder clearSideQuestionAnswer() {
+      copyOnWrite();
+      instance.clearSideQuestionAnswer();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -14532,9 +14776,11 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.ListRoutines.class,
             dev.ironpark.mako.v2.Routines.class,
             dev.ironpark.mako.v2.RoutineAction.class,
+            dev.ironpark.mako.v2.AskSideQuestion.class,
+            dev.ironpark.mako.v2.SideQuestionAnswer.class,
           };
           java.lang.String info =
-              "\u0000\u0084\u0001\u0000\u0001\u00a9\u0084\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
+              "\u0000\u0086\u0001\u0000\u0001\u00ab\u0086\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
               "\n<\u0000\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000" +
               "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <" +
               "\u0000!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000" +
@@ -14550,7 +14796,8 @@ public  final class Envelope extends
               "<\u0000\u0091<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000" +
               "\u0097<\u0000\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000\u009d" +
               "<\u0000\u009e<\u0000\u009f<\u0000\u00a0<\u0000\u00a1<\u0000\u00a2<\u0000\u00a3<\u0000" +
-              "\u00a4<\u0000\u00a5<\u0000\u00a6<\u0000\u00a7<\u0000\u00a8<\u0000\u00a9<\u0000";
+              "\u00a4<\u0000\u00a5<\u0000\u00a6<\u0000\u00a7<\u0000\u00a8<\u0000\u00a9<\u0000\u00aa" +
+              "<\u0000\u00ab<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

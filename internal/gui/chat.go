@@ -91,6 +91,9 @@ type chatState struct {
 	// composerFocus focuses the composer's field from code, as the Accept
 	// chip does after taking the suggestion.
 	composerFocus ggui.FocusRef
+	// side holds ephemeral /btw side-question input and answer card state
+	// for this session; never persisted or added to the conversation history.
+	side *sideQuestionState
 	// afterRead runs once a read lands that went out after it was asked
 	// for; reread asks for one more read, the one out having gone first.
 	afterRead []func()
@@ -120,6 +123,7 @@ func newChatState() *chatState {
 		suggestion:          ggui.State(""),
 		dismissedSuggestion: ggui.State(""),
 		ghostCaret:          ggui.State(true),
+		side:                newSideQuestionState(),
 		pending: ggui.State[[]pendingMessage](nil).WithEqual(func(a, b []pendingMessage) bool {
 			return slices.Equal(a, b)
 		}),
@@ -582,7 +586,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	session := widget.Column(
 		widget.Expanded(widget.Stack(feed, newTurnRail(m, find, turns), &afterPaint{fn: find.painted}, hostBadge(m, id), toLatestButton(m, state, scroll, offset),
 			usageOverlay(m, id, chatUsage, viewChip(m, id, group)), findBar(m, id, find.finder())).Expand()),
-		authErrorCard(m, id), approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), planProgress(m, id, state), liveActivityCard(m, id, state), runningAgents(m, id, state), runningTasks(m, id), goalBanner(m, id), chatInput(m, id, state),
+		authErrorCard(m, id), approvalCard(m, id), dialogCard(m, id), compactingRow(m, id), planProgress(m, id, state), liveActivityCard(m, id, state), runningAgents(m, id, state), runningTasks(m, id), goalBanner(m, id), sideQuestionCard(m, id, state), chatInput(m, id, state),
 	).Stretch()
 	// A subagent opened shows its conversation in place of the session's,
 	// which is built once and kept, scroll and draft and all, to come back

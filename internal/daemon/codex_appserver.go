@@ -298,6 +298,58 @@ type codexBridge struct {
 	bgTimer             *time.Timer
 	bgStarted           map[string]int64
 	bgHasTasks          bool
+	sideWaiters         map[string]*codexSideWaiter
+}
+
+type codexSideWaiter struct {
+	mu     sync.Mutex
+	chunks strings.Builder
+	final  string
+	err    error
+	done   chan struct{}
+	closed bool
+}
+
+func newCodexSideWaiter() *codexSideWaiter {
+	return &codexSideWaiter{done: make(chan struct{})}
+}
+
+func (w *codexSideWaiter) appendDelta(delta string) {
+	w.mu.Lock()
+	if !w.closed {
+		w.chunks.WriteString(delta)
+	}
+	w.mu.Unlock()
+}
+
+func (w *codexSideWaiter) setFinal(text string) {
+	w.mu.Lock()
+	if !w.closed && strings.TrimSpace(text) != "" {
+		w.final = text
+	}
+	w.mu.Unlock()
+}
+
+func (w *codexSideWaiter) finish(err error) {
+	w.mu.Lock()
+	if !w.closed {
+		w.err = err
+		w.closed = true
+		close(w.done)
+	}
+	w.mu.Unlock()
+}
+
+func (w *codexSideWaiter) result() (string, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.err != nil {
+		return "", w.err
+	}
+	if s := strings.TrimSpace(w.final); s != "" {
+		return s, nil
+	}
+	return strings.TrimSpace(w.chunks.String()), nil
 }
 
 func newCodexBridge(parent context.Context, sessionID string, client *codex.AppServerClient, cmd *exec.Cmd, exited chan struct{}, cleanupFiles func()) *codexBridge {
@@ -323,6 +375,7 @@ func newCodexBridge(parent context.Context, sessionID string, client *codex.AppS
 		fgItems:        map[string]bool{},
 		fgProcesses:    map[string]bool{},
 		bgStarted:      map[string]int64{},
+		sideWaiters:    map[string]*codexSideWaiter{},
 	}
 	if exited != nil {
 		b.watchProcessExit(exited, 1)
@@ -383,6 +436,7 @@ func (b *codexBridge) onProcessExit(gen uint64) {
 		return
 	}
 	b.settleTurnLocked()
+	b.failSideWaitersLocked(errors.New("codex app-server: exited"))
 }
 
 func (b *codexBridge) signalSwapLocked() {
@@ -560,6 +614,7 @@ func (b *codexBridge) Close() {
 			b.bgTimer = nil
 		}
 		b.settleTurnLocked()
+		b.failSideWaitersLocked(errors.New("codex app-server: disconnected"))
 		client := b.client
 		cmd := b.cmd
 		exited := b.exited
@@ -2177,7 +2232,14 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 
 	case "item/agentMessage/delta":
 		var p codex.AgentMessageDeltaNotification
-		if json.Unmarshal(n.Params, &p) != nil || p.ThreadID != b.threadID() || p.Delta == "" {
+		if json.Unmarshal(n.Params, &p) != nil || p.Delta == "" {
+			return
+		}
+		if w := b.sideWaiter(p.ThreadID); w != nil {
+			w.appendDelta(p.Delta)
+			return
+		}
+		if p.ThreadID != b.threadID() {
 			return
 		}
 		b.mu.Lock()
@@ -2217,7 +2279,16 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 
 	case "item/completed":
 		var p codex.ItemNotification
-		if json.Unmarshal(n.Params, &p) != nil || p.ThreadID != b.threadID() {
+		if json.Unmarshal(n.Params, &p) != nil {
+			return
+		}
+		if w := b.sideWaiter(p.ThreadID); w != nil {
+			if p.Item.Type == "agentMessage" && p.Item.Text != "" {
+				w.setFinal(p.Item.Text)
+			}
+			return
+		}
+		if p.ThreadID != b.threadID() {
 			return
 		}
 		if p.Item.Type == "commandExecution" {
@@ -2234,7 +2305,18 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 
 	case "turn/completed":
 		var p codex.TurnNotification
-		if json.Unmarshal(n.Params, &p) != nil || p.ThreadID != b.threadID() {
+		if json.Unmarshal(n.Params, &p) != nil {
+			return
+		}
+		if w := b.sideWaiter(p.ThreadID); w != nil {
+			if p.Turn.Status != "" && p.Turn.Status != "completed" {
+				w.finish(errors.New("codex side turn ended with status " + p.Turn.Status))
+			} else {
+				w.finish(nil)
+			}
+			return
+		}
+		if p.ThreadID != b.threadID() {
 			return
 		}
 		d.completeCodexTurn(s, b, epoch, p.Turn.ID, p.Turn.Status == "completed", n.EmittedAtMs)

@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 53
+const Revision = 54
+
+// RevisionSideQuestion adds AskSideQuestion and SideQuestionAnswer (Envelope
+// 170 and 171) and CapSideQuestion for asking a quick side question (/btw)
+// without interrupting an active turn or adding it to the session's history.
+const RevisionSideQuestion = 54
 
 // RevisionRoutines adds a node's routines, read and changed through its
 // daemon (ListRoutines, Routines and RoutineAction, Envelope 167 to 169),
@@ -328,10 +333,18 @@ func (a *AgentInfo) Channels() (r, g, b, alpha uint8) {
 // Caps are what mako follows of an agent, SessionInfo.Caps: each bit is a
 // capability the agent's driver has.
 const (
-	CapChat       uint32 = 1 << iota // its conversation reads from a log: chat, usage
-	CapHooks                         // its hooks report: status, approvals
-	CapSubAgents                     // the subagents its calls start are followed
-	CapAnswerKeys                    // its questions are answered by AnswerQuestion
+	CapChat         uint32 = 1 << iota // its conversation reads from a log: chat, usage
+	CapHooks                           // its hooks report: status, approvals
+	CapSubAgents                       // the subagents its calls start are followed
+	CapAnswerKeys                      // its questions are answered by AnswerQuestion
+	CapSideQuestion                    // its terminal or bridge answers side questions (/btw) natively
+)
+
+// Modes reported on SideQuestionAnswer.Mode.
+const (
+	SideQuestionModeNative    = "native"
+	SideQuestionModeAppServer = "appserver"
+	SideQuestionModeFallback  = "fallback"
 )
 
 // The kinds of tool, ChatMessage.Kind: what a tool does, whatever its agent

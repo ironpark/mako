@@ -207,6 +207,8 @@ type ThreadForkParams struct {
 	ServiceTier            string `json:"serviceTier,omitempty"`
 	ApprovalPolicy         string `json:"approvalPolicy,omitempty"`
 	Sandbox                string `json:"sandbox,omitempty"`
+	DeveloperInstructions  string `json:"developerInstructions,omitempty"`
+	Ephemeral              *bool  `json:"ephemeral,omitempty"`
 	ExcludeTurns           bool   `json:"excludeTurns,omitempty"`
 	PersistExtendedHistory bool   `json:"persistExtendedHistory,omitempty"`
 }

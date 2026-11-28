@@ -407,6 +407,7 @@ type OneShotRequest struct {
 	Prompt     string
 	Format     string // "text" (default) or "json"
 	JSONSchema string // optional JSON Schema string when Format == "json"
+	NoTools    bool   // disable tool execution / keep read-only (used for side questions)
 }
 
 // OneShotPrepared describes how to run a prepared non-interactive command.
@@ -509,6 +510,44 @@ type GoalCommands interface {
 	GoalClearCommand() string
 }
 
+// SideQuestionState describes the state of a native side-question overlay
+// read from an agent's terminal screen.
+type SideQuestionState int
+
+const (
+	// SideQuestionNone means no side-question overlay is currently visible.
+	SideQuestionNone SideQuestionState = iota
+	// SideQuestionPending means the overlay is open and waiting for or
+	// streaming its answer.
+	SideQuestionPending
+	// SideQuestionDone means the overlay shows a completed answer ready to
+	// read and dismiss.
+	SideQuestionDone
+)
+
+// SideQuestion is an agent that can answer a quick side question (/btw or
+// /side) without interrupting an active turn or adding the exchange to its
+// conversation history.
+type SideQuestion interface {
+	// SideQuestionCanAsk reports whether the agent's current terminal screen
+	// can safely accept a side-question command right now. It returns false
+	// with a human-readable reason when an approval, permission dialog,
+	// question prompt, form, picker, modal overlay, compaction, or an
+	// already-open side-question overlay is on screen, or when the prompt
+	// box is unavailable.
+	SideQuestionCanAsk(screen, title string) (ok bool, reason string)
+	// SideQuestionCommand formats question as the native slash command to
+	// submit at the agent's prompt (e.g. "/btw ..." or "/side ...").
+	SideQuestionCommand(question string) string
+	// SideQuestionParse inspects screen for the native side-question overlay,
+	// returning the extracted answer text (if any) and the overlay's state.
+	SideQuestionParse(screen string) (answer string, state SideQuestionState)
+	// SideQuestionDismiss returns the key sequence that closes the native
+	// side-question overlay when it is visible on screen, or nil when no
+	// overlay is shown (so a stray Escape never interrupts an active turn).
+	SideQuestionDismiss(screen string) []byte
+}
+
 // TaskEvent is what one line of a log says of a background task.
 type TaskEvent struct {
 	Kind   TaskEventKind
@@ -603,6 +642,9 @@ func Caps(d Driver) uint32 {
 	}
 	if _, ok := d.(KeyedAnswers); ok {
 		caps |= protocol.CapAnswerKeys
+	}
+	if _, ok := d.(SideQuestion); ok {
+		caps |= protocol.CapSideQuestion
 	}
 	return caps
 }

@@ -1650,5 +1650,35 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.RoutineAction getRoutineAction();
 
+  /**
+   * <pre>
+   * Side questions (/btw) asked without interrupting a turn (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+   * @return Whether the askSideQuestion field is set.
+   */
+  boolean hasAskSideQuestion();
+  /**
+   * <pre>
+   * Side questions (/btw) asked without interrupting a turn (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.AskSideQuestion ask_side_question = 170 [json_name = "askSideQuestion"];</code>
+   * @return The askSideQuestion.
+   */
+  dev.ironpark.mako.v2.AskSideQuestion getAskSideQuestion();
+
+  /**
+   * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+   * @return Whether the sideQuestionAnswer field is set.
+   */
+  boolean hasSideQuestionAnswer();
+  /**
+   * <code>.mako.v2.SideQuestionAnswer side_question_answer = 171 [json_name = "sideQuestionAnswer"];</code>
+   * @return The sideQuestionAnswer.
+   */
+  dev.ironpark.mako.v2.SideQuestionAnswer getSideQuestionAnswer();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

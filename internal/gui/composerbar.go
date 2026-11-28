@@ -122,7 +122,7 @@ func composerBar(m *model, id string, state *chatState, input *widget.TextInputW
 		}
 		return roundButton("arrow-up", T("Send"), func() { m.sendComposer(id) }, disabled)
 	})
-	row := []ggui.Widget{widget.Expanded(leftScroll), ghostAcceptChip(m, id, state, input, disabled)}
+	row := []ggui.Widget{widget.Expanded(leftScroll), ghostAcceptChip(m, id, state, input, disabled), sideQuestionButton(m, id, state, disabled)}
 	if state.inTerminal != nil {
 		// The agent's terminal, here, for what only it takes: a dialog no
 		// card shows, a key the agent asks for.
