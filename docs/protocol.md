@@ -854,9 +854,13 @@ only while its user trusts the file as it reads now.
 A trust is for one file of one repository. The node keeps it by three
 values: the root of the repository's main work tree with its links
 resolved, the path of the file from that root (slash-separated), and the
-SHA-256 of the file's content. The node keeps these in `repo-trust.json` in its configuration
-directory. When the file changes, it is not trusted. The user must trust
-it again as it reads then. These requests need revision 55.
+SHA-256 of the file's content. On macOS and Windows, whose file systems
+ignore case by default, the node matches the root and the path without
+regard to case. The node keeps these in `repo-trust.json` in its
+configuration directory. When the file changes, it is not trusted. The
+user must trust it again as it reads then. The node reads the file from
+the repository's root, and follows a link in its path only while the
+link stays inside the repository. These requests need revision 55.
 
 | Request | Payload | Reply | |
 |---|---|---|---|
