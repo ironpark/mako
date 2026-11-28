@@ -16,6 +16,7 @@ import "mako/v2/git.proto";
 import "mako/v2/forge.proto";
 import "mako/v2/mesh.proto";
 import "mako/v2/plugins.proto";
+import "mako/v2/policy.proto";
 import "mako/v2/pluginstore.proto";
 import "mako/v2/session.proto";
 import "mako/v2/sync.proto";
@@ -206,6 +207,12 @@ message Envelope {
 
     // Unified agent goal status control (revision 51).
     GoalAction goal_action = 166;
+
+    // Cross-agent permission policies and the approvals they decided
+    // (revision 53).
+    ListPolicies list_policies = 167;
+    SetPolicies set_policies = 168;
+    Policies policies = 169;
   }
 }
 

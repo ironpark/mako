@@ -29,7 +29,11 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 52
+const Revision = 53
+
+// RevisionPolicies adds the cross-agent permission policies' requests:
+// list_policies and set_policies, answered with policies.
+const RevisionPolicies = 53
 
 // RevisionCodexFastMode adds session-scoped Codex Fast Mode state and control:
 // SessionInfo.fast_mode (field 44), AgentControls.fast_mode (field 4),

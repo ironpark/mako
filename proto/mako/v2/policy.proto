@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package mako.v2;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// ListPolicies asks this node's daemon for its cross-agent permission
+// policy rules and the approvals they decided. Local front-ends only. The
+// reply is Policies (revision 53).
+message ListPolicies {}
+
+// SetPolicies replaces this node's daemon's global permission policy
+// rules, each checked before any is saved. Local front-ends only. The reply
+// is Policies (revision 53).
+message SetPolicies {
+  repeated PolicyRule rules = 1;
+}
+
+// Policies are a daemon's global permission policy rules, as policies.json
+// in its configuration directory keeps them, and the latest approvals they
+// decided, newest first.
+message Policies {
+  repeated PolicyRule rules = 1;
+  repeated PolicyDecision decisions = 2;
+}
+
+// PolicyRule is one permission policy rule, evaluated before an agent's
+// approval is shown; deny rules win over allow rules.
+message PolicyRule {
+  string id = 1;
+  string name = 2;
+  bool enabled = 3;
+  string action = 4; // allow, deny
+  // agents are the agents it holds for; none for every agent.
+  repeated string agents = 5;
+  // tool is the tool's name as an agent calls it, a glob of names, or a
+  // kind's name across agents: Bash, Edit, Read.
+  string tool = 6;
+  // pattern is a glob over what the call acts on, whole: its command, the
+  // paths it touches; "" for any call of the tool.
+  string pattern = 7;
+  string message = 8; // what a deny tells the agent; "" for a default
+}
+
+// PolicyDecision is one approval a rule decided.
+message PolicyDecision {
+  google.protobuf.Timestamp time = 1;
+  string session = 2;
+  string agent = 3;
+  string tool = 4;
+  string detail = 5; // a line's preview of the call
+  string action = 6; // allow, deny
+  string rule_id = 7;
+  string rule = 8; // the rule's name
+}

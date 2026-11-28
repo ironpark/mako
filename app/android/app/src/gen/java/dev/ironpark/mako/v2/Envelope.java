@@ -153,6 +153,9 @@ public  final class Envelope extends
     ACCOUNT_USAGE(164),
     REWIND_SESSION(165),
     GOAL_ACTION(166),
+    LIST_POLICIES(167),
+    SET_POLICIES(168),
+    POLICIES(169),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -295,6 +298,9 @@ public  final class Envelope extends
         case 164: return ACCOUNT_USAGE;
         case 165: return REWIND_SESSION;
         case 166: return GOAL_ACTION;
+        case 167: return LIST_POLICIES;
+        case 168: return SET_POLICIES;
+        case 169: return POLICIES;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -7203,6 +7209,181 @@ public  final class Envelope extends
     }
   }
 
+  public static final int LIST_POLICIES_FIELD_NUMBER = 167;
+  /**
+   * <pre>
+   * Cross-agent permission policies and the approvals they decided
+   * (revision 53).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+   */
+  @java.lang.Override
+  public boolean hasListPolicies() {
+    return bodyCase_ == 167;
+  }
+  /**
+   * <pre>
+   * Cross-agent permission policies and the approvals they decided
+   * (revision 53).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.ListPolicies getListPolicies() {
+    if (bodyCase_ == 167) {
+       return (dev.ironpark.mako.v2.ListPolicies) body_;
+    }
+    return dev.ironpark.mako.v2.ListPolicies.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * Cross-agent permission policies and the approvals they decided
+   * (revision 53).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+   */
+  private void setListPolicies(dev.ironpark.mako.v2.ListPolicies value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 167;
+  }
+  /**
+   * <pre>
+   * Cross-agent permission policies and the approvals they decided
+   * (revision 53).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+   */
+  private void mergeListPolicies(dev.ironpark.mako.v2.ListPolicies value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 167 &&
+        body_ != dev.ironpark.mako.v2.ListPolicies.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListPolicies.newBuilder((dev.ironpark.mako.v2.ListPolicies) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 167;
+  }
+  /**
+   * <pre>
+   * Cross-agent permission policies and the approvals they decided
+   * (revision 53).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+   */
+  private void clearListPolicies() {
+    if (bodyCase_ == 167) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SET_POLICIES_FIELD_NUMBER = 168;
+  /**
+   * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSetPolicies() {
+    return bodyCase_ == 168;
+  }
+  /**
+   * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SetPolicies getSetPolicies() {
+    if (bodyCase_ == 168) {
+       return (dev.ironpark.mako.v2.SetPolicies) body_;
+    }
+    return dev.ironpark.mako.v2.SetPolicies.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+   */
+  private void setSetPolicies(dev.ironpark.mako.v2.SetPolicies value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 168;
+  }
+  /**
+   * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+   */
+  private void mergeSetPolicies(dev.ironpark.mako.v2.SetPolicies value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 168 &&
+        body_ != dev.ironpark.mako.v2.SetPolicies.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SetPolicies.newBuilder((dev.ironpark.mako.v2.SetPolicies) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 168;
+  }
+  /**
+   * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+   */
+  private void clearSetPolicies() {
+    if (bodyCase_ == 168) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int POLICIES_FIELD_NUMBER = 169;
+  /**
+   * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+   */
+  @java.lang.Override
+  public boolean hasPolicies() {
+    return bodyCase_ == 169;
+  }
+  /**
+   * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.Policies getPolicies() {
+    if (bodyCase_ == 169) {
+       return (dev.ironpark.mako.v2.Policies) body_;
+    }
+    return dev.ironpark.mako.v2.Policies.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+   */
+  private void setPolicies(dev.ironpark.mako.v2.Policies value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 169;
+  }
+  /**
+   * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+   */
+  private void mergePolicies(dev.ironpark.mako.v2.Policies value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 169 &&
+        body_ != dev.ironpark.mako.v2.Policies.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Policies.newBuilder((dev.ironpark.mako.v2.Policies) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 169;
+  }
+  /**
+   * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+   */
+  private void clearPolicies() {
+    if (bodyCase_ == 169) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -14038,6 +14219,180 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Cross-agent permission policies and the approvals they decided
+     * (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListPolicies() {
+      return instance.hasListPolicies();
+    }
+    /**
+     * <pre>
+     * Cross-agent permission policies and the approvals they decided
+     * (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListPolicies getListPolicies() {
+      return instance.getListPolicies();
+    }
+    /**
+     * <pre>
+     * Cross-agent permission policies and the approvals they decided
+     * (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+     */
+    public Builder setListPolicies(dev.ironpark.mako.v2.ListPolicies value) {
+      copyOnWrite();
+      instance.setListPolicies(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Cross-agent permission policies and the approvals they decided
+     * (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+     */
+    public Builder setListPolicies(
+        dev.ironpark.mako.v2.ListPolicies.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListPolicies(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * Cross-agent permission policies and the approvals they decided
+     * (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+     */
+    public Builder mergeListPolicies(dev.ironpark.mako.v2.ListPolicies value) {
+      copyOnWrite();
+      instance.mergeListPolicies(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Cross-agent permission policies and the approvals they decided
+     * (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListPolicies list_policies = 167 [json_name = "listPolicies"];</code>
+     */
+    public Builder clearListPolicies() {
+      copyOnWrite();
+      instance.clearListPolicies();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSetPolicies() {
+      return instance.hasSetPolicies();
+    }
+    /**
+     * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SetPolicies getSetPolicies() {
+      return instance.getSetPolicies();
+    }
+    /**
+     * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+     */
+    public Builder setSetPolicies(dev.ironpark.mako.v2.SetPolicies value) {
+      copyOnWrite();
+      instance.setSetPolicies(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+     */
+    public Builder setSetPolicies(
+        dev.ironpark.mako.v2.SetPolicies.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSetPolicies(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+     */
+    public Builder mergeSetPolicies(dev.ironpark.mako.v2.SetPolicies value) {
+      copyOnWrite();
+      instance.mergeSetPolicies(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SetPolicies set_policies = 168 [json_name = "setPolicies"];</code>
+     */
+    public Builder clearSetPolicies() {
+      copyOnWrite();
+      instance.clearSetPolicies();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+     */
+    @java.lang.Override
+    public boolean hasPolicies() {
+      return instance.hasPolicies();
+    }
+    /**
+     * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Policies getPolicies() {
+      return instance.getPolicies();
+    }
+    /**
+     * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+     */
+    public Builder setPolicies(dev.ironpark.mako.v2.Policies value) {
+      copyOnWrite();
+      instance.setPolicies(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+     */
+    public Builder setPolicies(
+        dev.ironpark.mako.v2.Policies.Builder builderForValue) {
+      copyOnWrite();
+      instance.setPolicies(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+     */
+    public Builder mergePolicies(dev.ironpark.mako.v2.Policies value) {
+      copyOnWrite();
+      instance.mergePolicies(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Policies policies = 169 [json_name = "policies"];</code>
+     */
+    public Builder clearPolicies() {
+      copyOnWrite();
+      instance.clearPolicies();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -14185,9 +14540,12 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.AccountUsage.class,
             dev.ironpark.mako.v2.RewindSession.class,
             dev.ironpark.mako.v2.GoalAction.class,
+            dev.ironpark.mako.v2.ListPolicies.class,
+            dev.ironpark.mako.v2.SetPolicies.class,
+            dev.ironpark.mako.v2.Policies.class,
           };
           java.lang.String info =
-              "\u0000\u0081\u0001\u0000\u0001\u00a6\u0081\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
+              "\u0000\u0084\u0001\u0000\u0001\u00a9\u0084\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
               "\n<\u0000\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000" +
               "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <" +
               "\u0000!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000" +
@@ -14203,7 +14561,7 @@ public  final class Envelope extends
               "<\u0000\u0091<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000" +
               "\u0097<\u0000\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000\u009d" +
               "<\u0000\u009e<\u0000\u009f<\u0000\u00a0<\u0000\u00a1<\u0000\u00a2<\u0000\u00a3<\u0000" +
-              "\u00a4<\u0000\u00a5<\u0000\u00a6<\u0000";
+              "\u00a4<\u0000\u00a5<\u0000\u00a6<\u0000\u00a7<\u0000\u00a8<\u0000\u00a9<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

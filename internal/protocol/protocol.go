@@ -143,6 +143,9 @@ const (
 	TypeAccountUsage          Type = "account_usage"
 	TypeRewindSession         Type = "rewind_session"
 	TypeGoalAction            Type = "goal_action"
+	TypeListPolicies          Type = "list_policies"
+	TypeSetPolicies           Type = "set_policies"
+	TypePolicies              Type = "policies"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

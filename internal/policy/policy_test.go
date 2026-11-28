@@ -280,3 +280,15 @@ func TestAppendAuditKeepsConcurrentEntries(t *testing.T) {
 		t.Fatalf("audit kept %d entries (%d sessions), want %d", len(list), len(seen), n)
 	}
 }
+
+// Rules are never saved without a configuration directory to hold them,
+// as policies.json in the working directory.
+func TestSaveRulesNeedsAConfigDir(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := SaveRules(" ", []Rule{{Enabled: true, Action: ActionDeny, Tool: "Bash"}}); err == nil {
+		t.Fatal("SaveRules saved rules with no configuration directory")
+	}
+	if _, err := os.Stat(policiesFileName); !os.IsNotExist(err) {
+		t.Fatalf("SaveRules wrote %s in the working directory: %v", policiesFileName, err)
+	}
+}

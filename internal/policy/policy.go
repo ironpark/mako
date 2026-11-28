@@ -128,6 +128,9 @@ func LoadRules(configDir string) ([]Rule, error) {
 
 // SaveRules atomically writes global permission policy rules to configDir/policies.json.
 func SaveRules(configDir string, rules []Rule) error {
+	if strings.TrimSpace(configDir) == "" {
+		return errors.New("policy: no configuration directory to save rules in")
+	}
 	clean := make([]Rule, len(rules))
 	for i, r := range rules {
 		r = r.Normalized()
