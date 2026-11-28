@@ -89,6 +89,8 @@ func (r Rule) Validate() error {
 }
 
 // Normalized returns r with trimmed fields and a generated ID if missing.
+// An empty Tool stays empty, for Validate to refuse: it never widens to
+// every tool.
 func (r Rule) Normalized() Rule {
 	r.ID = strings.TrimSpace(r.ID)
 	if r.ID == "" {
@@ -96,9 +98,6 @@ func (r Rule) Normalized() Rule {
 	}
 	r.Name = strings.TrimSpace(r.Name)
 	r.Tool = strings.TrimSpace(r.Tool)
-	if r.Tool == "" {
-		r.Tool = "*"
-	}
 	r.Pattern = strings.TrimSpace(r.Pattern)
 	r.Message = strings.TrimSpace(r.Message)
 	return r
@@ -192,7 +191,9 @@ func EvaluateRules(rules []Rule, agentName, tool, detail string) Decision {
 	var allowMatch *Rule
 	for i := range rules {
 		r := rules[i]
-		if !r.Enabled || !ruleMatches(r, agentName, tool, detail) {
+		// A rule edited by hand into one Validate refuses, an empty
+		// tool among them, matches nothing.
+		if !r.Enabled || r.Validate() != nil || !ruleMatches(r, agentName, tool, detail) {
 			continue
 		}
 		if r.Action == ActionDeny {

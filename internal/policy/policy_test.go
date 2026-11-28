@@ -66,3 +66,30 @@ pattern = "*.env*"
 		t.Fatalf("expected only deny rule from project policy, got %+v", rules)
 	}
 }
+
+// A rule whose tool is left empty is refused, never saved as one for every
+// tool; one that reaches the file anyway matches nothing.
+func TestEmptyToolIsNeverAWildcard(t *testing.T) {
+	r := Rule{Enabled: true, Action: ActionAllow, Tool: "  "}.Normalized()
+	if r.Tool != "" {
+		t.Fatalf("Normalized turned an empty tool into %q", r.Tool)
+	}
+	if r.Validate() == nil {
+		t.Fatal("Validate accepted a rule with no tool")
+	}
+	dir := t.TempDir()
+	if err := SaveRules(dir, []Rule{{Enabled: true, Action: ActionAllow}}); err == nil {
+		t.Fatal("SaveRules saved a rule with no tool")
+	}
+	if _, err := os.Stat(filepath.Join(dir, policiesFileName)); !os.IsNotExist(err) {
+		t.Fatalf("SaveRules wrote %s: %v", policiesFileName, err)
+	}
+
+	// Written by hand, it loads, but allows nothing.
+	if err := os.WriteFile(filepath.Join(dir, policiesFileName), []byte(`[{"id":"x","enabled":true,"action":"allow","tool":""}]`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if d := Evaluate(dir, "", "claude", protocol.ToolShell, "Bash", "rm -rf ~"); d.Matched {
+		t.Fatalf("a rule with no tool matched: %+v", d)
+	}
+}
