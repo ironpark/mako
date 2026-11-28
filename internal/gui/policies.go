@@ -2,7 +2,9 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,11 +23,21 @@ import (
 // policies of the daemon the window talks through: they live in its
 // configuration directory, which need not be on this machine.
 type policiesState struct {
+	// Info is the policies of node's daemon; nil until they are read, and
+	// while the window talks to no daemon or to one too old to keep any.
 	Info    *ggui.StateValue[*protocol.Policies]
 	Loading *ggui.StateValue[bool]
-	Note    *ggui.StateValue[string] // why the last request or rule failed; "" for none
-	Asked   bool
-	Node    string // the node whose daemon Info came from
+	// Busy says a save is in flight. Each change is made to the rules
+	// Info holds, so none is made until the save before it is answered.
+	Busy *ggui.StateValue[bool]
+	Note *ggui.StateValue[string] // why the last request or rule failed; "" for none
+	Old  *ggui.StateValue[bool]   // node's daemon is too old to keep policies
+	// node is the node Info is of, or is asked of; "" for none. key is
+	// node with its daemon's revision, which a daemon updated changes.
+	// gen counts requests, so a reply to one that another outran, or that
+	// was for another node, is dropped. UI goroutine only.
+	node, key string
+	gen       int
 }
 
 func newPoliciesState() *policiesState {
@@ -34,65 +46,126 @@ func newPoliciesState() *policiesState {
 			return proto.Equal(a, b)
 		}),
 		Loading: ggui.State(false),
+		Busy:    ggui.State(false),
 		Note:    ggui.State(""),
+		Old:     ggui.State(false),
 	}
 }
 
-// ensurePoliciesLoaded asks the daemon for its policies once, and again
-// once the window talks through another node's.
-func (m *model) ensurePoliciesLoaded() {
-	if m.policies == nil || m.post == nil || ggui.Peek(m.policies.Loading) {
+// errPolicyNode refuses a request to a daemon other than the one the page
+// shows the policies of.
+var errPolicyNode = errors.New("the window now talks to another node")
+
+// followPolicies keeps the page on the node the window talks to, as conn
+// says: once it talks to another, to none, or to its daemon updated, what
+// the page showed is dropped, along with any reply still to come, and the
+// node's policies are asked for.
+func (m *model) followPolicies(conn connState) {
+	st := m.policies
+	if st == nil {
 		return
 	}
-	node := ggui.Peek(m.Conn).Self.GetId()
-	if m.policies.Asked && m.policies.Node == node {
+	node, key := "", ""
+	if conn.OK && conn.Self.GetId() != "" {
+		node = conn.Self.GetId()
+		key = node + "@" + strconv.FormatInt(conn.Self.GetRevision(), 10)
+	}
+	if key == st.key {
 		return
 	}
-	m.policies.Asked, m.policies.Node = true, node
+	st.node, st.key = node, key
+	st.gen++
+	st.Info.Set(nil)
+	st.Loading.Set(false)
+	st.Busy.Set(false)
+	st.Note.Set("")
+	st.Old.Set(node != "" && conn.Self.GetRevision() < protocol.RevisionPolicies)
 	m.loadPolicies()
 }
 
+// loadPolicies asks the daemon for its policies, unless a save is in
+// flight, whose reply holds them.
 func (m *model) loadPolicies() {
-	if m.policies == nil || m.post == nil {
+	st := m.policies
+	if st == nil || m.post == nil || st.node == "" || ggui.Peek(st.Old) || ggui.Peek(st.Busy) {
 		return
 	}
-	m.policies.Loading.Set(true)
+	st.gen++
+	gen, node := st.gen, st.node
+	st.Loading.Set(true)
 	fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Policies, error) {
+		if c.Node().GetId() != node {
+			return nil, errPolicyNode
+		}
 		return c.Policies(ctx)
 	}, func(res *protocol.Policies, err error) {
-		m.policies.Loading.Set(false)
-		if err != nil {
-			m.policies.Note.Set(errorText(err))
+		if gen != st.gen || node != st.node {
 			return
 		}
-		m.policies.Note.Set("")
-		m.policies.Info.Set(res)
+		st.Loading.Set(false)
+		if err != nil {
+			st.Note.Set(errorText(err))
+			return
+		}
+		st.Note.Set("")
+		st.Info.Set(res)
 	})
 }
 
 // savePolicyRules has the daemon take rules in place of its own; onOK runs
-// once it did.
+// once it did. It saves nothing while another save is in flight, nor
+// before the node's rules were read, and only to the node they were read
+// of.
 func (m *model) savePolicyRules(rules []policy.Rule, onOK func()) {
-	if m.policies == nil || m.post == nil {
+	st := m.policies
+	if st == nil || m.post == nil || st.node == "" || ggui.Peek(st.Busy) || ggui.Peek(st.Info) == nil {
 		return
 	}
 	req := &protocol.SetPolicies{}
 	for _, r := range rules {
 		req.Rules = append(req.Rules, policy.RuleProto(r))
 	}
-	m.policies.Note.Set("")
+	st.gen++
+	gen, node := st.gen, st.node
+	st.Busy.Set(true)
+	st.Loading.Set(false)
+	st.Note.Set("")
 	fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Policies, error) {
+		if c.Node().GetId() != node {
+			return nil, errPolicyNode
+		}
 		return c.SetPolicies(ctx, req)
 	}, func(res *protocol.Policies, err error) {
-		if err != nil {
-			m.policies.Note.Set(errorText(err))
+		if gen != st.gen || node != st.node {
 			return
 		}
-		m.policies.Info.Set(res)
+		st.Busy.Set(false)
+		if err != nil {
+			st.Note.Set(errorText(err))
+			return
+		}
+		st.Info.Set(res)
 		if onOK != nil {
 			onOK()
 		}
 	})
+}
+
+// policyRuleError is why a rule cannot be saved, in the window's language.
+func policyRuleError(err error) string {
+	switch {
+	case errors.Is(err, policy.ErrAction):
+		return T("Choose whether the rule allows or denies.")
+	case errors.Is(err, policy.ErrNoTool):
+		return T("Name the rule's tool, or * for any tool.")
+	case errors.Is(err, policy.ErrBlankAgent):
+		return T("An agent's name cannot be blank.")
+	case errors.Is(err, policy.ErrTooLong):
+		return T("A field of this rule is too long.")
+	case errors.Is(err, policy.ErrTooMany):
+		return Tf("A node keeps at most %d rules.", policy.MaxRules)
+	}
+	return errorText(err)
 }
 
 // policyRules are the rules p carries.
@@ -105,7 +178,10 @@ func policyRules(p *protocol.Policies) []policy.Rule {
 }
 
 func policySettings(m *model) ggui.Widget {
-	m.ensurePoliciesLoaded()
+	ggui.Effect(func() ggui.Cleanup {
+		m.followPolicies(m.Conn.Get())
+		return nil
+	})
 
 	// Rule form state
 	rName := ggui.State("")
@@ -135,10 +211,14 @@ func policySettings(m *model) ggui.Widget {
 		}
 		r = r.Normalized()
 		if err := r.Validate(); err != nil {
-			m.policies.Note.Set(err.Error())
+			m.policies.Note.Set(policyRuleError(err))
 			return
 		}
 		next := append(policyRules(ggui.Peek(m.policies.Info)), r)
+		if len(next) > policy.MaxRules {
+			m.policies.Note.Set(policyRuleError(policy.ErrTooMany))
+			return
+		}
 		m.savePolicyRules(next, func() {
 			rName.Set("")
 			rPattern.Set("")
@@ -148,14 +228,22 @@ func policySettings(m *model) ggui.Widget {
 
 	rulesSection := ggui.Reactive(func() ggui.Widget {
 		info := m.policies.Info.Get()
+		busy := m.policies.Busy.Get()
+		if m.policies.Old.Get() {
+			return card(widget.Box(warnLine("circle-slash", skin.DiffRemoved, T("The mako on this node is older and cannot do this. Update it there."))).Pad(14, 16))
+		}
 		if info == nil {
+			connected := m.Conn.Get().OK
+			loading := m.policies.Loading.Get()
 			msg := T("Loading policies…")
-			if !m.policies.Loading.Get() {
+			if !connected {
 				msg = T("Connect to this node's daemon to manage its policies.")
+			} else if !loading {
+				msg = T("Could not read this node's policies.")
 			}
 			rows := []ggui.Widget{widget.Box(widget.Row(
 				widget.Expanded(muted(widget.Text(msg).Size(12.5))),
-				ui.Button(T("Retry"), func() { m.loadPolicies() }).Outline(),
+				ui.Button(T("Retry"), func() { m.loadPolicies() }).Outline().Disabled(!connected || loading),
 			).Gap(12).Align(widget.AlignCenter)).Pad(14, 16)}
 			if note := m.policies.Note.Get(); note != "" {
 				rows = append(rows, widget.Box(widget.Text(note).Size(12).Color(skin.DotDown)).Pad(0, 16, 12, 16))
@@ -187,27 +275,32 @@ func policySettings(m *model) ggui.Widget {
 			if len(r.Agents) > 0 {
 				spec += " · " + strings.Join(r.Agents, ", ")
 			}
+			lines := []ggui.Widget{
+				widget.Text(label).Size(13).Weight(ggui.WeightMedium),
+				muted(widget.Text(spec).Size(12).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()),
+			}
+			// What a deny rule tells the agent.
+			if r.Action == policy.ActionDeny && r.Message != "" {
+				lines = append(lines, muted(widget.Text(Tf("Tells the agent: %s", r.Message)).Size(12).NoWrap().Ellipsis()))
+			}
 			rows = append(rows, widget.Box(widget.Row(
 				dot(pick(r.Enabled, col, skin.ExtraMuted)),
 				widget.Box(widget.Text(pick(r.Action == policy.ActionAllow, T("Allow"), T("Deny"))).Size(11).Weight(ggui.WeightMedium).Color(col).NoWrap()).
 					Fill(col.Alpha(0.14)).Radius(6).Pad(2, 7),
-				widget.Expanded(widget.Column(
-					widget.Text(label).Size(13).Weight(ggui.WeightMedium),
-					muted(widget.Text(spec).Size(12).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()),
-				).Gap(2).Stretch()),
+				widget.Expanded(widget.Column(lines...).Gap(2).Stretch()),
 				ui.Button(pick(r.Enabled, T("Disable"), T("Enable")), func() {
 					cur := policyRules(ggui.Peek(m.policies.Info))
 					if idx < len(cur) {
 						cur[idx].Enabled = !cur[idx].Enabled
 						m.savePolicyRules(cur, nil)
 					}
-				}).Ghost().Pad(4, 8).Radius(6),
-				iconButton("x", T("Delete rule"), func() {
+				}).Ghost().Pad(4, 8).Radius(6).Disabled(busy),
+				ui.Tooltip(ui.ButtonOf(icon("x"), func() {
 					cur := policyRules(ggui.Peek(m.policies.Info))
 					if idx < len(cur) {
 						m.savePolicyRules(slices.Delete(cur, idx, idx+1), nil)
 					}
-				}),
+				}).Ghost().Pad(6).Radius(6).Name(T("Delete rule")).Disabled(busy), T("Delete rule")),
 			).Gap(8).Align(widget.AlignCenter)).Pad(10, 16))
 		}
 		rows = append(rows, widget.Box(widget.Column(
@@ -231,7 +324,7 @@ func policySettings(m *model) ggui.Widget {
 			widget.Row(
 				widget.Expanded(ui.TextField(rName).Placeholder(T("Rule name (optional)")).Name(T("Rule name"))),
 				widget.Box(ui.TextField(rAgents).Placeholder(T("Agents (empty = all)")).Name(T("Agents"))).Width(180),
-				ui.Button(T("Add rule"), addRule),
+				ui.Button(pick(busy, T("Saving…"), T("Add rule")), addRule).Disabled(busy),
 			).Gap(8).Align(widget.AlignCenter),
 			ggui.Reactive(func() ggui.Widget {
 				if e := m.policies.Note.Get(); e != "" {
@@ -253,7 +346,7 @@ func policySettings(m *model) ggui.Widget {
 		rows := make([]ggui.Widget, 0, len(shown)+2)
 		rows = append(rows, widget.Box(widget.Row(
 			widget.Expanded(widget.Text(T("Policy audit log")).Size(13).Weight(ggui.WeightSemibold)),
-			ui.Button(T("Refresh"), func() { m.loadPolicies() }).Ghost().Pad(4, 8).Radius(6),
+			ui.Button(T("Refresh"), func() { m.loadPolicies() }).Ghost().Pad(4, 8).Radius(6).Disabled(m.policies.Busy.Get() || m.policies.Loading.Get()),
 		).Align(widget.AlignCenter)).Pad(10, 16))
 		if auditErr != "" {
 			rows = append(rows, widget.Box(warnLine("circle-slash", skin.DiffRemoved, Tf("Could not read the audit log: %s", auditErr))).Pad(0, 16, 10, 16))

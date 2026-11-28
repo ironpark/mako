@@ -2129,4 +2129,11 @@ var catalogKo = map[string]string{
 	"Connect to this node's daemon to manage its policies.":     "정책을 관리하려면 이 노드의 데몬에 연결하세요.",
 	"Cross-agent permission rules and the decisions they made.": "모든 에이전트에 공통 적용되는 권한 규칙과 그 규칙이 내린 결정입니다.",
 	"Could not read the audit log: %s":                          "감사 로그를 읽을 수 없음: %s",
+	"Could not read this node's policies.":                      "이 노드의 정책을 읽을 수 없습니다.",
+	"Tells the agent: %s":                                       "에이전트에게 전달: %s",
+	"Choose whether the rule allows or denies.":                 "규칙이 허용할지 거부할지 선택하세요.",
+	"Name the rule's tool, or * for any tool.":                  "규칙의 도구 이름을 입력하세요. 모든 도구는 *입니다.",
+	"An agent's name cannot be blank.":                          "에이전트 이름은 비워 둘 수 없습니다.",
+	"A field of this rule is too long.":                         "이 규칙의 항목 중 너무 긴 것이 있습니다.",
+	"A node keeps at most %d rules.":                            "한 노드에는 규칙을 최대 %d개까지 둘 수 있습니다.",
 }
