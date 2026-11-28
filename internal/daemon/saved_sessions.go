@@ -147,6 +147,14 @@ func (d *Daemon) saveSessionsLocked() error {
 	return fsutil.Write(d.sessionPath, data)
 }
 
+// savedEntry is what the daemon keeps of session id's launch.
+func (d *Daemon) savedEntry(id string) (savedSession, bool) {
+	d.sessionMu.Lock()
+	defer d.sessionMu.Unlock()
+	entry, ok := d.saved[id]
+	return entry, ok
+}
+
 func (d *Daemon) listSessions() []*protocol.SessionInfo {
 	d.sessionMu.Lock()
 	out := d.sessions.list()
@@ -766,6 +774,7 @@ func (d *Daemon) closeSession(id string) error {
 	d.dropCheckpoints(id, root, wtRepo)
 	d.live.forget(id)
 	d.loggedCommands.forget(id)
+	d.forgetHost(id)
 	if err := d.projectAgents.messages.remove(id); err != nil {
 		d.log.Warn("agent inbox could not be removed", "session", id, "err", err)
 	}

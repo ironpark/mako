@@ -37,6 +37,16 @@ type approvals struct {
 	here    time.Time                   // the last such listing by a front-end of this daemon
 	held    int                         // the front-ends of this daemon's watching for approvals on a watch stream
 	pending map[string]*pendingApproval // by approval ID
+	// sessions are the sessions a subscriber of their host shows the
+	// approvals of, and until when, after the last left, they still count
+	// as shown: a front-end that hands a session to another is not one
+	// that stopped watching.
+	sessions map[string]*sessionWatch
+}
+
+type sessionWatch struct {
+	held  int
+	until time.Time
 }
 
 type pendingApproval struct {
@@ -84,6 +94,50 @@ func (a *approvals) watching() bool {
 	return a.held > 0 || time.Since(a.watched) < approvalWatch
 }
 
+// holdSession counts session id's approvals as shown until release is
+// called, and for grace after.
+func (a *approvals) holdSession(id string, grace time.Duration) (release func()) {
+	a.mu.Lock()
+	if a.sessions == nil {
+		a.sessions = map[string]*sessionWatch{}
+	}
+	w := a.sessions[id]
+	if w == nil {
+		w = &sessionWatch{}
+		a.sessions[id] = w
+	}
+	w.held++
+	a.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			a.mu.Lock()
+			defer a.mu.Unlock()
+			w.held--
+			w.until = time.Now().Add(grace)
+		})
+	}
+}
+
+// watchingSession reports whether session id's approvals are shown: by a
+// front-end watching them all, or by one subscribed to its host.
+func (a *approvals) watchingSession(id string) bool {
+	if a.watching() {
+		return true
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	w := a.sessions[id]
+	if w == nil {
+		return false
+	}
+	if w.held > 0 || time.Now().Before(w.until) {
+		return true
+	}
+	delete(a.sessions, id)
+	return false
+}
+
 // ask holds an approval s's agent, the one called name, asks for until it
 // is answered, the front-ends stop watching, the session ends or ctx does,
 // and returns the hook's reply: "" leaves it to the agent's prompt. A
@@ -106,7 +160,7 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 			return hookReply{}
 		}
 	}
-	if !a.watching() {
+	if !a.watchingSession(s.ID()) {
 		return hookReply{}
 	}
 	var options []*protocol.ApprovalOption
@@ -169,7 +223,7 @@ func (a *approvals) ask(ctx context.Context, s *session.Session, name string, ev
 			status = protocol.AgentWorking
 			return reply
 		case <-tick.C:
-			if !a.watching() {
+			if !a.watchingSession(s.ID()) {
 				status = protocol.AgentWaiting
 				return hookReply{}
 			}
