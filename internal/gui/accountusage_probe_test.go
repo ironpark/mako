@@ -91,3 +91,29 @@ func TestAccountAnalyticsFollowsChatsRefreshAndScrolls(t *testing.T) {
 	refresh()
 	pump(t, "the refresh of an open chat", total("Loaded sessions total: 114k in · 0 out · $84.00"), p)
 }
+
+func TestUsageRefreshEndsWithoutAWindow(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s1", Agent: "claude", Caps: protocol.CapChat}, {Id: "s2", Agent: "codex", Caps: protocol.CapChat}})
+	m.refreshSessionUsages()
+	if r := ggui.Peek(m.AccountUsage.Sessions); r.running() || r.Total != 2 {
+		t.Fatalf("refresh = %+v, want two sessions and done", r)
+	}
+	if m.usages["s1"].loading {
+		t.Fatal("a usage read left loading with nothing asked")
+	}
+}
+
+func TestSetDefaultAgentGoesAheadOfTheLastOne(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.lastAgent = "codex"
+	if got := m.defaultSessionAgent(""); got != "codex" {
+		t.Fatalf("before: %q", got)
+	}
+	m.setDefaultAgent("agy")
+	if got := m.defaultSessionAgent(""); got != "agy" {
+		t.Fatalf("a new session starts with %q, want the new default agy", got)
+	}
+}

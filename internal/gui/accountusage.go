@@ -193,6 +193,14 @@ func (m *model) refreshSessionUsages() {
 	}
 }
 
+// setDefaultAgent makes target the agent new sessions start with, ahead
+// of the one the last session started with.
+func (m *model) setDefaultAgent(target string) {
+	m.Prefs.Update(func(p prefs) prefs { p.DefaultAgent = target; return p })
+	m.lastAgent = ""
+	m.toaster.Push(ui.Toast(T("Default agent updated"), targetLabel(target)))
+}
+
 func (m *model) openAccountUsage() {
 	m.AccountUsage.Open.Set(true)
 	m.loadAccountUsage(false)
@@ -200,7 +208,8 @@ func (m *model) openAccountUsage() {
 
 func (m *model) loadAccountUsage(refresh bool) {
 	st := m.AccountUsage
-	if st == nil || st.inFlight {
+	// With no window to answer in, nothing is asked, and nothing waits.
+	if st == nil || st.inFlight || m.post == nil {
 		return
 	}
 	if !refresh && ggui.Peek(st.Data) != nil {
@@ -369,8 +378,7 @@ func accountUsageDialog(m *model) ggui.Widget {
 			if fallback != "" {
 				fb := fallback
 				warnItems = append(warnItems, ui.Button(Tf("Switch default to %s", targetLabel(fb)), func() {
-					m.Prefs.Update(func(p prefs) prefs { p.DefaultAgent = fb; return p })
-					m.toaster.Push(ui.Toast(T("Default agent updated"), targetLabel(fb)))
+					m.setDefaultAgent(fb)
 				}).Pad(4, 10).Radius(6))
 			}
 			rows = append(rows, widget.Box(widget.Row(warnItems...).Gap(8).Align(widget.AlignCenter)).
@@ -494,8 +502,7 @@ func accountUsageCard(m *model, acc *protocol.AgentAccountUsage, now time.Time, 
 	headItems = append(headItems, widget.Spacer())
 	if acc.GetStatus() == "available" && !isDefault {
 		headItems = append(headItems, ui.Button(T("Set as default"), func() {
-			m.Prefs.Update(func(p prefs) prefs { p.DefaultAgent = name; return p })
-			m.toaster.Push(ui.Toast(T("Default agent updated"), name))
+			m.setDefaultAgent(name)
 		}).Ghost().Pad(3, 8).Radius(6))
 	}
 	if acc.Credits != nil {

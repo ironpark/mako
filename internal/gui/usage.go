@@ -105,14 +105,15 @@ func (m *model) loadUsage(id string, state *usageState) { m.loadUsageThen(id, st
 
 // loadUsageThen is loadUsage, calling done, if not nil, once the answer
 // is in, or at once when there is nothing to ask: a request already under
-// way, which sets the usage itself, or a session no longer listed.
+// way, which sets the usage itself, a session no longer listed, or no
+// window to answer in.
 func (m *model) loadUsageThen(id string, state *usageState, done func()) {
 	finish := func() {
 		if done != nil {
 			done()
 		}
 	}
-	if state.loading || m.usages[id] != state {
+	if state.loading || m.usages[id] != state || m.post == nil {
 		finish()
 		return
 	}
