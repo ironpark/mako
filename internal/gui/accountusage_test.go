@@ -65,25 +65,25 @@ func TestCanRewindTurnAndUserTurnIndices(t *testing.T) {
 	userNoID := &protocol.ChatMessage{Role: "user", Text: "hi"}
 	asst := &protocol.ChatMessage{Role: "assistant", Text: "hello"}
 
-	if !canRewindTurn(claudeInfo, userWithID, 0, false) {
+	if !canRewindTurn(claudeInfo, userWithID, 0, false, false) {
 		t.Fatal("claude user turn with UUID should be rewindable even without full history")
 	}
-	if canRewindTurn(claudeInfo, userNoID, 0, false) {
+	if canRewindTurn(claudeInfo, userNoID, 0, false, false) {
 		t.Fatal("claude user turn without UUID requires full history")
 	}
-	if !canRewindTurn(claudeInfo, userNoID, 0, true) {
+	if !canRewindTurn(claudeInfo, userNoID, 0, true, false) {
 		t.Fatal("claude user turn without UUID should be rewindable with full history")
 	}
-	if canRewindTurn(codexInfo, userWithID, 0, false) {
+	if canRewindTurn(codexInfo, userWithID, 0, false, false) {
 		t.Fatal("codex user turn requires full history for accurate turn index")
 	}
-	if !canRewindTurn(codexInfo, userNoID, 1, true) {
+	if !canRewindTurn(codexInfo, userNoID, 1, true, false) {
 		t.Fatal("codex user turn should be rewindable with full history")
 	}
-	if canRewindTurn(codexInfo, asst, 0, true) {
+	if canRewindTurn(codexInfo, asst, 0, true, false) {
 		t.Fatal("assistant turns must not be rewindable")
 	}
-	if canRewindTurn(shellInfo, userWithID, 0, true) {
+	if canRewindTurn(shellInfo, userWithID, 0, true, false) {
 		t.Fatal("shell sessions must not be rewindable")
 	}
 

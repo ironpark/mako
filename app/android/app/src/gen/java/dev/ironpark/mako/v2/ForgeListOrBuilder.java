@@ -118,4 +118,26 @@ public interface ForgeListOrBuilder extends
    * @return The current.
    */
   boolean getCurrent();
+
+  /**
+   * <pre>
+   * order is "created" for the newest opened first; "" for the most
+   * recently active first. Pull requests and issues (revision 53).
+   * </pre>
+   *
+   * <code>string order = 8 [json_name = "order"];</code>
+   * @return The order.
+   */
+  java.lang.String getOrder();
+  /**
+   * <pre>
+   * order is "created" for the newest opened first; "" for the most
+   * recently active first. Pull requests and issues (revision 53).
+   * </pre>
+   *
+   * <code>string order = 8 [json_name = "order"];</code>
+   * @return The bytes for order.
+   */
+  com.google.protobuf.ByteString
+      getOrderBytes();
 }

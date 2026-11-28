@@ -813,11 +813,14 @@ func chatTurnRow(m *model, id string, info *protocol.SessionInfo, state *chatSta
 	}
 	if t.Sending {
 		label := widget.Row(widget.Spacer(), icon("clock").Size(11).Color(skin.ExtraMuted), widget.Text(T("Sent")).Size(11).Color(skin.ExtraMuted)).Gap(4).Align(widget.AlignCenter)
-		return widget.Column(widget.Opacity(chatTurn(m, id, info, t.Messages[0], -1, false), 0.6), label).Gap(4).Stretch()
+		return widget.Column(widget.Opacity(chatTurn(m, id, info, t.Messages[0], nil), 0.6), label).Gap(4).Stretch()
 	}
 	if t.Messages[0].GetRole() != "tool" {
-		canRewind := ggui.Peek(state.agent) == "" && canRewindTurn(info, t.Messages[0], t.UserTurnIndex, t.FullHistory)
-		return chatTurn(m, id, info, t.Messages[0], t.UserTurnIndex, canRewind)
+		var rewind *turnRewind
+		if code, _ := m.codeRewind(info); ggui.Peek(state.agent) == "" && canRewindTurn(info, t.Messages[0], t.UserTurnIndex, t.FullHistory, code) {
+			rewind = &turnRewind{UserTurnIndex: t.UserTurnIndex, FullHistory: t.FullHistory}
+		}
+		return chatTurn(m, id, info, t.Messages[0], rewind)
 	}
 	var tools []ggui.Widget
 	for i, msg := range t.Messages {
@@ -901,7 +904,7 @@ func foldHeader(open ggui.Binding[bool], glyph, title ggui.Widget, detail, name 
 	).Gap(8).Stretch(), func() { open.Set(!ggui.Untrack(open.Get)) }).Ghost().Pad(4, 6).Radius(6).Name(name)
 }
 
-func canRewindTurn(info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, fullHistory bool) bool {
+func canRewindConversation(info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, fullHistory bool) bool {
 	if info == nil || msg == nil || msg.GetRole() != "user" || userTurnIndex < 0 {
 		return false
 	}
@@ -918,7 +921,26 @@ func canRewindTurn(info *protocol.SessionInfo, msg *protocol.ChatMessage, userTu
 	}
 }
 
-func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, canRewind bool) ggui.Widget {
+// canRewindTurn reports whether a user message can be rewound from: its
+// conversation, or, when code says the session's code can be, its code.
+func canRewindTurn(info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int, fullHistory, code bool) bool {
+	if canRewindConversation(info, msg, userTurnIndex, fullHistory) {
+		return true
+	}
+	return code && info != nil && msg.GetRole() == "user" && userTurnIndex >= 0
+}
+
+// turnRewind is where a user message the session can be rewound from is
+// in its conversation: its index among the user messages loaded, and
+// whether those are the whole conversation's.
+type turnRewind struct {
+	UserTurnIndex int
+	FullHistory   bool
+}
+
+// chatTurn is a message of the conversation; rewind is nil for one the
+// session cannot be rewound from.
+func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, rewind *turnRewind) ggui.Widget {
 	if msg.GetRole() == "user" {
 		if marks := chatMarks(msg.GetText()); marks != nil {
 			return markedTurn(m, id, info, msg, marks)
@@ -926,8 +948,8 @@ func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.Cha
 		bubble := widget.Box(widget.Text(msg.GetText()).Size(14).Selectable()).
 			Fill(skin.Surface2).Radius(12).Pad(10, 14).MaxWidth(680)
 		actions := copyButton(m, msg.GetText())
-		if canRewind {
-			actions = widget.Row(rewindButton(m, id, info, msg, userTurnIndex), actions).Gap(2).Align(widget.AlignCenter)
+		if rewind != nil {
+			actions = widget.Row(rewindButton(m, id, info, msg, *rewind), actions).Gap(2).Align(widget.AlignCenter)
 		}
 		var turn ggui.Widget = widget.Row(widget.Spacer(), &withCopy{content: bubble, button: actions}).Stretch()
 		// The images it holds, and those it names by their paths, over it.
@@ -945,25 +967,18 @@ func chatTurn(m *model, id string, info *protocol.SessionInfo, msg *protocol.Cha
 	return &withCopy{content: mdview.Column(host, msg.GetText()), button: copyButton(m, msg.GetText())}
 }
 
-func rewindButton(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int) ggui.Widget {
+func rewindButton(m *model, id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, at turnRewind) ggui.Widget {
 	glyph := icon("undo-2").Size(13).Color(skin.Muted)
 	return ui.Tooltip(ui.ButtonOf(glyph, func() {
-		m.askRewindSession(id, info, msg, userTurnIndex)
+		m.askRewindSession(id, info, msg, at)
 	}).Ghost().Pad(3).Radius(5).Name(T("Rewind from here")), T("Rewind from here"))
 }
 
-func (m *model) askRewindSession(id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, userTurnIndex int) {
-	messageID := msg.GetId()
-	promptText := msg.GetText()
-	m.askConfirm(confirmation{
-		Title:  T("Rewind conversation from here?"),
-		Body:   T("Opens a new forked session from right before this message without modifying the current session. This message will be placed in the new session's composer so you can edit and resend it."),
-		Action: T("Rewind"),
-		Safe:   true,
-		Run: func() {
-			m.rewindSession(id, info, messageID, userTurnIndex, promptText)
-		},
-	})
+// askRewindSession opens the rewind dialog for a user message, which can
+// rewind the conversation only as far as at says it is known.
+func (m *model) askRewindSession(id string, info *protocol.SessionInfo, msg *protocol.ChatMessage, at turnRewind) {
+	canConv := canRewindConversation(info, msg, at.UserTurnIndex, at.FullHistory)
+	m.openRewindDialog(id, info, msg, at.UserTurnIndex, canConv)
 }
 
 func (m *model) rewindSession(id string, info *protocol.SessionInfo, messageID string, userTurnIndex int, promptText string) {

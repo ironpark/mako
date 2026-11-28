@@ -65,7 +65,7 @@ func TestEveryStringIsTranslated(t *testing.T) {
 		want[b.Title] = "layoutdoc.Builtin"
 	}
 	for _, labels := range []map[string]string{themeLabels, cursorLabels, daemonModeLabels, openViewLabels, usageCornerLabels, templateTypeLabels, backdropFitLabels, backdropPositionLabels,
-		agentGroupLabels, agentGroupCommands, builtinLabels, agentSortLabels, agentSortButtons, agentFilterLabels, sshModeLabels} {
+		agentGroupLabels, agentGroupCommands, builtinLabels, agentSortLabels, agentSortButtons, agentFilterLabels, sshModeLabels, routineTriggerLabels} {
 		for _, l := range labels {
 			want[l] = "settings labels"
 		}

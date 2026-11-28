@@ -74,6 +74,7 @@ func window(m *model) ggui.Widget {
 		tunnelDialog(m),
 		forgeDialogs(m),
 		confirmDialog(m),
+		rewindDialog(m),
 		homeMigrateDialog(m),
 		accountUsageDialog(m),
 		raceDialog(m),

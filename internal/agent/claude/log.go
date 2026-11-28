@@ -8,6 +8,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
+	"google.golang.org/protobuf/proto"
 )
 
 // Claude logs a conversation in its project's folder, a record a message,
@@ -131,10 +132,11 @@ func (u *usage) Count(line []byte, total *protocol.Usage) {
 			ID    string `json:"id"`
 			Model string `json:"model"`
 			Usage *struct {
-				Input         int64 `json:"input_tokens"`
-				CacheCreation int64 `json:"cache_creation_input_tokens"`
-				CacheRead     int64 `json:"cache_read_input_tokens"`
-				Output        int64 `json:"output_tokens"`
+				Input         int64  `json:"input_tokens"`
+				CacheCreation int64  `json:"cache_creation_input_tokens"`
+				CacheRead     int64  `json:"cache_read_input_tokens"`
+				Output        int64  `json:"output_tokens"`
+				Speed         string `json:"speed"`
 			} `json:"usage"`
 		} `json:"message"`
 	}
@@ -155,6 +157,9 @@ func (u *usage) Count(line []byte, total *protocol.Usage) {
 		}
 		if r.Effort != "" {
 			total.Effort = r.Effort
+		}
+		if s := strings.TrimSpace(r.Message.Usage.Speed); s != "" {
+			total.FastMode = proto.Bool(strings.EqualFold(s, "fast"))
 		}
 	}
 	if r.Message.ID != "" && !u.seen.Add(r.Message.ID) {

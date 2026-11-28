@@ -596,6 +596,10 @@ func (s *Session) Report(u *protocol.Usage) {
 		s.reported = &protocol.Usage{}
 	}
 	s.reported.Apply(u)
+	if u != nil && u.FastMode != nil && s.state != protocol.StateExited && s.fastMode != *u.FastMode {
+		s.fastMode = *u.FastMode
+		s.changedLocked()
+	}
 }
 
 // Reported is a copy of what the agent's status line has said of its

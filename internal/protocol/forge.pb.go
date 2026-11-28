@@ -33,7 +33,10 @@ type ForgeList struct {
 	Max    int64                  `protobuf:"varint,6,opt,name=max,proto3" json:"max,omitempty"`
 	// Of the branch checked out, in place of branch: for pull requests, the
 	// one gh finds for it by its upstream.
-	Current       bool `protobuf:"varint,7,opt,name=current,proto3" json:"current,omitempty"`
+	Current bool `protobuf:"varint,7,opt,name=current,proto3" json:"current,omitempty"`
+	// order is "created" for the newest opened first; "" for the most
+	// recently active first. Pull requests and issues (revision 53).
+	Order         string `protobuf:"bytes,8,opt,name=order,proto3" json:"order,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -117,6 +120,13 @@ func (x *ForgeList) GetCurrent() bool {
 	return false
 }
 
+func (x *ForgeList) GetOrder() string {
+	if x != nil {
+		return x.Order
+	}
+	return ""
+}
+
 // ForgeItems answers ForgeList.
 type ForgeItems struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -197,10 +207,16 @@ type ForgeItem struct {
 	HeadOid string                 `protobuf:"bytes,11,opt,name=head_oid,json=headOid,proto3" json:"head_oid,omitempty"`
 	// A pull request's checks rolled up, success, failure or pending, ""
 	// with none; a run's conclusion once completed.
-	Checks        string   `protobuf:"bytes,12,opt,name=checks,proto3" json:"checks,omitempty"`
-	Labels        []string `protobuf:"bytes,14,rep,name=labels,proto3" json:"labels,omitempty"`
-	Workflow      string   `protobuf:"bytes,18,opt,name=workflow,proto3" json:"workflow,omitempty"` // a run's
-	Event         string   `protobuf:"bytes,19,opt,name=event,proto3" json:"event,omitempty"`       // what started a run: push, pull_request and the like
+	Checks   string   `protobuf:"bytes,12,opt,name=checks,proto3" json:"checks,omitempty"`
+	Labels   []string `protobuf:"bytes,14,rep,name=labels,proto3" json:"labels,omitempty"`
+	Workflow string   `protobuf:"bytes,18,opt,name=workflow,proto3" json:"workflow,omitempty"` // a run's
+	Event    string   `protobuf:"bytes,19,opt,name=event,proto3" json:"event,omitempty"`       // what started a run: push, pull_request and the like
+	// fork is set for a pull request from, or a run of a branch of, another
+	// repository, as far as the forge tells (revision 53).
+	Fork bool `protobuf:"varint,20,opt,name=fork,proto3" json:"fork,omitempty"`
+	// association is a pull request's author's tie to the repository, as
+	// ForgeComment.association; "" when the forge does not tell (revision 53).
+	Association   string `protobuf:"bytes,21,opt,name=association,proto3" json:"association,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -336,6 +352,20 @@ func (x *ForgeItem) GetWorkflow() string {
 func (x *ForgeItem) GetEvent() string {
 	if x != nil {
 		return x.Event
+	}
+	return ""
+}
+
+func (x *ForgeItem) GetFork() bool {
+	if x != nil {
+		return x.Fork
+	}
+	return false
+}
+
+func (x *ForgeItem) GetAssociation() string {
+	if x != nil {
+		return x.Association
 	}
 	return ""
 }
@@ -843,7 +873,7 @@ var File_mako_v2_forge_proto protoreflect.FileDescriptor
 
 const file_mako_v2_forge_proto_rawDesc = "" +
 	"\n" +
-	"\x13mako/v2/forge.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x11mako/v2/git.proto\"\xa6\x01\n" +
+	"\x13mako/v2/forge.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x11mako/v2/git.proto\"\xbc\x01\n" +
 	"\tForgeList\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04root\x18\x02 \x01(\tR\x04root\x12\x12\n" +
@@ -851,12 +881,13 @@ const file_mako_v2_forge_proto_rawDesc = "" +
 	"\x05state\x18\x04 \x01(\tR\x05state\x12\x16\n" +
 	"\x06branch\x18\x05 \x01(\tR\x06branch\x12\x10\n" +
 	"\x03max\x18\x06 \x01(\x03R\x03max\x12\x18\n" +
-	"\acurrent\x18\a \x01(\bR\acurrent\"^\n" +
+	"\acurrent\x18\a \x01(\bR\acurrent\x12\x14\n" +
+	"\x05order\x18\b \x01(\tR\x05order\"^\n" +
 	"\n" +
 	"ForgeItems\x12(\n" +
 	"\x05items\x18\x01 \x03(\v2\x12.mako.v2.ForgeItemR\x05items\x12\x14\n" +
 	"\x05forge\x18\x02 \x01(\tR\x05forge\x12\x10\n" +
-	"\x03ops\x18\x03 \x03(\tR\x03ops\"\xfe\x02\n" +
+	"\x03ops\x18\x03 \x03(\tR\x03ops\"\xb4\x03\n" +
 	"\tForgeItem\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x16\n" +
 	"\x06number\x18\x02 \x01(\x03R\x06number\x12\x14\n" +
@@ -873,7 +904,9 @@ const file_mako_v2_forge_proto_rawDesc = "" +
 	"\x06checks\x18\f \x01(\tR\x06checks\x12\x16\n" +
 	"\x06labels\x18\x0e \x03(\tR\x06labels\x12\x1a\n" +
 	"\bworkflow\x18\x12 \x01(\tR\bworkflow\x12\x14\n" +
-	"\x05event\x18\x13 \x01(\tR\x05event\"\x7f\n" +
+	"\x05event\x18\x13 \x01(\tR\x05event\x12\x12\n" +
+	"\x04fork\x18\x14 \x01(\bR\x04fork\x12 \n" +
+	"\vassociation\x18\x15 \x01(\tR\vassociation\"\x7f\n" +
 	"\tForgeView\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04root\x18\x02 \x01(\tR\x04root\x12\x12\n" +

@@ -58,6 +58,14 @@ func (*Agent) Efforts() []string { return []string{"low", "medium", "high", "xhi
 func (*Agent) ModelCommand(model string) string   { return "/model " + model }
 func (*Agent) EffortCommand(effort string) string { return "/effort " + effort }
 
+// FastModeCommand returns Claude Code's slash command to enable or disable fast mode.
+func (*Agent) FastModeCommand(enabled bool) string {
+	if enabled {
+		return "/fast on"
+	}
+	return "/fast off"
+}
+
 // ConfirmKeys says yes to "Switch model?", which Claude Code asks before
 // it leaves the model a conversation is cached for: the cursor moved to
 // its "Yes", then Enter.
