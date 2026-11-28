@@ -63,6 +63,10 @@ type NewWorktree struct {
 	// Start is the branch or commit it starts at; "" for the repository's
 	// base_ref, or without one dir's HEAD.
 	Start string
+	// Base is the branch the caller records as the one it came off, as a
+	// session's worktree does; "" for the one MadeWorktree.Base works out.
+	// The setup_cmd is told of it as the teardown_cmd is later.
+	Base string
 	// Trusted says whether the repository's setup_cmd may run; nil runs
 	// none.
 	Trusted HookTrust
@@ -77,9 +81,9 @@ type MadeWorktree struct {
 	// repository's base_ref named it; "" for dir's HEAD.
 	Start string
 	// Base is the local branch it came off, which it merges into and
-	// opens its pull request against: Start's, origin/main's being main;
-	// or, for a commit or tag, or no Start, the branch dir has checked
-	// out. "" when there is none.
+	// opens its pull request against: NewWorktree's Base; or Start's,
+	// origin/main's being main; or, for a commit or tag, or no Start, the
+	// branch dir has checked out. "" when there is none.
 	Base string
 	// SkippedHooks is the repository's command file, as an absolute path,
 	// whose setup_cmd did not run because the user does not trust it as it
@@ -138,8 +142,10 @@ func AddWorktree(ctx context.Context, dir string, w NewWorktree) (MadeWorktree, 
 	if _, err := run(ctx, dir, nil, args...); err != nil {
 		return MadeWorktree{}, err
 	}
-	from := cmp.Or(localBranch(ctx, repo, base), Branch(dir))
-	skipped, err := applyWorktreeBootstrap(ctx, repo, path, branch, base, cfg, w.Trusted)
+	// The base the setup_cmd is told of is the one the worktree records,
+	// which its teardown_cmd is told of in turn.
+	from := cmp.Or(w.Base, localBranch(ctx, repo, base), Branch(dir))
+	skipped, err := applyWorktreeBootstrap(ctx, repo, path, branch, from, cfg, w.Trusted)
 	if err != nil {
 		// Roll back the newly created worktree and branch so failed setup
 		// hooks do not leave orphaned broken worktrees behind; on a context

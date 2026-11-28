@@ -106,3 +106,30 @@ func TestLocalBranch(t *testing.T) {
 		}
 	}
 }
+
+// The setup_cmd is told of the base the worktree records, which the
+// teardown_cmd is told of later: on a default launch, the branch dir has
+// checked out, and the caller's base when it names one.
+func TestWorktreeSetupIsToldItsBase(t *testing.T) {
+	root, _, at := baseRepo(t, "setup_cmd = \"printf %s \\\"$MAKO_WORKTREE_BASE\\\" > \\\"$MAKO_WORKTREE_REPO/base-$MAKO_WORKTREE_BRANCH\\\"\"\n")
+	told := func(branch string) string {
+		t.Helper()
+		b, err := os.ReadFile(filepath.Join(root, "base-"+branch))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	made := addAt(t, root, NewWorktree{Branch: "w1", Trusted: trustAll}, at["dev"], "dev")
+	if got := told("w1"); got != made.Base {
+		t.Fatalf("setup_cmd told base %q, the worktree records %q", got, made.Base)
+	}
+	addAt(t, root, NewWorktree{Branch: "w2", Start: "origin/main", Trusted: trustAll}, at["origin/main"], "main")
+	if got := told("w2"); got != "main" {
+		t.Fatalf("setup_cmd told base %q, want main", got)
+	}
+	addAt(t, root, NewWorktree{Branch: "w3", Start: "origin/main", Base: "dev", Trusted: trustAll}, at["origin/main"], "dev")
+	if got := told("w3"); got != "dev" {
+		t.Fatalf("setup_cmd told base %q, want the caller's dev", got)
+	}
+}

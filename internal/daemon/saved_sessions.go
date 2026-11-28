@@ -474,13 +474,13 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		// repository's base_ref, or the project's HEAD. The repository's
 		// setup_cmd runs only while the user trusts its file as it reads;
 		// the worktree says it was skipped otherwise.
-		made, err := gitstat.AddWorktree(wtCtx, project, gitstat.NewWorktree{Branch: w.GetBranch(), Start: cmp.Or(w.GetStart(), w.GetBase()), Trusted: d.repoTrust.Trusted})
+		made, err := gitstat.AddWorktree(wtCtx, project, gitstat.NewWorktree{Branch: w.GetBranch(), Start: cmp.Or(w.GetStart(), w.GetBase()), Base: w.GetBase(), Trusted: d.repoTrust.Trusted})
 		cancel()
 		if err != nil {
 			return nil, err
 		}
 		w.Repo, w.Path, w.Branch, w.SkippedHooks = made.Repo, made.Path, made.Branch, made.SkippedHooks
-		w.Base = cmp.Or(w.GetBase(), made.Base)
+		w.Base = made.Base
 		if w.GetStart() == "" && made.Start != w.GetBase() {
 			w.Start = made.Start // as origin/main, of base main
 		}

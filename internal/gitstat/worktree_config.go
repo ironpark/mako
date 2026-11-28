@@ -254,8 +254,9 @@ func worktreeDest(wt *os.Root, rel, raw string) (exists bool, err error) {
 }
 
 // applyWorktreeBootstrap links and copies cfg's paths into the new
-// worktree at wtPath, and runs its setup_cmd there if trusted. skipped
-// says the setup_cmd did not run, untrusted.
+// worktree at wtPath, and runs its setup_cmd there if trusted, told of
+// the worktree's branch and the base it records. skipped says the
+// setup_cmd did not run, untrusted.
 //
 // What is linked or copied must be the repository's own files, and is
 // written only inside the worktree: os.Root keeps every write in it, and
