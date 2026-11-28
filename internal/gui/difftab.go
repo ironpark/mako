@@ -406,8 +406,8 @@ func diffTabView(m *model, id string) ggui.Widget {
 			}
 			if dt.workTree() && (dt.File.GetStatus() == protocol.GitModified || dt.File.GetStatus() == protocol.GitRenamed) {
 				actions = append(actions,
-					iconButton("plus", T("Stage this hunk"), func() { m.stageHunk(id, lines, false) }),
-					iconButton("minus", T("Unstage this hunk"), func() { m.stageHunk(id, lines, true) }),
+					iconButton("square-plus", T("Stage this hunk"), func() { m.stageHunk(id, lines, false) }),
+					iconButton("square-minus", T("Unstage this hunk"), func() { m.stageHunk(id, lines, true) }),
 					iconButton("undo-2", T("Discard this hunk"), func() { m.askDiscardHunk(id, lines) }),
 				)
 			}
