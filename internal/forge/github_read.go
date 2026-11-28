@@ -560,7 +560,7 @@ func (r run) proto() *protocol.ForgeItem {
 	return &protocol.ForgeItem{
 		Kind: protocol.ForgeRuns, Number: r.ID, Title: r.Title, State: r.Status, Checks: r.Conclusion, Url: r.URL,
 		Updated: protocol.Time(r.UpdatedAt), Head: r.HeadBranch, HeadOid: r.HeadSha, Workflow: r.Name, Event: r.Event,
-		Fork: r.HeadRepository.FullName != "" && !strings.EqualFold(r.HeadRepository.FullName, r.Repository.FullName),
+		Fork: r.Repository.FullName != "" && !strings.EqualFold(r.HeadRepository.FullName, r.Repository.FullName),
 	}
 }
 

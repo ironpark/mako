@@ -99,7 +99,8 @@ func checkHash(hash string) error {
 // inWorkTree refuses a path that leaves the work tree, as a GitFile path
 // never does; "" is no path, and passes.
 func inWorkTree(p string) error {
-	if path.IsAbs(p) || strings.HasPrefix(path.Clean(p), "..") {
+	clean := path.Clean(p)
+	if path.IsAbs(p) || clean == ".." || strings.HasPrefix(clean, "../") {
 		return fmt.Errorf("%q is not in the work tree", p)
 	}
 	return nil

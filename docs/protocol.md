@@ -832,6 +832,7 @@ leaves the commits out.
 | `detach`, `cherry_pick`, `revert`, `tag` | Of `commit`: check it out on no branch, apply it, undo it as a new commit, or tag it `tag` (annotated with `message`). |
 | `continue`, `abort` | Go on with the `operation` under way, adding what was resolved, or abandon it. |
 | `merge`, `pull_request`, `remove_worktree` | Of a session's `worktree`: merge its branch into its base, push it and open a pull request, or remove it once nothing is left in it. |
+| `list_checkpoints`, `restore_checkpoint` | List turn and pre-restore code checkpoints for session `message` at `root` as JSON, or restore `root` to checkpoint `commit` after capturing a pre-restore safety snapshot returned as JSON (revision 53). |
 
 Diff lines are `{op, text, old, new}`, where `op` is `+`, `-`, a space for
 context, or `@` for a hunk header, and `old`/`new` are line numbers on each

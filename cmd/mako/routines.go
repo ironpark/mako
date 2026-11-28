@@ -49,7 +49,7 @@ func routinesCmd(ctx context.Context, c routineClient, nodeID string, args []str
 		}
 		return printRoutines(out, reply.GetRoutines())
 	case "add":
-		spec, err := routineSpec(rest)
+		spec, err := routineSpec(nodeID, rest)
 		if err != nil {
 			return err
 		}
@@ -90,7 +90,10 @@ func routinesCmd(ctx context.Context, c routineClient, nodeID string, args []str
 		if err := fs.Parse(rest); err != nil {
 			return err
 		}
-		reply, err := c.Routines(ctx, &protocol.ListRoutines{NodeId: nodeID, Runs: uint32(max(*limit, 0))})
+		if *limit < 0 {
+			return fmt.Errorf("invalid -limit %d: must be >= 0", *limit)
+		}
+		reply, err := c.Routines(ctx, &protocol.ListRoutines{NodeId: nodeID, Runs: uint32(*limit)})
 		if err != nil {
 			return err
 		}
@@ -114,13 +117,14 @@ func routinesCmd(ctx context.Context, c routineClient, nodeID string, args []str
 	}
 }
 
-// routineSpec is the routine routines add's flags describe; its project
-// is made absolute against this folder, the CLI's.
-func routineSpec(args []string) (*protocol.Routine, error) {
+// routineSpec is the routine routines add's flags describe; for the local
+// node its project defaults to cwd and is made absolute locally. For a
+// remote node (-node), -project must be given explicitly and is passed as-is.
+func routineSpec(nodeID string, args []string) (*protocol.Routine, error) {
 	fs := flag.NewFlagSet("routines add", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	name := fs.String("name", "", "routine name")
-	project := fs.String("project", "", "project folder path (default: cwd)")
+	project := fs.String("project", "", "project folder path (default: cwd on local node)")
 	agent := fs.String("agent", "claude", "agent or agent:profile")
 	trigger := fs.String("trigger", string(routines.TriggerCron), "trigger kind: cron, forge_pr_opened, forge_ci_failed")
 	schedule := fs.String("schedule", "", "cron expression or @hourly/@daily/@every 30m")
@@ -135,24 +139,32 @@ func routineSpec(args []string) (*protocol.Routine, error) {
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
+	if fs.NArg() > 0 {
+		return nil, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
+	}
 	proj := strings.TrimSpace(*project)
-	if proj == "" {
-		cwd, err := os.Getwd()
+	if nodeID == "" {
+		if proj == "" {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return nil, err
+			}
+			proj = cwd
+		}
+		abs, err := filepath.Abs(proj)
 		if err != nil {
 			return nil, err
 		}
-		proj = cwd
-	}
-	abs, err := filepath.Abs(proj)
-	if err != nil {
-		return nil, err
+		proj = abs
+	} else if proj == "" {
+		return nil, fmt.Errorf("routines add on remote node %q requires -project", nodeID)
 	}
 	r := routines.Routine{
 		Name:          *name,
 		Enabled:       !*disabled,
 		Trigger:       routines.TriggerKind(strings.TrimSpace(*trigger)),
 		Schedule:      *schedule,
-		Project:       abs,
+		Project:       proj,
 		Agent:         *agent,
 		Worktree:      *worktree,
 		BranchPrefix:  *branchPrefix,

@@ -165,13 +165,17 @@ func (m *model) draftReviewSent(id, text string) {
 	if !slices.ContainsFunc(ggui.Peek(m.DraftReview), func(c draftReviewComment) bool { return c.SentTo == id }) {
 		return
 	}
+	lines := map[string]bool{}
+	for line := range strings.SplitSeq(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
+		lines[strings.TrimRight(line, " \t")] = true
+	}
 	m.DraftReview.Update(func(list []draftReviewComment) []draftReviewComment {
 		next := slices.Clone(list)
 		for i := range next {
 			if next[i].SentTo != id {
 				continue
 			}
-			if strings.Contains("\n"+text+"\n", "\n"+next[i].Heading+"\n") {
+			if lines[strings.TrimRight(next[i].Heading, " \t")] {
 				next[i].Resolved = true
 			}
 			next[i].SentTo, next[i].Heading = "", ""

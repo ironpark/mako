@@ -376,6 +376,13 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.ReportToolDone(msg.Seq)
 	case agent.Prompted:
 		if !s.ReportStatus(protocol.AgentWorking, msg.Seq) {
+			// Codex app-server turn/started or agy statusLine heartbeats can
+			// advance statusSeq in-process before the external prompt hook
+			// connects. Still capture the turn checkpoint if the session is
+			// actively working rather than exited or from a stale ended turn.
+			if info := s.Info(); info.GetState() != protocol.StateExited && info.GetStatus() == protocol.AgentWorking {
+				d.checkpointTurn(ctx, s, msg.Seq, ev)
+			}
 			return
 		}
 		// Only a prompt of this turn makes the suggestion stale, not a

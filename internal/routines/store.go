@@ -1,12 +1,15 @@
 package routines
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/ironpark/mako/pkg/fsutil"
@@ -39,6 +42,12 @@ func Load(configDir string) ([]Routine, error) {
 	}
 	for i := range list {
 		list[i] = list[i].Normalized()
+		if list[i].ID == "" {
+			// Deterministic fallback for hand-edited files missing "id" so
+			// repeated reads do not churn IDs and break dedup/state keys.
+			sum := sha256.Sum256([]byte(strconv.Itoa(i) + "\x00" + list[i].Name + "\x00" + list[i].Project + "\x00" + string(list[i].Trigger) + "\x00" + list[i].Schedule))
+			list[i].ID = "rtn-" + hex.EncodeToString(sum[:6])
+		}
 	}
 	return list, nil
 }
@@ -48,6 +57,9 @@ func Save(configDir string, list []Routine) error {
 	clean := make([]Routine, len(list))
 	for i, r := range list {
 		r = r.Normalized()
+		if r.ID == "" {
+			r.ID = NewID("rtn")
+		}
 		if err := r.Validate(); err != nil {
 			return err
 		}

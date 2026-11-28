@@ -302,3 +302,110 @@ func TestCaptureSnapshotRefusesWhatIsNoWorkTree(t *testing.T) {
 		}
 	}
 }
+
+func TestCaptureAndRestoreInPathWithSpaces(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "My Repo Space")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	runGit := func(args ...string) string {
+		t.Helper()
+		out, err := gitOut(ctx, root, nil, append([]string{"-c", "user.name=T", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"}, args...)...)
+		if err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+		return string(out)
+	}
+	runGit("init", "-q")
+	write(t, root, "a.txt", "before\n")
+	runGit("add", "-A")
+	runGit("commit", "-q", "-m", "init")
+
+	cp := turn(t, root, "s1", "space path")
+	write(t, root, "a.txt", "after\n")
+	if _, err := RestoreSnapshot(ctx, root, cp.Commit); err != nil {
+		t.Fatalf("RestoreSnapshot in path with spaces: %v", err)
+	}
+	if got := readFile(t, root, "a.txt"); got != "before\n" {
+		t.Fatalf("a.txt = %q, want before", got)
+	}
+}
+
+func TestPreRestoreCheckpointsIsolatedAcrossWorktrees(t *testing.T) {
+	root, runGit := cliRepo(t)
+	ctx := context.Background()
+	write(t, root, "a.txt", "main-v1\n")
+	runGit("add", "-A")
+	runGit("commit", "-q", "-m", "init")
+
+	_, wtPath, _, err := AddWorktree(ctx, root, "feat-wt", "HEAD")
+	if err != nil {
+		t.Fatalf("AddWorktree: %v", err)
+	}
+	wtCP := turn(t, wtPath, "sess-wt", "wt turn")
+	write(t, wtPath, "a.txt", "wt-v2\n")
+	safety, err := RestoreSnapshot(ctx, wtPath, wtCP.Commit)
+	if err != nil {
+		t.Fatalf("RestoreSnapshot in worktree: %v", err)
+	}
+	wtList, err := ListCheckpoints(ctx, wtPath, "other")
+	if err != nil || len(wtList) != 1 || wtList[0].Key != safety.Key {
+		t.Fatalf("worktree list = %+v, %v; want safety %+v", wtList, err, safety)
+	}
+	mainList, err := ListCheckpoints(ctx, root, "other")
+	if err != nil {
+		t.Fatalf("main ListCheckpoints: %v", err)
+	}
+	if len(mainList) != 0 {
+		t.Fatalf("main worktree leaked linked worktree pre-restore snapshots: %+v", mainList)
+	}
+}
+
+func TestRestoreRefusedLeavesNoPhantomSafetySnapshot(t *testing.T) {
+	root, runGit := cliRepo(t)
+	ctx := context.Background()
+	write(t, root, "out", "file\n")
+	runGit("add", "-A")
+	runGit("commit", "-q", "-m", "init")
+	cp := turn(t, root, "s", "x")
+	_ = os.Remove(filepath.Join(root, "out"))
+	write(t, root, "out/cache.bin", "keep\n")
+	write(t, root, ".gitignore", "out/\n")
+
+	if _, err := RestoreSnapshot(ctx, root, cp.Commit); err == nil {
+		t.Fatal("expected restore over ignored file to fail")
+	}
+	list, err := ListCheckpoints(ctx, root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("refused restore left phantom pre-restore refs: %+v", list)
+	}
+}
+
+func TestRestoreCaseOnlyRename(t *testing.T) {
+	root, runGit := cliRepo(t)
+	ctx := context.Background()
+	write(t, root, "Foo.txt", "hello\n")
+	runGit("add", "-A")
+	runGit("commit", "-q", "-m", "init")
+	cp := turn(t, root, "s", "case")
+
+	// Rename Foo.txt -> foo.txt via a two-step rename so it works on both
+	// case-insensitive (macOS/Windows) and case-sensitive (Linux) filesystems.
+	if err := os.Rename(filepath.Join(root, "Foo.txt"), filepath.Join(root, "Foo.txt.tmp")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(root, "Foo.txt.tmp"), filepath.Join(root, "foo.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RestoreSnapshot(ctx, root, cp.Commit); err != nil {
+		t.Fatalf("RestoreSnapshot on case-only rename: %v", err)
+	}
+	if got := readFile(t, root, "Foo.txt"); got != "hello\n" {
+		t.Fatalf("Foo.txt = %q", got)
+	}
+}

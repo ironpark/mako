@@ -15,7 +15,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -24,14 +26,76 @@ import (
 // untracked ones that are not ignored, as they were, made with an index of
 // its own so that the repository's index, HEAD and stashes stay as they are.
 // A turn's checkpoint is under checkpointRefs, by session; what a restore
-// found, to undo it with, is under restoreRefs, for every session of the
-// repository to see. Both are under refs/mako/, which the history does not
-// list nor fingerprint.
+// found, to undo it with, is under restoreRefs, scoped by worktree so
+// linked worktrees never list or restore each other's pre-restore
+// snapshots. Both are under refs/mako/, which the history does not list nor
+// fingerprint.
 const (
 	makoRefs       = "refs/mako/"
 	checkpointRefs = makoRefs + "checkpoints/" // <session>/<key>
-	restoreRefs    = makoRefs + "pre-restore/" // <key>
+	restoreRefs    = makoRefs + "pre-restore/" // <worktree>/<key>
 )
+
+// checkpointLocks serializes CaptureSnapshot and RestoreSnapshot per work
+// tree (keyed by canonical git dir) so concurrent operations never race on
+// work tree mutations or ref pruning.
+var (
+	checkpointLocksMu sync.Mutex
+	checkpointLocks   = map[string]*sync.Mutex{}
+)
+
+func lockWorktree(gitDir string) func() {
+	key := canonicalPath(gitDir)
+	checkpointLocksMu.Lock()
+	mu := checkpointLocks[key]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		checkpointLocks[key] = mu
+	}
+	checkpointLocksMu.Unlock()
+	mu.Lock()
+	return mu.Unlock
+}
+
+func canonicalPath(p string) string {
+	clean := filepath.Clean(p)
+	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
+		return filepath.Clean(resolved)
+	}
+	return clean
+}
+
+// worktreeKey hashes the worktree's own git directory (.git or
+// .git/worktrees/<name>) so linked worktrees keep their pre-restore
+// snapshots isolated while subfolders of the same worktree share them.
+func worktreeKey(gitDir string) string {
+	sum := sha256.Sum256([]byte(canonicalPath(gitDir)))
+	return hex.EncodeToString(sum[:8])
+}
+
+// worktreeGitDir returns the worktree's absolute git directory for root, or
+// ErrNoWorkTree when root is outside any git work tree. Other git errors
+// (such as dubious ownership or permission failures) are returned as-is.
+func worktreeGitDir(ctx context.Context, root string) (string, error) {
+	where, err := gitOut(ctx, root, nil, "rev-parse", "--is-inside-work-tree", "--absolute-git-dir")
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return "", ctxErr
+		}
+		lower := strings.ToLower(err.Error())
+		if strings.Contains(lower, "not a git repository") || strings.Contains(lower, "must be run in a work tree") {
+			return "", fmt.Errorf("checkpoint: %w", ErrNoWorkTree)
+		}
+		return "", fmt.Errorf("checkpoint: %w", err)
+	}
+	inside, gitDir, ok := strings.Cut(strings.TrimRight(string(where), "\r\n"), "\n")
+	inside = strings.TrimSpace(inside)
+	gitDir = strings.TrimRight(gitDir, "\r")
+	if !ok || inside != "true" || gitDir == "" || strings.Contains(gitDir, "\n") {
+		return "", fmt.Errorf("checkpoint: %w", ErrNoWorkTree)
+	}
+	return gitDir, nil
+}
 
 // The kinds of checkpoint.
 const (
@@ -131,11 +195,25 @@ func CaptureSnapshot(ctx context.Context, root string, cp Checkpoint) (Checkpoin
 	default:
 		return CheckpointEntry{}, fmt.Errorf("checkpoint: unknown kind %q", cp.Kind)
 	}
-	where, err := gitOut(ctx, root, nil, "rev-parse", "--is-inside-work-tree", "--absolute-git-dir")
-	lines := strings.Fields(string(where))
-	if err != nil || len(lines) != 2 || lines[0] != "true" {
-		return CheckpointEntry{}, cmp.Or(ctx.Err(), fmt.Errorf("checkpoint: %w", ErrNoWorkTree))
+	gitDir, err := worktreeGitDir(ctx, root)
+	if err != nil {
+		return CheckpointEntry{}, err
 	}
+	unlock := lockWorktree(gitDir)
+	defer unlock()
+	e, err := captureCommit(ctx, root, gitDir, cp)
+	if err != nil {
+		return CheckpointEntry{}, err
+	}
+	if err := publishCheckpoint(ctx, root, gitDir, sid, e); err != nil {
+		return CheckpointEntry{}, err
+	}
+	return e, nil
+}
+
+// captureCommit builds the shadow commit object for root without updating
+// any ref or pruning yet. Caller holds the worktree lock.
+func captureCommit(ctx context.Context, root, gitDir string, cp Checkpoint) (CheckpointEntry, error) {
 	index, done, err := tempIndex()
 	if err != nil {
 		return CheckpointEntry{}, err
@@ -143,7 +221,7 @@ func CaptureSnapshot(ctx context.Context, root string, cp Checkpoint) (Checkpoin
 	defer done()
 	// The real index, copied, tells git which files are as they were, which
 	// it then need not read again.
-	if err := copyFile(filepath.Join(lines[1], "index"), index); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := copyFile(filepath.Join(gitDir, "index"), index); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return CheckpointEntry{}, fmt.Errorf("checkpoint: %w", err)
 	}
 	env := checkpointEnv(index)
@@ -156,7 +234,7 @@ func CaptureSnapshot(ctx context.Context, root string, cp Checkpoint) (Checkpoin
 	}
 	now := time.Now().UnixMilli()
 	subject := fmt.Sprintf("%s kind=%s time=%d", checkpointSubject, cp.Kind, now)
-	if key := strings.TrimSpace(cp.Prompt); cp.Kind == CheckpointTurn && key != "" && !strings.ContainsAny(key, " \n") {
+	if key := strings.TrimSpace(cp.Prompt); cp.Kind == CheckpointTurn && key != "" && !strings.ContainsFunc(key, unicode.IsSpace) {
 		subject += " prompt=" + key
 	}
 	args := []string{"commit-tree", "--no-gpg-sign", strings.TrimSpace(string(tree)), "-m", subject}
@@ -181,17 +259,23 @@ func CaptureSnapshot(ctx context.Context, root string, cp Checkpoint) (Checkpoin
 		return CheckpointEntry{}, fmt.Errorf("checkpoint commit-tree: %w", err)
 	}
 	e.Key = fmt.Sprintf("%d-%s", now, short(e.Commit))
-	ref := restoreRefs + e.Key
-	if cp.Kind == CheckpointTurn {
+	return e, nil
+}
+
+// publishCheckpoint writes e's ref under refs/mako/ and prunes old entries.
+// Caller holds the worktree lock.
+func publishCheckpoint(ctx context.Context, root, gitDir, sid string, e CheckpointEntry) error {
+	ref := restoreRefs + worktreeKey(gitDir) + "/" + e.Key
+	if e.Kind == CheckpointTurn {
 		ref = checkpointRefs + sid + "/" + e.Key
 	}
 	if _, err := gitOut(ctx, root, nil, "update-ref", ref, e.Commit); err != nil {
-		return CheckpointEntry{}, fmt.Errorf("checkpoint update-ref: %w", cmp.Or(ctx.Err(), err))
+		return fmt.Errorf("checkpoint update-ref: %w", cmp.Or(ctx.Err(), err))
 	}
 	// A prune that fails leaves more kept than need be, which the next
 	// capture's prune takes up: the checkpoint is made.
 	_ = pruneCheckpoints(ctx, root, time.Now(), ref)
-	return e, nil
+	return nil
 }
 
 // short is a commit's hash as a message names it.
@@ -230,7 +314,8 @@ func sessionRefPart(id string) string {
 
 // checkpointRef is one checkpoint's ref and what its commit's subject says.
 type checkpointRef struct {
-	Ref string
+	Ref      string
+	Worktree string // worktreeKey for CheckpointPreRestore refs
 	CheckpointEntry
 }
 
@@ -262,7 +347,12 @@ func readCheckpoints(ctx context.Context, root string, prefixes ...string) ([]ch
 		}
 		switch {
 		case strings.HasPrefix(c.Ref, restoreRefs):
-			c.Key = strings.TrimPrefix(c.Ref, restoreRefs)
+			tail := strings.TrimPrefix(c.Ref, restoreRefs)
+			if wt, key, hasWT := strings.Cut(tail, "/"); hasWT {
+				c.Worktree, c.Key = wt, key
+			} else {
+				c.Key = tail
+			}
 			c.Kind = CheckpointPreRestore
 		case strings.HasPrefix(c.Ref, checkpointRefs):
 			c.SessionID, c.Key, _ = strings.Cut(strings.TrimPrefix(c.Ref, checkpointRefs), "/")
@@ -291,28 +381,30 @@ func pruneCheckpoints(ctx context.Context, root string, now time.Time, keep stri
 		return err
 	}
 	oldest := now.Add(-checkpointMaxAge).UnixMilli()
-	kept := map[string]int{} // by session, "" for restores
+	kept := map[string]int{} // bucketed by turn session or pre-restore worktree
 	var drop strings.Builder
 	for _, c := range list { // newest first
 		limit := maxTurnCheckpoints
+		bucket := "turn:" + c.SessionID
 		if c.Kind == CheckpointPreRestore {
 			limit = maxRestoreCheckpoints
+			bucket = "pre-restore:" + c.Worktree
 		}
-		if c.Ref == keep || (c.CreatedAt >= oldest && kept[c.SessionID] < limit) {
-			kept[c.SessionID]++
+		if c.Ref == keep || (c.CreatedAt >= oldest && kept[bucket] < limit) {
+			kept[bucket]++
 			continue
 		}
-		fmt.Fprintf(&drop, "delete %s %s\n", c.Ref, c.Commit)
+		fmt.Fprintf(&drop, "delete %s\x00%s\x00", c.Ref, c.Commit)
 	}
 	return deleteRefs(ctx, root, drop.String())
 }
 
-// deleteRefs runs update-ref's commands, if any, at once.
+// deleteRefs runs update-ref's NUL-delimited commands, if any, at once.
 func deleteRefs(ctx context.Context, root, commands string) error {
 	if commands == "" {
 		return nil
 	}
-	_, err := gitOut(ctx, root, []byte(commands), "update-ref", "--stdin")
+	_, err := gitOut(ctx, root, []byte(commands), "update-ref", "--stdin", "-z")
 	return err
 }
 
@@ -329,15 +421,19 @@ func DeleteCheckpoints(ctx context.Context, root, sessionID string) error {
 	}
 	var drop strings.Builder
 	for _, c := range list {
-		fmt.Fprintf(&drop, "delete %s %s\n", c.Ref, c.Commit)
+		fmt.Fprintf(&drop, "delete %s\x00%s\x00", c.Ref, c.Commit)
 	}
 	return deleteRefs(ctx, root, drop.String())
 }
 
 // ListCheckpoints lists the checkpoints of the session's turns, and what
-// restores of root found, newest first.
+// restores of root's work tree found, newest first.
 func ListCheckpoints(ctx context.Context, root, sessionID string) ([]CheckpointEntry, error) {
-	prefixes := []string{restoreRefs}
+	gitDir, err := worktreeGitDir(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+	prefixes := []string{restoreRefs + worktreeKey(gitDir) + "/"}
 	if sid := sessionRefPart(sessionID); sid != "" {
 		prefixes = append(prefixes, checkpointRefs+sid+"/")
 	}
@@ -372,10 +468,19 @@ func RestoreSnapshot(ctx context.Context, root, commit string) (CheckpointEntry,
 	if err != nil {
 		return CheckpointEntry{}, err
 	}
+	gitDir, err := worktreeGitDir(ctx, root)
+	if err != nil {
+		return CheckpointEntry{}, err
+	}
+	unlock := lockWorktree(gitDir)
+	defer unlock()
 	if _, err := gitOut(ctx, root, nil, "cat-file", "-e", sha+"^{commit}"); err != nil {
 		return CheckpointEntry{}, fmt.Errorf("checkpoint %s not found: %w", sha, cmp.Or(ctx.Err(), err))
 	}
-	safety, err := CaptureSnapshot(ctx, root, Checkpoint{Kind: CheckpointPreRestore})
+	// Build the safety commit before mutating anything, but hold off on
+	// publishing its ref/pruning until restorable checks pass so a refused
+	// restore never leaves a phantom pre-restore ref or evicts a real one.
+	safety, err := captureCommit(ctx, root, gitDir, Checkpoint{Kind: CheckpointPreRestore})
 	if err != nil {
 		return CheckpointEntry{}, fmt.Errorf("restore: no safety snapshot, so nothing was restored: %w", err)
 	}
@@ -383,11 +488,11 @@ func RestoreSnapshot(ctx context.Context, root, commit string) (CheckpointEntry,
 	// checkpoint is all a restore writes or removes.
 	changes, err := restoreChanges(ctx, root, safety.Commit, sha)
 	if err != nil {
-		return safety, err
+		return CheckpointEntry{}, err
 	}
 	dir, err := os.OpenRoot(root)
 	if err != nil {
-		return safety, err
+		return CheckpointEntry{}, err
 	}
 	defer dir.Close()
 	removed := map[string]bool{}
@@ -404,9 +509,12 @@ func RestoreSnapshot(ctx context.Context, root, commit string) (CheckpointEntry,
 	for _, c := range changes {
 		if !c.Remove {
 			if err := restorable(dir, c, removed); err != nil {
-				return safety, err
+				return CheckpointEntry{}, err
 			}
 		}
+	}
+	if err := publishCheckpoint(ctx, root, gitDir, "", safety); err != nil {
+		return CheckpointEntry{}, fmt.Errorf("restore: no safety snapshot, so nothing was restored: %w", err)
 	}
 	for _, c := range changes {
 		if !c.Remove {
@@ -458,6 +566,27 @@ func restoreChanges(ctx context.Context, root, from, to string) ([]treeChange, e
 	return changes, nil
 }
 
+// removedSameFile reports whether p (or a case-only alias of p on a
+// case-insensitive filesystem that resolves to the same os.FileInfo) is
+// scheduled for removal before write.
+func removedSameFile(dir *os.Root, p string, info os.FileInfo, removed map[string]bool) bool {
+	if removed[p] {
+		return true
+	}
+	if info == nil {
+		return false
+	}
+	for r := range removed {
+		if !strings.EqualFold(r, p) {
+			continue
+		}
+		if rInfo, err := dir.Lstat(filepath.FromSlash(r)); err == nil && os.SameFile(info, rInfo) {
+			return true
+		}
+	}
+	return false
+}
+
 // restorable refuses to write c's file over what is in its way, if that
 // is in no snapshot and not removed first: an ignored file, or a folder
 // with one left in it.
@@ -471,7 +600,7 @@ func restorable(dir *os.Root, c treeChange, removed map[string]bool) error {
 			return nil
 		case err != nil:
 			return fmt.Errorf("restore: %w", err)
-		case removed[at]:
+		case removedSameFile(dir, at, info, removed):
 			return nil // gone before the file is written
 		case at != c.Path && info.IsDir() && info.Mode()&os.ModeSymlink == 0:
 			continue
@@ -508,7 +637,13 @@ func fileLeftIn(dir *os.Root, p string, removed map[string]bool) string {
 			if left := fileLeftIn(dir, name, removed); left != "" {
 				return left
 			}
-		case !removed[name]:
+		default:
+			if removed[name] {
+				continue
+			}
+			if info, err := dir.Lstat(filepath.FromSlash(name)); err == nil && removedSameFile(dir, name, info, removed) {
+				continue
+			}
 			return name
 		}
 	}

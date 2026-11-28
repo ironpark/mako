@@ -43,6 +43,9 @@ func routineSettings(m *model) ggui.Widget {
 	items := ggui.State([]*protocol.Routine(nil)).WithEqual(sameRoutines)
 	runs := ggui.State([]*protocol.RoutineRun(nil)).WithEqual(sameRuns)
 	loaded := ggui.State(false)
+	loading := ggui.State(false)
+	busy := ggui.State(false)
+	loadErr := ggui.State("")
 	errText := ggui.State("")
 	runsErr := ggui.State("")
 
@@ -69,29 +72,37 @@ func routineSettings(m *model) ggui.Widget {
 		loaded.Set(true)
 	}
 	load := func() {
+		loading.Set(true)
 		fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Routines, error) {
 			return c.Routines(ctx, &protocol.ListRoutines{Runs: routineRunsShown})
 		}, func(res *protocol.Routines, err error) {
+			loading.Set(false)
 			if err != nil {
-				errText.Set(nodeErr(err))
+				loadErr.Set(nodeErr(err))
 				return
 			}
-			errText.Set("")
+			loadErr.Set("")
 			show(res)
 		})
 	}
 	// act asks the daemon for one change; its reply, or a fresh read after
 	// a refusal, is what the page shows next.
 	act := func(req *protocol.RoutineAction, done func(*protocol.Routines, error)) {
+		if ggui.Peek(busy) {
+			return
+		}
+		busy.Set(true)
 		req.Runs = routineRunsShown
 		fetch(m, 90*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Routines, error) {
 			return c.ActRoutine(ctx, req)
 		}, func(res *protocol.Routines, err error) {
+			busy.Set(false)
 			if err != nil {
 				errText.Set(nodeErr(err))
 				load()
 			} else {
 				errText.Set("")
+				loadErr.Set("")
 				show(res)
 			}
 			if done != nil {
@@ -157,10 +168,17 @@ func routineSettings(m *model) ggui.Widget {
 
 	listView := ggui.Reactive(func() ggui.Widget {
 		list := items.Get()
+		isBusy := busy.Get()
 		if !loaded.Get() {
+			if e := loadErr.Get(); e != "" && !loading.Get() {
+				return card(widget.Box(widget.Row(
+					widget.Expanded(warnLine("circle-slash", skin.DiffRemoved, Tf("Could not read this node's routines: %s", e))),
+					ui.Button(T("Retry"), load).Outline(),
+				).Gap(12).Align(widget.AlignCenter)).Pad(14, 16))
+			}
 			return card(widget.Box(widget.Row(
 				widget.Expanded(muted(widget.Text(T("Reading this node's routines…")).Size(12.5))),
-				ui.Button(T("Retry"), load).Outline(),
+				ui.Button(T("Retry"), load).Outline().Disabled(loading.Get()),
 			).Gap(12).Align(widget.AlignCenter)).Pad(14, 16))
 		}
 		if len(list) == 0 {
@@ -169,7 +187,10 @@ func routineSettings(m *model) ggui.Widget {
 		now := time.Now()
 		rows := make([]ggui.Widget, 0, len(list))
 		for _, r := range list {
-			subtitle := T(routineTriggerLabels[r.GetTrigger()])
+			subtitle := r.GetTrigger()
+			if lbl, ok := routineTriggerLabels[r.GetTrigger()]; ok {
+				subtitle = T(lbl)
+			}
 			if routines.TriggerKind(r.GetTrigger()) == routines.TriggerCron {
 				subtitle = r.GetSchedule()
 				if sched, err := routines.ParseSchedule(r.GetSchedule()); err == nil {
@@ -187,10 +208,10 @@ func routineSettings(m *model) ggui.Widget {
 						widget.Text(r.GetName()).Size(13.5).Weight(ggui.WeightSemibold),
 						muted(widget.Text(subtitle).Size(12).NoWrap().Ellipsis()),
 					).Gap(2).Stretch()),
-					ui.Button(T("Run now"), func() { runNow(r) }).Outline().Pad(4, 10).Radius(6),
+					ui.Button(T("Run now"), func() { runNow(r) }).Outline().Pad(4, 10).Radius(6).Disabled(isBusy),
 					ui.Button(pick(r.GetEnabled(), T("Disable"), T("Enable")), func() {
 						act(&protocol.RoutineAction{Op: toggle, Routine: r.GetId()}, nil)
-					}).Ghost().Pad(4, 8).Radius(6),
+					}).Ghost().Pad(4, 8).Radius(6).Disabled(isBusy),
 					iconButton("x", T("Delete routine"), func() {
 						act(&protocol.RoutineAction{Op: "remove", Routine: r.GetId()}, nil)
 					}),
@@ -270,7 +291,9 @@ func routineSettings(m *model) ggui.Widget {
 				}
 				return widget.Box()
 			}),
-			widget.Row(widget.Spacer(), ui.Button(T("Add routine"), addRoutine)).Align(widget.AlignCenter),
+			widget.Row(widget.Spacer(), ggui.Reactive(func() ggui.Widget {
+				return ui.Button(T("Add routine"), addRoutine).Disabled(busy.Get())
+			})).Align(widget.AlignCenter),
 		).Gap(10).Stretch()).Pad(14, 16),
 	)
 
@@ -285,7 +308,10 @@ func routineSettings(m *model) ggui.Widget {
 		rows := make([]ggui.Widget, 0, len(list)+1)
 		rows = append(rows, widget.Box(widget.Text(T("Recent runs")).Size(13).Weight(ggui.WeightSemibold)).Pad(10, 16))
 		for _, rec := range list {
-			ts := rec.GetStarted().AsTime().Local().Format("01-02 15:04")
+			ts := "-"
+			if started := protocol.TimeOf(rec.GetStarted()); !started.IsZero() {
+				ts = started.Local().Format("01-02 15:04")
+			}
 			statusCol := skin.DotDown
 			switch rec.GetStatus() {
 			case "started":

@@ -169,3 +169,22 @@ func TestAddToReviewNeedsPickedLines(t *testing.T) {
 		t.Fatalf("added %+v", got)
 	}
 }
+
+func TestDraftReviewResolvesCRLFAndTrailingSpaces(t *testing.T) {
+	m := newModel(config.Default(), "")
+	root := fileRoot{Node: "n", Path: "/repo"}
+	m.addDraftReviewComment(root, "a.go", []*protocol.DiffLine{{Op: "+", Text: "x", New: 1}}, "fix")
+	batch, headings := formatDraftReviewBatch(ggui.Peek(m.DraftReview))
+	m.DraftReview.Update(func(list []draftReviewComment) []draftReviewComment {
+		list[0].SentTo = "s1"
+		list[0].Heading = headings[list[0].ID]
+		return list
+	})
+	// Simulate CRLF and trailing spaces on the heading line.
+	crlf := strings.ReplaceAll(batch, headings[ggui.Peek(m.DraftReview)[0].ID], headings[ggui.Peek(m.DraftReview)[0].ID]+"  ")
+	crlf = strings.ReplaceAll(crlf, "\n", "\r\n")
+	m.draftReviewSent("s1", crlf)
+	if !ggui.Peek(m.DraftReview)[0].Resolved {
+		t.Fatal("comment should resolve even with CRLF and trailing spaces on heading")
+	}
+}

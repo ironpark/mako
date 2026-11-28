@@ -36,6 +36,10 @@ const Revision = 53
 // ForgeList.order, and ForgeItem.fork and ForgeItem.association.
 const RevisionRoutines = 53
 
+// RevisionCodeCheckpoints adds turn code checkpoints and code-inclusive
+// rewind (GitRun ops list_checkpoints and restore_checkpoint).
+const RevisionCodeCheckpoints = 53
+
 // RevisionCodexFastMode adds session-scoped Codex Fast Mode state and control:
 // SessionInfo.fast_mode (field 44), AgentControls.fast_mode (field 4),
 // ConfigureAgent.fast_mode (field 6), and Usage.fast_mode (field 11).

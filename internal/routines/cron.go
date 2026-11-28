@@ -153,6 +153,10 @@ func (s Schedule) Next(after time.Time) time.Time {
 }
 
 func parseField(expr string, minVal, maxVal int, dst []bool) error {
+	return parseFieldBounded(expr, minVal, maxVal, maxVal, dst)
+}
+
+func parseFieldBounded(expr string, minVal, maxVal, stepMax int, dst []bool) error {
 	for part := range strings.SplitSeq(expr, ",") {
 		part = strings.TrimSpace(part)
 		if part == "" {
@@ -168,10 +172,10 @@ func parseField(expr string, minVal, maxVal int, dst []bool) error {
 			step = n
 			rangePart = base
 		}
-		lo, hi := minVal, maxVal
+		lo, hi := minVal, stepMax
 		switch {
 		case rangePart == "*":
-			// full range
+			// full range up to stepMax
 		case strings.Contains(rangePart, "-"):
 			a, b, _ := strings.Cut(rangePart, "-")
 			var err error
@@ -197,6 +201,8 @@ func parseField(expr string, minVal, maxVal int, dst []bool) error {
 			lo = v
 			if !strings.Contains(part, "/") {
 				hi = v
+			} else if v > stepMax {
+				hi = v
 			}
 		}
 		for v := lo; v <= hi; v += step {
@@ -208,7 +214,10 @@ func parseField(expr string, minVal, maxVal int, dst []bool) error {
 
 func parseDowField(expr string, dst []bool) error {
 	var tmp [8]bool
-	if err := parseField(expr, 0, 7, tmp[:]); err != nil {
+	// Accept 7 as an alias for Sunday (0), while keeping the implicit upper
+	// bound for "*" and "N/step" at 6 so expressions like "1/2" produce
+	// Mon/Wed/Fri rather than wrapping onto Sunday via 7.
+	if err := parseFieldBounded(expr, 0, 7, 6, tmp[:]); err != nil {
 		return err
 	}
 	copy(dst, tmp[:7])

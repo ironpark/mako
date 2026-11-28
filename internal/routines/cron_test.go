@@ -245,3 +245,54 @@ func TestTriggerStateSurvivesASaveAndStartsAfreshForAnotherSource(t *testing.T) 
 		t.Fatalf("another source = %+v; want its cursors afresh and the cron minute kept", other)
 	}
 }
+
+func TestDowStepDoesNotWrapOntoSunday(t *testing.T) {
+	sched, err := ParseSchedule("0 9 * * 1/2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 2026-11-29 is Sunday, 11-30 Monday, 12-01 Tuesday, 12-02 Wednesday, 12-04 Friday.
+	sun := time.Date(2026, 11, 29, 9, 0, 0, 0, time.UTC)
+	mon := time.Date(2026, 11, 30, 9, 0, 0, 0, time.UTC)
+	wed := time.Date(2026, 12, 2, 9, 0, 0, 0, time.UTC)
+	fri := time.Date(2026, 12, 4, 9, 0, 0, 0, time.UTC)
+	if sched.Matches(sun) {
+		t.Fatal("1/2 must not match Sunday via 7->0 wrap")
+	}
+	for _, day := range []time.Time{mon, wed, fri} {
+		if !sched.Matches(day) {
+			t.Fatalf("1/2 should match %s", day.Weekday())
+		}
+	}
+}
+
+func TestValidateRejectsImpossibleDateAndForgeShell(t *testing.T) {
+	feb31 := Routine{Name: "x", Project: "/p", Agent: "claude", Trigger: TriggerCron, Schedule: "0 0 31 2 *", Prompt: "p"}
+	if err := feb31.Validate(); err == nil {
+		t.Fatal("Validate accepted Feb 31 schedule")
+	}
+	forgeShell := Routine{Name: "x", Project: "/p", Agent: "shell", Trigger: TriggerForgePR, Prompt: "p"}
+	if err := forgeShell.Validate(); err == nil {
+		t.Fatal("Validate accepted shell agent on Forge trigger")
+	}
+	neg := Routine{MaxConcurrent: -2, MaxPerPoll: -3}
+	if neg.ConcurrencyCap() != DefaultMaxConcurrent || neg.PollCap() != DefaultMaxPerPoll {
+		t.Fatalf("negative caps = %d, %d", neg.ConcurrencyCap(), neg.PollCap())
+	}
+}
+
+func TestLoadAssignsDeterministicIDWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	raw := `[{"name":"Hand edited","enabled":true,"trigger":"cron","schedule":"0 9 * * *","project":"/p","agent":"claude","prompt":"hi"}]`
+	if err := os.WriteFile(FilePath(dir), []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a, err := Load(dir)
+	if err != nil || len(a) != 1 || a[0].ID == "" {
+		t.Fatalf("first Load = %+v, %v", a, err)
+	}
+	b, err := Load(dir)
+	if err != nil || len(b) != 1 || b[0].ID != a[0].ID {
+		t.Fatalf("second Load churned ID: %q vs %q", a[0].ID, b[0].ID)
+	}
+}

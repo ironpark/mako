@@ -91,16 +91,25 @@ func (d *Daemon) checkpointTurn(ctx context.Context, s *session.Session, seq int
 }
 
 // dropCheckpoints drops the turn checkpoints of session id, closed for
-// good, in its project at root.
-func (d *Daemon) dropCheckpoints(id, root string) {
+// good, in its project at root (falling back to repo if root was a
+// worktree that has already been removed).
+func (d *Daemon) dropCheckpoints(id, root, repo string) {
 	d.turns.drop(id)
-	if root == "" {
+	target := root
+	if target == "" {
+		target = repo
+	}
+	if target == "" {
 		return
 	}
 	go func() {
 		ctx, cancel := context.WithTimeout(d.ctx, time.Minute)
 		defer cancel()
-		if err := gitstat.DeleteCheckpoints(ctx, root, id); err != nil {
+		err := gitstat.DeleteCheckpoints(ctx, target, id)
+		if err != nil && repo != "" && repo != target {
+			err = gitstat.DeleteCheckpoints(ctx, repo, id)
+		}
+		if err != nil {
 			d.log.Debug("checkpoints not dropped", "session", id, "err", err)
 		}
 	}()

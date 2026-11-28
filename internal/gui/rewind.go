@@ -48,6 +48,7 @@ type rewindDialogState struct {
 	Selected    *ggui.StateValue[string] // the Key of the checkpoint chosen, "" for none
 	Own         *ggui.StateValue[string] // the Key of the message's own checkpoint, "" for none
 	Loading     *ggui.StateValue[bool]
+	Restoring   *ggui.StateValue[bool]
 	Err         *ggui.StateValue[string]
 }
 
@@ -58,6 +59,7 @@ func newRewindDialogState() *rewindDialogState {
 		Selected:    ggui.State(""),
 		Own:         ggui.State(""),
 		Loading:     ggui.State(false),
+		Restoring:   ggui.State(false),
 		Err:         ggui.State(""),
 	}
 }
@@ -131,6 +133,9 @@ func (m *model) codeRewind(info *protocol.SessionInfo) (bool, string) {
 	case m.directSSH(info.GetNodeId()):
 		return false, T("Code checkpoints need makod on this SSH host, so only the conversation can be rewound here.")
 	}
+	if n, ok := nodeIn(ggui.Peek(m.Nodes), info.GetNodeId()); ok && n.GetRevision() > 0 && n.GetRevision() < protocol.RevisionCodeCheckpoints {
+		return false, T("Code checkpoints need a newer makod on this node, so only the conversation can be rewound here.")
+	}
 	return true, ""
 }
 
@@ -183,7 +188,7 @@ func (m *model) openRewindDialog(id string, info *protocol.SessionInfo, msg *pro
 // gen asked for, choosing the message's own if there is one.
 func (m *model) rewindListed(gen int, res *protocol.GitResult, err error) {
 	st := m.Rewind
-	if st.gen != gen {
+	if st.gen != gen || !ggui.Peek(st.Open) {
 		return // the dialog was closed, or opened for another message
 	}
 	st.Loading.Set(false)
@@ -213,6 +218,10 @@ func (m *model) closeRewindDialog() {
 // restoreCodeCheckpoint puts the session's files back as checkpoint cp has
 // them, reads the open diffs again, and runs after once it has.
 func (m *model) restoreCodeCheckpoint(info *protocol.SessionInfo, cp gitstat.CheckpointEntry, after func()) {
+	if ggui.Peek(m.Rewind.Restoring) {
+		return
+	}
+	m.Rewind.Restoring.Set(true)
 	req := &protocol.GitRun{
 		NodeId: m.remoteID(info.GetNodeId()),
 		Root:   info.GetProject(),
@@ -222,6 +231,7 @@ func (m *model) restoreCodeCheckpoint(info *protocol.SessionInfo, cp gitstat.Che
 	fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
 		return c.GitRun(ctx, req)
 	}, func(res *protocol.GitResult, err error) {
+		m.Rewind.Restoring.Set(false)
 		// A restore that fails part way has changed files too.
 		m.rereadDiffChanges(info.GetNodeId())
 		if err != nil {
@@ -275,13 +285,18 @@ func rewindDialog(m *model) ggui.Widget {
 			return widget.Box()
 		}
 		loading := st.Loading.Get()
+		restoring := st.Restoring.Get()
 		checkpoints := st.Checkpoints.Get()
 		selectedKey := st.Selected.Get()
 		own := st.Own.Get()
 		errText := st.Err.Get()
 
+		intro := T("Choose what to rewind from right before this message. A safety snapshot is always saved before restoring files.")
+		if !st.Code {
+			intro = T("Opens a new forked session from right before this message without modifying the current session. This message will be placed in the new session's composer so you can edit and resend it.")
+		}
 		rows := []ggui.Widget{
-			muted(widget.Text(T("Choose what to rewind from right before this message. A safety snapshot is always saved before restoring files.")).Size(12.5)),
+			muted(widget.Text(intro).Size(12.5)),
 		}
 		var selected gitstat.CheckpointEntry
 		for _, cp := range checkpoints {
@@ -333,7 +348,7 @@ func rewindDialog(m *model) ggui.Widget {
 			rows = append(rows, muted(widget.Text(T("No code checkpoints captured yet for this session.")).Size(12)))
 		}
 
-		hasCP := selected.Commit != ""
+		hasCP := selected.Commit != "" && !restoring
 		info, sid, msgID, turnIdx, prompt := st.Info, st.SessionID, st.MessageID, st.UserTurnIndex, st.PromptText
 		var buttons []ggui.Widget
 		if st.CanConv && hasCP {

@@ -152,3 +152,16 @@ func TestRewindPassesTheHistoryItKnows(t *testing.T) {
 		t.Fatal("a whole Codex history does not rewind its conversation")
 	}
 }
+
+func TestCodeRewindRequiresNewerPeerRevision(t *testing.T) {
+	m, _ := rewindModel(t)
+	remote := &protocol.SessionInfo{Id: "s2", Agent: "claude", NodeId: "peer-old", Project: "/srv/repo", Branch: "main"}
+	m.Nodes.Set([]*protocol.Node{{Id: "peer-old", Revision: protocol.RevisionCodeCheckpoints - 1}})
+	if code, why := m.codeRewind(remote); code || why == "" {
+		t.Fatalf("old peer codeRewind = %v, %q; want gated with upgrade note", code, why)
+	}
+	m.Nodes.Set([]*protocol.Node{{Id: "peer-old", Revision: protocol.RevisionCodeCheckpoints}})
+	if code, why := m.codeRewind(remote); !code || why != "" {
+		t.Fatalf("updated peer codeRewind = %v, %q; want allowed", code, why)
+	}
+}

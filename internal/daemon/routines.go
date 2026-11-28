@@ -47,8 +47,12 @@ type routineRunner struct {
 	// routines-state.json keeps them; nil until first read. Guarded by mu.
 	state map[string]routines.TriggerState
 	// starting counts, by routine ID, the runs whose sessions are being
-	// started, which the history does not name yet. Guarded by mu.
+	// started, which active does not name yet. Guarded by mu.
 	starting map[string]int
+	// active tracks sessions started by each routine (routineID -> sessionID
+	// -> startedAt) so concurrency caps do not depend solely on the bounded
+	// history file. Guarded by mu.
+	active map[string]map[string]time.Time
 }
 
 // routineWarmup is how long a routine's new session counts as at work
@@ -81,8 +85,9 @@ func (d *Daemon) loadRoutines() ([]routines.Routine, error) {
 
 // updateRoutines changes the routines as change says, and saves them, the
 // whole read, change and write under the runner's lock. A routines.json
-// that cannot be read is left as it is.
-func (d *Daemon) updateRoutines(change func([]routines.Routine) ([]routines.Routine, error)) ([]routines.Routine, error) {
+// that cannot be read is left as it is. If afterSave is non-nil, it runs
+// under the same lock once Save succeeds.
+func (d *Daemon) updateRoutines(change func([]routines.Routine) ([]routines.Routine, error), afterSave ...func()) ([]routines.Routine, error) {
 	d.routines.mu.Lock()
 	defer d.routines.mu.Unlock()
 	list, err := routines.Load(d.dir)
@@ -96,7 +101,36 @@ func (d *Daemon) updateRoutines(change func([]routines.Routine) ([]routines.Rout
 	if err := routines.Save(d.dir, next); err != nil {
 		return nil, err
 	}
+	for _, fn := range afterSave {
+		if fn != nil {
+			fn()
+		}
+	}
 	return routines.Load(d.dir)
+}
+
+// loadRoutinesAndPruneState loads routines.json and removes trigger state
+// for deleted routines in a single lock acquisition so a routine added
+// concurrently never has its state dropped.
+func (d *Daemon) loadRoutinesAndPruneState() ([]routines.Routine, error) {
+	d.routines.mu.Lock()
+	defer d.routines.mu.Unlock()
+	list, err := routines.Load(d.dir)
+	if err != nil {
+		return nil, err
+	}
+	st := d.routineStateLocked()
+	changed := false
+	for id := range st {
+		if !slices.ContainsFunc(list, func(r routines.Routine) bool { return r.ID == id }) {
+			delete(st, id)
+			changed = true
+		}
+	}
+	if changed {
+		d.saveRoutineStateLocked()
+	}
+	return list, nil
 }
 
 // recordRoutineRun appends rec to the routines' history.
@@ -188,12 +222,11 @@ func (d *Daemon) startForgePoll(ctx context.Context) bool {
 }
 
 func (d *Daemon) tickCronRoutines(ctx context.Context, now time.Time) {
-	list, err := d.loadRoutines()
+	list, err := d.loadRoutinesAndPruneState()
 	if err != nil {
 		d.log.Warn("routines: load failed", "err", err)
 		return
 	}
-	d.forgetRemovedRoutines(list)
 	minKey := now.Unix() / 60
 	for _, r := range list {
 		if !r.Enabled || r.Trigger != routines.TriggerCron {
@@ -215,7 +248,7 @@ func (d *Daemon) tickCronRoutines(ctx context.Context, now time.Time) {
 			return true
 		})
 		if due {
-			d.startRoutine(ctx, r, "cron:"+r.Schedule, r.Prompt, false, now)
+			d.startRoutine(ctx, r, "cron:"+r.Schedule, r.Prompt, false, false, now)
 		}
 	}
 }
@@ -257,30 +290,55 @@ func (d *Daemon) tickForgeRoutines(ctx context.Context, list []routines.Routine)
 			d.log.Debug("routines: forge poll failed", "routine", r.Name, "err", err)
 			continue
 		}
-		var fresh []*protocol.ForgeItem
+		// Re-verify the routine under the lock after the network call when
+		// routines.json is present so a routine removed, disabled, or
+		// repointed while polling is never resurrected or launched.
+		var (
+			fresh []*protocol.ForgeItem
+			cur   = r
+			valid = true
+		)
 		d.changeRoutineState(func(st map[string]routines.TriggerState) bool {
-			s := st[r.ID].For(routineSource(r))
-			if r.Trigger == routines.TriggerForgePR {
+			if _, statErr := os.Stat(routines.FilePath(d.dir)); statErr == nil {
+				latest, err := routines.Load(d.dir)
+				if err != nil {
+					valid = false
+					return false
+				}
+				idx := slices.IndexFunc(latest, func(x routines.Routine) bool { return x.ID == r.ID })
+				if idx < 0 || !latest[idx].Enabled || routineSource(latest[idx]) != routineSource(r) {
+					valid = false
+					return false
+				}
+				cur = latest[idx]
+			}
+			s := st[cur.ID].For(routineSource(cur))
+			if cur.Trigger == routines.TriggerForgePR {
 				fresh = newPullRequests(&s, items.GetItems())
 			} else {
 				fresh = newFailedRuns(&s, items.GetItems())
 			}
-			st[r.ID] = s
+			st[cur.ID] = s
 			return true
 		})
+		if !valid {
+			continue
+		}
 		started := 0
 		for _, it := range fresh {
 			trigger := fmt.Sprintf("ci:#%d", it.GetNumber())
-			if r.Trigger == routines.TriggerForgePR {
+			if cur.Trigger == routines.TriggerForgePR {
 				trigger = fmt.Sprintf("pr:#%d", it.GetNumber())
 			}
 			switch {
-			case !r.AllowExternal && externalForgeItem(it, items.GetForge()):
-				d.recordRoutineSkip(r, trigger, "from a fork or an author without write access to the repository; the routine allows its own branches and members only")
-			case started >= r.PollCap():
-				d.recordRoutineSkip(r, trigger, fmt.Sprintf("over its limit of %d runs a poll", r.PollCap()))
+			case !cur.AllowExternal && externalForgeItem(it, items.GetForge()):
+				d.recordRoutineSkip(cur, trigger, "from a fork or an author without write access to the repository; the routine allows its own branches and members only")
+			case started >= cur.PollCap():
+				d.recordRoutineSkip(cur, trigger, fmt.Sprintf("over its limit of %d runs a poll", cur.PollCap()))
 			default:
-				if d.startRoutine(ctx, r, trigger, forgeEventPrompt(r, it), true, time.Now()) {
+				// Check cooldown only for the first run of this poll; once
+				// outside cooldown, this poll may start up to PollCap() runs.
+				if d.startRoutine(ctx, cur, trigger, forgeEventPrompt(cur, it), true, started == 0, time.Now()) {
 					started++
 				}
 			}
@@ -292,6 +350,14 @@ func (d *Daemon) tickForgeRoutines(ctx context.Context, list []routines.Routine)
 // write to it, as GitHub names them.
 var trustedAssociations = []string{"OWNER", "MEMBER", "COLLABORATOR"}
 
+// trustedGitHubRunEvents are GitHub Actions workflow events whose triggers
+// and display titles originate from repository branches/maintainers rather
+// than arbitrary external issues, comments, or pull_request_target payloads.
+var trustedGitHubRunEvents = []string{
+	"push", "schedule", "workflow_dispatch", "release",
+	"pull_request", "merge_group", "deployment", "workflow_call", "repository_dispatch",
+}
+
 // externalForgeItem reports whether a pull request or a run is from
 // outside the repository: from a fork, or by an author without write
 // access, as far as the forge tells. A Forgejo's or Gitea's runs do not
@@ -302,7 +368,11 @@ func externalForgeItem(it *protocol.ForgeItem, forgeName string) bool {
 		return true
 	}
 	if it.GetKind() == protocol.ForgeRuns {
-		return forgeName != "github" && strings.HasPrefix(it.GetEvent(), "pull_request")
+		if forgeName == "github" {
+			ev := strings.ToLower(strings.TrimSpace(it.GetEvent()))
+			return ev != "" && !slices.Contains(trustedGitHubRunEvents, ev)
+		}
+		return strings.HasPrefix(it.GetEvent(), "pull_request")
 	}
 	a := it.GetAssociation()
 	return a != "" && !slices.Contains(trustedAssociations, strings.ToUpper(a))
@@ -337,29 +407,30 @@ func forgeEventPrompt(r routines.Routine, it *protocol.ForgeItem) string {
 // daemon's shutdown waits for, unless r's limits refuse it, which is
 // recorded as a skipped run: its sessions at work at once and, for a
 // Forge event, its cooldown. It reports whether the run started.
-func (d *Daemon) startRoutine(ctx context.Context, r routines.Routine, trigger, prompt string, forgeEvent bool, now time.Time) bool {
-	release, why := d.claimRoutineRun(r, forgeEvent, now)
-	if release == nil {
+func (d *Daemon) startRoutine(ctx context.Context, r routines.Routine, trigger, prompt string, forgeEvent, checkCooldown bool, now time.Time) bool {
+	onDone, why := d.claimRoutineRun(r, forgeEvent, checkCooldown, now)
+	if onDone == nil {
 		d.recordRoutineSkip(r, trigger, why)
 		return false
 	}
 	d.routines.start(func() {
-		defer release()
-		_, _ = d.executeRoutine(ctx, r, trigger, prompt)
+		defer onDone("", time.Time{})
+		_, _ = d.executeRoutineWithHook(ctx, r, trigger, prompt, onDone)
 	})
 	return true
 }
 
 // claimRoutineRun takes a place for a run of r, if its limits leave one,
-// and returns how to give it back once its session has started and is in
-// the history; else nil, and why not.
-func (d *Daemon) claimRoutineRun(r routines.Routine, forgeEvent bool, now time.Time) (release func(), why string) {
+// and returns an idempotent completion callback that atomically moves the
+// slot from starting to active (and commits LastForgeRun for Forge events)
+// once the session starts, or releases the slot on failure.
+func (d *Daemon) claimRoutineRun(r routines.Routine, forgeEvent, checkCooldown bool, now time.Time) (onDone func(sessionID string, startedAt time.Time), why string) {
 	rr := &d.routines
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	st := d.routineStateLocked()
 	s := st[r.ID]
-	if cd := r.CooldownPeriod(); forgeEvent && cd > 0 && s.LastForgeRun > 0 && now.Sub(time.Unix(s.LastForgeRun, 0)) < cd {
+	if cd := r.CooldownPeriod(); forgeEvent && checkCooldown && cd > 0 && s.LastForgeRun > 0 && now.Sub(time.Unix(s.LastForgeRun, 0)) < cd {
 		return nil, fmt.Sprintf("in its cooldown of %s after its last Forge-triggered run", cd)
 	}
 	if n, limit := d.routineAtWorkLocked(r.ID, now), r.ConcurrencyCap(); n >= limit {
@@ -374,38 +445,109 @@ func (d *Daemon) claimRoutineRun(r routines.Routine, forgeEvent bool, now time.T
 		rr.starting = map[string]int{}
 	}
 	rr.starting[r.ID]++
-	return func() {
+	done := false
+	return func(sessionID string, startedAt time.Time) {
 		rr.mu.Lock()
 		defer rr.mu.Unlock()
+		if done {
+			return
+		}
+		done = true
 		if rr.starting[r.ID]--; rr.starting[r.ID] <= 0 {
 			delete(rr.starting, r.ID)
+		}
+		if sessionID != "" {
+			if rr.active == nil {
+				rr.active = map[string]map[string]time.Time{}
+			}
+			if rr.active[r.ID] == nil {
+				rr.active[r.ID] = map[string]time.Time{}
+			}
+			rr.active[r.ID][sessionID] = startedAt
 		}
 	}, ""
 }
 
+// reserveManualRoutineStart tracks a manually triggered routine while its
+// session is starting, transitioning it into rr.active once started so
+// scheduled/Forge concurrency caps account for manual runs too.
+func (d *Daemon) reserveManualRoutineStart(id string) func(sessionID string, startedAt time.Time) {
+	rr := &d.routines
+	rr.mu.Lock()
+	if rr.starting == nil {
+		rr.starting = map[string]int{}
+	}
+	rr.starting[id]++
+	rr.mu.Unlock()
+	done := false
+	return func(sessionID string, startedAt time.Time) {
+		rr.mu.Lock()
+		defer rr.mu.Unlock()
+		if done {
+			return
+		}
+		done = true
+		if rr.starting[id]--; rr.starting[id] <= 0 {
+			delete(rr.starting, id)
+		}
+		if sessionID != "" {
+			if rr.active == nil {
+				rr.active = map[string]map[string]time.Time{}
+			}
+			if rr.active[id] == nil {
+				rr.active[id] = map[string]time.Time{}
+			}
+			rr.active[id][sessionID] = startedAt
+		}
+	}
+}
+
 // routineAtWorkLocked counts the sessions of routine id at work: those
-// being started, and those its runs started that are still at work, ask
-// the user something, or are too new for their status to say. The
-// caller holds the runner's lock.
+// being started, those tracked in memory, and those in history (for
+// sessions started before a daemon restart) that are still at work, ask
+// the user something, or are too new for their status to say. The caller
+// holds the runner's lock.
 func (d *Daemon) routineAtWorkLocked(id string, now time.Time) int {
 	n := d.routines.starting[id]
+	seen := map[string]bool{}
+	isAtWork := func(sessionID string, startedAt time.Time) (running, atWork bool) {
+		s, ok := d.sessions.get(sessionID)
+		if !ok {
+			return false, false
+		}
+		info := s.Info()
+		if info.GetState() != protocol.StateRunning {
+			return false, false
+		}
+		status := info.GetStatus()
+		return true, protocol.AtWork(status) || status == protocol.AgentWaiting || now.Sub(startedAt) < routineWarmup
+	}
+	if active := d.routines.active[id]; len(active) > 0 {
+		for sid, startedAt := range active {
+			seen[sid] = true
+			running, atWork := isAtWork(sid, startedAt)
+			if !running {
+				delete(active, sid)
+				continue
+			}
+			if atWork {
+				n++
+			}
+		}
+		if len(active) == 0 {
+			delete(d.routines.active, id)
+		}
+	}
 	hist, err := routines.LoadHistory(d.dir)
 	if err != nil {
 		return n
 	}
 	for _, rec := range hist {
-		if rec.RoutineID != id || rec.Status != routineStarted || rec.SessionID == "" {
+		if rec.RoutineID != id || rec.Status != routineStarted || rec.SessionID == "" || seen[rec.SessionID] {
 			continue
 		}
-		s, ok := d.sessions.get(rec.SessionID)
-		if !ok {
-			continue
-		}
-		info := s.Info()
-		if info.GetState() != protocol.StateRunning {
-			continue
-		}
-		if status := info.GetStatus(); protocol.AtWork(status) || status == protocol.AgentWaiting || now.Sub(time.Unix(rec.StartedAt, 0)) < routineWarmup {
+		seen[rec.SessionID] = true
+		if _, atWork := isAtWork(rec.SessionID, time.Unix(rec.StartedAt, 0)); atWork {
 			n++
 		}
 	}
@@ -492,34 +634,55 @@ func (d *Daemon) saveRoutineStateLocked() {
 	}
 }
 
-// forgetRemovedRoutines drops the trigger states of routines list no
-// longer has.
-func (d *Daemon) forgetRemovedRoutines(list []routines.Routine) {
-	d.changeRoutineState(func(st map[string]routines.TriggerState) bool {
-		changed := false
-		for id := range st {
-			if !slices.ContainsFunc(list, func(r routines.Routine) bool { return r.ID == id }) {
-				delete(st, id)
-				changed = true
-			}
-		}
-		return changed
-	})
+// resetRoutineStateLocked clears routine id's Forge cursors immediately so
+// disabling and re-enabling before the next poll starts fresh. Caller holds
+// the runner's lock.
+func (d *Daemon) resetRoutineStateLocked(id string) {
+	st := d.routineStateLocked()
+	s, ok := st[id]
+	if !ok || s.Source == "" {
+		return
+	}
+	st[id] = s.For("")
+	d.saveRoutineStateLocked()
+}
+
+// deleteRoutineStateLocked removes routine id's persisted trigger state and
+// in-memory active session tracking. Caller holds the runner's lock.
+func (d *Daemon) deleteRoutineStateLocked(id string) {
+	delete(d.routines.active, id)
+	st := d.routineStateLocked()
+	if _, ok := st[id]; !ok {
+		return
+	}
+	delete(st, id)
+	d.saveRoutineStateLocked()
 }
 
 // executeRoutine starts an agent session for routine r, given prompt, and
 // records the run: the one way a routine runs, whether its schedule, a
 // Forge event or a front-end's run action started it.
 func (d *Daemon) executeRoutine(ctx context.Context, r routines.Routine, triggerReason, prompt string) (*protocol.SessionInfo, error) {
+	return d.executeRoutineWithHook(ctx, r, triggerReason, prompt, nil)
+}
+
+func (d *Daemon) executeRoutineWithHook(ctx context.Context, r routines.Routine, triggerReason, prompt string, onStarted func(sessionID string, startedAt time.Time)) (*protocol.SessionInfo, error) {
+	startedAt := time.Now()
 	rec := routines.RunRecord{
 		RoutineID:   r.ID,
 		RoutineName: r.Name,
 		Trigger:     triggerReason,
-		StartedAt:   time.Now().Unix(),
+		StartedAt:   startedAt.Unix(),
 	}
-	if _, err := os.Stat(r.Project); err != nil {
+	if st, err := os.Stat(r.Project); err != nil {
 		rec.Status = routineError
 		rec.Error = fmt.Sprintf("project path unavailable: %v", err)
+		d.recordRoutineRun(rec)
+		return nil, err
+	} else if !st.IsDir() {
+		err := fmt.Errorf("project path %q is not a directory", r.Project)
+		rec.Status = routineError
+		rec.Error = err.Error()
 		d.recordRoutineRun(rec)
 		return nil, err
 	}
@@ -547,6 +710,9 @@ func (d *Daemon) executeRoutine(ctx context.Context, r routines.Routine, trigger
 		return nil, err
 	}
 	info := d.withHead(s.Info())
+	if onStarted != nil {
+		onStarted(info.GetId(), startedAt)
+	}
 	rec.Status = routineStarted
 	rec.SessionID = info.GetId()
 	d.recordRoutineRun(rec)

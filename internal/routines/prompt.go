@@ -59,7 +59,7 @@ func EventPrompt(prompt, event string, fields []EventField) string {
 // made one, and cut to maxEventValue runes.
 func cleanEventValue(v string) string {
 	v = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r) || r == unicode.ReplacementChar {
+		if unicode.IsControl(r) || unicode.IsSpace(r) || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Zl, r) || unicode.Is(unicode.Zp, r) || r == unicode.ReplacementChar {
 			return ' '
 		}
 		return r

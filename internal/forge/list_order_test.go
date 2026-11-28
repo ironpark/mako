@@ -39,7 +39,8 @@ func (f *fakeGitHubList) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	return reply(`{"workflow_runs":[
 		{"id":31,"name":"ci","status":"completed","conclusion":"failure","repository":{"full_name":"o/r"},"head_repository":{"full_name":"eve/r"}},
-		{"id":30,"name":"ci","status":"completed","conclusion":"failure","repository":{"full_name":"o/r"},"head_repository":{"full_name":"O/R"}}
+		{"id":30,"name":"ci","status":"completed","conclusion":"failure","repository":{"full_name":"o/r"},"head_repository":{"full_name":"O/R"}},
+		{"id":29,"name":"ci","status":"completed","conclusion":"failure","repository":{"full_name":"o/r"},"head_repository":null}
 	]}`)
 }
 
@@ -78,8 +79,8 @@ func TestGitHubListSaysOrderAndOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r := runs.GetItems(); len(r) != 2 || !r[0].GetFork() || r[1].GetFork() {
-		t.Fatalf("runs = %v; want the first a fork's and the second the repository's own", r)
+	if r := runs.GetItems(); len(r) != 3 || !r[0].GetFork() || r[1].GetFork() || !r[2].GetFork() {
+		t.Fatalf("runs = %v; want fork, own, and null head_repository (deleted fork) treated as fork", r)
 	}
 }
 

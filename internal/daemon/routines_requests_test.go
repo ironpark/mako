@@ -96,6 +96,7 @@ func TestRoutineActionsChangeOneRoutine(t *testing.T) {
 		{Op: "update", Routine: "rtn-none", Spec: cronSpec("C", proj)},
 		{Op: "remove", Routine: "nothing"},
 		{Op: "frobnicate", Routine: b},
+		&protocol.RoutineAction{Op: "update", Spec: cronSpec("X", proj)}, // missing ID
 	} {
 		if _, err := d.actOnRoutine(ctx, bad); err == nil {
 			t.Errorf("%v was taken", bad)

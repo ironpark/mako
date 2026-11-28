@@ -59,10 +59,20 @@ const (
 
 // ConcurrencyCap is how many of the routine's sessions may be at work at
 // once.
-func (r Routine) ConcurrencyCap() int { return cmp.Or(r.MaxConcurrent, DefaultMaxConcurrent) }
+func (r Routine) ConcurrencyCap() int {
+	if r.MaxConcurrent <= 0 {
+		return DefaultMaxConcurrent
+	}
+	return r.MaxConcurrent
+}
 
 // PollCap is how many runs one poll of the forge may start.
-func (r Routine) PollCap() int { return cmp.Or(r.MaxPerPoll, DefaultMaxPerPoll) }
+func (r Routine) PollCap() int {
+	if r.MaxPerPoll <= 0 {
+		return DefaultMaxPerPoll
+	}
+	return r.MaxPerPoll
+}
 
 // CooldownPeriod is the least time between two Forge-triggered runs.
 func (r Routine) CooldownPeriod() time.Duration {
@@ -126,23 +136,30 @@ func (r Routine) Validate() error {
 	}
 	switch r.Trigger {
 	case "", TriggerCron:
-		if _, err := ParseSchedule(r.Schedule); err != nil {
+		sched, err := ParseSchedule(r.Schedule)
+		if err != nil {
 			return fmt.Errorf("invalid schedule: %w", err)
 		}
+		if !sched.IsInterval() && sched.Next(time.Now()).IsZero() {
+			return errors.New("invalid schedule: date never occurs")
+		}
 	case TriggerForgePR, TriggerForgeCIFail:
-		// Forge event triggers do not require a cron schedule.
+		// Forge event triggers deliver untrusted metadata in the initial
+		// prompt and must not target a raw shell session.
+		baseAgent, _, _ := strings.Cut(strings.TrimSpace(r.Agent), ":")
+		if strings.EqualFold(baseAgent, "shell") {
+			return errors.New("forge-triggered routines cannot use the shell agent")
+		}
 	default:
 		return fmt.Errorf("unknown routine trigger %q", r.Trigger)
 	}
 	return nil
 }
 
-// Normalized returns r with defaults populated.
+// Normalized returns r with whitespace trimmed and default trigger populated.
+// It does not invent a random ID on read; Save and daemon add assign one.
 func (r Routine) Normalized() Routine {
 	r.ID = strings.TrimSpace(r.ID)
-	if r.ID == "" {
-		r.ID = NewID("rtn")
-	}
 	r.Name = strings.TrimSpace(r.Name)
 	r.Project = strings.TrimSpace(r.Project)
 	r.Agent = strings.TrimSpace(r.Agent)

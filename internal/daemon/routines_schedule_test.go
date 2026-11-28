@@ -399,3 +399,111 @@ func TestForgeEventPromptPutsTheRoutineFirst(t *testing.T) {
 		t.Fatalf("the title is not in the fenced facts:\n%s", got)
 	}
 }
+
+// MaxPerPoll > 1 starts up to MaxPerPoll runs within a single poll even when
+// a non-zero Cooldown is configured, and then enforces cooldown on the next poll.
+func TestMaxPerPollWorksWithCooldown(t *testing.T) {
+	f := &fakeForge{}
+	d := forgeDaemon(t.TempDir(), f)
+	r := forgeRoutine("rtn-pr", routines.TriggerForgePR)
+	r.MaxPerPoll = 2
+	r.MaxConcurrent = 5
+	r.Cooldown = "10m"
+	d.tickForgeRoutines(t.Context(), []routines.Routine{r})
+	f.set(pr(3), pr(2), pr(1))
+	d.tickForgeRoutines(t.Context(), []routines.Routine{r})
+	d.routines.runs.Wait()
+	if ran, skipped := firedTriggers(t, d), skippedTriggers(t, d); !slices.Equal(ran, []string{"pr:#1", "pr:#2"}) || !slices.Equal(skipped, []string{"pr:#3"}) {
+		t.Fatalf("first poll: ran %v, skipped %v; want #1,#2 run and #3 skipped", ran, skipped)
+	}
+	f.set(pr(4), pr(3), pr(2), pr(1))
+	d.tickForgeRoutines(t.Context(), []routines.Routine{r})
+	d.routines.runs.Wait()
+	if ran, skipped := firedTriggers(t, d), skippedTriggers(t, d); !slices.Equal(ran, []string{"pr:#1", "pr:#2"}) || !slices.Equal(skipped, []string{"pr:#3", "pr:#4"}) {
+		t.Fatalf("second poll in cooldown: ran %v, skipped %v; want #4 skipped", ran, skipped)
+	}
+}
+
+// GitHub Actions runs triggered by untrusted external events (issues,
+// pull_request_target) are skipped when AllowExternal is false even if
+// head_repository matches the base repository.
+func TestGitHubUntrustedRunEventsSkipped(t *testing.T) {
+	f := &fakeForge{}
+	d := forgeDaemon(t.TempDir(), f)
+	d.routines.forgeList = func(ctx context.Context, req *protocol.ForgeList) (*protocol.ForgeItems, error) {
+		items, err := f.list(ctx, req)
+		items.Forge = "github"
+		return items, err
+	}
+	r := forgeRoutine("rtn-ci", routines.TriggerForgeCIFail)
+	r.MaxPerPoll = 5
+	d.tickForgeRoutines(t.Context(), []routines.Routine{r})
+
+	issueRun := ciRun(61, "failure")
+	issueRun.Event = "issues"
+	prtRun := ciRun(62, "failure")
+	prtRun.Event = "pull_request_target"
+	pushRun := ciRun(63, "failure")
+	pushRun.Event = "push"
+	f.set(issueRun, prtRun, pushRun)
+	d.tickForgeRoutines(t.Context(), []routines.Routine{r})
+	if ran, skipped := firedTriggers(t, d), skippedTriggers(t, d); !slices.Equal(ran, []string{"ci:#63"}) || !slices.Equal(skipped, []string{"ci:#61", "ci:#62"}) {
+		t.Fatalf("ran %v, skipped %v; want only push run", ran, skipped)
+	}
+}
+
+// Disabling and re-enabling a routine via RPC resets its Forge cursors
+// immediately even before the next poll runs.
+func TestDisableImmediatelyResetsForgeCursor(t *testing.T) {
+	f := &fakeForge{}
+	d := forgeDaemon(t.TempDir(), f)
+	proj := t.TempDir()
+	r := forgeRoutine("rtn-pr", routines.TriggerForgePR)
+	r.Project = proj
+	saveRoutines(t, d, r)
+	f.set(pr(10))
+	d.tickForgeRoutines(t.Context(), []routines.Routine{r})
+	if _, err := d.actOnRoutine(t.Context(), &protocol.RoutineAction{Op: "disable", Routine: r.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.actOnRoutine(t.Context(), &protocol.RoutineAction{Op: "enable", Routine: r.ID}); err != nil {
+		t.Fatal(err)
+	}
+	f.set(pr(11), pr(10))
+	d.tickForgeRoutines(t.Context(), []routines.Routine{r})
+	if ran := firedTriggers(t, d); len(ran) != 0 {
+		t.Fatalf("ran %v for PR opened while disabled", ran)
+	}
+}
+
+// Removing a routine while its Forge poll is in flight prevents the poll
+// from resurrecting its state or launching a run.
+func TestRemovedRoutineDuringPollIsNotResurrected(t *testing.T) {
+	f := &fakeForge{}
+	d := forgeDaemon(t.TempDir(), f)
+	proj := t.TempDir()
+	r := forgeRoutine("rtn-pr", routines.TriggerForgePR)
+	r.Project = proj
+	saveRoutines(t, d, r)
+	f.set(pr(10))
+	d.tickForgeRoutines(t.Context(), []routines.Routine{r})
+
+	f.set(pr(11), pr(10))
+	d.routines.forgeList = func(ctx context.Context, req *protocol.ForgeList) (*protocol.ForgeItems, error) {
+		if _, err := d.actOnRoutine(t.Context(), &protocol.RoutineAction{Op: "remove", Routine: r.ID}); err != nil {
+			t.Errorf("remove during poll: %v", err)
+		}
+		return f.list(ctx, req)
+	}
+	d.tickForgeRoutines(t.Context(), []routines.Routine{r})
+	if ran := firedTriggers(t, d); len(ran) != 0 {
+		t.Fatalf("removed routine ran %v", ran)
+	}
+	st, err := routines.LoadState(d.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := st[r.ID]; ok {
+		t.Fatalf("removed routine resurrected trigger state: %+v", st)
+	}
+}

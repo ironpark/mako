@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/routines"
 	"github.com/ironpark/mako/internal/transport"
@@ -76,33 +78,53 @@ func (d *Daemon) actOnRoutine(ctx context.Context, r *protocol.RoutineAction) (*
 		}
 		next := routineFromProto(r.GetSpec())
 		next.ID = cmp.Or(strings.TrimSpace(r.GetRoutine()), strings.TrimSpace(next.ID))
+		if next.ID == "" {
+			return nil, errors.New("update needs a routine ID")
+		}
 		if next, err = checkRoutine(next); err != nil {
 			return nil, err
 		}
+		var resetState bool
 		list, err = d.updateRoutines(func(list []routines.Routine) ([]routines.Routine, error) {
 			i := slices.IndexFunc(list, func(x routines.Routine) bool { return x.ID == next.ID })
 			if i < 0 {
 				return nil, fmt.Errorf("no routine has the ID %q", next.ID)
 			}
+			prev := list[i]
+			resetState = !next.Enabled || routineSource(prev) != routineSource(next)
 			list[i] = next
 			return list, nil
+		}, func() {
+			if resetState {
+				d.resetRoutineStateLocked(next.ID)
+			}
 		})
 	case routineOpRemove:
+		var removedID string
 		list, err = d.updateRoutines(func(list []routines.Routine) ([]routines.Routine, error) {
 			i, err := findRoutine(list, r.GetRoutine())
 			if err != nil {
 				return nil, err
 			}
+			removedID = list[i].ID
 			return slices.Delete(list, i, i+1), nil
+		}, func() {
+			d.deleteRoutineStateLocked(removedID)
 		})
 	case routineOpEnable, routineOpDisable:
+		var toggledID string
 		list, err = d.updateRoutines(func(list []routines.Routine) ([]routines.Routine, error) {
 			i, err := findRoutine(list, r.GetRoutine())
 			if err != nil {
 				return nil, err
 			}
+			toggledID = list[i].ID
 			list[i].Enabled = op == routineOpEnable
 			return list, nil
+		}, func() {
+			if op == routineOpDisable {
+				d.resetRoutineStateLocked(toggledID)
+			}
 		})
 	case routineOpRun:
 		if list, err = d.loadRoutines(); err != nil {
@@ -114,7 +136,9 @@ func (d *Daemon) actOnRoutine(ctx context.Context, r *protocol.RoutineAction) (*
 		}
 		runCtx, cancel := context.WithTimeout(ctx, routineRunTimeout)
 		defer cancel()
-		if session, err = d.executeRoutine(runCtx, list[i], "manual", list[i].Prompt); err != nil {
+		onDone := d.reserveManualRoutineStart(list[i].ID)
+		defer onDone("", time.Time{})
+		if session, err = d.executeRoutineWithHook(runCtx, list[i], "manual", list[i].Prompt, onDone); err != nil {
 			return nil, err
 		}
 	default:
@@ -171,9 +195,13 @@ func (d *Daemon) routinesReply(list []routines.Routine, limit uint32) *protocol.
 	}
 	reply.Runs = make([]*protocol.RoutineRun, len(runs))
 	for i, rec := range runs {
+		var started *timestamppb.Timestamp
+		if rec.StartedAt > 0 {
+			started = protocol.Time(time.Unix(rec.StartedAt, 0))
+		}
 		reply.Runs[i] = &protocol.RoutineRun{
 			Id: rec.ID, RoutineId: rec.RoutineID, RoutineName: rec.RoutineName, Trigger: rec.Trigger,
-			SessionId: rec.SessionID, Status: rec.Status, Error: rec.Error, Started: protocol.Time(time.Unix(rec.StartedAt, 0)),
+			SessionId: rec.SessionID, Status: rec.Status, Error: rec.Error, Started: started,
 		}
 	}
 	return reply
