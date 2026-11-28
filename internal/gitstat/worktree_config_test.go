@@ -73,8 +73,7 @@ teardown_cmd = "printf 'torn-down' > \"$MAKO_WORKTREE_REPO/teardown.marker\""
 		t.Fatalf("setup.marker = %q, err=%v", marker, err)
 	}
 
-	// Clean up untracked copy_paths dir that wasn't gitignored before removal.
-	_ = os.RemoveAll(filepath.Join(path, "config"))
+	// The copy of config/local, not ignored, is taken out with the rest.
 	w := &protocol.Worktree{Repo: repo, Path: path, Branch: made, Base: "main"}
 	if _, err := RemoveWorktree(ctx, w, trustAll); err != nil {
 		t.Fatalf("RemoveWorktree failed: %v", err)

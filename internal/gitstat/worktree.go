@@ -220,22 +220,47 @@ func checkBranch(ctx context.Context, dir, branch string) error {
 }
 
 // RemoveWorktree removes a session's worktree, which must have no changes
-// left, and its branch once merged. The repository's teardown_cmd runs
-// first if trusted says so; the output ends saying so when it did not.
+// left, and its branch once merged. It refuses a worktree with changes
+// before anything else, so one it refuses is left as it was. Then the
+// repository's teardown_cmd runs if trusted says so, and what the bootstrap
+// made is taken out for git to remove the worktree; it is put back if git
+// does not. The output ends saying so when the teardown_cmd did not run or
+// failed, which does not stop the removal.
 func RemoveWorktree(ctx context.Context, w *protocol.Worktree, trusted HookTrust) (string, error) {
-	if w.GetPath() == "" || w.GetRepo() == "" {
+	repo, path := w.GetRepo(), w.GetPath()
+	if path == "" || repo == "" {
 		return "", errors.New("no worktree to remove")
 	}
-	notice, err := cleanupWorktreeBeforeRemove(ctx, w.GetRepo(), w.GetPath(), w.GetBranch(), w.GetBase(), trusted)
+	// A malformed config does not stop the removal: it bootstraps nothing.
+	cfg, err := LoadWorktreeConfig(repo)
+	if err != nil {
+		cfg = WorktreeConfig{}
+	}
+	made, changed, err := bootstrapLeft(ctx, repo, path, cfg)
 	if err != nil {
 		return "", err
 	}
-	out, err := run(ctx, w.GetRepo(), nil, "worktree", "remove", w.GetPath())
+	if len(changed) > 0 {
+		shown := changed[:min(len(changed), 5)]
+		more := ""
+		if len(changed) > len(shown) {
+			more = fmt.Sprintf(" and %d more", len(changed)-len(shown))
+		}
+		return "", fmt.Errorf("%s has changes not committed or not tracked, %s%s: commit or remove them first", path, strings.Join(shown, ", "), more)
+	}
+	notice := teardownWorktree(ctx, repo, path, w.GetBranch(), w.GetBase(), cfg, trusted)
+	if err := removeMade(path, made); err != nil {
+		_ = bootstrapPaths(repo, path, cfg)
+		return "", err
+	}
+	out, err := run(ctx, repo, nil, "worktree", "remove", path)
 	if err != nil {
+		// Still there, with what its bootstrap made back as it was.
+		_ = bootstrapPaths(repo, path, cfg)
 		return out, err
 	}
 	// A branch with work not merged anywhere stays: -d refuses it.
-	if more, err := run(ctx, w.GetRepo(), nil, "branch", "-d", w.GetBranch()); err == nil {
+	if more, err := run(ctx, repo, nil, "branch", "-d", w.GetBranch()); err == nil {
 		out = strings.TrimSpace(out + "\n" + more)
 	}
 	if notice != "" {

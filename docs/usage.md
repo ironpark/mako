@@ -284,6 +284,11 @@ setup_cmd = "npm ci --prefer-offline"
 teardown_cmd = ""
 ```
 
+When you remove a worktree, Mako first refuses it if it has changes.
+Then Mako runs `teardown_cmd`, and takes out the links and the unchanged
+copies that it made. If `teardown_cmd` fails, Mako removes the worktree
+anyway and shows the failure.
+
 Mako reads the file from the main work tree of the repository, also
 when you start in a folder of it or in another worktree. `base_ref` is
 where a new worktree starts when you do not name a base or a start.

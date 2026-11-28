@@ -1,6 +1,7 @@
 package gitstat
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -240,49 +241,168 @@ func applyWorktreeBootstrap(ctx context.Context, repo, wtPath, branch, base stri
 	return false, nil
 }
 
-// cleanupWorktreeBeforeRemove runs the repository's teardown_cmd in the
-// worktree at wtPath if trusted, and takes out the links its shared_paths
-// made. notice is what to tell of a teardown_cmd that did not run.
-func cleanupWorktreeBeforeRemove(ctx context.Context, repo, wtPath, branch, base string, trusted HookTrust) (notice string, err error) {
-	cfg, err := LoadWorktreeConfig(repo)
-	if err != nil {
-		// Don't block removal on a malformed config; proceed with git worktree remove.
-		return "", nil
+// teardownWorktree runs the repository's teardown_cmd in the worktree at
+// wtPath if trusted. notice is what to tell of it: that it did not run,
+// untrusted, or that it failed, which does not stop the worktree's
+// removal, with the end of what it printed.
+func teardownWorktree(ctx context.Context, repo, wtPath, branch, base string, cfg WorktreeConfig, trusted HookTrust) (notice string) {
+	cmdStr := strings.TrimSpace(cfg.TeardownCmd)
+	switch {
+	case cmdStr == "":
+		return ""
+	case !cfg.hooksRun(repo, trusted):
+		if cfg.data != nil && os.Getenv(worktreeHookDisableEnv) != "1" {
+			return skippedHook(repo, "teardown_cmd")
+		}
+		return ""
 	}
-	if cmdStr := strings.TrimSpace(cfg.TeardownCmd); cmdStr != "" {
-		if cfg.hooksRun(repo, trusted) {
-			if out, err := runWorktreeHook(ctx, wtPath, repo, branch, base, cmdStr); err != nil {
-				if out != "" {
-					return "", fmt.Errorf("worktree teardown_cmd failed: %w\n%s", err, out)
-				}
-				return "", fmt.Errorf("worktree teardown_cmd failed: %w", err)
-			}
-		} else if os.Getenv(worktreeHookDisableEnv) != "1" {
-			notice = skippedHook(repo, "teardown_cmd")
+	out, err := runWorktreeHook(ctx, wtPath, repo, branch, base, cmdStr)
+	if err == nil {
+		return ""
+	}
+	if lines := strings.Split(out, "\n"); out != "" {
+		out = strings.Join(lines[max(0, len(lines)-10):], "\n") + "\n"
+	}
+	return fmt.Sprintf("%swarning: teardown_cmd failed (%v); the worktree was removed anyway", out, err)
+}
+
+// bootstrapLeft is what of the worktree at wtPath stands in the way of
+// removing it, and what of it the bootstrap made as it made it. made are
+// cfg's shared_paths linked to the repository at repo and the untracked
+// files of its copy_paths still the same as the repository's, which git
+// would refuse to remove the worktree over and can be made again; changed
+// are the changes to tracked files, and the untracked files that are not
+// made, which lose work if the worktree goes. Both are slash-separated
+// paths from the worktree's root.
+func bootstrapLeft(ctx context.Context, repo, wtPath string, cfg WorktreeConfig) (made, changed []string, err error) {
+	out, err := gitOut(ctx, wtPath, nil, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		return nil, nil, err
+	}
+	var untracked []string
+	records := strings.Split(string(out), "\x00")
+	for i := 0; i < len(records); i++ {
+		r := records[i]
+		if len(r) < 4 {
+			continue
+		}
+		switch xy, p := r[:2], r[3:]; {
+		case xy == "??":
+			untracked = append(untracked, p)
+		case xy[0] == 'R' || xy[0] == 'C':
+			i++ // the path it was renamed or copied from
+			fallthrough
+		default:
+			changed = append(changed, p)
 		}
 	}
-	// Remove symlinks created by shared_paths if they still point into repo so
-	// git worktree remove does not reject untracked bootstrap symlinks.
+	if len(cfg.SharedPaths) == 0 && len(cfg.CopyPaths) == 0 {
+		return nil, append(changed, untracked...), nil
+	}
+	wt, err := os.OpenRoot(wtPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer wt.Close()
+	src, err := os.OpenRoot(repo)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer src.Close()
 	for _, raw := range cfg.SharedPaths {
 		rel, err := cleanWorktreeRelPath(raw)
 		if err != nil {
 			continue
 		}
-		dst := filepath.Join(wtPath, rel)
-		info, err := os.Lstat(dst)
-		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		if checkNoIntermediateSymlink(wt, filepath.ToSlash(rel), raw) != nil {
 			continue
 		}
-		target, err := os.Readlink(dst)
-		if err != nil {
-			continue
-		}
-		want := filepath.Join(repo, rel)
-		if filepath.Clean(target) == filepath.Clean(want) {
-			_ = os.Remove(dst)
+		if target, err := wt.Readlink(rel); err == nil && filepath.Clean(target) == filepath.Join(repo, rel) {
+			made = append(made, filepath.ToSlash(rel))
 		}
 	}
-	return notice, nil
+	var copies []string
+	for _, raw := range cfg.CopyPaths {
+		if rel, err := cleanWorktreeRelPath(raw); err == nil {
+			copies = append(copies, filepath.ToSlash(rel))
+		}
+	}
+	for _, p := range untracked {
+		if slices.Contains(made, p) {
+			continue
+		}
+		within := slices.ContainsFunc(copies, func(c string) bool { return p == c || strings.HasPrefix(p, c+"/") })
+		if within && checkNoIntermediateSymlink(wt, p, p) == nil && sameEntry(src, wt, filepath.FromSlash(p)) {
+			made = append(made, p)
+		} else {
+			changed = append(changed, p)
+		}
+	}
+	return made, changed, nil
+}
+
+// sameEntry reports whether name is the same in the repository open at
+// src as in the worktree open at wt: both regular files with the same
+// bytes, or both symlinks that read the same.
+func sameEntry(src, wt *os.Root, name string) bool {
+	a, err := src.Lstat(name)
+	if err != nil {
+		return false
+	}
+	b, err := wt.Lstat(name)
+	if err != nil || a.Mode().Type() != b.Mode().Type() {
+		return false
+	}
+	switch {
+	case a.Mode()&fs.ModeSymlink != 0:
+		ta, errA := src.Readlink(name)
+		tb, errB := wt.Readlink(name)
+		return errA == nil && errB == nil && ta == tb
+	case !a.Mode().IsRegular() || a.Size() != b.Size():
+		return false
+	}
+	fa, err := src.Open(name)
+	if err != nil {
+		return false
+	}
+	defer fa.Close()
+	fb, err := wt.Open(name)
+	if err != nil {
+		return false
+	}
+	defer fb.Close()
+	ba, bb := make([]byte, 32<<10), make([]byte, 32<<10)
+	for {
+		na, errA := io.ReadFull(fa, ba)
+		nb, errB := io.ReadFull(fb, bb)
+		if na != nb || !bytes.Equal(ba[:na], bb[:nb]) {
+			return false
+		}
+		if errA != nil || errB != nil {
+			return (errA == io.EOF || errA == io.ErrUnexpectedEOF) && (errB == io.EOF || errB == io.ErrUnexpectedEOF)
+		}
+	}
+}
+
+// removeMade removes the paths made, slash-separated from the root of
+// the worktree at wtPath, and each folder over them that it leaves empty.
+func removeMade(wtPath string, made []string) error {
+	wt, err := os.OpenRoot(wtPath)
+	if err != nil {
+		return err
+	}
+	defer wt.Close()
+	for _, p := range made {
+		if err := wt.Remove(filepath.FromSlash(p)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+		for dir := path.Dir(p); dir != "."; dir = path.Dir(dir) {
+			if wt.Remove(filepath.FromSlash(dir)) != nil {
+				break
+			}
+		}
+	}
+	return nil
 }
 
 // bootstrapPaths links cfg's shared_paths and copies its copy_paths from
