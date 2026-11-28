@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ironpark/mako/internal/agentspec"
@@ -17,6 +18,58 @@ const (
 	routineTickInterval  = 30 * time.Second
 	routineForgeInterval = 3 * time.Minute
 )
+
+// routineRunner serializes what the daemon reads and writes of its
+// routines: routines.json and routines-history.json, which the front-ends
+// change through it (routines_requests.go), and the scheduler and the runs
+// it starts append to.
+type routineRunner struct {
+	mu sync.Mutex
+}
+
+// loadRoutines reads the routines.
+func (d *Daemon) loadRoutines() ([]routines.Routine, error) {
+	d.routines.mu.Lock()
+	defer d.routines.mu.Unlock()
+	return routines.Load(d.dir)
+}
+
+// updateRoutines changes the routines as change says, and saves them, the
+// whole read, change and write under the runner's lock. A routines.json
+// that cannot be read is left as it is.
+func (d *Daemon) updateRoutines(change func([]routines.Routine) ([]routines.Routine, error)) ([]routines.Routine, error) {
+	d.routines.mu.Lock()
+	defer d.routines.mu.Unlock()
+	list, err := routines.Load(d.dir)
+	if err != nil {
+		return nil, err
+	}
+	next, err := change(list)
+	if err != nil {
+		return nil, err
+	}
+	if err := routines.Save(d.dir, next); err != nil {
+		return nil, err
+	}
+	return routines.Load(d.dir)
+}
+
+// recordRoutineRun appends rec to the routines' history.
+func (d *Daemon) recordRoutineRun(rec routines.RunRecord) {
+	d.routines.mu.Lock()
+	err := routines.AppendHistory(d.dir, rec)
+	d.routines.mu.Unlock()
+	if err != nil {
+		d.log.Warn("routines: run not recorded", "routine", rec.RoutineName, "err", err)
+	}
+}
+
+// routineRuns reads the routines' history, newest first.
+func (d *Daemon) routineRuns() ([]routines.RunRecord, error) {
+	d.routines.mu.Lock()
+	defer d.routines.mu.Unlock()
+	return routines.LoadHistory(d.dir)
+}
 
 // runRoutines executes enabled cron schedules and Forge event triggers defined
 // in routines.json inside the daemon's configuration directory.
@@ -37,7 +90,7 @@ func (d *Daemon) runRoutines(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			list, err := routines.Load(d.dir)
+			list, err := d.loadRoutines()
 			if err != nil {
 				d.log.Warn("routines: load failed", "err", err)
 				continue
@@ -140,18 +193,20 @@ func (d *Daemon) tickForgeRoutines(ctx context.Context, list []routines.Routine,
 	}
 }
 
-// executeRoutine starts an agent session for routine r and persists a RunRecord.
+// executeRoutine starts an agent session for routine r and records the run:
+// the one way a routine runs, whether its schedule, a Forge event or a
+// front-end's run action started it.
 func (d *Daemon) executeRoutine(ctx context.Context, r routines.Routine, triggerReason, extraContext string) (*protocol.SessionInfo, error) {
+	rec := routines.RunRecord{
+		RoutineID:   r.ID,
+		RoutineName: r.Name,
+		Trigger:     triggerReason,
+		StartedAt:   time.Now().Unix(),
+	}
 	if _, err := os.Stat(r.Project); err != nil {
-		rec := routines.RunRecord{
-			RoutineID:   r.ID,
-			RoutineName: r.Name,
-			Trigger:     triggerReason,
-			Status:      "error",
-			Error:       fmt.Sprintf("project path unavailable: %v", err),
-			StartedAt:   time.Now().Unix(),
-		}
-		_ = routines.AppendHistory(d.dir, rec)
+		rec.Status = "error"
+		rec.Error = fmt.Sprintf("project path unavailable: %v", err)
+		d.recordRoutineRun(rec)
 		return nil, err
 	}
 
@@ -179,23 +234,17 @@ func (d *Daemon) executeRoutine(ctx context.Context, r routines.Routine, trigger
 	runCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	s, err := d.openSession(runCtx, req)
-	rec := routines.RunRecord{
-		RoutineID:   r.ID,
-		RoutineName: r.Name,
-		Trigger:     triggerReason,
-		StartedAt:   time.Now().Unix(),
-	}
 	if err != nil {
 		rec.Status = "error"
 		rec.Error = err.Error()
-		_ = routines.AppendHistory(d.dir, rec)
+		d.recordRoutineRun(rec)
 		d.log.Warn("routines: execution failed", "routine", r.Name, "err", err)
 		return nil, err
 	}
-	info := s.Info()
+	info := d.withHead(s.Info())
 	rec.Status = "started"
 	rec.SessionID = info.GetId()
-	_ = routines.AppendHistory(d.dir, rec)
+	d.recordRoutineRun(rec)
 	d.log.Info("routines: started session", "routine", r.Name, "session", info.GetId(), "trigger", triggerReason)
 	return info, nil
 }

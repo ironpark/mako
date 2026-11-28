@@ -64,6 +64,7 @@ type Daemon struct {
 	approvals     approvals
 	layouts       windowLayouts // the window layouts' changes staged here, and what is node-local of them; see layouts.go
 	templateAsks  templateAsks  // the templates agents ask the user to save; see agent_templates.go
+	routines      routineRunner // the routines' files and the runs they start; see routines.go
 	peers         *peerTable
 	ssh           *sshManager
 
@@ -512,6 +513,10 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleRewindSession(ctx, stream, env)
 	case protocol.TypeGoalAction:
 		return d.handleGoalAction(ctx, stream, env)
+	case protocol.TypeListRoutines:
+		return d.handleListRoutines(ctx, stream, env)
+	case protocol.TypeRoutineAction:
+		return d.handleRoutineAction(ctx, stream, env)
 	case protocol.TypeInspectAgentHome:
 		return d.handleInspectAgentHome(ctx, stream, env)
 	case protocol.TypeMigrateAgentHome:

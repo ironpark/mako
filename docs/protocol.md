@@ -891,7 +891,7 @@ data. Revision 53.
 | Request | Payload | Reply | |
 |---|---|---|---|
 | `list_routines` | `ListRoutines` | `routines` | The node's routines, and its latest `runs` (at most `runs` of them, newest first); `runs_error` says why the runs could not be read. Routed by `node_id`. |
-| `routine_action` | `RoutineAction` | `routines` | `op` `add` (`spec`, given an ID of its own), `update` (`spec`, by its ID), `remove`, `enable`, `disable` or `run` the routine `routine` names, by ID or by a name no other routine has. `run` starts it now, as its triggers would but for their limits, and the reply's `session` is the session started. The reply is the node's routines after. Routed by `node_id`. |
+| `routine_action` | `RoutineAction` | `routines` | `op` `add` (`spec`, given an ID of its own, and last of the reply's routines), `update` (`spec`, by its ID), `remove`, `enable`, `disable` or `run` the routine `routine` names, by ID or by a name no other routine has. `run` starts it now, as its triggers would but for their limits, and the reply's `session` is the session started. The reply is the node's routines after. Routed by `node_id`. |
 
 ### Plugins
 

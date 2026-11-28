@@ -11,84 +11,112 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/ironpark/mako/internal/agentspec"
-	"github.com/ironpark/mako/internal/client"
-	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/routines"
 )
 
-func routinesCmd(args []string, daemonAddr string) error {
-	dir, err := config.Dir()
-	if err != nil {
-		return err
-	}
+// routineClient is what the routines commands ask of the daemon: a
+// client.Client, or a test's stand-in.
+type routineClient interface {
+	Routines(ctx context.Context, req *protocol.ListRoutines) (*protocol.Routines, error)
+	ActRoutine(ctx context.Context, req *protocol.RoutineAction) (*protocol.Routines, error)
+}
+
+// routinesCmd reads and changes the routines of the daemon the CLI talks
+// to, or of the node nodeID names, through that daemon, which alone writes
+// its routines' files.
+func routinesCmd(ctx context.Context, c routineClient, nodeID string, args []string, out io.Writer) error {
 	sub := "list"
 	var rest []string
 	if len(args) > 0 {
 		sub = args[0]
 		rest = args[1:]
 	}
+	act := func(op, routine string, spec *protocol.Routine) (*protocol.Routines, error) {
+		return c.ActRoutine(ctx, &protocol.RoutineAction{NodeId: nodeID, Op: op, Routine: routine, Spec: spec, Runs: 1})
+	}
+	needOne := func() (string, error) {
+		if len(rest) < 1 {
+			return "", fmt.Errorf("routines %s needs a routine ID or name", sub)
+		}
+		return rest[0], nil
+	}
 	switch sub {
 	case "list", "ls":
-		return routinesList(dir, os.Stdout)
+		reply, err := c.Routines(ctx, &protocol.ListRoutines{NodeId: nodeID, Runs: 1})
+		if err != nil {
+			return err
+		}
+		return printRoutines(out, reply.GetRoutines())
 	case "add":
-		return routinesAdd(dir, rest, os.Stdout)
+		spec, err := routineSpec(rest)
+		if err != nil {
+			return err
+		}
+		reply, err := act("add", "", spec)
+		if err != nil {
+			return err
+		}
+		// The routine added comes last.
+		if list := reply.GetRoutines(); len(list) > 0 {
+			r := list[len(list)-1]
+			fmt.Fprintf(out, "added routine %s (%s)\n", r.GetId(), r.GetName())
+		}
+		return nil
 	case "remove", "rm":
-		if len(rest) < 1 {
-			return fmt.Errorf("routines remove needs a routine ID or name")
+		which, err := needOne()
+		if err != nil {
+			return err
 		}
-		return routinesRemove(dir, rest[0], os.Stdout)
+		if _, err := act("remove", which, nil); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "removed routine %s\n", which)
+		return nil
 	case "enable", "disable":
-		if len(rest) < 1 {
-			return fmt.Errorf("routines %s needs a routine ID or name", sub)
+		which, err := needOne()
+		if err != nil {
+			return err
 		}
-		return routinesSetEnabled(dir, rest[0], sub == "enable", os.Stdout)
+		if _, err := act(sub, which, nil); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "%sd routine %s\n", sub, which)
+		return nil
 	case "history":
-		return routinesHistory(dir, rest, os.Stdout)
-	case "run":
-		if len(rest) < 1 {
-			return fmt.Errorf("routines run needs a routine ID or name")
+		fs := flag.NewFlagSet("routines history", flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		limit := fs.Int("limit", 20, "max records")
+		if err := fs.Parse(rest); err != nil {
+			return err
 		}
-		return routinesRunNow(dir, daemonAddr, rest[0], os.Stdout)
+		reply, err := c.Routines(ctx, &protocol.ListRoutines{NodeId: nodeID, Runs: uint32(max(*limit, 0))})
+		if err != nil {
+			return err
+		}
+		if e := reply.GetRunsError(); e != "" {
+			return fmt.Errorf("routine history: %s", e)
+		}
+		return printRoutineRuns(out, reply.GetRuns())
+	case "run":
+		which, err := needOne()
+		if err != nil {
+			return err
+		}
+		reply, err := act("run", which, nil)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "started routine %s as session %s\n", which, reply.GetSession().GetId())
+		return nil
 	default:
 		return fmt.Errorf("unknown routines subcommand %q (expected list, add, remove, enable, disable, run, history)", sub)
 	}
 }
 
-func routinesList(dir string, out io.Writer) error {
-	list, err := routines.Load(dir)
-	if err != nil {
-		return err
-	}
-	if len(list) == 0 {
-		fmt.Fprintln(out, "no routines configured")
-		return nil
-	}
-	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tENABLED\tTRIGGER\tAGENT\tPROJECT\tNEXT")
-	now := time.Now()
-	for _, r := range list {
-		trig := string(r.Trigger)
-		nextStr := "-"
-		if r.Trigger == routines.TriggerCron {
-			trig = r.Schedule
-			if sched, err := routines.ParseSchedule(r.Schedule); err == nil {
-				if next := sched.Next(now); !next.IsZero() {
-					nextStr = next.Local().Format("2006-01-02 15:04")
-				}
-			}
-		}
-		enabled := "no"
-		if r.Enabled {
-			enabled = "yes"
-		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Name, enabled, trig, r.Agent, r.Project, nextStr)
-	}
-	return w.Flush()
-}
-
-func routinesAdd(dir string, args []string, out io.Writer) error {
+// routineSpec is the routine routines add's flags describe; its project
+// is made absolute against this folder, the CLI's.
+func routineSpec(args []string) (*protocol.Routine, error) {
 	fs := flag.NewFlagSet("routines add", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	name := fs.String("name", "", "routine name")
@@ -96,24 +124,24 @@ func routinesAdd(dir string, args []string, out io.Writer) error {
 	agent := fs.String("agent", "claude", "agent or agent:profile")
 	trigger := fs.String("trigger", string(routines.TriggerCron), "trigger kind: cron, forge_pr_opened, forge_ci_failed")
 	schedule := fs.String("schedule", "", "cron expression or @hourly/@daily/@every 30m")
-	prompt := fs.String("prompt", "", "prompt or //template call")
+	prompt := fs.String("prompt", "", "prompt text, typed into the agent as it is (//template calls are not expanded)")
 	worktree := fs.Bool("worktree", false, "run each execution in a new git worktree")
 	branchPrefix := fs.String("branch-prefix", "", "optional worktree branch prefix")
 	disabled := fs.Bool("disabled", false, "create the routine disabled")
 	if err := fs.Parse(args); err != nil {
-		return err
+		return nil, err
 	}
 	proj := strings.TrimSpace(*project)
 	if proj == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		proj = cwd
 	}
 	abs, err := filepath.Abs(proj)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	r := routines.Routine{
 		Name:         *name,
@@ -126,142 +154,58 @@ func routinesAdd(dir string, args []string, out io.Writer) error {
 		BranchPrefix: *branchPrefix,
 		Prompt:       *prompt,
 	}.Normalized()
+	// Checked here too, so a mistake is told before the daemon is asked.
 	if err := r.Validate(); err != nil {
-		return err
+		return nil, err
 	}
-	list, err := routines.Load(dir)
-	if err != nil {
-		return err
-	}
-	list = append(list, r)
-	if err := routines.Save(dir, list); err != nil {
-		return err
-	}
-	fmt.Fprintf(out, "added routine %s (%s)\n", r.ID, r.Name)
-	return nil
+	return &protocol.Routine{
+		Name: r.Name, Enabled: r.Enabled, Trigger: string(r.Trigger), Schedule: r.Schedule, Project: r.Project,
+		Agent: r.Agent, Worktree: r.Worktree, BranchPrefix: r.BranchPrefix, Prompt: r.Prompt,
+	}, nil
 }
 
-func routinesRemove(dir, idOrName string, out io.Writer) error {
-	list, err := routines.Load(dir)
-	if err != nil {
-		return err
-	}
-	idx, ok := routines.Find(list, idOrName)
-	if !ok {
-		return fmt.Errorf("routine %q not found", idOrName)
-	}
-	removed := list[idx]
-	list = append(list[:idx], list[idx+1:]...)
-	if err := routines.Save(dir, list); err != nil {
-		return err
-	}
-	fmt.Fprintf(out, "removed routine %s (%s)\n", removed.ID, removed.Name)
-	return nil
-}
-
-func routinesSetEnabled(dir, idOrName string, enabled bool, out io.Writer) error {
-	list, err := routines.Load(dir)
-	if err != nil {
-		return err
-	}
-	idx, ok := routines.Find(list, idOrName)
-	if !ok {
-		return fmt.Errorf("routine %q not found", idOrName)
-	}
-	list[idx].Enabled = enabled
-	if err := routines.Save(dir, list); err != nil {
-		return err
-	}
-	state := "disabled"
-	if enabled {
-		state = "enabled"
-	}
-	fmt.Fprintf(out, "%s routine %s (%s)\n", state, list[idx].ID, list[idx].Name)
-	return nil
-}
-
-func routinesHistory(dir string, args []string, out io.Writer) error {
-	fs := flag.NewFlagSet("routines history", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	limit := fs.Int("limit", 20, "max records")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	hist, err := routines.LoadHistory(dir)
-	if err != nil {
-		return err
-	}
-	if len(hist) == 0 {
-		fmt.Fprintln(out, "no routine runs yet")
+func printRoutines(out io.Writer, list []*protocol.Routine) error {
+	if len(list) == 0 {
+		fmt.Fprintln(out, "no routines configured")
 		return nil
 	}
-	if *limit > 0 && len(hist) > *limit {
-		hist = hist[:*limit]
-	}
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "TIME\tROUTINE\tTRIGGER\tSTATUS\tSESSION\tERROR")
-	for _, rec := range hist {
-		ts := time.Unix(rec.StartedAt, 0).Local().Format("2006-01-02 15:04:05")
-		sid := rec.SessionID
-		if sid == "" {
-			sid = "-"
+	fmt.Fprintln(w, "ID\tNAME\tENABLED\tTRIGGER\tAGENT\tPROJECT\tNEXT")
+	now := time.Now()
+	for _, r := range list {
+		trig := r.GetTrigger()
+		nextStr := "-"
+		if routines.TriggerKind(trig) == routines.TriggerCron {
+			trig = r.GetSchedule()
+			if sched, err := routines.ParseSchedule(r.GetSchedule()); err == nil {
+				if next := sched.Next(now); !next.IsZero() {
+					nextStr = next.Local().Format("2006-01-02 15:04")
+				}
+			}
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", ts, rec.RoutineName, rec.Trigger, rec.Status, sid, rec.Error)
+		enabled := "no"
+		if r.GetEnabled() {
+			enabled = "yes"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.GetId(), r.GetName(), enabled, trig, r.GetAgent(), r.GetProject(), nextStr)
 	}
 	return w.Flush()
 }
 
-func routinesRunNow(dir, daemonAddr, idOrName string, out io.Writer) error {
-	list, err := routines.Load(dir)
-	if err != nil {
-		return err
+func printRoutineRuns(out io.Writer, runs []*protocol.RoutineRun) error {
+	if len(runs) == 0 {
+		fmt.Fprintln(out, "no routine runs yet")
+		return nil
 	}
-	idx, ok := routines.Find(list, idOrName)
-	if !ok {
-		return fmt.Errorf("routine %q not found", idOrName)
-	}
-	r := list[idx]
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	c, err := client.Dial(ctx, daemonAddr)
-	if err != nil {
-		return fmt.Errorf("cannot reach daemon (is makod running?): %w", err)
-	}
-	defer c.Close()
-
-	agentName, profile := agentspec.SplitTarget(r.Agent)
-	req := &protocol.OpenSession{
-		Agent:   agentName,
-		Profile: profile,
-		Project: r.Project,
-		Name:    "Routine: " + r.Name,
-		Prompt:  r.Prompt,
-		Cols:    120,
-		Rows:    36,
-	}
-	if r.Worktree {
-		prefix := r.BranchPrefix
-		if prefix == "" {
-			prefix = "routine/" + r.ID
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "TIME\tROUTINE\tTRIGGER\tSTATUS\tSESSION\tERROR")
+	for _, rec := range runs {
+		ts := rec.GetStarted().AsTime().Local().Format("2006-01-02 15:04:05")
+		sid := rec.GetSessionId()
+		if sid == "" {
+			sid = "-"
 		}
-		req.Worktree = &protocol.Worktree{Branch: fmt.Sprintf("%s-%s", prefix, time.Now().Format("20060102-150405"))}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", ts, rec.GetRoutineName(), rec.GetTrigger(), rec.GetStatus(), sid, rec.GetError())
 	}
-	info, err := c.Open(ctx, req)
-	rec := routines.RunRecord{
-		RoutineID:   r.ID,
-		RoutineName: r.Name,
-		Trigger:     "manual",
-		StartedAt:   time.Now().Unix(),
-	}
-	if err != nil {
-		rec.Status = "error"
-		rec.Error = err.Error()
-		_ = routines.AppendHistory(dir, rec)
-		return err
-	}
-	rec.Status = "started"
-	rec.SessionID = info.GetId()
-	_ = routines.AppendHistory(dir, rec)
-	fmt.Fprintf(out, "started routine %s as session %s\n", r.Name, info.GetId())
-	return nil
+	return w.Flush()
 }

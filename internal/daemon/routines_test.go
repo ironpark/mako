@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/routines"
 )
 
@@ -60,6 +61,21 @@ func TestDaemonExecuteRoutineRecordsHistory(t *testing.T) {
 	}
 	if hist[0].Status != "started" || hist[0].SessionID != info.GetId() || hist[0].RoutineID != r.ID {
 		t.Fatalf("unexpected history record: %+v", hist[0])
+	}
+
+	// A front-end's run action takes the same path, and says the session.
+	added, err := d.actOnRoutine(t.Context(), &protocol.RoutineAction{Op: "add", Spec: routineProto(r)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := added.GetRoutines()[0].GetId()
+	ran, err := d.actOnRoutine(t.Context(), &protocol.RoutineAction{Op: "run", Routine: id})
+	if err != nil {
+		t.Fatalf("run action: %v", err)
+	}
+	if ran.GetSession().GetName() != "Routine: Daily checks" || len(ran.GetRuns()) != 2 ||
+		ran.GetRuns()[0].GetTrigger() != "manual" || ran.GetRuns()[0].GetSessionId() != ran.GetSession().GetId() {
+		t.Fatalf("run action replied %v", ran)
 	}
 
 	// Verify tickCronRoutines deduplicates within the same minute.

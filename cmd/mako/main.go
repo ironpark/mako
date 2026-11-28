@@ -44,8 +44,9 @@ Projects:
 
 Routines (self-hosted scheduled & event-triggered agent runs):
   mako routines [list]              list configured routines
-  mako routines add -name <name> -project <dir> -agent <target> (-schedule <cron> | -trigger forge_pr_opened|forge_ci_failed) -prompt <text> [-worktree]
-                                     add a scheduled or Forge-triggered routine
+  mako routines add -name <name> -project <dir> -agent <target> (-schedule <cron> | -trigger forge_pr_opened|forge_ci_failed) -prompt <text> [-worktree] [-branch-prefix <prefix>]
+                                     add a scheduled or Forge-triggered routine; the prompt is
+                                     typed into the agent as it is (//template calls are not expanded)
   mako routines remove <id|name>    remove a routine
   mako routines enable|disable <id|name>
                                      enable or disable a routine
@@ -159,9 +160,6 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 	if args[0] == "ssh" {
 		return sshCmd(args[1:])
 	}
-	if args[0] == "routines" {
-		return routinesCmd(args[1:], daemonAddr)
-	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -186,6 +184,8 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 	defer c.Close()
 
 	switch args[0] {
+	case "routines":
+		return routinesCmd(ctx, c, nodeID, args[1:], os.Stdout)
 	case "nodes":
 		return listNodes(ctx, c)
 	case "addrs":

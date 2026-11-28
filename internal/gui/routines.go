@@ -3,7 +3,6 @@ package gui
 import (
 	"cmp"
 	"context"
-	"fmt"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,10 +11,9 @@ import (
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
 	"github.com/ironpark/ggui/widget"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/client"
-	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/routines"
@@ -27,20 +25,25 @@ var routineTriggerLabels = map[string]string{
 	string(routines.TriggerForgeCIFail): "Failed CI run",
 }
 
-func routineSettings(m *model) ggui.Widget {
-	dir, _ := config.Dir()
-	loadList := func() []routines.Routine {
-		list, _ := routines.Load(dir)
-		return list
-	}
-	loadHist := func() []routines.RunRecord {
-		hist, _ := routines.LoadHistory(dir)
-		return hist
-	}
+// routineRunsShown is how many of the latest runs the page lists.
+const routineRunsShown = 10
 
-	items := ggui.State(loadList())
-	hist := ggui.State(loadHist())
+// routineSettings lists and changes the routines of the daemon the window
+// talks to. The daemon keeps them: the page reads them from it, and each
+// change is one request that the daemon makes to the routines it has then,
+// so the page never writes a copy it read earlier over another's change.
+func routineSettings(m *model) ggui.Widget {
+	sameRoutines := func(a, b []*protocol.Routine) bool {
+		return slices.EqualFunc(a, b, func(x, y *protocol.Routine) bool { return proto.Equal(x, y) })
+	}
+	sameRuns := func(a, b []*protocol.RoutineRun) bool {
+		return slices.EqualFunc(a, b, func(x, y *protocol.RoutineRun) bool { return proto.Equal(x, y) })
+	}
+	items := ggui.State([]*protocol.Routine(nil)).WithEqual(sameRoutines)
+	runs := ggui.State([]*protocol.RoutineRun(nil)).WithEqual(sameRuns)
+	loaded := ggui.State(false)
 	errText := ggui.State("")
+	runsErr := ggui.State("")
 
 	name := ggui.State("")
 	project := ggui.State(m.launchProject(ggui.Peek(m.Conn).Self.GetId()))
@@ -54,53 +57,52 @@ func routineSettings(m *model) ggui.Widget {
 		return sessionAgentTargets(nodeTargets(m.Nodes.Get(), m.Conn.Get().Self.GetId(), m.Agents.Get()))
 	}).WithEqual(slices.Equal)
 
-	saveList := func(next []routines.Routine) bool {
-		if err := routines.Save(dir, next); err != nil {
-			errText.Set(err.Error())
-			return false
-		}
-		errText.Set("")
-		items.Set(loadList())
-		return true
+	show := func(res *protocol.Routines) {
+		items.Set(res.GetRoutines())
+		runs.Set(res.GetRuns())
+		runsErr.Set(res.GetRunsError())
+		loaded.Set(true)
 	}
-
-	runNow := func(r routines.Routine) {
-		agentName, profile := agentspec.SplitTarget(r.Agent)
-		req := &protocol.OpenSession{
-			Agent:   agentName,
-			Profile: profile,
-			Project: r.Project,
-			Name:    "Routine: " + r.Name,
-			Prompt:  r.Prompt,
-			Cols:    120,
-			Rows:    36,
-		}
-		if r.Worktree {
-			prefix := cmp.Or(r.BranchPrefix, "routine/"+r.ID)
-			req.Worktree = &protocol.Worktree{Branch: fmt.Sprintf("%s-%s", prefix, time.Now().Format("20060102-150405"))}
-		}
-		fetch(m, 30*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
-			return c.Open(ctx, req)
-		}, func(info *protocol.SessionInfo, err error) {
-			rec := routines.RunRecord{
-				RoutineID:   r.ID,
-				RoutineName: r.Name,
-				Trigger:     "manual",
-				StartedAt:   time.Now().Unix(),
-			}
+	load := func() {
+		fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Routines, error) {
+			return c.Routines(ctx, &protocol.ListRoutines{Runs: routineRunsShown})
+		}, func(res *protocol.Routines, err error) {
 			if err != nil {
-				rec.Status = "error"
-				rec.Error = nodeErr(err)
-				_ = routines.AppendHistory(dir, rec)
-				hist.Set(loadHist())
+				errText.Set(nodeErr(err))
+				return
+			}
+			errText.Set("")
+			show(res)
+		})
+	}
+	// act asks the daemon for one change; its reply, or a fresh read after
+	// a refusal, is what the page shows next.
+	act := func(req *protocol.RoutineAction, done func(*protocol.Routines, error)) {
+		req.Runs = routineRunsShown
+		fetch(m, 90*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Routines, error) {
+			return c.ActRoutine(ctx, req)
+		}, func(res *protocol.Routines, err error) {
+			if err != nil {
+				errText.Set(nodeErr(err))
+				load()
+			} else {
+				errText.Set("")
+				show(res)
+			}
+			if done != nil {
+				done(res, err)
+			}
+		})
+	}
+	load()
+
+	runNow := func(r *protocol.Routine) {
+		act(&protocol.RoutineAction{Op: "run", Routine: r.GetId()}, func(res *protocol.Routines, err error) {
+			if err != nil {
 				m.toaster.Push(ui.Toast(T("Could not start routine"), nodeErr(err)).Destructive())
 				return
 			}
-			rec.Status = "started"
-			rec.SessionID = info.GetId()
-			_ = routines.AppendHistory(dir, rec)
-			hist.Set(loadHist())
-			m.toaster.Push(ui.Toast(Tf("Started routine %s", r.Name), info.GetId()))
+			m.toaster.Push(ui.Toast(Tf("Started routine %s", r.GetName()), res.GetSession().GetId()))
 			m.link.pollNow()
 		})
 	}
@@ -122,83 +124,88 @@ func routineSettings(m *model) ggui.Widget {
 			Worktree: ggui.Peek(worktree),
 			Prompt:   ggui.Peek(prompt),
 		}.Normalized()
+		if r.Trigger != routines.TriggerCron {
+			r.Schedule = ""
+		}
 		if err := r.Validate(); err != nil {
 			errText.Set(err.Error())
 			return
 		}
-		cur := slices.Clone(ggui.Peek(items))
-		cur = append(cur, r)
-		if saveList(cur) {
-			name.Set("")
-			prompt.Set("")
+		spec := &protocol.Routine{
+			Name: r.Name, Enabled: r.Enabled, Trigger: string(r.Trigger), Schedule: r.Schedule,
+			Project: r.Project, Agent: r.Agent, Worktree: r.Worktree, Prompt: r.Prompt,
 		}
+		act(&protocol.RoutineAction{Op: "add", Spec: spec}, func(_ *protocol.Routines, err error) {
+			if err == nil {
+				name.Set("")
+				prompt.Set("")
+			}
+		})
 	}
 
 	listView := ggui.Reactive(func() ggui.Widget {
 		list := items.Get()
+		if !loaded.Get() {
+			return card(widget.Box(widget.Row(
+				widget.Expanded(muted(widget.Text(T("Reading this node's routines…")).Size(12.5))),
+				ui.Button(T("Retry"), load).Outline(),
+			).Gap(12).Align(widget.AlignCenter)).Pad(14, 16))
+		}
 		if len(list) == 0 {
 			return card(widget.Box(muted(widget.Text(T("No routines configured yet. Create one below to automate recurring or Forge-triggered agent runs.")).Size(13))).Pad(14, 16))
 		}
 		now := time.Now()
 		rows := make([]ggui.Widget, 0, len(list))
-		for i, item := range list {
-			idx := i
-			r := item
-			subtitle := T(routineTriggerLabels[string(r.Trigger)])
-			if r.Trigger == routines.TriggerCron {
-				subtitle = r.Schedule
-				if sched, err := routines.ParseSchedule(r.Schedule); err == nil {
+		for _, r := range list {
+			subtitle := T(routineTriggerLabels[r.GetTrigger()])
+			if routines.TriggerKind(r.GetTrigger()) == routines.TriggerCron {
+				subtitle = r.GetSchedule()
+				if sched, err := routines.ParseSchedule(r.GetSchedule()); err == nil {
 					if next := sched.Next(now); !next.IsZero() {
 						subtitle += " · " + Tf("next %s", next.Local().Format("01-02 15:04"))
 					}
 				}
 			}
-			subtitle += " · " + r.Agent + " · " + prettyPath(r.Project)
-			toggleVal := ggui.State(r.Enabled)
-			toggleBtn := ui.Button(pick(r.Enabled, T("Disable"), T("Enable")), func() {
-				cur := slices.Clone(ggui.Peek(items))
-				if idx < len(cur) {
-					cur[idx].Enabled = !cur[idx].Enabled
-					toggleVal.Set(cur[idx].Enabled)
-					saveList(cur)
-				}
-			}).Ghost().Pad(4, 8).Radius(6)
+			subtitle += " · " + r.GetAgent() + " · " + prettyPath(r.GetProject())
+			toggle := pick(r.GetEnabled(), "disable", "enable")
 			rows = append(rows, widget.Box(widget.Column(
 				widget.Row(
-					dot(pick(r.Enabled, skin.DotRunning, skin.ExtraMuted)),
+					dot(pick(r.GetEnabled(), skin.DotRunning, skin.ExtraMuted)),
 					widget.Expanded(widget.Column(
-						widget.Text(r.Name).Size(13.5).Weight(ggui.WeightSemibold),
+						widget.Text(r.GetName()).Size(13.5).Weight(ggui.WeightSemibold),
 						muted(widget.Text(subtitle).Size(12).NoWrap().Ellipsis()),
 					).Gap(2).Stretch()),
 					ui.Button(T("Run now"), func() { runNow(r) }).Outline().Pad(4, 10).Radius(6),
-					toggleBtn,
+					ui.Button(pick(r.GetEnabled(), T("Disable"), T("Enable")), func() {
+						act(&protocol.RoutineAction{Op: toggle, Routine: r.GetId()}, nil)
+					}).Ghost().Pad(4, 8).Radius(6),
 					iconButton("x", T("Delete routine"), func() {
-						cur := slices.Clone(ggui.Peek(items))
-						if idx < len(cur) {
-							cur = slices.Delete(cur, idx, idx+1)
-							saveList(cur)
-						}
+						act(&protocol.RoutineAction{Op: "remove", Routine: r.GetId()}, nil)
 					}),
 				).Gap(8).Align(widget.AlignCenter),
-				muted(widget.Text(firstLine(r.Prompt)).Size(12).NoWrap().Ellipsis()),
+				muted(widget.Text(firstLine(r.GetPrompt())).Size(12).NoWrap().Ellipsis()),
 			).Gap(6).Stretch()).Pad(12, 16))
 		}
 		return card(rows...)
 	})
 
-	schedulePreview := ggui.Reactive(func() ggui.Widget {
+	// The trigger's fields are built again only when the trigger changes:
+	// the schedule's field is not rebuilt as it is typed in, which would
+	// lose its focus, caret and composition; only its hint reads it.
+	triggerFields := ggui.Reactive(func() ggui.Widget {
 		if trigger.Get() != string(routines.TriggerCron) {
 			return widget.Box()
 		}
-		expr := schedule.Get()
-		var hint ggui.Widget
-		if sched, err := routines.ParseSchedule(expr); err != nil {
-			hint = widget.Text(err.Error()).Size(12).Color(skin.DotDown)
-		} else if next := sched.Next(time.Now()); !next.IsZero() {
-			hint = muted(widget.Text(Tf("Next run: %s", next.Local().Format("2006-01-02 15:04"))).Size(12))
-		} else {
-			hint = widget.Box()
-		}
+		hint := ggui.Reactive(func() ggui.Widget {
+			sched, err := routines.ParseSchedule(schedule.Get())
+			if err != nil {
+				return widget.Text(err.Error()).Size(12).Color(skin.DotDown)
+			}
+			if next := sched.Next(time.Now()); !next.IsZero() {
+				return muted(widget.Text(Tf("Next run: %s", next.Local().Format("2006-01-02 15:04"))).Size(12))
+			}
+			return widget.Box()
+		})
 		return widget.Column(
 			ui.TextField(schedule).Placeholder("0 9 * * 1-5 / @hourly / @every 30m").Name(T("Schedule")),
 			hint,
@@ -224,7 +231,7 @@ func routineSettings(m *model) ggui.Widget {
 					}
 					return v
 				}).Name(T("Trigger"))).Width(200),
-				widget.Expanded(schedulePreview),
+				widget.Expanded(triggerFields),
 			).Gap(10).Align(widget.AlignStart),
 			ui.Switch(worktree, T("Run in a new isolated worktree")),
 			ui.TextField(prompt).Lines(3).Placeholder(T("Prompt to run when triggered")).Name(T("Prompt")),
@@ -239,25 +246,27 @@ func routineSettings(m *model) ggui.Widget {
 	)
 
 	historyView := ggui.Reactive(func() ggui.Widget {
-		list := hist.Get()
+		list := runs.Get()
+		if e := runsErr.Get(); e != "" {
+			return card(widget.Box(warnLine("circle-slash", skin.DiffRemoved, Tf("Could not read the routines' runs: %s", e))).Pad(12, 16))
+		}
 		if len(list) == 0 {
 			return widget.Box()
 		}
-		shown := list[:min(len(list), 10)]
-		rows := make([]ggui.Widget, 0, len(shown)+1)
+		rows := make([]ggui.Widget, 0, len(list)+1)
 		rows = append(rows, widget.Box(widget.Text(T("Recent runs")).Size(13).Weight(ggui.WeightSemibold)).Pad(10, 16))
-		for _, rec := range shown {
-			ts := time.Unix(rec.StartedAt, 0).Local().Format("01-02 15:04")
-			statusCol := pick(rec.Status == "started", skin.DotRunning, skin.DotDown)
-			detail := rec.Trigger
-			if rec.Error != "" {
-				detail += " · " + rec.Error
-			} else if rec.SessionID != "" {
-				detail += " · " + rec.SessionID
+		for _, rec := range list {
+			ts := rec.GetStarted().AsTime().Local().Format("01-02 15:04")
+			statusCol := pick(rec.GetStatus() == "started", skin.DotRunning, skin.DotDown)
+			detail := rec.GetTrigger()
+			if rec.GetError() != "" {
+				detail += " · " + rec.GetError()
+			} else if rec.GetSessionId() != "" {
+				detail += " · " + rec.GetSessionId()
 			}
 			rows = append(rows, widget.Box(widget.Row(
 				dot(statusCol),
-				widget.Text(rec.RoutineName).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
+				widget.Text(rec.GetRoutineName()).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
 				widget.Expanded(muted(widget.Text(detail).Size(12).NoWrap().Ellipsis())),
 				muted(widget.Text(ts).Size(11.5).NoWrap()),
 			).Gap(8).Align(widget.AlignCenter)).Pad(8, 16))

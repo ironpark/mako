@@ -2061,4 +2061,6 @@ var catalogKo = map[string]string{
 	"Add routine":                    "루틴 추가",
 	"Recent runs":                    "최근 실행 기록",
 	"Self-hosted scheduled and Forge-triggered agent runs executed by this node's daemon.": "이 노드의 데몬에서 직접 실행하는 스케줄 및 Forge 이벤트 기반 에이전트 자동화입니다.",
+	"Reading this node's routines…":         "이 노드의 루틴을 읽는 중…",
+	"Could not read the routines' runs: %s": "루틴 실행 기록을 읽을 수 없음: %s",
 }
