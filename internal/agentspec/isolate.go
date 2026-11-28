@@ -237,3 +237,52 @@ func IsolatedHomeEnvForAgent(name string, isolate bool, agents map[string]Agent)
 	maps.Copy(out, iso)
 	return out
 }
+
+// SandboxHomeBase returns the base directory of the agent homes sandboxed
+// sessions use: $MAKO_HOME/sandbox when MAKO_HOME is set, otherwise
+// ~/.mako/sandbox.
+func SandboxHomeBase() (string, error) {
+	if custom := os.Getenv("MAKO_HOME"); custom != "" {
+		return filepath.Join(custom, "sandbox"), nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".mako", "sandbox"), nil
+}
+
+// ApplySandboxHome points agent name's settings and conversation data at
+// its sandbox home, under SandboxHomeBase, in place of the user's or the
+// isolated one, and returns that home; "" for an agent whose home Mako
+// cannot move. Only sandboxed sessions use it, so the settings, hooks and
+// MCP servers an agent writes there never run outside the sandbox. It
+// takes the place of a home the profile's environment names, as that one
+// may be what unsandboxed sessions use.
+func ApplySandboxHome(name string, l *Launch) (string, error) {
+	if !SupportsHomeIsolation(name) {
+		return "", nil
+	}
+	base, err := SandboxHomeBase()
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(base, name)
+	if l.Env == nil {
+		l.Env = map[string]string{}
+	}
+	if name == "agy" {
+		if err := EnsureAgyIsolatedHome(dir); err != nil {
+			return "", fmt.Errorf("agent %q sandbox home: %w", name, err)
+		}
+		l.Env["HOME"] = dir
+		return dir, nil
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("agent %q sandbox home: %w", name, err)
+	}
+	entry, _ := agents.Lookup(name)
+	l.Env[entry.Driver.(agent.Logs).Place().RootEnv] = dir
+	_ = skills.EnsureAgentSkills(name, l.Env)
+	return dir, nil
+}
