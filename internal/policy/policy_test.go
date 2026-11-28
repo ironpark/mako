@@ -37,11 +37,17 @@ func TestEvaluatePolicyDenyWinsAndInteractiveProtected(t *testing.T) {
 	// Interactive approval kinds must never be auto-decided.
 	dir := t.TempDir()
 	_ = SaveRules(dir, []Rule{{ID: "all", Enabled: true, Action: ActionAllow, Tool: "*"}})
-	if d := Evaluate(dir, "", Call{Agent: "claude", Tool: "ExitPlanMode", Kind: protocol.ToolExitPlan}); d.Matched {
+	if d, _ := Evaluate(dir, "", Call{Agent: "claude", Tool: "ExitPlanMode", Kind: protocol.ToolExitPlan}); d.Matched {
 		t.Fatalf("plan approval must never be auto-approved: %+v", d)
 	}
-	if d := Evaluate(dir, "", Call{Agent: "claude", Tool: "AskUserQuestion", Kind: protocol.ToolQuestion}); d.Matched {
+	if d, _ := Evaluate(dir, "", Call{Agent: "claude", Tool: "AskUserQuestion", Kind: protocol.ToolQuestion}); d.Matched {
 		t.Fatalf("question approval must never be auto-approved: %+v", d)
+	}
+	// Nor by the rules alone.
+	for _, kind := range []string{protocol.ToolQuestion, protocol.ToolExitPlan, protocol.ToolLayout, protocol.ToolTemplate} {
+		if d := EvaluateRules([]Rule{{ID: "all", Enabled: true, Action: ActionAllow, Tool: "*"}}, Call{Agent: "claude", Tool: "x", Kind: kind}); d.Matched {
+			t.Fatalf("EvaluateRules decided a %s approval: %+v", kind, d)
+		}
 	}
 }
 
@@ -176,7 +182,10 @@ pattern = "*.env*"
 	if err := os.WriteFile(filepath.Join(proj, ".mako", "policy.toml"), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	rules := LoadProjectDenyRules(proj)
+	rules, err := LoadProjectDenyRules(proj)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(rules) != 1 || rules[0].Action != ActionDeny || rules[0].Name != "Protect .env" {
 		t.Fatalf("expected only deny rule from project policy, got %+v", rules)
 	}
@@ -204,7 +213,7 @@ func TestEmptyToolIsNeverAWildcard(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, policiesFileName), []byte(`[{"id":"x","enabled":true,"action":"allow","tool":""}]`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if d := Evaluate(dir, "", bash("claude", "rm -rf ~")); d.Matched {
+	if d, _ := Evaluate(dir, "", bash("claude", "rm -rf ~")); d.Matched {
 		t.Fatalf("a rule with no tool matched: %+v", d)
 	}
 }

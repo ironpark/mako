@@ -24,6 +24,9 @@ message SetPolicies {
 message Policies {
   repeated PolicyRule rules = 1;
   repeated PolicyDecision decisions = 2;
+  // decisions_error says why the approvals decided could not be read, the
+  // rules read all the same; "" when they were.
+  string decisions_error = 3;
 }
 
 // PolicyRule is one permission policy rule, evaluated before an agent's

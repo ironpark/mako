@@ -23,6 +23,7 @@ public  final class Policies extends
   private Policies() {
     rules_ = emptyProtobufList();
     decisions_ = emptyProtobufList();
+    decisionsError_ = "";
   }
   public static final int RULES_FIELD_NUMBER = 1;
   private com.google.protobuf.Internal.ProtobufList<dev.ironpark.mako.v2.PolicyRule> rules_;
@@ -210,6 +211,78 @@ public  final class Policies extends
   private void removeDecisions(int index) {
     ensureDecisionsIsMutable();
     decisions_.remove(index);
+  }
+
+  public static final int DECISIONS_ERROR_FIELD_NUMBER = 3;
+  private java.lang.String decisionsError_;
+  /**
+   * <pre>
+   * decisions_error says why the approvals decided could not be read, the
+   * rules read all the same; "" when they were.
+   * </pre>
+   *
+   * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+   * @return The decisionsError.
+   */
+  @java.lang.Override
+  public java.lang.String getDecisionsError() {
+    return decisionsError_;
+  }
+  /**
+   * <pre>
+   * decisions_error says why the approvals decided could not be read, the
+   * rules read all the same; "" when they were.
+   * </pre>
+   *
+   * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+   * @return The bytes for decisionsError.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getDecisionsErrorBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(decisionsError_);
+  }
+  /**
+   * <pre>
+   * decisions_error says why the approvals decided could not be read, the
+   * rules read all the same; "" when they were.
+   * </pre>
+   *
+   * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+   * @param value The decisionsError to set.
+   */
+  private void setDecisionsError(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    decisionsError_ = value;
+  }
+  /**
+   * <pre>
+   * decisions_error says why the approvals decided could not be read, the
+   * rules read all the same; "" when they were.
+   * </pre>
+   *
+   * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+   */
+  private void clearDecisionsError() {
+
+    decisionsError_ = getDefaultInstance().getDecisionsError();
+  }
+  /**
+   * <pre>
+   * decisions_error says why the approvals decided could not be read, the
+   * rules read all the same; "" when they were.
+   * </pre>
+   *
+   * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+   * @param value The bytes for decisionsError to set.
+   */
+  private void setDecisionsErrorBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    decisionsError_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.Policies parseFrom(
@@ -519,6 +592,80 @@ public  final class Policies extends
       return this;
     }
 
+    /**
+     * <pre>
+     * decisions_error says why the approvals decided could not be read, the
+     * rules read all the same; "" when they were.
+     * </pre>
+     *
+     * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+     * @return The decisionsError.
+     */
+    @java.lang.Override
+    public java.lang.String getDecisionsError() {
+      return instance.getDecisionsError();
+    }
+    /**
+     * <pre>
+     * decisions_error says why the approvals decided could not be read, the
+     * rules read all the same; "" when they were.
+     * </pre>
+     *
+     * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+     * @return The bytes for decisionsError.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getDecisionsErrorBytes() {
+      return instance.getDecisionsErrorBytes();
+    }
+    /**
+     * <pre>
+     * decisions_error says why the approvals decided could not be read, the
+     * rules read all the same; "" when they were.
+     * </pre>
+     *
+     * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+     * @param value The decisionsError to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDecisionsError(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setDecisionsError(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * decisions_error says why the approvals decided could not be read, the
+     * rules read all the same; "" when they were.
+     * </pre>
+     *
+     * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDecisionsError() {
+      copyOnWrite();
+      instance.clearDecisionsError();
+      return this;
+    }
+    /**
+     * <pre>
+     * decisions_error says why the approvals decided could not be read, the
+     * rules read all the same; "" when they were.
+     * </pre>
+     *
+     * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+     * @param value The bytes for decisionsError to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDecisionsErrorBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setDecisionsErrorBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Policies)
   }
   @java.lang.Override
@@ -539,10 +686,11 @@ public  final class Policies extends
             dev.ironpark.mako.v2.PolicyRule.class,
             "decisions_",
             dev.ironpark.mako.v2.PolicyDecision.class,
+            "decisionsError_",
           };
           java.lang.String info =
-              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0002\u0000\u0001\u001b\u0002\u001b" +
-              "";
+              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0002\u0000\u0001\u001b\u0002\u001b" +
+              "\u0003\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

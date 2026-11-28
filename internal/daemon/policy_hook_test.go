@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"net"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -145,5 +146,28 @@ func TestApprovalHookReadsPathsInTheProject(t *testing.T) {
 	}
 	if r := hook(t, d, s, 2, permission("Edit", in("src/../../.bashrc"))); r.Decision != "" {
 		t.Fatalf("an edit out of the project: decision %q, want it left to the user", r.Decision)
+	}
+}
+
+// Rules the daemon cannot read allow no call: it is left to the user, and
+// a repository's deny rule still denies.
+func TestApprovalHookFailsClosedOnUnreadableRules(t *testing.T) {
+	d, s := policyDaemon(t, "claude")
+	if err := os.WriteFile(filepath.Join(d.dir, "policies.json"), []byte(`[{"id":"all","enabled":true,"action":"allow","tool":"*"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := hook(t, d, s, 1, permission("Bash", `{"command":"ls"}`)); r.Decision != "" {
+		t.Fatalf("ls under a broken policies.json: decision %q, want it left to the user", r.Decision)
+	}
+	proj := s.Info().GetProject()
+	if err := os.MkdirAll(filepath.Join(proj, ".mako"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	deny := "[[rule]]\nid = \"rm\"\nenabled = true\naction = \"deny\"\ntool = \"Bash\"\npattern = \"rm *\"\n"
+	if err := os.WriteFile(filepath.Join(proj, ".mako", "policy.toml"), []byte(deny), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if r := hook(t, d, s, 2, permission("Bash", `{"command":"rm -rf ~"}`)); r.Decision != protocol.DecisionDeny {
+		t.Fatalf("rm under a project deny rule: decision %q, want deny", r.Decision)
 	}
 }

@@ -2128,4 +2128,5 @@ var catalogKo = map[string]string{
 	"Loading policies…": "정책을 불러오는 중…",
 	"Connect to this node's daemon to manage its policies.":     "정책을 관리하려면 이 노드의 데몬에 연결하세요.",
 	"Cross-agent permission rules and the decisions they made.": "모든 에이전트에 공통 적용되는 권한 규칙과 그 규칙이 내린 결정입니다.",
+	"Could not read the audit log: %s":                          "감사 로그를 읽을 수 없음: %s",
 }

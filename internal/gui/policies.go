@@ -244,16 +244,20 @@ func policySettings(m *model) ggui.Widget {
 	})
 
 	auditSection := ggui.Reactive(func() ggui.Widget {
-		list := m.policies.Info.Get().GetDecisions()
-		if len(list) == 0 {
+		info := m.policies.Info.Get()
+		list, auditErr := info.GetDecisions(), info.GetDecisionsError()
+		if len(list) == 0 && auditErr == "" {
 			return widget.Box()
 		}
 		shown := list[:min(len(list), 12)]
-		rows := make([]ggui.Widget, 0, len(shown)+1)
+		rows := make([]ggui.Widget, 0, len(shown)+2)
 		rows = append(rows, widget.Box(widget.Row(
 			widget.Expanded(widget.Text(T("Policy audit log")).Size(13).Weight(ggui.WeightSemibold)),
 			ui.Button(T("Refresh"), func() { m.loadPolicies() }).Ghost().Pad(4, 8).Radius(6),
 		).Align(widget.AlignCenter)).Pad(10, 16))
+		if auditErr != "" {
+			rows = append(rows, widget.Box(warnLine("circle-slash", skin.DiffRemoved, Tf("Could not read the audit log: %s", auditErr))).Pad(0, 16, 10, 16))
+		}
 		for _, e := range shown {
 			col := pick(e.GetAction() == string(policy.ActionAllow), skin.DotRunning, skin.DotDown)
 			ts := e.GetTime().AsTime().Local().Format("01-02 15:04:05")

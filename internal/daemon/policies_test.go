@@ -4,6 +4,8 @@ package daemon
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +53,40 @@ func TestPoliciesOverSocket(t *testing.T) {
 	}
 	if saved, _ := policy.LoadRules(d.dir); len(saved) != 1 || saved[0].Action != policy.ActionDeny {
 		t.Fatalf("a refused save changed policies.json: %+v", saved)
+	}
+}
+
+// An audit log that cannot be read leaves the rules to read and replace,
+// and says why it is not shown; it is kept as it is.
+func TestPoliciesStandABrokenAuditLog(t *testing.T) {
+	d := meshDaemon(t, "polaudit")
+	audit := filepath.Join(d.dir, "policies-audit.json")
+	if err := os.WriteFile(audit, []byte(`[{"time":`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := policy.SaveRules(d.dir, []policy.Rule{{ID: "r", Enabled: true, Action: policy.ActionDeny, Tool: "Bash"}}); err != nil {
+		t.Fatal(err)
+	}
+	c := dialDaemon(t, d)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	got, err := c.Policies(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.GetRules()) != 1 || got.GetDecisionsError() == "" {
+		t.Fatalf("policies beside a broken audit log = %v", got)
+	}
+	got, err = c.SetPolicies(ctx, &protocol.SetPolicies{})
+	if err != nil {
+		t.Fatalf("set_policies beside a broken audit log: %v", err)
+	}
+	if len(got.GetRules()) != 0 || got.GetDecisionsError() == "" {
+		t.Fatalf("saved = %v", got)
+	}
+	if b, _ := os.ReadFile(audit); string(b) != `[{"time":` {
+		t.Fatalf("the audit log now holds %q", b)
 	}
 }
 

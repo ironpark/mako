@@ -37,4 +37,26 @@ public interface PoliciesOrBuilder extends
    * <code>repeated .mako.v2.PolicyDecision decisions = 2 [json_name = "decisions"];</code>
    */
   int getDecisionsCount();
+
+  /**
+   * <pre>
+   * decisions_error says why the approvals decided could not be read, the
+   * rules read all the same; "" when they were.
+   * </pre>
+   *
+   * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+   * @return The decisionsError.
+   */
+  java.lang.String getDecisionsError();
+  /**
+   * <pre>
+   * decisions_error says why the approvals decided could not be read, the
+   * rules read all the same; "" when they were.
+   * </pre>
+   *
+   * <code>string decisions_error = 3 [json_name = "decisionsError"];</code>
+   * @return The bytes for decisionsError.
+   */
+  com.google.protobuf.ByteString
+      getDecisionsErrorBytes();
 }

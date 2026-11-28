@@ -6,15 +6,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/pkg/fsutil"
 )
@@ -98,6 +101,8 @@ func (r Rule) Normalized() Rule {
 		r.ID = NewID("pol")
 	}
 	r.Name = strings.TrimSpace(r.Name)
+	// "Deny" is deny, not an action Validate refuses and a rule lost.
+	r.Action = Action(strings.ToLower(strings.TrimSpace(string(r.Action))))
 	r.Tool = strings.TrimSpace(r.Tool)
 	r.Pattern = strings.TrimSpace(r.Pattern)
 	r.Message = strings.TrimSpace(r.Message)
@@ -109,16 +114,17 @@ func LoadRules(configDir string) ([]Rule, error) {
 	if strings.TrimSpace(configDir) == "" {
 		return nil, nil
 	}
-	data, err := os.ReadFile(filepath.Join(configDir, policiesFileName))
+	path := filepath.Join(configDir, policiesFileName)
+	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("policy: read %s: %w", path, err)
 	}
 	var list []Rule
 	if err := json.Unmarshal(data, &list); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("policy: read %s: %w", path, err)
 	}
 	for i := range list {
 		list[i] = list[i].Normalized()
@@ -147,32 +153,103 @@ func SaveRules(configDir string, rules []Rule) error {
 	return fsutil.Write(filepath.Join(configDir, policiesFileName), raw)
 }
 
-// LoadProjectDenyRules loads optional deny-only rules from <project>/.mako/policy.toml.
-// For security, repository-level policy files may only deny tool calls and can
-// never grant auto-allow permissions.
-func LoadProjectDenyRules(projectDir string) []Rule {
-	if strings.TrimSpace(projectDir) == "" {
-		return nil
-	}
-	data, err := os.ReadFile(filepath.Join(projectDir, filepath.FromSlash(projectPolicyFile)))
-	if err != nil {
-		return nil
-	}
-	var doc projectPolicyDoc
-	if _, err := toml.Decode(string(data), &doc); err != nil {
-		return nil
+// maxProjectPolicySize bounds what is read of a repository's policy
+// file, which the repository, not the user, wrote.
+const maxProjectPolicySize = 256 << 10
+
+// LoadProjectDenyRules loads optional deny-only rules from .mako/policy.toml
+// in the repository projectDir is in: at the top of its work tree, of the
+// main work tree for a linked one, and in projectDir itself. For security,
+// repository-level policy files may only deny tool calls and can never
+// grant auto-allow permissions; their allow rules are left out. A file that
+// cannot be read, or a deny rule in it that does not validate, is an error,
+// with the deny rules read besides.
+func LoadProjectDenyRules(projectDir string) ([]Rule, error) {
+	projectDir = strings.TrimSpace(projectDir)
+	if projectDir == "" {
+		return nil, nil
 	}
 	var out []Rule
-	for _, r := range doc.Rules {
-		r = r.Normalized()
-		if r.Action != ActionDeny {
+	var errs []error
+	for _, dir := range projectDirs(projectDir) {
+		path := filepath.Join(dir, filepath.FromSlash(projectPolicyFile))
+		data, err := readBounded(path, maxProjectPolicySize)
+		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		if r.Validate() == nil {
+		if err != nil {
+			errs = append(errs, fmt.Errorf("policy: read %s: %w", path, err))
+			continue
+		}
+		var doc projectPolicyDoc
+		if _, err := toml.Decode(string(data), &doc); err != nil {
+			errs = append(errs, fmt.Errorf("policy: read %s: %w", path, err))
+			continue
+		}
+		for i, r := range doc.Rules {
+			r = r.Normalized()
+			if r.Action == ActionAllow {
+				continue
+			}
+			if err := r.Validate(); err != nil {
+				errs = append(errs, fmt.Errorf("policy: rule %d of %s: %w", i+1, path, err))
+				continue
+			}
 			out = append(out, r)
 		}
 	}
-	return out
+	return out, errors.Join(errs...)
+}
+
+// projectDirs are the folders a repository's policy file is read in for a
+// session in dir: dir, the top of its work tree, and the main work tree.
+func projectDirs(dir string) []string {
+	dir = filepath.Clean(dir)
+	dirs := []string{dir}
+	for d := dir; ; d = filepath.Dir(d) {
+		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
+			dirs = append(dirs, d)
+			break
+		}
+		if filepath.Dir(d) == d {
+			break
+		}
+	}
+	if repo := gitstat.Repo(dir); repo != "" {
+		dirs = append(dirs, repo)
+	}
+	// Each once, however a link names it.
+	for i, d := range dirs {
+		if real, err := filepath.EvalSymlinks(d); err == nil {
+			dirs[i] = real
+		}
+	}
+	return unique(dirs)
+}
+
+// readBounded reads the regular file at path, of at most limit bytes,
+// without waiting on a FIFO or a device to give it any.
+func readBounded(path string, limit int64) ([]byte, error) {
+	f, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !fi.Mode().IsRegular() {
+		return nil, errors.New("not a regular file")
+	}
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("larger than %d bytes", limit)
+	}
+	return data, nil
 }
 
 // Evaluate checks global rules (from configDir) and project deny rules (from
@@ -180,13 +257,29 @@ func LoadProjectDenyRules(projectDir string) []Rule {
 //
 // Interactive approvals (questions, plans, layout changes, templates) are never
 // auto-approved. Deny rules always take precedence over allow rules.
-func Evaluate(configDir, projectDir string, call Call) Decision {
+//
+// Rules that cannot be read fail closed: a rules file that cannot be read,
+// or an enabled rule in one that does not validate, might be a deny rule
+// lost, so while err says one is, no call is allowed. The deny rules read
+// still hold.
+func Evaluate(configDir, projectDir string, call Call) (Decision, error) {
 	if interactive(call.Kind) {
-		return Decision{}
+		return Decision{}, nil
 	}
-	globalRules, _ := LoadRules(configDir)
-	projectRules := LoadProjectDenyRules(projectDir)
-	return EvaluateRules(slices.Concat(globalRules, projectRules), call)
+	globalRules, gerr := LoadRules(configDir)
+	projectRules, perr := LoadProjectDenyRules(projectDir)
+	errs := []error{gerr, perr}
+	for _, r := range globalRules {
+		if err := r.Validate(); err != nil && r.Enabled {
+			errs = append(errs, fmt.Errorf("policy: rule %q of %s: %w", r.ID, policiesFileName, err))
+		}
+	}
+	err := errors.Join(errs...)
+	dec := EvaluateRules(slices.Concat(globalRules, projectRules), call)
+	if err != nil && dec.Action == ActionAllow {
+		return Decision{}, err
+	}
+	return dec, err
 }
 
 // EvaluateRules evaluates an explicit rule slice with deny-first precedence.
@@ -299,16 +392,17 @@ func LoadAudit(configDir string) ([]AuditEntry, error) {
 	if strings.TrimSpace(configDir) == "" {
 		return nil, nil
 	}
-	data, err := os.ReadFile(filepath.Join(configDir, auditFileName))
+	path := filepath.Join(configDir, auditFileName)
+	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("policy: read %s: %w", path, err)
 	}
 	var list []AuditEntry
 	if err := json.Unmarshal(data, &list); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("policy: read %s: %w", path, err)
 	}
 	return list, nil
 }
@@ -327,7 +421,12 @@ func AppendAudit(configDir string, entry AuditEntry) error {
 	}
 	auditMu.Lock()
 	defer auditMu.Unlock()
-	list, _ := LoadAudit(configDir)
+	// A log that cannot be read is kept as it is, not written over with
+	// this entry alone.
+	list, err := LoadAudit(configDir)
+	if err != nil {
+		return err
+	}
 	next := append([]AuditEntry{entry}, list...)
 	if len(next) > maxAuditEntries {
 		next = slices.Clone(next[:maxAuditEntries])

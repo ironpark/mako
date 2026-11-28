@@ -112,11 +112,14 @@ func (x *SetPolicies) GetRules() []*PolicyRule {
 // in its configuration directory keeps them, and the latest approvals they
 // decided, newest first.
 type Policies struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Rules         []*PolicyRule          `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
-	Decisions     []*PolicyDecision      `protobuf:"bytes,2,rep,name=decisions,proto3" json:"decisions,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Rules     []*PolicyRule          `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
+	Decisions []*PolicyDecision      `protobuf:"bytes,2,rep,name=decisions,proto3" json:"decisions,omitempty"`
+	// decisions_error says why the approvals decided could not be read, the
+	// rules read all the same; "" when they were.
+	DecisionsError string `protobuf:"bytes,3,opt,name=decisions_error,json=decisionsError,proto3" json:"decisions_error,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Policies) Reset() {
@@ -161,6 +164,13 @@ func (x *Policies) GetDecisions() []*PolicyDecision {
 		return x.Decisions
 	}
 	return nil
+}
+
+func (x *Policies) GetDecisionsError() string {
+	if x != nil {
+		return x.DecisionsError
+	}
+	return ""
 }
 
 // PolicyRule is one permission policy rule, evaluated before an agent's
@@ -378,10 +388,11 @@ const file_mako_v2_policy_proto_rawDesc = "" +
 	"\x14mako/v2/policy.proto\x12\amako.v2\x1a\x1fgoogle/protobuf/timestamp.proto\"\x0e\n" +
 	"\fListPolicies\"8\n" +
 	"\vSetPolicies\x12)\n" +
-	"\x05rules\x18\x01 \x03(\v2\x13.mako.v2.PolicyRuleR\x05rules\"l\n" +
+	"\x05rules\x18\x01 \x03(\v2\x13.mako.v2.PolicyRuleR\x05rules\"\x95\x01\n" +
 	"\bPolicies\x12)\n" +
 	"\x05rules\x18\x01 \x03(\v2\x13.mako.v2.PolicyRuleR\x05rules\x125\n" +
-	"\tdecisions\x18\x02 \x03(\v2\x17.mako.v2.PolicyDecisionR\tdecisions\"\xc2\x01\n" +
+	"\tdecisions\x18\x02 \x03(\v2\x17.mako.v2.PolicyDecisionR\tdecisions\x12'\n" +
+	"\x0fdecisions_error\x18\x03 \x01(\tR\x0edecisionsError\"\xc2\x01\n" +
 	"\n" +
 	"PolicyRule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +

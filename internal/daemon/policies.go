@@ -11,19 +11,20 @@ import (
 var errPolicyPeer = errors.New("a node's permission policies are its own front-ends' alone")
 
 // policies are the rules in the daemon's configuration directory and the
-// approvals they decided, as list_policies answers.
+// approvals they decided, as list_policies answers. An audit log that
+// cannot be read leaves the rules to read and change all the same.
 func (d *Daemon) policies() (*protocol.Policies, error) {
 	rules, err := policy.LoadRules(d.dir)
-	if err != nil {
-		return nil, err
-	}
-	audit, err := policy.LoadAudit(d.dir)
 	if err != nil {
 		return nil, err
 	}
 	out := &protocol.Policies{}
 	for _, r := range rules {
 		out.Rules = append(out.Rules, policy.RuleProto(r))
+	}
+	audit, err := policy.LoadAudit(d.dir)
+	if err != nil {
+		out.DecisionsError = err.Error()
 	}
 	for _, e := range audit {
 		out.Decisions = append(out.Decisions, policy.AuditProto(e))

@@ -434,12 +434,17 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		// Rules read the whole call; the detail, cut to a line, is only
 		// what the audit log shows of it.
 		call := policy.Call{Agent: name, Tool: ev.Tool, Kind: kind, Input: canon, Dir: s.Info().GetProject()}
-		if dec := policy.Evaluate(d.dir, s.Info().GetProject(), call); dec.Matched {
+		dec, err := policy.Evaluate(d.dir, s.Info().GetProject(), call)
+		if err != nil {
+			// Rules that cannot be read allow nothing: the user is asked.
+			d.log.Warn("policy: rules unreadable, so none allows a call", "session", msg.Session, "err", err)
+		}
+		if dec.Matched {
 			reply := hookReply{Decision: string(dec.Action), Message: dec.Reason}
 			if len(reply.Output) == 0 {
 				reply.Output = hooks.Reply(reply.Decision, reply.Message)
 			}
-			_ = policy.AppendAudit(d.dir, policy.AuditEntry{
+			if err := policy.AppendAudit(d.dir, policy.AuditEntry{
 				Session: msg.Session,
 				Agent:   name,
 				Tool:    ev.Tool,
@@ -447,7 +452,9 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 				Action:  dec.Action,
 				RuleID:  dec.Rule.ID,
 				Rule:    dec.Rule.Name,
-			})
+			}); err != nil {
+				d.log.Warn("policy: decision not logged", "session", msg.Session, "err", err)
+			}
 			// Decided, the call runs or is refused and the agent works on,
 			// as after an answer in the window. A request the window holds
 			// for another call stands.
