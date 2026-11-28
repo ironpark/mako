@@ -56,7 +56,8 @@ func writeClipTools(dir, program, socket string) (string, error) {
 // runClip is a clipboard tool, run by a script of writeClipTools as
 // args[1], with the daemon's hook socket args[0] and the tool's own
 // arguments after. It runs the node's own tool, where there is one, and
-// passes what it copies on for the session in MAKO_SESSION; it never
+// passes what it copies on for the session in MAKO_SESSION, with its
+// token from its hookTokenFile; it never
 // fails for want of a tool, as one on a node without a display would.
 func runClip(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
@@ -80,7 +81,7 @@ func runClip(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	session := os.Getenv("MAKO_SESSION")
 	if session != "" {
 		input, _ := json.Marshal(string(text))
-		if conn, err := sendHook(socket, hookMessage{Session: session, Seq: time.Now().UnixNano(), Kind: clipArg, Input: input}); err == nil {
+		if conn, err := sendHook(socket, hookMessage{Session: session, Token: readHookToken(socket, session), Seq: time.Now().UnixNano(), Kind: clipArg, Input: input}); err == nil {
 			_ = conn.Close()
 			return 0 // copied for the user, wherever the node's own tool failed
 		}
