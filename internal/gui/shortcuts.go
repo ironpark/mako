@@ -383,13 +383,6 @@ func (m *model) handleEscape(host ggui.Host) {
 	}
 }
 
-func (m *model) handleSettingsEscape(host ggui.Host) {
-	if ggui.Peek(m.Page) != "settings" {
-		return
-	}
-	m.handleEscape(host)
-}
-
 // escapeCapturedInSemantics reports whether the last painted accessibility tree
 // has an open dialog/popover, an open dropdown/menu, or a focused text/number
 // input that should keep Escape from leaving Settings.

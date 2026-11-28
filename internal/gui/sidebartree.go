@@ -311,15 +311,6 @@ func (m *model) syncScopeToTab(id string, force bool) {
 	}
 }
 
-// followScope moves the sidebar's active project in the space shown to the
-// project (or sub-project) of session s.
-func (m *model) followScope(s *protocol.SessionInfo) {
-	if s == nil {
-		return
-	}
-	m.syncScopeToTab(s.GetId(), true)
-}
-
 // pinnedScope reports whether the sidebar lists a project or folder first.
 func (m *model) pinnedScope(k scopeKey) bool {
 	return slices.Contains(ggui.Peek(m.Spaces).PinnedProjects, k)

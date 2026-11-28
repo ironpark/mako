@@ -2,7 +2,6 @@ package plugin
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -126,6 +125,6 @@ slots = ["sidebar"]
 	}
 	w.until("jumped and dropped updated", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		st := findBySuffix(n, "status")
-		return st != nil && st.GetText() == fmt.Sprintf("jumped=sess:s1|dropped=sess:s1@42,84")
+		return st != nil && st.GetText() == "jumped=sess:s1|dropped=sess:s1@42,84"
 	})
 }

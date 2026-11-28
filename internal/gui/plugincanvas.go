@@ -347,10 +347,6 @@ func (p *pluginCanvasWidget) worldToScreen(x, y float64, r ggui.Rect) ggui.Point
 	return ggui.Pt(r.Origin.X+p.state.panX+x*p.state.zoom, r.Origin.Y+p.state.panY+y*p.state.zoom)
 }
 
-func (p *pluginCanvasWidget) cmdScreenBounds(dst *ggui.Canvas, cmd *protocol.UiCanvasCommand, r ggui.Rect) ggui.Rect {
-	return p.cmdScreenBoundsAt(dst, -1, cmd, r)
-}
-
 func (p *pluginCanvasWidget) cmdScreenBoundsAt(dst *ggui.Canvas, idx int, cmd *protocol.UiCanvasCommand, r ggui.Rect) ggui.Rect {
 	z := p.state.zoom
 	switch cmd.GetOp() {

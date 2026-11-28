@@ -258,11 +258,6 @@ func (m *model) closePluginTabIn(sw *spaceWindowState, id string) {
 	}
 }
 
-// closePluginTabByKey closes the plugin tab matching (block, key).
-func (m *model) closePluginTabByKey(block, key string) {
-	m.closePluginTabByKeyIn(nil, block, key)
-}
-
 // closePluginTabByKeyIn closes the plugin tab matching (block, key) in sw (or
 // the main workspace when sw is nil).
 func (m *model) closePluginTabByKeyIn(sw *spaceWindowState, block, key string) {

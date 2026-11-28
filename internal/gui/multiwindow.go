@@ -1376,10 +1376,6 @@ func paneGroupForKey(m *model, key string, id int) ggui.Readable[tabGroup] {
 	}).WithEqual(func(a, b tabGroup) bool { return reflect.DeepEqual(a, b) })
 }
 
-func keyedLayoutView(m *model, keyFn func() string, focusGroup *ggui.StateValue[int]) ggui.Widget {
-	return keyedLayoutViewIn(m, keyFn, focusGroup, nil)
-}
-
 func keyedLayoutViewIn(m *model, keyFn func() string, focusGroup *ggui.StateValue[int], sw *spaceWindowState) ggui.Widget {
 	type layoutKeyShape struct {
 		Key   string
@@ -1408,10 +1404,6 @@ func keyedLayoutViewIn(m *model, keyFn func() string, focusGroup *ggui.StateValu
 	).Expand()
 }
 
-func keyedLayoutNodeView(m *model, key string, n *layoutNode, focusGroup *ggui.StateValue[int]) ggui.Widget {
-	return keyedLayoutNodeViewIn(m, key, n, focusGroup, nil)
-}
-
 func keyedLayoutNodeViewIn(m *model, key string, n *layoutNode, focusGroup *ggui.StateValue[int], sw *spaceWindowState) ggui.Widget {
 	if n.Group != nil {
 		return keyedPaneViewIn(m, key, n.Group.ID, focusGroup, sw)
@@ -1429,10 +1421,6 @@ func keyedLayoutNodeViewIn(m *model, key string, n *layoutNode, focusGroup *ggui
 		split = split.Vertical()
 	}
 	return split
-}
-
-func keyedPaneView(m *model, key string, id int, focusGroup *ggui.StateValue[int]) ggui.Widget {
-	return keyedPaneViewIn(m, key, id, focusGroup, nil)
 }
 
 func keyedPaneViewIn(m *model, key string, id int, focusGroup *ggui.StateValue[int], sw *spaceWindowState) ggui.Widget {
@@ -1645,10 +1633,6 @@ func keyedAgentLane(m *model, key string, id int, group ggui.Readable[tabGroup],
 			Horizontal().Shrink().Bar(color.Transparent).FadeEdges(20)
 		return widget.Column(widget.Box(row).Height(laneHeight), hline()).Stretch()
 	})
-}
-
-func keyedPaneBody(m *model, key string, id int, group ggui.Readable[tabGroup], focusGroup *ggui.StateValue[int]) ggui.Widget {
-	return keyedPaneBodyIn(m, key, id, group, focusGroup, nil)
 }
 
 func keyedPaneBodyIn(m *model, key string, id int, group ggui.Readable[tabGroup], focusGroup *ggui.StateValue[int], sw *spaceWindowState) ggui.Widget {

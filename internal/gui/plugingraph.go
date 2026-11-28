@@ -409,12 +409,8 @@ func normalizeGraphLayoutMode(mode string) string {
 	}
 }
 
-// graphSignature hashes the topology, weights, layout mode, and explicit node positions
+// graphSignatureWithMode hashes the topology, weights, layout mode, and explicit node positions
 // so layout is recomputed only when structure or placement inputs change.
-func graphSignature(nodes []*protocol.UiGraphNode, edges []*protocol.UiGraphEdge) uint64 {
-	return graphSignatureWithMode(nodes, edges, graphLayoutForce, false)
-}
-
 func graphSignatureWithMode(nodes []*protocol.UiGraphNode, edges []*protocol.UiGraphEdge, mode string, isCards bool) uint64 {
 	return hashGraphSignature(nodes, edges, mode, isCards, true, false)
 }

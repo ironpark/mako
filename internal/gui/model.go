@@ -762,11 +762,6 @@ func (m *model) openNew(nodeID, project string) *launchState {
 	return l
 }
 
-// openSubagent opens a new-session tab prefilled as a subagent of parentID.
-func (m *model) openSubagent(parentID string) *launchState {
-	return m.openSubagentIn(nil, parentID)
-}
-
 // openSubagentIn opens a new-session tab prefilled as a subagent of parentID
 // inside sw (or the main workspace when sw is nil).
 func (m *model) openSubagentIn(sw *spaceWindowState, parentID string) *launchState {
