@@ -65,6 +65,7 @@ type Daemon struct {
 	turns         turnCheckpoints // whether each session's turn has its checkpoint; see checkpoints.go
 	layouts       windowLayouts   // the window layouts' changes staged here, and what is node-local of them; see layouts.go
 	templateAsks  templateAsks    // the templates agents ask the user to save; see agent_templates.go
+	routines      routineRunner   // the routines' files and the runs they start; see routines.go
 	peers         *peerTable
 	ssh           *sshManager
 
@@ -299,6 +300,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	wg.Go(func() { d.discover(ctx) })
 	wg.Go(func() { d.maintain(ctx) })
 	wg.Go(func() { d.watchState(ctx) })
+	wg.Go(func() { d.runRoutines(ctx) })
 
 	<-ctx.Done()
 	_ = d.ln.Close()
@@ -512,6 +514,10 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleRewindSession(ctx, stream, env)
 	case protocol.TypeGoalAction:
 		return d.handleGoalAction(ctx, stream, env)
+	case protocol.TypeListRoutines:
+		return d.handleListRoutines(ctx, stream, env)
+	case protocol.TypeRoutineAction:
+		return d.handleRoutineAction(ctx, stream, env)
 	case protocol.TypeInspectAgentHome:
 		return d.handleInspectAgentHome(ctx, stream, env)
 	case protocol.TypeMigrateAgentHome:

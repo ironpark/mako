@@ -17,6 +17,7 @@ import "mako/v2/forge.proto";
 import "mako/v2/mesh.proto";
 import "mako/v2/plugins.proto";
 import "mako/v2/pluginstore.proto";
+import "mako/v2/routines.proto";
 import "mako/v2/session.proto";
 import "mako/v2/sync.proto";
 import "mako/v2/project_agents.proto";
@@ -206,6 +207,11 @@ message Envelope {
 
     // Unified agent goal status control (revision 51).
     GoalAction goal_action = 166;
+
+    // A node's routines: scheduled and Forge-triggered runs (revision 53).
+    ListRoutines list_routines = 167;
+    Routines routines = 168;
+    RoutineAction routine_action = 169;
   }
 }
 

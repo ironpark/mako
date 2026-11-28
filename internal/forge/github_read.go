@@ -113,8 +113,9 @@ type item struct {
 			} `json:"statusCheckRollup"`
 		} `json:"commit"`
 	}] `json:"statusCheckRollup"`
-	IsCrossRepository   bool `json:"isCrossRepository"`
-	HeadRepositoryOwner user `json:"headRepositoryOwner"`
+	IsCrossRepository   bool   `json:"isCrossRepository"`
+	HeadRepositoryOwner user   `json:"headRepositoryOwner"`
+	Association         string `json:"authorAssociation"`
 
 	Body     string         `json:"body"`
 	Comments nodes[comment] `json:"comments"`
@@ -142,7 +143,7 @@ func (it item) checks() []check {
 // the more a view adds.
 const (
 	issueFields = `number title state url updatedAt author { login } labels(first: 100) { nodes { name } }`
-	prFields    = issueFields + ` isDraft headRefName baseRefName headRefOid isCrossRepository headRepositoryOwner { login }
+	prFields    = issueFields + ` isDraft headRefName baseRefName headRefOid isCrossRepository headRepositoryOwner { login } authorAssociation
 		statusCheckRollup: commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
 			__typename
 			... on StatusContext { context state targetUrl }
@@ -191,9 +192,13 @@ func (g *github) list(ctx context.Context, r *protocol.ForgeList) (*protocol.For
 			headVar, headArg, vars["head"] = ", $head: String!", ", headRefName: $head", branch
 		}
 	}
+	order := "UPDATED_AT"
+	if r.GetOrder() == protocol.ForgeOrderCreated {
+		order = "CREATED_AT"
+	}
 	query := `query($owner: String!, $repo: String!, $states: [` + state + `!], $first: Int!, $after: String` + headVar + `) {
 		repository(owner: $owner, name: $repo) {
-			list: ` + conn + `(first: $first, after: $after, states: $states` + headArg + `, orderBy: {field: UPDATED_AT, direction: DESC}) {
+			list: ` + conn + `(first: $first, after: $after, states: $states` + headArg + `, orderBy: {field: ` + order + `, direction: DESC}) {
 				nodes { ` + fields + ` }
 				pageInfo { hasNextPage endCursor }
 			}
@@ -501,7 +506,7 @@ func (it item) proto(kind string) *protocol.ForgeItem {
 	p := &protocol.ForgeItem{
 		Kind: kind, Number: it.Number, Title: it.Title, Author: it.Author.Login, State: it.State, Url: it.URL,
 		Updated: protocol.Time(it.UpdatedAt), Draft: it.IsDraft, Head: it.HeadRefName, Base: it.BaseRefName, HeadOid: it.HeadRefOid,
-		Checks: rollup(checks),
+		Checks: rollup(checks), Fork: it.IsCrossRepository, Association: it.Association,
 	}
 	for _, l := range it.Labels.Nodes {
 		p.Labels = append(p.Labels, l.Name)
@@ -523,6 +528,14 @@ type run struct {
 	HeadBranch string    `json:"head_branch"`
 	HeadSha    string    `json:"head_sha"`
 	Event      string    `json:"event"`
+	// The repository the run is of, and the one its branch is in: a
+	// fork's, for a fork's pull request.
+	Repository     runRepo `json:"repository"`
+	HeadRepository runRepo `json:"head_repository"`
+}
+
+type runRepo struct {
+	FullName string `json:"full_name"`
 }
 
 // job is a job of a run, with its steps.
@@ -547,6 +560,7 @@ func (r run) proto() *protocol.ForgeItem {
 	return &protocol.ForgeItem{
 		Kind: protocol.ForgeRuns, Number: r.ID, Title: r.Title, State: r.Status, Checks: r.Conclusion, Url: r.URL,
 		Updated: protocol.Time(r.UpdatedAt), Head: r.HeadBranch, HeadOid: r.HeadSha, Workflow: r.Name, Event: r.Event,
+		Fork: r.HeadRepository.FullName != "" && !strings.EqualFold(r.HeadRepository.FullName, r.Repository.FullName),
 	}
 }
 

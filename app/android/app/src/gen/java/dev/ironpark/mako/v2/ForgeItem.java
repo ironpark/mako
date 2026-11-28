@@ -32,6 +32,7 @@ public  final class ForgeItem extends
     labels_ = emptyProtobufList();
     workflow_ = "";
     event_ = "";
+    association_ = "";
   }
   private int bitField0_;
   public static final int KIND_FIELD_NUMBER = 1;
@@ -862,6 +863,119 @@ public  final class ForgeItem extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     event_ = value.toStringUtf8();
+
+  }
+
+  public static final int FORK_FIELD_NUMBER = 20;
+  private boolean fork_;
+  /**
+   * <pre>
+   * fork is set for a pull request from, or a run of a branch of, another
+   * repository, as far as the forge tells (revision 53).
+   * </pre>
+   *
+   * <code>bool fork = 20 [json_name = "fork"];</code>
+   * @return The fork.
+   */
+  @java.lang.Override
+  public boolean getFork() {
+    return fork_;
+  }
+  /**
+   * <pre>
+   * fork is set for a pull request from, or a run of a branch of, another
+   * repository, as far as the forge tells (revision 53).
+   * </pre>
+   *
+   * <code>bool fork = 20 [json_name = "fork"];</code>
+   * @param value The fork to set.
+   */
+  private void setFork(boolean value) {
+    
+    fork_ = value;
+  }
+  /**
+   * <pre>
+   * fork is set for a pull request from, or a run of a branch of, another
+   * repository, as far as the forge tells (revision 53).
+   * </pre>
+   *
+   * <code>bool fork = 20 [json_name = "fork"];</code>
+   */
+  private void clearFork() {
+
+    fork_ = false;
+  }
+
+  public static final int ASSOCIATION_FIELD_NUMBER = 21;
+  private java.lang.String association_;
+  /**
+   * <pre>
+   * association is a pull request's author's tie to the repository, as
+   * ForgeComment.association; "" when the forge does not tell (revision 53).
+   * </pre>
+   *
+   * <code>string association = 21 [json_name = "association"];</code>
+   * @return The association.
+   */
+  @java.lang.Override
+  public java.lang.String getAssociation() {
+    return association_;
+  }
+  /**
+   * <pre>
+   * association is a pull request's author's tie to the repository, as
+   * ForgeComment.association; "" when the forge does not tell (revision 53).
+   * </pre>
+   *
+   * <code>string association = 21 [json_name = "association"];</code>
+   * @return The bytes for association.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getAssociationBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(association_);
+  }
+  /**
+   * <pre>
+   * association is a pull request's author's tie to the repository, as
+   * ForgeComment.association; "" when the forge does not tell (revision 53).
+   * </pre>
+   *
+   * <code>string association = 21 [json_name = "association"];</code>
+   * @param value The association to set.
+   */
+  private void setAssociation(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    association_ = value;
+  }
+  /**
+   * <pre>
+   * association is a pull request's author's tie to the repository, as
+   * ForgeComment.association; "" when the forge does not tell (revision 53).
+   * </pre>
+   *
+   * <code>string association = 21 [json_name = "association"];</code>
+   */
+  private void clearAssociation() {
+
+    association_ = getDefaultInstance().getAssociation();
+  }
+  /**
+   * <pre>
+   * association is a pull request's author's tie to the repository, as
+   * ForgeComment.association; "" when the forge does not tell (revision 53).
+   * </pre>
+   *
+   * <code>string association = 21 [json_name = "association"];</code>
+   * @param value The bytes for association to set.
+   */
+  private void setAssociationBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    association_ = value.toStringUtf8();
 
   }
 
@@ -1823,6 +1937,123 @@ public  final class ForgeItem extends
       return this;
     }
 
+    /**
+     * <pre>
+     * fork is set for a pull request from, or a run of a branch of, another
+     * repository, as far as the forge tells (revision 53).
+     * </pre>
+     *
+     * <code>bool fork = 20 [json_name = "fork"];</code>
+     * @return The fork.
+     */
+    @java.lang.Override
+    public boolean getFork() {
+      return instance.getFork();
+    }
+    /**
+     * <pre>
+     * fork is set for a pull request from, or a run of a branch of, another
+     * repository, as far as the forge tells (revision 53).
+     * </pre>
+     *
+     * <code>bool fork = 20 [json_name = "fork"];</code>
+     * @param value The fork to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFork(boolean value) {
+      copyOnWrite();
+      instance.setFork(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * fork is set for a pull request from, or a run of a branch of, another
+     * repository, as far as the forge tells (revision 53).
+     * </pre>
+     *
+     * <code>bool fork = 20 [json_name = "fork"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFork() {
+      copyOnWrite();
+      instance.clearFork();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * association is a pull request's author's tie to the repository, as
+     * ForgeComment.association; "" when the forge does not tell (revision 53).
+     * </pre>
+     *
+     * <code>string association = 21 [json_name = "association"];</code>
+     * @return The association.
+     */
+    @java.lang.Override
+    public java.lang.String getAssociation() {
+      return instance.getAssociation();
+    }
+    /**
+     * <pre>
+     * association is a pull request's author's tie to the repository, as
+     * ForgeComment.association; "" when the forge does not tell (revision 53).
+     * </pre>
+     *
+     * <code>string association = 21 [json_name = "association"];</code>
+     * @return The bytes for association.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getAssociationBytes() {
+      return instance.getAssociationBytes();
+    }
+    /**
+     * <pre>
+     * association is a pull request's author's tie to the repository, as
+     * ForgeComment.association; "" when the forge does not tell (revision 53).
+     * </pre>
+     *
+     * <code>string association = 21 [json_name = "association"];</code>
+     * @param value The association to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAssociation(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setAssociation(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * association is a pull request's author's tie to the repository, as
+     * ForgeComment.association; "" when the forge does not tell (revision 53).
+     * </pre>
+     *
+     * <code>string association = 21 [json_name = "association"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAssociation() {
+      copyOnWrite();
+      instance.clearAssociation();
+      return this;
+    }
+    /**
+     * <pre>
+     * association is a pull request's author's tie to the repository, as
+     * ForgeComment.association; "" when the forge does not tell (revision 53).
+     * </pre>
+     *
+     * <code>string association = 21 [json_name = "association"];</code>
+     * @param value The bytes for association to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAssociationBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setAssociationBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ForgeItem)
   }
   @java.lang.Override
@@ -1855,11 +2086,14 @@ public  final class ForgeItem extends
             "labels_",
             "workflow_",
             "event_",
+            "fork_",
+            "association_",
           };
           java.lang.String info =
-              "\u0000\u000f\u0000\u0001\u0001\u0013\u000f\u0000\u0001\u0000\u0001\u0208\u0002\u0002" +
+              "\u0000\u0011\u0000\u0001\u0001\u0015\u0011\u0000\u0001\u0000\u0001\u0208\u0002\u0002" +
               "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u1009\u0000\b\u0007\t\u0208" +
-              "\n\u0208\u000b\u0208\f\u0208\u000e\u021a\u0012\u0208\u0013\u0208";
+              "\n\u0208\u000b\u0208\f\u0208\u000e\u021a\u0012\u0208\u0013\u0208\u0014\u0007\u0015" +
+              "\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

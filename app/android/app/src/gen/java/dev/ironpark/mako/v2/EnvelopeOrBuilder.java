@@ -1609,5 +1609,46 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.GoalAction getGoalAction();
 
+  /**
+   * <pre>
+   * A node's routines: scheduled and Forge-triggered runs (revision 53).
+   * </pre>
+   *
+   * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
+   * @return Whether the listRoutines field is set.
+   */
+  boolean hasListRoutines();
+  /**
+   * <pre>
+   * A node's routines: scheduled and Forge-triggered runs (revision 53).
+   * </pre>
+   *
+   * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
+   * @return The listRoutines.
+   */
+  dev.ironpark.mako.v2.ListRoutines getListRoutines();
+
+  /**
+   * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
+   * @return Whether the routines field is set.
+   */
+  boolean hasRoutines();
+  /**
+   * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
+   * @return The routines.
+   */
+  dev.ironpark.mako.v2.Routines getRoutines();
+
+  /**
+   * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+   * @return Whether the routineAction field is set.
+   */
+  boolean hasRoutineAction();
+  /**
+   * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+   * @return The routineAction.
+   */
+  dev.ironpark.mako.v2.RoutineAction getRoutineAction();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }
