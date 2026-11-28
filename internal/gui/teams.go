@@ -95,18 +95,7 @@ func (m *model) startTeam(parent string, team agentTeam, task string) {
 	node := m.remoteID(s.GetNodeId())
 	reqs := make([]*protocol.OpenSession, len(team.Members))
 	for i, mb := range team.Members {
-		agent, profile := agentspec.SplitTarget(mb.Agent)
-		project := s.GetProject()
-		wt := s.GetWorktree()
-		if team.IsolateWorktrees {
-			// Off the leader's base when it works in a worktree; otherwise
-			// as the repository's base_ref says, or off its checked-out
-			// branch, which the node works out.
-			project = cmp.Or(s.GetWorktree().GetRepo(), s.GetProject())
-			wt = &protocol.Worktree{Base: s.GetWorktree().GetBase()}
-		}
-		reqs[i] = &protocol.OpenSession{NodeId: node, Agent: agent, Profile: profile, Project: project, Worktree: wt,
-			Cols: 120, Rows: 36, ParentSessionId: parent, Name: mb.Name, Prompt: memberPrompt(mb, task)}
+		reqs[i] = memberOpen(s, node, team, mb, task)
 	}
 	var open func(i int)
 	open = func(i int) {
@@ -118,7 +107,7 @@ func (m *model) startTeam(parent string, team agentTeam, task string) {
 				defer open(i + 1)
 			}
 			if err != nil {
-				m.toaster.Push(ui.Toast(Tf("%s did not start", mb.Name), err.Error()).Destructive())
+				m.toast(ui.Toast(Tf("%s did not start", mb.Name), err.Error()).Destructive())
 				return
 			}
 			if _, known := m.session(info.GetId()); !known {
@@ -136,6 +125,23 @@ func (m *model) startTeam(parent string, team agentTeam, task string) {
 	for i := range reqs {
 		open(i)
 	}
+}
+
+// memberOpen is the request that starts mb of team on node, as an agent
+// the leader s spawned, in its folder.
+func memberOpen(s *protocol.SessionInfo, node string, team agentTeam, mb teamMember, task string) *protocol.OpenSession {
+	agent, profile := agentspec.SplitTarget(mb.Agent)
+	project := s.GetProject()
+	wt := s.GetWorktree()
+	if team.IsolateWorktrees {
+		// Off the leader's start and base when it works in a worktree, as
+		// origin/main of base main; otherwise as the repository's base_ref
+		// says, or off its checked-out branch, which the node works out.
+		project = cmp.Or(s.GetWorktree().GetRepo(), s.GetProject())
+		wt = &protocol.Worktree{Base: s.GetWorktree().GetBase(), Start: s.GetWorktree().GetStart()}
+	}
+	return &protocol.OpenSession{NodeId: node, Agent: agent, Profile: profile, Project: project, Worktree: wt,
+		Cols: 120, Rows: 36, ParentSessionId: s.GetId(), Name: mb.Name, Prompt: memberPrompt(mb, task)}
 }
 
 // openTimeout is how long to wait for the session req opens, wait at

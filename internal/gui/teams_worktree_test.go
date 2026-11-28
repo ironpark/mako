@@ -27,6 +27,24 @@ func TestOpenWaitsForTheWorktree(t *testing.T) {
 	}
 }
 
+// A teammate isolated in a worktree starts where the leader's worktree
+// started, off the same base, in the leader's repository: origin/main
+// stays its start, though its base is main.
+func TestIsolatedMemberStartsAsTheLeader(t *testing.T) {
+	lead := &protocol.SessionInfo{Id: "lead", Project: "/r.worktrees/x", Worktree: &protocol.Worktree{Repo: "/r", Path: "/r.worktrees/x", Branch: "x", Base: "main", Start: "origin/main"}}
+	req := memberOpen(lead, "", agentTeam{IsolateWorktrees: true}, teamMember{Name: "A", Agent: "shell"}, "")
+	if req.GetProject() != "/r" || req.GetParentSessionId() != "lead" {
+		t.Fatalf("project %q parent %q", req.GetProject(), req.GetParentSessionId())
+	}
+	if w := req.GetWorktree(); w.GetPath() != "" || w.GetBranch() != "" || w.GetBase() != "main" || w.GetStart() != "origin/main" {
+		t.Fatalf("worktree %+v", w)
+	}
+	// Not isolated, it works in the leader's worktree itself.
+	if req := memberOpen(lead, "", agentTeam{}, teamMember{Name: "A", Agent: "shell"}, ""); req.GetWorktree().GetPath() != "/r.worktrees/x" || req.GetProject() != "/r.worktrees/x" {
+		t.Fatalf("shared worktree %+v in %q", req.GetWorktree(), req.GetProject())
+	}
+}
+
 // A team isolated in worktrees starts its agents one after another: the
 // next is asked for once the one before it started.
 func TestIsolatedTeamStartsInTurn(t *testing.T) {
