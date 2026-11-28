@@ -152,7 +152,8 @@ func pendingTurns(pending []pendingMessage) []chatTurnItem {
 // Windows, where its console marks no paste's end, takes an Enter right
 // behind it as a line of the paste and does not submit. Sent through the
 // terminal's own stream, a gap kept here could close on the way. Should
-// the node not take it, it goes through the terminal as before.
+// the node not take it, it goes through the terminal as before. To a node
+// that hosts the session, it goes as the host's action, taken once.
 func (m *model) submit(id string, conn *termConn, text string) {
 	s, ok := m.session(id)
 	enter := conn.enter()
@@ -160,6 +161,7 @@ func (m *model) submit(id string, conn *termConn, text string) {
 		conn.sendText(text)
 		return
 	}
+	hosted := m.hostable(id)
 	prev, done := submitAfter(id)
 	ggui.Async(func() (struct{}, error) {
 		// One message at a time, in the order sent.
@@ -169,6 +171,13 @@ func (m *model) submit(id string, conn *termConn, text string) {
 		defer cancel()
 		c, err := m.link.client(ctx)
 		if err != nil {
+			return struct{}{}, err
+		}
+		if hosted {
+			_, err = sendHostAction(ctx, c, &protocol.SessionAction{
+				NodeId: s.GetNodeId(), SessionId: id,
+				Action: &protocol.SessionAction_SendPrompt{SendPrompt: &protocol.HostSendPrompt{Text: text, Keys: enter}},
+			})
 			return struct{}{}, err
 		}
 		_, err = c.Send(ctx, &protocol.Send{NodeId: s.GetNodeId(), SessionId: id, Text: text, Keys: enter})
