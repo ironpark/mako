@@ -365,7 +365,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	}
 	switch ev.Kind {
 	case agent.Started:
-		if !s.ReportStatus(protocol.AgentIdle, msg.Seq) {
+		if !s.ReportConversationStart(msg.Seq) {
 			return
 		}
 		s.ClearAuthError(msg.Seq)
@@ -406,14 +406,25 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.ReportToolStatus(protocol.AgentWaiting, msg.Seq)
 	case agent.Stopped:
 		d.refreshActivity(s)
-		s.ReportStatus(protocol.AgentDone, msg.Seq)
+		// Codex's app server may have told of this end already.
+		if s.ReportTurnEnd(msg.Seq) {
+			d.turnDoneHooks(s)
+		}
 	case agent.Ended, agent.Idle:
 		if ev.Kind == agent.Ended || ev.AuthError != nil {
 			d.live.clearSuggestion(msg.Session)
 		}
-		s.ReportStatus(protocol.AgentIdle, msg.Seq)
+		ended := false
+		if ev.Kind == agent.Ended {
+			ended = s.ReportSessionEnd(msg.Seq)
+		} else {
+			s.ReportStatus(protocol.AgentIdle, msg.Seq)
+		}
 		if ev.AuthError != nil {
 			s.ReportAuthError(ev.AuthError, msg.Seq)
+		}
+		if ended {
+			d.sessionEndHooks(s)
 		}
 	case agent.ChildStarted, agent.ChildStopped:
 		s.ReportSubagent(ev.SessionID, ev.AgentID, ev.Kind == agent.ChildStarted, msg.Seq)

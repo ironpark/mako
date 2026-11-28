@@ -806,6 +806,7 @@ func (h *guiTemplateHost) Spawn(ctx context.Context, req prompttmpl.SpawnRequest
 	}
 	if h.m.post != nil {
 		h.m.post(func() {
+			h.m.noteRepoHooks(info)
 			if _, known := h.m.session(info.GetId()); !known {
 				h.m.Sessions.Set(append(slices.Clone(ggui.Peek(h.m.Sessions)), info))
 			}

@@ -2412,7 +2412,10 @@ func (d *Daemon) completeCodexTurn(s *session.Session, b *codexBridge, epoch uin
 	seq := b.seqFor(emittedAtMs)
 	if completed {
 		d.refreshActivity(s)
-		s.ReportStatus(protocol.AgentDone, seq)
+		// Told once, whether this or Codex's Stop hook tells of it first.
+		if s.ReportTurnEnd(seq) {
+			d.turnDoneHooks(s)
+		}
 	} else {
 		s.ReportStatus(protocol.AgentIdle, seq)
 	}

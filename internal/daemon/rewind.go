@@ -99,6 +99,9 @@ func (d *Daemon) rewindSession(ctx context.Context, req *protocol.RewindSession)
 
 	tctx, cancel := context.WithTimeout(ctx, rewindTimeout)
 	defer cancel()
+	// Its new session goes on with the conversation rewound: no session's
+	// start to its hooks.
+	ctx = rewinding(ctx)
 
 	var (
 		forkedID   string

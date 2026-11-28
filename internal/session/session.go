@@ -120,6 +120,13 @@ type Session struct {
 	approval      *protocol.Approval
 	approvalDone  chan struct{}
 	lastMessage   time.Time // when the conversation last said something, as its log has it
+	// turnAt is the seq of the report that last put the agent at work,
+	// and turnTold says the end of that turn was told; convAt is the seq
+	// of the agent's last start of a conversation, and endTold says the
+	// end of its session was told since. ReportTurnEnd, ReportSessionEnd
+	// and EndUntold tell each once, however many report it.
+	turnAt, convAt    int64
+	turnTold, endTold bool
 	// screen is what the agent's screen shows, read by its driver's
 	// rules; nil for an agent whose screen is not read.
 	screen *screenWatch
@@ -446,6 +453,66 @@ func (s *Session) ReportStatus(status protocol.AgentStatus, seq int64) bool {
 	return s.reportStatusLocked(status, seq)
 }
 
+// ReportTurnEnd is ReportStatus of AgentDone from a report that the agent
+// ended its turn, and says whether that end is news: true once for each
+// turn, for the first report of its end newer than its start. The Stop
+// hook, Codex's app server and the agent's log may each report one end,
+// in any order, and a stale or repeated report is no new end.
+func (s *Session) ReportTurnEnd(seq int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// Ordered against the turn's start, not the newest status: another
+	// reporter of this very end may have come first.
+	s.reportStatusLocked(protocol.AgentDone, seq)
+	if s.state == protocol.StateExited || s.turnTold || seq <= s.turnAt {
+		return false
+	}
+	s.turnTold = true
+	return true
+}
+
+// ReportConversationStart is ReportStatus of AgentIdle from a report that
+// the agent began a conversation, or switched to one: the end of its
+// session is news again from then on.
+func (s *Session) ReportConversationStart(seq int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ok := s.reportStatusLocked(protocol.AgentIdle, seq)
+	if s.state != protocol.StateExited && seq > s.convAt {
+		s.convAt, s.endTold = seq, false
+	}
+	return ok
+}
+
+// ReportSessionEnd is ReportStatus of AgentIdle from a report that the
+// agent's session ended, and says whether that end is news: true once for
+// each conversation the agent starts, for the first report of its end
+// newer than its start; never once the program exited.
+func (s *Session) ReportSessionEnd(seq int64) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reportStatusLocked(protocol.AgentIdle, seq)
+	if s.state == protocol.StateExited || s.endTold || seq <= s.convAt {
+		return false
+	}
+	s.endTold = true
+	return true
+}
+
+// EndUntold says, of a session whose program exited, whether the end of
+// its agent's session is yet to be told: the program exited on its own,
+// not ended by Close, and its agent reported no end since it last started
+// a conversation. It tells it: a second call says false.
+func (s *Session) EndUntold() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closing || s.endTold {
+		return false
+	}
+	s.endTold = true
+	return true
+}
+
 // ReportToolDone is a tool's end, which says the agent works on: renewing
 // a turn at work, or resuming one from a request the user answered in its
 // terminal. It never starts a turn: a tool an interruption left running
@@ -488,6 +555,9 @@ func (s *Session) reportStatusLocked(status protocol.AgentStatus, seq int64) boo
 	}
 	s.status = status
 	s.statusSeq = seq
+	if protocol.AtWork(status) {
+		s.turnAt, s.turnTold = seq, false
+	}
 	if (status == protocol.AgentWorking || status == protocol.AgentDone) && seq > s.authErrorSeq {
 		s.authErrorSeq = seq
 		s.authError = nil

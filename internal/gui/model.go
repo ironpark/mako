@@ -212,7 +212,16 @@ type model struct {
 	openChat ggui.Readable[bool]
 	// An operation that loses work, asking to be sure; see confirm.go.
 	Confirmation *ggui.StateValue[confirmation]
-	AgentsSplit  *ggui.StateValue[float64] // the agents panel's agents over its messages
+	// A repository's command file the user is asked to trust; see
+	// repotrust.go.
+	RepoTrust   *ggui.StateValue[repoTrustAsk]
+	AgentsSplit *ggui.StateValue[float64] // the agents panel's agents over its messages
+
+	// repoHooksNoted are the repositories' hooks files the node answered
+	// for, by node and file, when; repoHooksAsking those it is asked of
+	// now. See repohooks.go. UI goroutine only.
+	repoHooksNoted  map[string]time.Time
+	repoHooksAsking map[string]bool
 
 	SidebarOpen *ggui.StateValue[bool]
 	SidebarPage *ggui.StateValue[string] // "" for Projects/Agents, or "plugin:<id>/<block>" for a sidebar plugin page
@@ -404,6 +413,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		RepoPick:            ggui.State(repoPick{}),
 		// Its functions do not compare: each asking is new.
 		Confirmation:  ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),
+		RepoTrust:     ggui.State(repoTrustAsk{}),
 		AgentsSplit:   ggui.State(0.4),
 		SidebarOpen:   ggui.State(true),
 		SidebarPage:   ggui.State(""),
@@ -892,6 +902,7 @@ func (m *model) startSession(tab string, f newSession) {
 		if !isShellTarget(f.Agent) {
 			m.lastAgent = f.Agent
 		}
+		m.noteRepoHooks(info)
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
 		inMain := slices.Contains(ggui.Peek(m.Tabs), tab)

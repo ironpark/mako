@@ -255,7 +255,7 @@ error { message: "unknown session \"7f3a…\"", code: "" }
 
 | Code | Meaning |
 |---|---|
-| `changed` | A `write_file` was refused because the file changed since the writer read it. |
+| `changed` | A `write_file` was refused because the file changed since the writer read it, or a `repo_trust` `trust` because the file changed since it was shown (revision 55). |
 | `unsupported` | The daemon does not know the request's type; it predates the caller. |
 | `no_plugin` | A `watch_block` or `block_event` of a plugin the node does not have, or a node that runs no plugins: asking again changes nothing until the plugin is installed (revision 31). |
 
@@ -842,6 +842,41 @@ A `git_diff` with `pull` set is a file of that pull request's change, read
 from its forge as the Forges section says; `commit` is then the pull request's
 head as the asker saw it.
 
+### Repository trust
+
+A command file is a file in a repository that names commands for mako to
+run for it on its own, such as a command to run in each new worktree or
+on a session's events. Each feature that reads such a file says which
+file it reads. Anyone who can commit to the repository can write one. An
+agent that works in it can write one too. So a node runs these commands
+only while its user trusts the file as it reads now.
+
+A trust is for one file of one repository. The node keeps it by three
+values: the root of the repository's main work tree with its links
+resolved, the path of the file from that root (slash-separated), and the
+SHA-256 of the file's content. On macOS and Windows, whose file systems
+ignore case by default, the node matches the root and the path without
+regard to case. The node keeps these in `repo-trust.json` in its
+configuration directory. When the file changes, it is not trusted. The
+user must trust it again as it reads then. The node reads the file from
+the repository's root, and follows a link in its path only while the
+link stays inside the repository. These requests need revision 55.
+
+| Request | Payload | Reply | |
+|---|---|---|---|
+| `repo_trust` | `RepoTrust` | `repo_trust_info` | Shows, trusts, forgets or lists command files, by `op`. Routed by `node_id`. A direct SSH host keeps no trust. |
+
+| `op` | |
+|---|---|
+| `""` | Show the file at `path` (absolute). Its repository is the main work tree of the git work tree it is in. A file of a linked worktree stands for the same file of the main work tree, which is the one shown and trusted: features read a repository's command files from its main work tree, for a session in any worktree of it. A folder whose `.git` points into a repository that does not list it as a worktree, both ways, is a repository of its own. The reply gives its `root`, `path`, `sha256` and `content` as it reads now, and `trusted` if the user trusts it as it reads now. |
+| `trust` | Trust the file at `path` as it reads now. Its content must hash to `sha256`, the content the user saw. If the file changed, the node refuses with code `changed`, and the front-end shows the file again before it asks again. |
+| `revoke` | Forget the file at `path`, or every file of the repository whose root is `path`, also when the repository is gone. A path in a linked worktree stands for the same path of the main work tree. |
+| `list` | List every file trusted, with the hash it is trusted at. |
+
+A front-end shows the user the whole file before it asks to trust it,
+with its control characters made visible (`protocol.Printable`). The MCP
+tools of agents cannot trust a file.
+
 ### Forges
 
 The node answers for the forge of the repository at `root`: the host its
@@ -1169,7 +1204,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 46) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 55) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end

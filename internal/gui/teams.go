@@ -96,6 +96,7 @@ func (m *model) startTeam(parent string, team agentTeam, task string) {
 				m.toaster.Push(ui.Toast(Tf("%s did not start", mb.Name), err.Error()).Destructive())
 				return
 			}
+			m.noteRepoHooks(info)
 			if _, known := m.session(info.GetId()); !known {
 				m.Sessions.Set(append(slices.Clone(ggui.Peek(m.Sessions)), info))
 			}

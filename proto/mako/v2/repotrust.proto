@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package mako.v2;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// RepoTrust asks which command files of repositories the user of a node
+// trusts, or changes that (revision 55). A command file is a file a
+// repository tracks that names commands mako would run for it on its own,
+// such as a command to run in each new worktree or on a session's events.
+// Each feature that reads one names its own file. mako runs its commands
+// only while the user trusts the file as it reads, by its content's
+// SHA-256.
+message RepoTrust {
+  string node_id = 1;
+  // op is what to do: "" shows the file at path as it reads now, and
+  // whether it is trusted so; "trust" trusts it as it reads, which must
+  // hash to sha256, the content the user was shown; "revoke" forgets the
+  // file at path, or every file of the repository whose root is path;
+  // "list" lists the files trusted.
+  string op = 2;
+  // path is absolute: a file of a git work tree, or with "revoke" a
+  // repository's root. The repository is the main work tree of the work
+  // tree the file is in, and a file of a linked worktree stands for the
+  // same file of the main work tree, which is the one read and trusted. A
+  // folder whose .git points into a repository that does not list it as
+  // a worktree of its own is a repository of its own.
+  string path = 3;
+  string sha256 = 4;
+}
+
+// RepoTrustInfo answers RepoTrust: the file shown or trusted, the files
+// forgotten, or those listed.
+message RepoTrustInfo {
+  repeated TrustedFile files = 1;
+}
+
+// TrustedFile is a command file of a repository, as the user trusts it or
+// not.
+message TrustedFile {
+  string root = 1; // the repository's main work tree, links resolved
+  string path = 2; // the file, slash-separated, from root
+  // sha256 is of the content: as it reads now when shown, as it was
+  // trusted otherwise.
+  string sha256 = 3;
+  bool trusted = 4; // as it reads now, when shown; always when listed
+  bytes content = 5; // what it reads now; only when shown
+  google.protobuf.Timestamp trusted_at = 6; // unset if it never was
+}
