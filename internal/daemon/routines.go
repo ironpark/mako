@@ -203,9 +203,14 @@ func (d *Daemon) runRoutines(ctx context.Context) {
 // startForgePoll polls the forges of the Forge routines on a goroutine of
 // its own, and reports whether it did: not while the last poll is still
 // under way, which a slow or unreachable forge can make longer than an
-// interval.
+// interval, nor once ctx is done.
 func (d *Daemon) startForgePoll(ctx context.Context) bool {
 	rr := &d.routines
+	// A select that finds both ctx done and the poll timer due picks
+	// either: a shutdown under way starts nothing.
+	if ctx.Err() != nil {
+		return false
+	}
 	if !rr.polling.CompareAndSwap(false, true) {
 		return false
 	}
@@ -222,6 +227,10 @@ func (d *Daemon) startForgePoll(ctx context.Context) bool {
 }
 
 func (d *Daemon) tickCronRoutines(ctx context.Context, now time.Time) {
+	// As for a poll: a tick that comes with the shutdown starts no run.
+	if ctx.Err() != nil {
+		return
+	}
 	list, err := d.loadRoutinesAndPruneState()
 	if err != nil {
 		d.log.Warn("routines: load failed", "err", err)
