@@ -20,6 +20,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/ironpark/mako/internal/repotrust"
 	"github.com/ironpark/mako/internal/safeexec"
 )
 
@@ -75,7 +76,7 @@ func (cfg WorktreeConfig) hooksRun(repo string, trusted HookTrust) bool {
 // repository's cmd did not run, untrusted: what to run to trust it.
 func skippedHook(repo, cmd string) string {
 	file := filepath.Join(repo, filepath.FromSlash(WorktreeConfigFile))
-	return fmt.Sprintf("%s of %s did not run: the file is not trusted as it reads. Review it and trust it with: mako repo-trust allow %s", cmd, file, file)
+	return fmt.Sprintf("%s of %s did not run: the file is not trusted as it reads. Review it and trust it with: %s", cmd, file, repotrust.AllowCommand("", file))
 }
 
 type orcaYAMLConfig struct {

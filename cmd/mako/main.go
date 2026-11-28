@@ -17,6 +17,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/repotrust"
 	"rsc.io/qr"
 )
 
@@ -565,16 +566,12 @@ const worktreeOpenWait = gitstat.WorktreeTimeout + 30*time.Second
 // setup_cmd, which file was not trusted and how to trust it; "" for any
 // other.
 func skippedHooksNotice(nodeID string, w *protocol.Worktree) string {
-	f := protocol.Printable(w.GetSkippedHooks())
+	f := w.GetSkippedHooks()
 	if f == "" {
 		return ""
 	}
-	node := ""
-	if nodeID != "" {
-		node = "-node " + nodeID + " "
-	}
 	return fmt.Sprintf("[mako] the setup_cmd of %s did not run: the file is not trusted as it reads\r\n"+
-		"[mako] review it and trust it with: mako %srepo-trust allow %s\r\n", f, node, f)
+		"[mako] review it and trust it with: %s\r\n", protocol.Printable(f), protocol.Printable(repotrust.AllowCommand(nodeID, f)))
 }
 
 func short(id string) string {
