@@ -151,3 +151,80 @@ func TestWorktreeBootstrapCopiesInnerSymlinks(t *testing.T) {
 		t.Fatalf("through the link: %q, %v", b, err)
 	}
 }
+
+// A link inside a copied folder must end among the repository's files
+// through the links it leads on to, as well as by its words: one that
+// leads to a link out of the repository is refused, and one that leads
+// nowhere is left out.
+func TestWorktreeBootstrapFollowsNestedSymlinks(t *testing.T) {
+	outside := t.TempDir()
+	write(t, outside, "secret", "s\n")
+	t.Run("chained out", func(t *testing.T) {
+		root, run := bootstrapRepo(t, "copy_paths = [\"conf\"]\n", "conf/\nhop\n")
+		write(t, root, "conf/ok", "x\n")
+		if err := os.Symlink(filepath.Join(outside, "secret"), filepath.Join(root, "hop")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("../hop", filepath.Join(root, "conf", "link")); err != nil {
+			t.Fatal(err)
+		}
+		addRefused(t, root, run, "main", "outside the repository")
+	})
+	t.Run("nowhere", func(t *testing.T) {
+		root, _ := bootstrapRepo(t, "copy_paths = [\"conf\"]\n", "conf/\n")
+		write(t, root, "conf/ok", "x\n")
+		if err := os.Symlink("missing", filepath.Join(root, "conf", "link")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("ok", filepath.Join(root, "conf", "good")); err != nil {
+			t.Fatal(err)
+		}
+		wt, err := AddWorktree(context.Background(), root, NewWorktree{Branch: "feat/nowhere", Start: "main"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(filepath.Dir(wt.Path)) })
+		if _, err := os.Lstat(filepath.Join(wt.Path, "conf", "link")); !os.IsNotExist(err) {
+			t.Fatalf("a link that leads nowhere was copied: %v", err)
+		}
+		if target, err := os.Readlink(filepath.Join(wt.Path, "conf", "good")); err != nil || target != "ok" {
+			t.Fatalf("link = %q, %v", target, err)
+		}
+	})
+}
+
+// A .git inside a copied folder, as a repository checked out in it has,
+// is left out: git would run its config and hooks in the worktree.
+func TestWorktreeBootstrapLeavesOutNestedGit(t *testing.T) {
+	root, _ := bootstrapRepo(t, "copy_paths = [\"vendor\"]\n", "vendor/\n")
+	write(t, root, "vendor/lib/a.txt", "a\n")
+	write(t, root, "vendor/lib/.git/config", "[core]\n\tfsmonitor = touch pwned\n")
+	write(t, root, "vendor/sub/.git", "gitdir: ../../.git\n")
+	write(t, root, "vendor/other/.GIT/hooks/x", "x\n")
+	wt, err := AddWorktree(context.Background(), root, NewWorktree{Branch: "feat/nested", Start: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(filepath.Dir(wt.Path)) })
+	if b, err := os.ReadFile(filepath.Join(wt.Path, "vendor", "lib", "a.txt")); err != nil || string(b) != "a\n" {
+		t.Fatalf("copy = %q, %v", b, err)
+	}
+	for _, p := range []string{"vendor/lib/.git", "vendor/sub/.git", "vendor/other/.GIT"} {
+		if _, err := os.Lstat(filepath.Join(wt.Path, filepath.FromSlash(p))); !os.IsNotExist(err) {
+			t.Fatalf("%s copied: %v", p, err)
+		}
+	}
+}
+
+// On Windows, where hooks run under cmd, a branch or base with what cmd
+// reads as its own is refused before a hook names it as %NAME%.
+func TestCmdSafe(t *testing.T) {
+	for _, v := range []string{"a&calc", "x|y", "p%PATH%", "b^c", "q\"r", "w!x!", "(z)", "l<m", "n>o"} {
+		if err := cmdSafe("main", v); err == nil {
+			t.Errorf("%q taken", v)
+		}
+	}
+	if err := cmdSafe("feat/x-1", "main", "release_2.0", ""); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -513,10 +513,12 @@ func bootstrapPaths(repo, wtPath string, cfg WorktreeConfig) error {
 }
 
 // copyWorktreePath copies name, a slash-separated path, from the
-// repository open at src to the worktree open at wt, where nothing is at
-// it yet: a directory with all in it. Only directories, regular files and
-// symlinks that stay among the repository's files are copied; a FIFO, a
-// socket or a device is left out.
+// repository open at src, its root with links resolved, to the worktree
+// open at wt, where nothing is at it yet: a directory with all in it.
+// Only directories, regular files and symlinks that stay among the
+// repository's files are copied; a FIFO, a socket or a device is left
+// out, and so is a .git in it, as a repository checked out inside has,
+// whose config and hooks git would run in the worktree.
 func copyWorktreePath(src, wt *os.Root, name string, info fs.FileInfo) error {
 	if !info.IsDir() {
 		return copyWorktreeEntry(src, wt, name, info.Mode())
@@ -524,6 +526,12 @@ func copyWorktreePath(src, wt *os.Root, name string, info fs.FileInfo) error {
 	return fs.WalkDir(src.FS(), name, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if dotGitPath(p) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
 		}
 		if d.IsDir() {
 			fi, err := d.Info()
@@ -557,6 +565,18 @@ func copyWorktreeEntry(src, wt *os.Root, name string, mode fs.FileMode) error {
 		if filepath.IsAbs(target) || path.IsAbs(t) || filepath.VolumeName(target) != "" ||
 			to == "." || to == ".." || strings.HasPrefix(to, "../") || dotGitPath(to) {
 			return fmt.Errorf("symlink %s leads outside the repository's files, to %s", name, target)
+		}
+		// And so must where it ends up, through the links it leads on to,
+		// as a tracked link out of the repository: resolved in the
+		// repository, whose links the worktree checks out. One that leads
+		// nowhere there is left out, as it could lead anywhere later.
+		if _, ok, err := repoSource(src.Name(), native); err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return fmt.Errorf("symlink %s: %w", name, err)
+		} else if !ok {
+			return nil
 		}
 		return wt.Symlink(target, native)
 	case mode.IsRegular():
@@ -612,6 +632,11 @@ func runWorktreeHook(ctx context.Context, reserve time.Duration, wtPath, repo, b
 	if limit <= 0 {
 		return "", errors.New("no time was left for it")
 	}
+	if runtime.GOOS == "windows" {
+		if err := cmdSafe(branch, base); err != nil {
+			return "", err
+		}
+	}
 	hookCtx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	var cmd *exec.Cmd
@@ -636,4 +661,21 @@ func runWorktreeHook(ctx context.Context, reserve time.Duration, wtPath, repo, b
 		err = fmt.Errorf("ran out of its %s", limit.Round(time.Second))
 	}
 	return strings.TrimSpace(string(out)), err
+}
+
+// cmdSpecial are the characters cmd reads as its own in a line, after it
+// puts in the values of the variables the line names as %NAME%.
+const cmdSpecial = "&|<>^%!\"()"
+
+// cmdSafe refuses a branch, as vals are, with a character cmd reads as its
+// own: a hook that names one as %MAKO_WORKTREE_BRANCH% would run what
+// follows it. git takes such characters in a branch's name, and a branch
+// is named by whoever starts a session, an agent included.
+func cmdSafe(vals ...string) error {
+	for _, v := range vals {
+		if i := strings.IndexAny(v, cmdSpecial); i >= 0 {
+			return fmt.Errorf("%q has %q, which cmd would read as its own: name the branch without any of %s to run the repository's commands on Windows", v, v[i], cmdSpecial)
+		}
+	}
+	return nil
 }
