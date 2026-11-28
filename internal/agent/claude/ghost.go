@@ -131,17 +131,18 @@ func joinRows(rows []string) string {
 		widest = max(widest, cells(row))
 	}
 	var b strings.Builder
-	for i, row := range rows {
+	var prev string
+	for _, row := range rows {
 		if row == "" {
 			continue
 		}
 		if b.Len() > 0 {
-			prev := rows[i-1]
 			if cells(lastWord(prev))+cells(firstWord(row)) <= widest {
 				b.WriteByte(' ')
 			}
 		}
 		b.WriteString(row)
+		prev = row
 	}
 	return b.String()
 }

@@ -1024,7 +1024,7 @@ func (s *Session) StyledScreen() (string, error) {
 	t := s.term.Terminal()
 	total := t.ActiveScreen().Scrollbar().Total
 	rows := min(uint64(t.Rows()), total)
-	if rows == 0 {
+	if rows == 0 || t.Cols() == 0 {
 		return "", nil
 	}
 	var b strings.Builder
