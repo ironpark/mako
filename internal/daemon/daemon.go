@@ -533,6 +533,10 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleProviderAction(ctx, stream, env, fromPeer)
 	case protocol.TypeRunDecision:
 		return d.handleRunDecision(ctx, stream, env, fromPeer)
+	case protocol.TypeListPolicies:
+		return d.handleListPolicies(stream, env, fromPeer)
+	case protocol.TypeSetPolicies:
+		return d.handleSetPolicies(stream, env, fromPeer)
 
 	case protocol.TypeSearch:
 		return d.handleSearch(ctx, stream, env)

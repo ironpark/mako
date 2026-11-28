@@ -560,6 +560,17 @@ func (c *Client) ActProvider(ctx context.Context, req *protocol.ProviderAction) 
 	return request[*protocol.Providers](ctx, c, protocol.TypeProviderAction, req)
 }
 
+// Policies returns the daemon's cross-agent permission policy rules and
+// the approvals they decided.
+func (c *Client) Policies(ctx context.Context) (*protocol.Policies, error) {
+	return request[*protocol.Policies](ctx, c, protocol.TypeListPolicies, &protocol.ListPolicies{})
+}
+
+// SetPolicies replaces the daemon's cross-agent permission policy rules.
+func (c *Client) SetPolicies(ctx context.Context, req *protocol.SetPolicies) (*protocol.Policies, error) {
+	return request[*protocol.Policies](ctx, c, protocol.TypeSetPolicies, req)
+}
+
 // RunDecision evaluates structured decision questions via the daemon's configured decision provider.
 func (c *Client) RunDecision(ctx context.Context, req *protocol.RunDecision) (*protocol.DecisionResult, error) {
 	return request[*protocol.DecisionResult](ctx, c, protocol.TypeRunDecision, req)

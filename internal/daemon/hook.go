@@ -16,6 +16,7 @@ import (
 	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
+	"github.com/ironpark/mako/internal/policy"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/transport"
@@ -418,6 +419,50 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	case agent.ChildStarted, agent.ChildStopped:
 		s.ReportSubagent(ev.SessionID, ev.AgentID, ev.Kind == agent.ChildStarted, msg.Seq)
 	case agent.Approval:
+		// Evaluate cross-agent Mako permission policy rules before holding the
+		// approval for user interaction.
+		// The call reads as its kind does, as approvals.ask reads it: a
+		// call with no arguments still has the kind its name gives, so a
+		// question or a plan is never decided for the user.
+		kind, canon := "", agent.Fields(ev.Input)
+		if tools, ok := agents.As[agent.Tools](name); ok {
+			var read map[string]any
+			if kind, read = tools.Tool(ev.Tool, ev.Input); read != nil {
+				canon = read
+			}
+		}
+		// Rules read the whole call; the detail, cut to a line, is only
+		// what the audit log shows of it.
+		call := policy.Call{Agent: name, Tool: ev.Tool, Kind: kind, Input: canon, Dir: s.Info().GetProject()}
+		dec, err := policy.Evaluate(d.dir, s.Info().GetProject(), call)
+		if err != nil {
+			// Rules that cannot be read allow nothing: the user is asked.
+			d.log.Warn("policy: rules unreadable, so none allows a call", "session", msg.Session, "err", err)
+		}
+		if dec.Matched {
+			reply := hookReply{Decision: string(dec.Action), Message: dec.Reason}
+			if len(reply.Output) == 0 {
+				reply.Output = hooks.Reply(reply.Decision, reply.Message)
+			}
+			if err := policy.AppendAudit(d.dir, policy.AuditEntry{
+				Session: msg.Session,
+				Agent:   name,
+				Tool:    ev.Tool,
+				Detail:  agent.Detail(kind, canon),
+				Action:  dec.Action,
+				RuleID:  dec.Rule.ID,
+				Rule:    dec.Rule.Name,
+			}); err != nil {
+				d.log.Warn("policy: decision not logged", "session", msg.Session, "err", err)
+			}
+			// Decided, the call runs or is refused and the agent works on,
+			// as after an answer in the window. A request the window holds
+			// for another call stands.
+			s.ReportToolStatus(protocol.AgentWorking, msg.Seq)
+			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+			_ = json.NewEncoder(conn).Encode(reply)
+			return
+		}
 		if !s.ReportStatus(protocol.AgentWaiting, msg.Seq) {
 			return
 		}

@@ -1650,5 +1650,48 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.RoutineAction getRoutineAction();
 
+  /**
+   * <pre>
+   * Cross-agent permission policies and the approvals they decided
+   * (revision 56).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPolicies list_policies = 175 [json_name = "listPolicies"];</code>
+   * @return Whether the listPolicies field is set.
+   */
+  boolean hasListPolicies();
+  /**
+   * <pre>
+   * Cross-agent permission policies and the approvals they decided
+   * (revision 56).
+   * </pre>
+   *
+   * <code>.mako.v2.ListPolicies list_policies = 175 [json_name = "listPolicies"];</code>
+   * @return The listPolicies.
+   */
+  dev.ironpark.mako.v2.ListPolicies getListPolicies();
+
+  /**
+   * <code>.mako.v2.SetPolicies set_policies = 176 [json_name = "setPolicies"];</code>
+   * @return Whether the setPolicies field is set.
+   */
+  boolean hasSetPolicies();
+  /**
+   * <code>.mako.v2.SetPolicies set_policies = 176 [json_name = "setPolicies"];</code>
+   * @return The setPolicies.
+   */
+  dev.ironpark.mako.v2.SetPolicies getSetPolicies();
+
+  /**
+   * <code>.mako.v2.Policies policies = 177 [json_name = "policies"];</code>
+   * @return Whether the policies field is set.
+   */
+  boolean hasPolicies();
+  /**
+   * <code>.mako.v2.Policies policies = 177 [json_name = "policies"];</code>
+   * @return The policies.
+   */
+  dev.ironpark.mako.v2.Policies getPolicies();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

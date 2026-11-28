@@ -188,6 +188,7 @@ type model struct {
 	// plugins are the daemon's plugins; see plugins.go.
 	plugins   *pluginsState
 	providers *providersState // decision-model & API keys; see providers.go
+	policies  *policiesState  // the daemon's permission policies; see policies.go
 	// store is the plugin store's: the registries' listings and the
 	// registries themselves; see pluginstore.go.
 	store *storeState
@@ -355,6 +356,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		ext:                 newExtState(cfg),
 		plugins:             newPluginsState(),
 		providers:           newProvidersState(),
+		policies:            newPoliciesState(),
 		store:               newStoreState(),
 		AgentBlocks:         ggui.State([]*protocol.AgentBlock(nil)),
 		files:               newFilesState(),

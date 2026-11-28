@@ -146,6 +146,9 @@ const (
 	TypeListRoutines          Type = "list_routines"
 	TypeRoutines              Type = "routines"
 	TypeRoutineAction         Type = "routine_action"
+	TypeListPolicies          Type = "list_policies"
+	TypeSetPolicies           Type = "set_policies"
+	TypePolicies              Type = "policies"
 )
 
 // Newer reports whether the edit made at version v on node is newer than

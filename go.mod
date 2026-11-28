@@ -40,6 +40,7 @@ require (
 	golang.org/x/text v0.44.0
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.62.0
+	mvdan.cc/sh/v3 v3.14.1
 	rsc.io/qr v0.2.0
 )
 
