@@ -18,9 +18,14 @@ func (p *HostChatPatch) Apply(c *Chat) *Chat {
 		out.Messages = p.GetMessages()
 		return out
 	}
+	// A patch is of the conversation held, and of no other.
+	if c == nil || c.GetConversation() != p.GetConversation() {
+		return nil
+	}
 	old := c.GetMessages()
 	drop, keep := int(p.GetDrop()), int(p.GetKeep())
-	if drop < 0 || keep < 0 || drop+keep > len(old) {
+	// Each checked on its own, so that their sum cannot overflow.
+	if drop < 0 || keep < 0 || drop > len(old) || keep > len(old)-drop {
 		return nil
 	}
 	out.Messages = append(slices.Clone(old[drop:drop+keep]), p.GetMessages()...)
@@ -30,8 +35,12 @@ func (p *HostChatPatch) Apply(c *Chat) *Chat {
 // ApplyHostEvent applies ev to state, in place: what a front-end holding a
 // session's host state does with each event, in seq order. It reports
 // false when ev does not apply, as a conversation patch of another
-// conversation, and the front-end should subscribe again from nothing.
+// conversation or an event no later than the state, and the front-end
+// should subscribe again from nothing.
 func ApplyHostEvent(state *HostState, ev *HostEvent) bool {
+	if ev.GetSeq() <= state.GetSeq() {
+		return false
+	}
 	switch b := ev.GetBody().(type) {
 	case *HostEvent_Info:
 		state.Info = b.Info
