@@ -38,7 +38,7 @@ func (d *Daemon) handleListSessions(ctx context.Context, stream *transport.Strea
 	// it reaches through them, plus any tunneled SSH daemons.
 	sessions = append(sessions, d.meshSessions(d.routing())...)
 	if d.ssh != nil {
-		sessions = append(sessions, d.ssh.daemonSessions()...)
+		sessions = appendUnlisted(sessions, d.ssh.daemonSessions())
 	}
 	return stream.Send(protocol.TypeSessions, env.GetId(), &protocol.Sessions{Sessions: sessions})
 }

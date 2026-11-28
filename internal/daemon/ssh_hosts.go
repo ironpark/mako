@@ -370,17 +370,11 @@ func (m *sshManager) monitorDaemonTunnel(ctx context.Context, e *sshEntry, tun *
 		if err != nil {
 			return err
 		}
-		sessions := make([]*protocol.SessionInfo, 0, len(reply.GetSessions()))
-		for _, si := range reply.GetSessions() {
-			cp := proto.CloneOf(si)
-			cp.NodeId = e.nodeID
-			sessions = append(sessions, cp)
-		}
 		e.mu.Lock()
 		if node != nil {
 			e.remoteNode = node
 		}
-		e.remoteSessions = sessions
+		e.remoteSessions = ownSessions(reply.GetSessions(), e.remoteNode.GetId(), e.nodeID)
 		e.lastSeen = time.Now()
 		e.mu.Unlock()
 		m.d.changes.fire(true, true)
@@ -597,6 +591,43 @@ func (m *sshManager) dialDaemon(ctx context.Context, nodeID string) (*transport.
 		return nil, fmt.Errorf("%s is not connected", name)
 	}
 	return m.dialTunnelHailed(ctx, tun)
+}
+
+// ownSessions is the sessions of the remote node remote among those its
+// daemon listed, each marked as on nodeID, its SSH host. Asked as a
+// front-end asks, the daemon lists the whole mesh it reaches, which can
+// hold this node's own sessions: those stay with the nodes they are on.
+func ownSessions(listed []*protocol.SessionInfo, remote, nodeID string) []*protocol.SessionInfo {
+	out := make([]*protocol.SessionInfo, 0, len(listed))
+	for _, si := range listed {
+		if on := si.GetNodeId(); on != "" && on != remote {
+			continue
+		}
+		cp := proto.CloneOf(si)
+		cp.NodeId = nodeID
+		if cp.GetParentNodeId() == remote {
+			cp.ParentNodeId = nodeID
+		}
+		out = append(out, cp)
+	}
+	return out
+}
+
+// appendUnlisted appends to sessions those of more it does not list yet. A
+// host reached over SSH can be a mesh peer as well, its sessions then
+// listed already, by the mesh.
+func appendUnlisted(sessions, more []*protocol.SessionInfo) []*protocol.SessionInfo {
+	listed := make(map[string]bool, len(sessions))
+	for _, s := range sessions {
+		listed[s.GetId()] = true
+	}
+	for _, s := range more {
+		if !listed[s.GetId()] {
+			listed[s.GetId()] = true
+			sessions = append(sessions, s)
+		}
+	}
+	return sessions
 }
 
 // daemonSessions returns all sessions reported by connected daemon-mode SSH hosts.

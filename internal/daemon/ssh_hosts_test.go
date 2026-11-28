@@ -268,3 +268,41 @@ exit 0
 		t.Fatalf("forwarded ListDir via SSH daemon tunnel = (%+v, %v)", listing, err)
 	}
 }
+
+// A remote makod asked for its sessions lists the whole mesh it reaches,
+// this node's sessions among them. Only its own are its SSH host's, and
+// one the mesh lists already is not listed twice.
+func TestSSHHostListsOnlyItsOwnSessionsOnce(t *testing.T) {
+	const self, studio, sshNode = "macbook", "studio", "ssh:5d9c"
+	listed := []*protocol.SessionInfo{
+		{Id: "on-studio", NodeId: studio},
+		{Id: "child-on-studio", NodeId: studio, ParentSessionId: "on-studio", ParentNodeId: studio},
+		{Id: "on-macbook", NodeId: self},
+		{Id: "older-daemon", NodeId: ""},
+	}
+	own := ownSessions(listed, studio, sshNode)
+	var got []string
+	for _, s := range own {
+		got = append(got, s.GetId()+"@"+s.GetNodeId())
+	}
+	if want := []string{"on-studio@" + sshNode, "child-on-studio@" + sshNode, "older-daemon@" + sshNode}; !slices.Equal(got, want) {
+		t.Fatalf("ownSessions = %v, want %v", got, want)
+	}
+	if p := own[1].GetParentNodeId(); p != sshNode {
+		t.Fatalf("a child's parent is on %q, want %q", p, sshNode)
+	}
+	if listed[0].GetNodeId() != studio {
+		t.Fatal("ownSessions changed the listing it was given")
+	}
+
+	// The studio is a mesh peer too: its session came by the mesh already.
+	mesh := []*protocol.SessionInfo{{Id: "on-macbook", NodeId: self}, {Id: "on-studio", NodeId: studio}}
+	all := appendUnlisted(mesh, own)
+	got = got[:0]
+	for _, s := range all {
+		got = append(got, s.GetId()+"@"+s.GetNodeId())
+	}
+	if want := []string{"on-macbook@" + self, "on-studio@" + studio, "child-on-studio@" + sshNode, "older-daemon@" + sshNode}; !slices.Equal(got, want) {
+		t.Fatalf("appendUnlisted = %v, want %v", got, want)
+	}
+}
