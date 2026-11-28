@@ -392,6 +392,7 @@ export function enableAutoFix(rec) {
 }
 
 export function disableAutoFix(rec) {
+  if (rec.pendingRequestId) pendingStarts.delete(rec.pendingRequestId);
   rec.enabled = false;
   rec.inFlight = false;
   rec.sawBusy = false;
@@ -405,6 +406,7 @@ export function disableAutoFix(rec) {
 // resetAutoFix starts the attempts again, as the strip's Reset does: the
 // user asks for the next fix now, past the cooldown too.
 export function resetAutoFix(rec) {
+  if (rec.pendingRequestId) pendingStarts.delete(rec.pendingRequestId);
   rec.attempts = 0;
   rec.lastHandledCiKey = "";
   rec.lastCheckAt = 0;
@@ -1281,7 +1283,9 @@ export function createAutoFixEventHandlers(mako) {
       }
     }
     await forgetStart(mako, reqId);
-    return key ? { key, rec: records.get(key) } : null;
+    const rec = key ? records.get(key) : null;
+    if (!rec || rec.pendingRequestId !== reqId) return null;
+    return { key, rec };
   }
 
   async function handleAgentStarted(ev) {

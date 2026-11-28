@@ -919,14 +919,16 @@ func (f daemonForgeHost) FailedLogs(ctx context.Context, t plugin.GitTarget, run
 		runErr error
 		det    *protocol.ForgeDetail
 	)
+	viewCtx, cancelView := context.WithCancel(ctx)
+	defer cancelView()
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		if local {
-			det, _ = d.forgeViewLocal(ctx, viewReq)
+			det, _ = d.forgeViewLocal(viewCtx, viewReq)
 		} else {
 			viewReq.NodeId = t.Node
-			det, _ = forward[*protocol.ForgeDetail](ctx, d, protocol.TypeForgeView, viewReq)
+			det, _ = forward[*protocol.ForgeDetail](viewCtx, d, protocol.TypeForgeView, viewReq)
 		}
 	}()
 	if local {
@@ -935,10 +937,12 @@ func (f daemonForgeHost) FailedLogs(ctx context.Context, t plugin.GitTarget, run
 		runReq.NodeId = t.Node
 		res, runErr = forward[*protocol.GitResult](ctx, d, protocol.TypeForgeRun, runReq)
 	}
-	<-done
 	if runErr != nil {
+		cancelView()
+		<-done
 		return nil, runErr
 	}
+	<-done
 	raw := strings.TrimSpace(res.GetOutput())
 	limit := int(maxLines)
 	if limit <= 0 {

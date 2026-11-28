@@ -359,7 +359,7 @@ function makeContext(ctxJson) {
       typeof req === "number" ? { target: defaultTarget(), number: req } : withTarget(req),
     ),
     failedLogs: (req) => host.forge.failedLogs(
-      typeof req === "number" ? { target: defaultTarget(), runNumber: req } : withTarget(req),
+      typeof req === "number" ? { target: defaultTarget(), runId: req } : withTarget(req),
     ),
   });
   const withFolder = (o) => {
