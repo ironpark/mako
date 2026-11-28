@@ -24,6 +24,7 @@ public  final class Worktree extends
     branch_ = "";
     base_ = "";
     start_ = "";
+    skippedHooks_ = "";
   }
   public static final int REPO_FIELD_NUMBER = 1;
   private java.lang.String repo_;
@@ -357,6 +358,88 @@ public  final class Worktree extends
       com.google.protobuf.ByteString value) {
     checkByteStringIsUtf8(value);
     start_ = value.toStringUtf8();
+
+  }
+
+  public static final int SKIPPED_HOOKS_FIELD_NUMBER = 6;
+  private java.lang.String skippedHooks_;
+  /**
+   * <pre>
+   * skipped_hooks is the repository's command file, an absolute path on
+   * the node, whose setup_cmd mako did not run as it made the worktree,
+   * since the user does not trust the file as it reads (RepoTrust); ""
+   * when none was skipped (revision 53).
+   * </pre>
+   *
+   * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+   * @return The skippedHooks.
+   */
+  @java.lang.Override
+  public java.lang.String getSkippedHooks() {
+    return skippedHooks_;
+  }
+  /**
+   * <pre>
+   * skipped_hooks is the repository's command file, an absolute path on
+   * the node, whose setup_cmd mako did not run as it made the worktree,
+   * since the user does not trust the file as it reads (RepoTrust); ""
+   * when none was skipped (revision 53).
+   * </pre>
+   *
+   * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+   * @return The bytes for skippedHooks.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getSkippedHooksBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(skippedHooks_);
+  }
+  /**
+   * <pre>
+   * skipped_hooks is the repository's command file, an absolute path on
+   * the node, whose setup_cmd mako did not run as it made the worktree,
+   * since the user does not trust the file as it reads (RepoTrust); ""
+   * when none was skipped (revision 53).
+   * </pre>
+   *
+   * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+   * @param value The skippedHooks to set.
+   */
+  private void setSkippedHooks(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    skippedHooks_ = value;
+  }
+  /**
+   * <pre>
+   * skipped_hooks is the repository's command file, an absolute path on
+   * the node, whose setup_cmd mako did not run as it made the worktree,
+   * since the user does not trust the file as it reads (RepoTrust); ""
+   * when none was skipped (revision 53).
+   * </pre>
+   *
+   * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+   */
+  private void clearSkippedHooks() {
+
+    skippedHooks_ = getDefaultInstance().getSkippedHooks();
+  }
+  /**
+   * <pre>
+   * skipped_hooks is the repository's command file, an absolute path on
+   * the node, whose setup_cmd mako did not run as it made the worktree,
+   * since the user does not trust the file as it reads (RepoTrust); ""
+   * when none was skipped (revision 53).
+   * </pre>
+   *
+   * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+   * @param value The bytes for skippedHooks to set.
+   */
+  private void setSkippedHooksBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    skippedHooks_ = value.toStringUtf8();
 
   }
 
@@ -806,6 +889,90 @@ public  final class Worktree extends
       return this;
     }
 
+    /**
+     * <pre>
+     * skipped_hooks is the repository's command file, an absolute path on
+     * the node, whose setup_cmd mako did not run as it made the worktree,
+     * since the user does not trust the file as it reads (RepoTrust); ""
+     * when none was skipped (revision 53).
+     * </pre>
+     *
+     * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+     * @return The skippedHooks.
+     */
+    @java.lang.Override
+    public java.lang.String getSkippedHooks() {
+      return instance.getSkippedHooks();
+    }
+    /**
+     * <pre>
+     * skipped_hooks is the repository's command file, an absolute path on
+     * the node, whose setup_cmd mako did not run as it made the worktree,
+     * since the user does not trust the file as it reads (RepoTrust); ""
+     * when none was skipped (revision 53).
+     * </pre>
+     *
+     * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+     * @return The bytes for skippedHooks.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getSkippedHooksBytes() {
+      return instance.getSkippedHooksBytes();
+    }
+    /**
+     * <pre>
+     * skipped_hooks is the repository's command file, an absolute path on
+     * the node, whose setup_cmd mako did not run as it made the worktree,
+     * since the user does not trust the file as it reads (RepoTrust); ""
+     * when none was skipped (revision 53).
+     * </pre>
+     *
+     * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+     * @param value The skippedHooks to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSkippedHooks(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setSkippedHooks(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * skipped_hooks is the repository's command file, an absolute path on
+     * the node, whose setup_cmd mako did not run as it made the worktree,
+     * since the user does not trust the file as it reads (RepoTrust); ""
+     * when none was skipped (revision 53).
+     * </pre>
+     *
+     * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSkippedHooks() {
+      copyOnWrite();
+      instance.clearSkippedHooks();
+      return this;
+    }
+    /**
+     * <pre>
+     * skipped_hooks is the repository's command file, an absolute path on
+     * the node, whose setup_cmd mako did not run as it made the worktree,
+     * since the user does not trust the file as it reads (RepoTrust); ""
+     * when none was skipped (revision 53).
+     * </pre>
+     *
+     * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
+     * @param value The bytes for skippedHooks to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSkippedHooksBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setSkippedHooksBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Worktree)
   }
   @java.lang.Override
@@ -827,10 +994,11 @@ public  final class Worktree extends
             "branch_",
             "base_",
             "start_",
+            "skippedHooks_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208";
+              "\u0000\u0006\u0000\u0000\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

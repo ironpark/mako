@@ -8,7 +8,12 @@ import (
 	"testing"
 
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/repotrust"
 )
+
+// trustAll trusts every repository's commands, as a user who trusted
+// them all would.
+func trustAll(string, string, []byte) bool { return true }
 
 func TestWorktreeBootstrapTOML(t *testing.T) {
 	root, run := cliRepo(t)
@@ -30,11 +35,15 @@ teardown_cmd = "printf 'torn-down' > \"$MAKO_WORKTREE_REPO/teardown.marker\""
 	write(t, root, ".env", "SECRET=42\n")
 	write(t, root, "config/local/dev.json", `{"port":3000}`)
 
-	repo, path, made, err := AddWorktree(ctx, root, "feat/boot", "main")
+	wt, err := AddWorktree(ctx, root, NewWorktree{Branch: "feat/boot", Start: "main", Trusted: trustAll})
 	if err != nil {
 		t.Fatal(err)
 	}
+	repo, path, made := wt.Repo, wt.Path, wt.Branch
 	t.Cleanup(func() { os.RemoveAll(filepath.Dir(path)) })
+	if wt.SkippedHooks != "" {
+		t.Fatalf("trusted setup_cmd reported skipped: %q", wt.SkippedHooks)
+	}
 
 	// shared_paths must be symlinked to main repo.
 	nm := filepath.Join(path, "node_modules")
@@ -66,7 +75,7 @@ teardown_cmd = "printf 'torn-down' > \"$MAKO_WORKTREE_REPO/teardown.marker\""
 	// Clean up untracked copy_paths dir that wasn't gitignored before removal.
 	_ = os.RemoveAll(filepath.Join(path, "config"))
 	w := &protocol.Worktree{Repo: repo, Path: path, Branch: made, Base: "main"}
-	if _, err := RemoveWorktree(ctx, w); err != nil {
+	if _, err := RemoveWorktree(ctx, w, trustAll); err != nil {
 		t.Fatalf("RemoveWorktree failed: %v", err)
 	}
 	if marker, err := os.ReadFile(filepath.Join(root, "teardown.marker")); err != nil || string(marker) != "torn-down" {
@@ -84,10 +93,11 @@ func TestWorktreeBootstrapOrcaFallback(t *testing.T) {
 	run("commit", "-q", "-m", "initial")
 
 	write(t, root, ".cache/data.bin", "cached")
-	_, path, _, err := AddWorktree(ctx, root, "feat/orca", "main")
+	wt, err := AddWorktree(ctx, root, NewWorktree{Branch: "feat/orca", Start: "main", Trusted: trustAll})
 	if err != nil {
 		t.Fatal(err)
 	}
+	path := wt.Path
 	t.Cleanup(func() { os.RemoveAll(filepath.Dir(path)) })
 
 	fi, err := os.Lstat(filepath.Join(path, ".cache"))
@@ -104,9 +114,9 @@ func TestWorktreeBootstrapFailureRollsBack(t *testing.T) {
 	run("add", "-A")
 	run("commit", "-q", "-m", "initial")
 
-	_, path, _, err := AddWorktree(ctx, root, "feat/fail-setup", "main")
+	wt, err := AddWorktree(ctx, root, NewWorktree{Branch: "feat/fail-setup", Start: "main", Trusted: trustAll})
 	if err == nil || !strings.Contains(err.Error(), "setup_cmd failed") {
-		t.Fatalf("expected setup_cmd failure, got path=%q err=%v", path, err)
+		t.Fatalf("expected setup_cmd failure, got path=%q err=%v", wt.Path, err)
 	}
 	expectedPath := filepath.Join(filepath.Dir(root), filepath.Base(root)+".worktrees", "feat-fail-setup")
 	if _, statErr := os.Stat(expectedPath); !os.IsNotExist(statErr) {
@@ -127,4 +137,78 @@ func TestWorktreeConfigRejectsPathTraversal(t *testing.T) {
 	if _, err := LoadWorktreeConfig(root); err == nil {
 		t.Fatal("expected traversal path to be rejected")
 	}
+}
+
+// A repository's setup_cmd and teardown_cmd run only while the user
+// trusts its .mako/worktree.toml as it reads: untrusted, or changed since
+// it was trusted, the worktree is made and removed without them, and says
+// so with what to run to trust it.
+func TestWorktreeHooksRunOnlyWhileTrusted(t *testing.T) {
+	root, run := cliRepo(t)
+	ctx := context.Background()
+	write(t, root, ".gitignore", ".env\nsetup.marker\n")
+	config := "copy_paths = [\".env\"]\nsetup_cmd = \"touch setup.marker\"\nteardown_cmd = \"touch \\\"$MAKO_WORKTREE_REPO/teardown.marker\\\"\"\n"
+	write(t, root, ".mako/worktree.toml", config)
+	run("add", "-A")
+	run("commit", "-q", "-m", "initial")
+	write(t, root, ".env", "SECRET=1\n")
+	store := repotrust.Open(t.TempDir())
+
+	check := func(branch string, wantRun, wantSkipped bool) MadeWorktree {
+		t.Helper()
+		wt, err := AddWorktree(ctx, root, NewWorktree{Branch: branch, Start: "main", Trusted: store.Trusted})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(filepath.Dir(wt.Path)) })
+		if _, err := os.Stat(filepath.Join(wt.Path, ".env")); err != nil {
+			t.Fatalf("copy_paths not copied without trust: %v", err)
+		}
+		_, err = os.Stat(filepath.Join(wt.Path, "setup.marker"))
+		if ran := err == nil; ran != wantRun {
+			t.Fatalf("%s: setup_cmd ran = %v, want %v", branch, ran, wantRun)
+		}
+		if skipped := wt.SkippedHooks != ""; skipped != wantSkipped {
+			t.Fatalf("%s: skipped = %q", branch, wt.SkippedHooks)
+		}
+		if wantSkipped && wt.SkippedHooks != filepath.Join(wt.Repo, ".mako", "worktree.toml") {
+			t.Fatalf("skipped = %q, not the repository's file", wt.SkippedHooks)
+		}
+		return wt
+	}
+
+	untrusted := check("feat/untrusted", false, true)
+	w := &protocol.Worktree{Repo: untrusted.Repo, Path: untrusted.Path, Branch: untrusted.Branch, Base: "main"}
+	out, err := RemoveWorktree(ctx, w, store.Trusted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "teardown_cmd") || !strings.Contains(out, "mako repo-trust allow "+filepath.Join(untrusted.Repo, ".mako", "worktree.toml")) {
+		t.Fatalf("removal does not say teardown_cmd was skipped: %q", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, "teardown.marker")); err == nil {
+		t.Fatal("untrusted teardown_cmd ran")
+	}
+
+	// Trusted as it reads, both run.
+	if _, err := store.Trust(root, WorktreeConfigFile, repotrust.Hash([]byte(config))); err != nil {
+		t.Fatal(err)
+	}
+	trusted := check("feat/trusted", true, false)
+	w = &protocol.Worktree{Repo: trusted.Repo, Path: trusted.Path, Branch: trusted.Branch, Base: "main"}
+	if out, err := RemoveWorktree(ctx, w, store.Trusted); err != nil || strings.Contains(out, "teardown_cmd") {
+		t.Fatalf("trusted removal = %q, %v", out, err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "teardown.marker")); err != nil {
+		t.Fatal("trusted teardown_cmd did not run")
+	}
+
+	// Changed since it was trusted, it is not trusted.
+	write(t, root, ".mako/worktree.toml", config+"# more\n")
+	check("feat/changed", false, true)
+
+	// The kill switch runs none, trusted or not, and says nothing of it.
+	write(t, root, ".mako/worktree.toml", config)
+	t.Setenv("MAKO_NO_WORKTREE_HOOKS", "1")
+	check("feat/off", false, false)
 }

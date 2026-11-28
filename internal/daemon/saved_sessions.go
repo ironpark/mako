@@ -428,12 +428,14 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 			w.Base = gitstat.Branch(project)
 		}
 		wtCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-		repo, path, branch, err := gitstat.AddWorktree(wtCtx, project, w.GetBranch(), cmp.Or(start, w.GetBase()))
+		// The repository's setup_cmd runs only while the user trusts its
+		// file as it reads; the worktree says it was skipped otherwise.
+		made, err := gitstat.AddWorktree(wtCtx, project, gitstat.NewWorktree{Branch: w.GetBranch(), Start: cmp.Or(start, w.GetBase()), Trusted: d.repoTrust.Trusted})
 		cancel()
 		if err != nil {
 			return nil, err
 		}
-		w.Repo, w.Path, w.Branch = repo, path, branch
+		w.Repo, w.Path, w.Branch, w.SkippedHooks = made.Repo, made.Path, made.Branch, made.SkippedHooks
 		req.Project = w.GetPath()
 	}
 	// A project that gives its folders gives them to an agent started in

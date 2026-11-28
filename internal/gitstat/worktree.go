@@ -19,28 +19,52 @@ import (
 // other's files. The worktree sits beside the repository, in a folder
 // named after it: ../<repo>.worktrees/<branch>.
 
-// AddWorktree makes a worktree for branch, new, from base ("" for HEAD), in
-// the repository dir is in, and returns the repository's main work tree,
-// the new worktree's path and its branch. Without a branch it names one
-// after the repository and a short random ID, such as mako-k3x9q2.
-func AddWorktree(ctx context.Context, dir, branch, base string) (repo, path, made string, err error) {
+// NewWorktree is a worktree for AddWorktree to make.
+type NewWorktree struct {
+	// Branch is the new branch; "" names one after the repository and a
+	// short random ID, such as mako-k3x9q2.
+	Branch string
+	// Start is the branch or commit it starts at; "" for the repository's
+	// base_ref, or without one HEAD.
+	Start string
+	// Trusted says whether the repository's setup_cmd may run; nil runs
+	// none.
+	Trusted HookTrust
+}
+
+// MadeWorktree is the worktree AddWorktree made.
+type MadeWorktree struct {
+	Repo   string // the repository's main work tree
+	Path   string
+	Branch string
+	// SkippedHooks is the repository's command file, as an absolute path,
+	// whose setup_cmd did not run because the user does not trust it as it
+	// reads; "" when none was skipped.
+	SkippedHooks string
+}
+
+// AddWorktree makes a worktree on a new branch in the repository dir is
+// in, beside its main work tree, and bootstraps it as the repository's
+// .mako/worktree.toml says.
+func AddWorktree(ctx context.Context, dir string, w NewWorktree) (MadeWorktree, error) {
+	branch, base := w.Branch, w.Start
 	if branch != "" {
 		if err := checkBranch(ctx, dir, branch); err != nil {
-			return "", "", "", err
+			return MadeWorktree{}, err
 		}
 	}
 	if base != "" && strings.HasPrefix(base, "-") {
-		return "", "", "", fmt.Errorf("%q is not a branch or commit", base)
+		return MadeWorktree{}, fmt.Errorf("%q is not a branch or commit", base)
 	}
 	// The main work tree, even from inside another worktree.
 	common, err := gitOut(ctx, dir, nil, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
-		return "", "", "", err
+		return MadeWorktree{}, err
 	}
-	repo = filepath.Dir(strings.TrimSpace(string(common)))
+	repo := filepath.Dir(strings.TrimSpace(string(common)))
 	cfg, err := LoadWorktreeConfig(repo)
 	if err != nil {
-		return "", "", "", err
+		return MadeWorktree{}, err
 	}
 	if base == "" && strings.TrimSpace(cfg.BaseRef) != "" {
 		base = strings.TrimSpace(cfg.BaseRef)
@@ -48,28 +72,33 @@ func AddWorktree(ctx context.Context, dir, branch, base string) (repo, path, mad
 	parent := filepath.Join(filepath.Dir(repo), filepath.Base(repo)+".worktrees")
 	if branch == "" {
 		if branch, err = freeBranch(ctx, repo, parent); err != nil {
-			return "", "", "", err
+			return MadeWorktree{}, err
 		}
 	}
-	path = filepath.Join(parent, strings.ReplaceAll(branch, "/", "-"))
+	path := filepath.Join(parent, strings.ReplaceAll(branch, "/", "-"))
 	if _, err := os.Stat(path); err == nil {
-		return "", "", "", fmt.Errorf("%s already exists", path)
+		return MadeWorktree{}, fmt.Errorf("%s already exists", path)
 	}
 	args := []string{"worktree", "add", "-b", branch, path}
 	if base != "" {
 		args = append(args, base)
 	}
 	if _, err := run(ctx, repo, nil, args...); err != nil {
-		return "", "", "", err
+		return MadeWorktree{}, err
 	}
-	if err := applyWorktreeBootstrap(ctx, repo, path, branch, base, cfg); err != nil {
+	skipped, err := applyWorktreeBootstrap(ctx, repo, path, branch, base, cfg, w.Trusted)
+	if err != nil {
 		// Roll back the newly created worktree and branch so failed setup
 		// hooks do not leave orphaned broken worktrees behind.
 		_, _ = run(ctx, repo, nil, "worktree", "remove", "--force", path)
 		_, _ = run(ctx, repo, nil, "branch", "-D", branch)
-		return "", "", "", err
+		return MadeWorktree{}, err
 	}
-	return repo, path, branch, nil
+	made := MadeWorktree{Repo: repo, Path: path, Branch: branch}
+	if skipped {
+		made.SkippedHooks = filepath.Join(repo, filepath.FromSlash(WorktreeConfigFile))
+	}
+	return made, nil
 }
 
 // idAlphabet is what a worktree's random ID is made of, as nanoid makes
@@ -128,12 +157,14 @@ func checkBranch(ctx context.Context, dir, branch string) error {
 }
 
 // RemoveWorktree removes a session's worktree, which must have no changes
-// left, and its branch once merged.
-func RemoveWorktree(ctx context.Context, w *protocol.Worktree) (string, error) {
+// left, and its branch once merged. The repository's teardown_cmd runs
+// first if trusted says so; the output ends saying so when it did not.
+func RemoveWorktree(ctx context.Context, w *protocol.Worktree, trusted HookTrust) (string, error) {
 	if w.GetPath() == "" || w.GetRepo() == "" {
 		return "", errors.New("no worktree to remove")
 	}
-	if err := cleanupWorktreeBeforeRemove(ctx, w.GetRepo(), w.GetPath(), w.GetBranch(), w.GetBase()); err != nil {
+	notice, err := cleanupWorktreeBeforeRemove(ctx, w.GetRepo(), w.GetPath(), w.GetBranch(), w.GetBase(), trusted)
+	if err != nil {
 		return "", err
 	}
 	out, err := run(ctx, w.GetRepo(), nil, "worktree", "remove", w.GetPath())
@@ -143,6 +174,9 @@ func RemoveWorktree(ctx context.Context, w *protocol.Worktree) (string, error) {
 	// A branch with work not merged anywhere stays: -d refuses it.
 	if more, err := run(ctx, w.GetRepo(), nil, "branch", "-d", w.GetBranch()); err == nil {
 		out = strings.TrimSpace(out + "\n" + more)
+	}
+	if notice != "" {
+		out = strings.TrimSpace(out + "\n" + notice)
 	}
 	return out, nil
 }

@@ -286,8 +286,15 @@ teardown_cmd = ""
 
 If `.mako/worktree.toml` is absent and `orca.yaml` defines
 `worktree.sharedDirectories`, Mako honors those shared directories
-automatically. Set `MAKO_NO_WORKTREE_HOOKS=1` to skip `setup_cmd` and
-`teardown_cmd`.
+automatically.
+
+`setup_cmd` and `teardown_cmd` run with your permissions, so Mako runs
+them only after you trust the file as it reads (see Repository commands
+below). Until then, Mako still makes and removes the worktree, but skips
+the two commands. The app, `mako run` and `spawn_agent` then say so and
+tell you what to run. When the file changes, Mako skips them again until
+you trust it again. Set `MAKO_NO_WORKTREE_HOOKS=1` in the daemon's
+environment to never run them, trusted or not.
 
 **Networking.** The CLI and the app talk to their daemon on a Unix socket
 in the configuration folder, and daemons talk to each other on port 4243

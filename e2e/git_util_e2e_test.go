@@ -101,10 +101,11 @@ func TestGitStatTier1(t *testing.T) {
 		git("add", "base.txt")
 		git("commit", "-qm", "base")
 
-		repo, wtPath, _, err := gitstat.AddWorktree(ctx, root, "feat/e2e", "main")
+		made, err := gitstat.AddWorktree(ctx, root, gitstat.NewWorktree{Branch: "feat/e2e", Start: "main"})
 		if err != nil {
 			t.Fatalf("AddWorktree: %v", err)
 		}
+		repo, wtPath := made.Repo, made.Path
 		t.Cleanup(func() { _ = os.RemoveAll(filepath.Dir(wtPath)) })
 
 		if err := os.WriteFile(filepath.Join(wtPath, "base.txt"), []byte("v2\n"), 0o644); err != nil {
@@ -124,7 +125,7 @@ func TestGitStatTier1(t *testing.T) {
 		if err != nil || string(got) != "v2\n" {
 			t.Fatalf("merged base.txt = %q, err=%v", string(got), err)
 		}
-		if out, err := gitstat.RemoveWorktree(ctx, wt); err != nil {
+		if out, err := gitstat.RemoveWorktree(ctx, wt, nil); err != nil {
 			t.Fatalf("RemoveWorktree: %v\n%s", err, out)
 		}
 		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {

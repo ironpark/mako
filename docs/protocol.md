@@ -562,6 +562,10 @@ repository `project` is in, and starts there. If `branch` is empty, the
 daemon names it after the repository's folder and a random 6-character ID,
 for example `mako-k3x9q2`. The session's `worktree` reports that name.
 `base` stays the branch the worktree merges and opens its pull request into.
+The repository's `.mako/worktree.toml` can give a `setup_cmd`. The daemon
+runs it only if the user trusts that file as it reads (Repository trust).
+If not, the daemon makes the worktree without it and sets the worktree's
+`skipped_hooks` to the file's absolute path (revision 53).
 
 **`SessionInfo`** is what listings and most replies describe a session with.
 The fields a front-end usually needs:
@@ -831,7 +835,7 @@ leaves the commits out.
 | `stash`, `stash_apply`, `stash_pop`, `stash_drop` | Stash every change, untracked files too, as `message`; or apply, pop or drop stash `stash`. |
 | `detach`, `cherry_pick`, `revert`, `tag` | Of `commit`: check it out on no branch, apply it, undo it as a new commit, or tag it `tag` (annotated with `message`). |
 | `continue`, `abort` | Go on with the `operation` under way, adding what was resolved, or abandon it. |
-| `merge`, `pull_request`, `remove_worktree` | Of a session's `worktree`: merge its branch into its base, push it and open a pull request, or remove it once nothing is left in it. |
+| `merge`, `pull_request`, `remove_worktree` | Of a session's `worktree`: merge its branch into its base, push it and open a pull request, or remove it once nothing is left in it. Removing runs the repository's `teardown_cmd` only if the user trusts its file, and the output says so if it did not run. |
 
 Diff lines are `{op, text, old, new}`, where `op` is `+`, `-`, a space for
 context, or `@` for a hunk header, and `old`/`new` are line numbers on each

@@ -387,6 +387,9 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 	info = child.Info()
 	summary := summarizeAgent(info, peer.id, d.takesMessages(info))
 	summary.Hint = "Spawned asynchronously. Continue other work or end your turn—Mako will push its reply automatically (or use non-blocking watch_agent to get a note when its turn ends)."
+	if f := info.GetWorktree().GetSkippedHooks(); f != "" {
+		summary.Hint += " Its worktree's setup_cmd from " + f + " did not run, because the user has not trusted that file. Tell the user: they can review and trust it with `mako repo-trust allow " + f + "`. You cannot trust it for them."
+	}
 	return summary, nil
 }
 

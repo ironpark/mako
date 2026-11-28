@@ -25,6 +25,7 @@ import (
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/mcp"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/repotrust"
 	"github.com/ironpark/mako/internal/session"
 )
 
@@ -990,5 +991,60 @@ func TestSpawnAgentWithWorktreeIsolation(t *testing.T) {
 	t.Cleanup(func() { os.RemoveAll(filepath.Dir(child.Worktree)) })
 	if got := gitstat.Branch(child.Worktree); got != "feat/isolated-worker" {
 		t.Fatalf("worktree branch = %q, want feat/isolated-worker", got)
+	}
+}
+
+// A worktree spawn_agent makes runs its repository's setup_cmd only while
+// the user trusts .mako/worktree.toml as it reads; otherwise the child
+// starts without it, and the spawning agent is told what the user can run.
+func TestSpawnAgentWorktreeSetupNeedsTrust(t *testing.T) {
+	d, _ := projectMCPDaemon(t)
+	repo := filepath.Join(t.TempDir(), "demo")
+	if err := os.MkdirAll(filepath.Join(repo, ".mako"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com", "GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("init", "-q", "-b", "main")
+	config := []byte("setup_cmd = \"touch setup.marker\"\n")
+	if err := os.WriteFile(filepath.Join(repo, ".mako", "worktree.toml"), config, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte("setup.marker\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit("add", "-A")
+	runGit("commit", "-q", "-m", "init")
+	t.Cleanup(func() { os.RemoveAll(repo + ".worktrees") })
+
+	parent, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: repo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := projectMCPClient(t, d, parent)
+	child := callProjectTool[agentSummary](t, client, "spawn_agent", spawnAgentArgs{Prompt: "work", Worktree: true})
+	if _, err := os.Stat(filepath.Join(child.Worktree, "setup.marker")); err == nil {
+		t.Fatal("untrusted setup_cmd ran")
+	}
+	if !strings.Contains(child.Hint, "did not run") || !strings.Contains(child.Hint, "mako repo-trust allow ") || !strings.Contains(child.Hint, filepath.Join("demo", ".mako", "worktree.toml")) {
+		t.Fatalf("hint does not say setup_cmd was skipped: %q", child.Hint)
+	}
+
+	d.repoTrust = repotrust.Open(t.TempDir())
+	if _, err := d.repoTrust.Trust(repo, ".mako/worktree.toml", repotrust.Hash(config)); err != nil {
+		t.Fatal(err)
+	}
+	child = callProjectTool[agentSummary](t, client, "spawn_agent", spawnAgentArgs{Prompt: "work", Worktree: true})
+	if _, err := os.Stat(filepath.Join(child.Worktree, "setup.marker")); err != nil {
+		t.Fatalf("trusted setup_cmd did not run: %v", err)
+	}
+	if strings.Contains(child.Hint, "did not run") {
+		t.Fatalf("hint says a trusted setup_cmd was skipped: %q", child.Hint)
 	}
 }

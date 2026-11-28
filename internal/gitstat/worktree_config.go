@@ -18,21 +18,53 @@ import (
 )
 
 const (
-	worktreeConfigFile    = ".mako/worktree.toml"
-	orcaFallbackFile      = "orca.yaml"
-	worktreeHookDisableEn = "MAKO_NO_WORKTREE_HOOKS"
-	worktreeHookTimeout   = 2 * time.Minute
+	// WorktreeConfigFile is where a repository keeps its worktree bootstrap,
+	// from its root.
+	WorktreeConfigFile = ".mako/worktree.toml"
+	orcaFallbackFile   = "orca.yaml"
+	// worktreeHookDisableEnv set to 1 in the daemon's environment runs no
+	// setup_cmd or teardown_cmd, trusted or not.
+	worktreeHookDisableEnv = "MAKO_NO_WORKTREE_HOOKS"
+	worktreeHookTimeout    = 2 * time.Minute
 )
+
+// HookTrust says whether the user trusts the commands of file, a
+// slash-separated path from the root of the repository at repo, as data
+// has it. A nil HookTrust trusts nothing.
+type HookTrust func(repo, file string, data []byte) bool
 
 // WorktreeConfig configures automatic worktree bootstrap and teardown for a
 // repository. It is read from .mako/worktree.toml at the repository root, with
 // a read-only compatibility fallback to orca.yaml's worktree.sharedDirectories.
+//
+// The repository's own file gives setup_cmd and teardown_cmd, which run
+// with the user's permissions; anyone who can commit to the repository, or
+// an agent working in it, can write them. They run only while the user
+// trusts the file as it reads (internal/repotrust), checked against the
+// bytes they were read from.
 type WorktreeConfig struct {
 	BaseRef     string   `toml:"base_ref"`
 	SharedPaths []string `toml:"shared_paths"`
 	CopyPaths   []string `toml:"copy_paths"`
 	SetupCmd    string   `toml:"setup_cmd"`
 	TeardownCmd string   `toml:"teardown_cmd"`
+
+	// data is the file as it was read, which a trust is checked against.
+	data []byte
+}
+
+// hooksRun reports whether cfg's commands, read from the repository at
+// repo, may run: trusted as they read, and not turned off for the daemon.
+func (cfg WorktreeConfig) hooksRun(repo string, trusted HookTrust) bool {
+	return trusted != nil && cfg.data != nil && os.Getenv(worktreeHookDisableEnv) != "1" &&
+		trusted(repo, WorktreeConfigFile, cfg.data)
+}
+
+// skippedHook is the line a worktree's output ends with when its
+// repository's cmd did not run, untrusted: what to run to trust it.
+func skippedHook(repo, cmd string) string {
+	file := filepath.Join(repo, filepath.FromSlash(WorktreeConfigFile))
+	return fmt.Sprintf("%s of %s did not run: the file is not trusted as it reads. Review it and trust it with: mako repo-trust allow %s", cmd, file, file)
 }
 
 type orcaYAMLConfig struct {
@@ -48,22 +80,23 @@ func LoadWorktreeConfig(repo string) (WorktreeConfig, error) {
 	if strings.TrimSpace(repo) == "" {
 		return WorktreeConfig{}, nil
 	}
-	tomlPath := filepath.Join(repo, filepath.FromSlash(worktreeConfigFile))
+	tomlPath := filepath.Join(repo, filepath.FromSlash(WorktreeConfigFile))
 	if data, err := os.ReadFile(tomlPath); err == nil {
 		var cfg WorktreeConfig
 		md, err := toml.Decode(string(data), &cfg)
 		if err != nil {
-			return WorktreeConfig{}, fmt.Errorf("parse %s: %w", worktreeConfigFile, err)
+			return WorktreeConfig{}, fmt.Errorf("parse %s: %w", WorktreeConfigFile, err)
 		}
 		if undec := md.Undecoded(); len(undec) > 0 {
-			return WorktreeConfig{}, fmt.Errorf("parse %s: unknown field %q", worktreeConfigFile, undec[0].String())
+			return WorktreeConfig{}, fmt.Errorf("parse %s: unknown field %q", WorktreeConfigFile, undec[0].String())
 		}
 		if err := validateWorktreeConfig(cfg); err != nil {
-			return WorktreeConfig{}, fmt.Errorf("%s: %w", worktreeConfigFile, err)
+			return WorktreeConfig{}, fmt.Errorf("%s: %w", WorktreeConfigFile, err)
 		}
+		cfg.data = data
 		return cfg, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return WorktreeConfig{}, fmt.Errorf("read %s: %w", worktreeConfigFile, err)
+		return WorktreeConfig{}, fmt.Errorf("read %s: %w", WorktreeConfigFile, err)
 	}
 
 	orcaPath := filepath.Join(repo, orcaFallbackFile)
@@ -135,80 +168,95 @@ func pathWithin(root, target string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-func applyWorktreeBootstrap(ctx context.Context, repo, wtPath, branch, base string, cfg WorktreeConfig) error {
+// applyWorktreeBootstrap links and copies cfg's paths into the new
+// worktree at wtPath, and runs its setup_cmd there if trusted. skipped
+// says the setup_cmd did not run, untrusted.
+func applyWorktreeBootstrap(ctx context.Context, repo, wtPath, branch, base string, cfg WorktreeConfig, trusted HookTrust) (skipped bool, err error) {
 	for _, raw := range cfg.SharedPaths {
 		rel, err := cleanWorktreeRelPath(raw)
 		if err != nil {
-			return err
+			return false, err
 		}
 		src := filepath.Join(repo, rel)
 		if _, err := os.Lstat(src); errors.Is(err, os.ErrNotExist) {
 			continue
 		} else if err != nil {
-			return fmt.Errorf("stat shared path %s: %w", rel, err)
+			return false, fmt.Errorf("stat shared path %s: %w", rel, err)
 		}
 		if !pathWithin(repo, src) {
-			return fmt.Errorf("shared path %s resolves outside repository", rel)
+			return false, fmt.Errorf("shared path %s resolves outside repository", rel)
 		}
 		dst := filepath.Join(wtPath, rel)
 		if _, err := os.Lstat(dst); err == nil {
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return fmt.Errorf("mkdir for shared path %s: %w", rel, err)
+			return false, fmt.Errorf("mkdir for shared path %s: %w", rel, err)
 		}
 		if err := os.Symlink(src, dst); err != nil {
-			return fmt.Errorf("symlink shared path %s: %w", rel, err)
+			return false, fmt.Errorf("symlink shared path %s: %w", rel, err)
 		}
 	}
 
 	for _, raw := range cfg.CopyPaths {
 		rel, err := cleanWorktreeRelPath(raw)
 		if err != nil {
-			return err
+			return false, err
 		}
 		src := filepath.Join(repo, rel)
 		info, err := os.Lstat(src)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		} else if err != nil {
-			return fmt.Errorf("stat copy path %s: %w", rel, err)
+			return false, fmt.Errorf("stat copy path %s: %w", rel, err)
 		}
 		if !pathWithin(repo, src) {
-			return fmt.Errorf("copy path %s resolves outside repository", rel)
+			return false, fmt.Errorf("copy path %s resolves outside repository", rel)
 		}
 		dst := filepath.Join(wtPath, rel)
 		if _, err := os.Lstat(dst); err == nil {
 			continue
 		}
 		if err := copyWorktreePath(repo, src, dst, info); err != nil {
-			return fmt.Errorf("copy path %s: %w", rel, err)
+			return false, fmt.Errorf("copy path %s: %w", rel, err)
 		}
 	}
 
-	if cmdStr := strings.TrimSpace(cfg.SetupCmd); cmdStr != "" && os.Getenv(worktreeHookDisableEn) != "1" {
-		if out, err := runWorktreeHook(ctx, wtPath, repo, branch, base, cmdStr); err != nil {
-			if out != "" {
-				return fmt.Errorf("worktree setup_cmd failed: %w\n%s", err, out)
-			}
-			return fmt.Errorf("worktree setup_cmd failed: %w", err)
-		}
+	cmdStr := strings.TrimSpace(cfg.SetupCmd)
+	if cmdStr == "" {
+		return false, nil
 	}
-	return nil
+	if !cfg.hooksRun(repo, trusted) {
+		return cfg.data != nil && os.Getenv(worktreeHookDisableEnv) != "1", nil
+	}
+	if out, err := runWorktreeHook(ctx, wtPath, repo, branch, base, cmdStr); err != nil {
+		if out != "" {
+			return false, fmt.Errorf("worktree setup_cmd failed: %w\n%s", err, out)
+		}
+		return false, fmt.Errorf("worktree setup_cmd failed: %w", err)
+	}
+	return false, nil
 }
 
-func cleanupWorktreeBeforeRemove(ctx context.Context, repo, wtPath, branch, base string) error {
+// cleanupWorktreeBeforeRemove runs the repository's teardown_cmd in the
+// worktree at wtPath if trusted, and takes out the links its shared_paths
+// made. notice is what to tell of a teardown_cmd that did not run.
+func cleanupWorktreeBeforeRemove(ctx context.Context, repo, wtPath, branch, base string, trusted HookTrust) (notice string, err error) {
 	cfg, err := LoadWorktreeConfig(repo)
 	if err != nil {
 		// Don't block removal on a malformed config; proceed with git worktree remove.
-		return nil
+		return "", nil
 	}
-	if cmdStr := strings.TrimSpace(cfg.TeardownCmd); cmdStr != "" && os.Getenv(worktreeHookDisableEn) != "1" {
-		if out, err := runWorktreeHook(ctx, wtPath, repo, branch, base, cmdStr); err != nil {
-			if out != "" {
-				return fmt.Errorf("worktree teardown_cmd failed: %w\n%s", err, out)
+	if cmdStr := strings.TrimSpace(cfg.TeardownCmd); cmdStr != "" {
+		if cfg.hooksRun(repo, trusted) {
+			if out, err := runWorktreeHook(ctx, wtPath, repo, branch, base, cmdStr); err != nil {
+				if out != "" {
+					return "", fmt.Errorf("worktree teardown_cmd failed: %w\n%s", err, out)
+				}
+				return "", fmt.Errorf("worktree teardown_cmd failed: %w", err)
 			}
-			return fmt.Errorf("worktree teardown_cmd failed: %w", err)
+		} else if os.Getenv(worktreeHookDisableEnv) != "1" {
+			notice = skippedHook(repo, "teardown_cmd")
 		}
 	}
 	// Remove symlinks created by shared_paths if they still point into repo so
@@ -232,7 +280,7 @@ func cleanupWorktreeBeforeRemove(ctx context.Context, repo, wtPath, branch, base
 			_ = os.Remove(dst)
 		}
 	}
-	return nil
+	return notice, nil
 }
 
 func copyWorktreePath(repo, src, dst string, info os.FileInfo) error {

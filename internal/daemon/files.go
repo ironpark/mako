@@ -258,13 +258,23 @@ func (d *Daemon) gitRunLocal(ctx context.Context, r *protocol.GitRun) (*protocol
 	}
 	return inRepo(ctx, r.GetRoot(), func(ctx context.Context) (*protocol.GitResult, error) {
 		run := gitstat.Run
-		if r.GetOp() == protocol.GitOpPR {
+		switch r.GetOp() {
+		case protocol.GitOpPR:
 			// A pull request is opened through GitHub's CLI.
 			if r.GetWorktree() == nil {
 				return nil, errors.New("no worktree named")
 			}
 			run = func(ctx context.Context, r *protocol.GitRun) (string, error) {
 				return forge.WorktreePR(ctx, r.GetWorktree())
+			}
+		case protocol.GitOpRemoveWT:
+			// The repository's teardown_cmd runs only while the user trusts
+			// its file as it reads.
+			if r.GetWorktree() == nil {
+				return nil, errors.New("no worktree named")
+			}
+			run = func(ctx context.Context, r *protocol.GitRun) (string, error) {
+				return gitstat.RemoveWorktree(ctx, r.GetWorktree(), d.repoTrust.Trusted)
 			}
 		}
 		out, err := run(ctx, r)
