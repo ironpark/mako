@@ -85,6 +85,7 @@ Mako 바이너리 자체는 멀티콜(multicall) 진입점 `daemon.HookMain()`�
 | `mako agy-sidecar <agent-cli.sock>` | Antigravity 사이드카 슈퍼바이저용 메시지 푸시 브리지 | `agent-cli.sock` |
 | `mako clip <hooks.sock>` | 세션 클립보드 심(shim) | `hooks.sock` |
 
+- **`hooks.sock` 세션 인증**: 위 `hook`/`statusline`/`clip`은 `MAKO_SESSION` 세션의 토큰을 실어 보냅니다. 토큰은 데몬이 시작할 때마다 새로 만드는 랜덤 32바이트 시크릿으로 생성한 `HMAC-SHA256(sessionID)`이며, 데몬이 세션 시작 전에 소켓 옆 `hook-tokens/<SHA-256(sessionID) 앞 16바이트 hex>` 파일(0600)에 씁니다. 환경변수나 명령줄에는 넣지 않습니다(macOS에서는 같은 사용자의 프로세스가 샌드박스 안에서도 다른 프로세스의 환경변수를 읽을 수 있음). 토큰이 없거나 다른 세션의 토큰이면 `serveHook`이 연결을 거부하고 1분에 최대 한 번 로그를 남깁니다.
 - **공통 이벤트 모델 (`agent.EventKind`)**: `Started`, `Prompted`, `ToolDone`, `Approval`, `Compacting`, `Waiting`, `Stopped`, `Ended`, `Idle`, `ChildStarted`, `ChildStopped`.
 - **`HookGate`**: 에이전트 버전에 따라 훅 지원 여부가 다를 때(예: `codex features list`의 `hooks`) 실행 전 1회 프로빙(캐시)합니다.
 - **`SubAgentHooks`**: `agent_id` 필드를 훅 페이로드에 포함하지 않는 에이전트(`agy`)의 서브에이전트/Swarm 워커 훅이 부모 세션의 `conversation_id`나 상태를 덮어쓰지 않도록 `IsSubAgent(parentID, parentLog, childID, childLog)`로 필터링합니다.
