@@ -37,7 +37,12 @@ var hashPattern = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 // gitOut runs git in root and returns what it wrote to stdout; a failure's
 // error carries what it wrote to stderr.
 func gitOut(ctx context.Context, root string, stdin []byte, args ...string) ([]byte, error) {
-	cmd := gitCommand(ctx, root, stdin, args)
+	return outputOf(gitCommand(ctx, root, stdin, args))
+}
+
+// outputOf runs a git command and returns what it wrote to stdout; a
+// failure's error carries what it wrote to stderr.
+func outputOf(cmd *exec.Cmd) ([]byte, error) {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := safeexec.Output(cmd)
@@ -133,6 +138,7 @@ func Log(ctx context.Context, root string, max int, known string) (*protocol.Git
 	}
 	// show-ref fails, printing nothing, before the first commit.
 	refs, _ := gitOut(ctx, root, nil, "show-ref", "--head")
+	refs = historyRefs(refs)
 	sum := sha256.Sum256(append(refs, out.GetCurrent()...))
 	out.Fingerprint = hex.EncodeToString(sum[:8])
 	if out.GetFingerprint() == known {
@@ -156,6 +162,22 @@ func Log(ctx context.Context, root string, max int, known string) (*protocol.Git
 		out.Commits, out.More = out.GetCommits()[:max], true
 	}
 	return out, nil
+}
+
+// historyRefs is show-ref's listing without mako's own refs, as the
+// checkpoints a turn makes are: the history shows none of them, and would
+// be read again at every turn if they changed its fingerprint.
+func historyRefs(refs []byte) []byte {
+	if !bytes.Contains(refs, []byte(" "+makoRefs)) {
+		return refs
+	}
+	var kept []byte
+	for line := range bytes.Lines(refs) {
+		if _, name, _ := bytes.Cut(line, []byte(" ")); !bytes.HasPrefix(name, []byte(makoRefs)) {
+			kept = append(kept, line...)
+		}
+	}
+	return kept
 }
 
 // Show is what one commit changed against its first parent.
@@ -322,6 +344,8 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 			return "", errors.New("a discard is of one file")
 		}
 		return "", DiscardHunk(r.GetRoot(), r.GetPaths()[0], r.GetHunk())
+	case protocol.GitOpRestoreCheckpoint, protocol.GitOpListCheckpoints:
+		return runCheckpointOp(ctx, r.GetOp(), r.GetRoot(), r.GetCommit(), strings.TrimSpace(r.GetMessage()))
 	case protocol.GitOpMerge, protocol.GitOpRemoveWT:
 		if r.GetWorktree() == nil {
 			return "", errors.New("no worktree named")

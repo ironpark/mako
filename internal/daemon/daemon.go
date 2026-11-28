@@ -62,8 +62,9 @@ type Daemon struct {
 	goalActions   goalActionGuard
 	conversations conversations
 	approvals     approvals
-	layouts       windowLayouts // the window layouts' changes staged here, and what is node-local of them; see layouts.go
-	templateAsks  templateAsks  // the templates agents ask the user to save; see agent_templates.go
+	turns         turnCheckpoints // whether each session's turn has its checkpoint; see checkpoints.go
+	layouts       windowLayouts   // the window layouts' changes staged here, and what is node-local of them; see layouts.go
+	templateAsks  templateAsks    // the templates agents ask the user to save; see agent_templates.go
 	peers         *peerTable
 	ssh           *sshManager
 

@@ -528,6 +528,11 @@ const (
 	GitOpAbort        = "abort"         // the operation under way
 	GitOpClone        = "clone"         // clones Message (a git URL) into Root (destination folder)
 	GitOpAuth         = "auth"          // caches/approves HTTPS git credentials carried as JSON in Message
+
+	// Checkpoints are snapshots of a work tree, which the daemon takes as
+	// each turn of an agent's starts (gitstat's CaptureSnapshot).
+	GitOpRestoreCheckpoint = "restore_checkpoint" // the files of Root and under it as checkpoint Commit has them, after a safety snapshot it returns as JSON
+	GitOpListCheckpoints   = "list_checkpoints"   // Message's (a session ID) and Root's restores' checkpoints, newest first, as JSON
 )
 
 // What a ForgeList and a ForgeView are of.

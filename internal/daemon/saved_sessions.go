@@ -737,10 +737,13 @@ func (d *Daemon) closeSession(id string) error {
 		}
 		return err
 	}
+	root := entry.Info.GetProject()
 	if live {
+		root = s.Info().GetProject()
 		_ = s.Close()
 		d.sessions.remove(id)
 	}
+	d.dropCheckpoints(id, root)
 	d.live.forget(id)
 	d.loggedCommands.forget(id)
 	if err := d.projectAgents.messages.remove(id); err != nil {
