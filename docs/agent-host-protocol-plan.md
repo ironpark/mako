@@ -1,6 +1,6 @@
 # Agent Host Protocol 도입과 클라이언트 간 Seamless Handoff 계획
 
-작성 기준일: 2026년 11월 28일. 분석 기준 커밋: `main` @ `148b43e` (`protocol.Revision` 52). 상태: 기획. 첫 단계(`read_agent`)와 두 번째 단계(session host, `subscribe_session`) 구현 중, Phase 0 (검증) 대기.
+작성 기준일: 2026년 11월 28일. 분석 기준 커밋: `main` @ `148b43e` (`protocol.Revision` 52). 상태: 기획. 첫 단계(`read_agent`), 두 번째 단계(session host, `subscribe_session`), 세 번째 단계(AHP endpoint) 구현 중, Phase 0 (검증) 대기.
 
 이 문서는 Microsoft의 [Agent Host Protocol](https://microsoft.github.io/agent-host-protocol/) (이하 AHP)을 mako에 도입하는 계획이다. 목표는 세션을 `makod`가 들고 있는 동안 클라이언트가 바뀌어도 작업이 끊기지 않는 것이다. 데스크톱 창, CLI, Android 앱, 그리고 VS Code Agents 창이나 웹 클라이언트 같은 외부 AHP 클라이언트가 모두 대상이다.
 
@@ -443,6 +443,24 @@ AHP 어댑터 없이, 1절 목표의 handoff를 mako 자체 프로토콜로 먼�
 - Android 앱을 `subscribe_session`으로 옮기는 일.
 - `internal/e2e`의 6.8절 시나리오.
 - AHP 어댑터 (Phase 3).
+
+### 세 번째 단계. AHP endpoint (`internal/ahp`)
+
+Phase 3의 최소 범위를 만든다. 사용법은 [`docs/ahp.md`](ahp.md)에 적었다.
+
+- AHP 서버는 [`gosuda/go-ahp`](https://github.com/gosuda/go-ahp) v0.2.0이다. mako 세션처럼 client가 만들지 않은 세션을 보여 주려고 `Host.AddSession`과 `Host.RemoveSession`을 go-ahp에 추가했다.
+- `internal/ahp`는 bridge다. makod의 자기 socket에 front-end로 접속해 `subscribe_session`으로 각 세션을 따라가고, AHP 세션(`ahp-session:/<id>`)과 채팅(`ahp-chat:/<id>`)으로 옮긴다. 메시의 다른 노드 세션도 같은 방식으로 보인다 (Phase 4의 일부).
+- 대화: 사용자 메시지 하나가 턴 하나이고, 응답 텍스트는 markdown part, 도구 호출은 tool call이다. 에이전트가 일을 멈추면 턴이 끝난다. 보류 중인 승인은 확인을 기다리는 tool call(`approval:<id>`)이다.
+- 쓰기: `chat/turnStarted`는 `send_prompt`, `chat/turnCancelled`는 Escape, steering 메시지는 바로 입력, `chat/toolCallConfirmed`는 `answer_approval`, `chat/draftChanged`는 `set_draft`가 된다. 초안은 양방향이다.
+- 승인 보류: 세션에 AHP active client가 있을 때만 bridge가 `approvals`로 구독한다. 그래서 아무도 보지 않을 때 승인이 창에서 무한히 기다리지 않는다.
+- endpoint는 기본으로 꺼져 있다 (D5). `config.json`의 `ahp.listen`(loopback만), 토큰은 `ahp-token`(`0600`), 그리고 run 디렉터리의 `ahp.sock`(`0600`, 토큰 없음). epoch는 `ahp-epoch`에 저장한다 (D6).
+- 시험: 공식 Go 클라이언트로 접속, 구독, 에이전트 턴, client 턴, 초안 양방향, active client의 승인 보류를 확인한다.
+
+남은 일은 다음과 같다.
+
+- 입력 요청(`chat/inputRequested`, 질문 승인), 터미널 채널, resource, changeset.
+- `dispatchAction` 속도 제한 (9절).
+- 공식 TypeScript 클라이언트와 VS Code 연결 시험 (Phase 0의 확인 항목).
 
 ### Phase 0. 검증
 
