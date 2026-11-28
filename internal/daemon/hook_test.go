@@ -267,6 +267,45 @@ func TestChildHooksDelayCompletionAndIgnoreLateParentEvents(t *testing.T) {
 	}
 }
 
+// A prompt clears the agent's suggestion, but a late hook of an earlier
+// prompt does not, and a failure to sign in does.
+func TestHooksClearTheSuggestionOfTheirTurn(t *testing.T) {
+	d, s, socket := hookedDaemon(t)
+	base := time.Now().UnixNano()
+	send := func(seq int64, input string) {
+		t.Helper()
+		conn, err := sendHook(socket, hookMessage{Session: s.ID(), Seq: base + seq, Input: json.RawMessage(input)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		if _, err := io.Copy(io.Discard, conn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	key := liveKey(s.ID(), "")
+	suggested := func() string { return suggestionBlock(d.live.blocks(key)) }
+
+	send(10, `{"hook_event_name":"UserPromptSubmit"}`)
+	send(11, `{"hook_event_name":"Stop"}`)
+	d.live.setSuggestion(s.ID(), "Run the tests")
+	send(5, `{"hook_event_name":"UserPromptSubmit"}`)
+	if got := suggested(); got != "Run the tests" {
+		t.Fatalf("a late prompt hook of an earlier turn left suggestion %q", got)
+	}
+	send(12, `{"hook_event_name":"UserPromptSubmit"}`)
+	if got := suggested(); got != "" {
+		t.Fatalf("a prompt kept suggestion %q", got)
+	}
+
+	send(13, `{"hook_event_name":"Stop"}`)
+	d.live.setSuggestion(s.ID(), "Commit the changes")
+	send(14, `{"hook_event_name":"StopFailure","error":"authentication_failed","error_details":"Failed to authenticate: OAuth session expired and could not be refreshed."}`)
+	if got := suggested(); got != "" {
+		t.Fatalf("a failure to sign in kept suggestion %q", got)
+	}
+}
+
 func TestCompletionFollowsBackgroundLogsWithoutAChatReader(t *testing.T) {
 	d, s, socket := hookedDaemon(t)
 	waitConversation(t, s)

@@ -60,7 +60,12 @@ let liveCreds: Creds | null = null
 // Suggestion updates go out one at a time, in order, so a clear sent as a
 // turn starts can never land before the suggestion it replaces.
 let suggestionQueue: Promise<unknown> = Promise.resolve()
-let lastSuggestion = ''
+// lastSuggestion is the update last queued, null when the daemon may not
+// hold it because a send failed, so that the next goes out whatever it is.
+let lastSuggestion: string | null = ''
+// suggestionGen counts the prompts submitted and the turns started, so a
+// suggestion offered before one of them is not sent after it.
+let suggestionGen = 0
 
 async function readCreds($: any): Promise<Creds | null> {
   const session = await $.env.get('MAKO_SESSION')
@@ -91,9 +96,11 @@ function updateChildStatus($: any, nextStatus: string) {
   }
 }
 
-async function postSuggestion($: any, creds: Creds, text: string) {
+// postSuggestion sends text as the session's suggestion, reporting whether
+// the daemon took it.
+async function postSuggestion($: any, creds: Creds, text: string): Promise<boolean> {
   try {
-    await $.http.fetch('http://mako/suggestion', {
+    const res = await $.http.fetch('http://mako/suggestion', {
       method: 'POST',
       body: JSON.stringify({
         session: creds.session,
@@ -102,8 +109,10 @@ async function postSuggestion($: any, creds: Creds, text: string) {
       }),
       socketPath: creds.socket,
     })
+    return !!res?.ok
   } catch {
     // Non-fatal if the daemon socket is temporarily unreachable.
+    return false
   }
 }
 
@@ -114,7 +123,31 @@ function setSuggestion($: any, creds: Creds, text: string) {
     return
   }
   lastSuggestion = text
-  suggestionQueue = suggestionQueue.then(() => postSuggestion($, creds, text))
+  suggestionQueue = suggestionQueue.then(async () => {
+    if (!(await postSuggestion($, creds, text)) && lastSuggestion === text) {
+      lastSuggestion = null
+    }
+  })
+}
+
+// currentCreds is the session's live credentials, or null when this is not
+// a Mako session or they cannot be read: a hook that gates the prompt must
+// not fail for want of them.
+async function currentCreds($: any): Promise<Creds | null> {
+  if (liveCreds) {
+    return liveCreds
+  }
+  return readCreds($).catch(() => null)
+}
+
+// clearSuggestion clears the session's suggestion as a prompt goes in or a
+// turn starts, and stales any suggestion still on its way.
+async function clearSuggestion($: any) {
+  suggestionGen++
+  const creds = await currentCreds($)
+  if (creds) {
+    setSuggestion($, creds, '')
+  }
 }
 
 async function ackMessages($: any, creds: Creds, ackThrough: number) {
@@ -298,30 +331,31 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // A subagent's turn leaves the main prompt, and its suggestion, as they are.
   on('turn.start', async ($, e, next) => {
-    const creds = liveCreds ?? (await readCreds($))
-    if (creds) {
-      setSuggestion($, creds, '')
+    if (!e?.agentId) {
+      await clearSuggestion($).catch(() => undefined)
     }
     return next(e)
   })
 
+  // Clearing the suggestion never stands in the prompt's way: should the hook
+  // fail, the prompt goes on as the hook would have sent it.
   on('prompt.submit', async ($, e, next) => {
-    const creds = liveCreds ?? (await readCreds($))
-    if (creds) {
-      setSuggestion($, creds, '')
-    }
+    await clearSuggestion($).catch(() => undefined)
     return next(e)
-  })
+  }).catch(($, e, next) => next(e))
 
   on('prompt.suggest', async ($, e, next) => {
+    const gen = suggestionGen
     const res = await next(e)
-    const creds = liveCreds ?? (await readCreds($))
-    if (creds && res?.isShown !== false) {
-      const text = typeof e?.text === 'string' ? e.text.trim() : ''
-      if (text) {
-        setSuggestion($, creds, text)
-      }
+    if (res?.isShown === false || gen !== suggestionGen) {
+      return res
+    }
+    const text = typeof e?.text === 'string' ? e.text.trim() : ''
+    const creds = text ? await currentCreds($) : null
+    if (creds && gen === suggestionGen) {
+      setSuggestion($, creds, text)
     }
     return res
   })

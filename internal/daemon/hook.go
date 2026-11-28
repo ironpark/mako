@@ -363,10 +363,12 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	case agent.ToolDone:
 		s.ReportToolDone(msg.Seq)
 	case agent.Prompted:
-		d.live.clearSuggestion(msg.Session)
 		if !s.ReportStatus(protocol.AgentWorking, msg.Seq) {
 			return
 		}
+		// Only a prompt of this turn makes the suggestion stale, not a
+		// late hook of an earlier one.
+		d.live.clearSuggestion(msg.Session)
 		// A conversation whose start went unheard, as a resumed one's may,
 		// is told by its prompts.
 		if ev.SessionID != "" && ev.SessionID != s.Info().GetConversationId() {
@@ -385,7 +387,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		d.refreshActivity(s)
 		s.ReportStatus(protocol.AgentDone, msg.Seq)
 	case agent.Ended, agent.Idle:
-		if ev.Kind == agent.Ended {
+		if ev.Kind == agent.Ended || ev.AuthError != nil {
 			d.live.clearSuggestion(msg.Session)
 		}
 		s.ReportStatus(protocol.AgentIdle, msg.Seq)

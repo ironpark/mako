@@ -137,3 +137,35 @@ func TestPlainTextUnwrappedJoinsSoftWraps(t *testing.T) {
 		return err == nil && strings.Contains(text, long)
 	})
 }
+
+// StyledScreen formats the rows on screen and none of the scrollback above
+// them, keeping their styles and joining a soft-wrapped row back up.
+func TestStyledScreenIsTheRowsOnScreen(t *testing.T) {
+	long := strings.Repeat("abcdefghij", 6) // 60 cols on a 40-col terminal
+	s, err := Start(Spec{
+		ID: "styled-screen",
+		Command: []string{"/bin/sh", "-c",
+			`i=0; while [ $i -lt 30 ]; do echo "scrolled $i"; i=$((i+1)); done; printf '\033[2m%s\033[0m\n' "` + long + `"; sleep 5`},
+		Cols: 40,
+		Rows: 6,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	var screen string
+	waitFor(t, func() bool {
+		var err error
+		screen, err = s.StyledScreen()
+		return err == nil && strings.Contains(screen, long)
+	})
+	if strings.Contains(screen, "scrolled 0") || strings.Contains(screen, "scrolled 20") {
+		t.Fatalf("StyledScreen holds the scrollback:\n%q", screen)
+	}
+	if !strings.Contains(screen, "scrolled 29") {
+		t.Fatalf("StyledScreen lost a row on screen:\n%q", screen)
+	}
+	if !strings.Contains(screen, "\x1b[2m") {
+		t.Fatalf("StyledScreen dropped the dim style:\n%q", screen)
+	}
+}

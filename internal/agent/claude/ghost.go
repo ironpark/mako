@@ -1,7 +1,6 @@
 package claude
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -9,10 +8,6 @@ import (
 
 	"github.com/ironpark/mako/internal/detect"
 )
-
-// ansiSeq matches CSI/OSC/single-char escape sequences so we can strip styles
-// for structural checks while inspecting SGR codes on the prompt line itself.
-var ansiSeq = regexp.MustCompile(`\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[@-Z\\-_])`)
 
 // staticPlaceholders are the dim texts Claude Code shows in an empty prompt
 // box that are not suggestions from the model: the rotating example prompt
@@ -33,7 +28,7 @@ func (*Agent) ExtractGhost(styledScreen string) string {
 	if styledScreen == "" {
 		return ""
 	}
-	plain := ansiSeq.ReplaceAllString(styledScreen, "")
+	plain := plainScreen(styledScreen)
 	// Only extract when Claude Code is genuinely resting at its prompt box
 	// (not inside a permission dialog, picker, or transcript viewer).
 	if r := screenRules.Detect(detect.Input{Screen: plain}); r.ID != "prompt_box" {
@@ -46,43 +41,143 @@ func (*Agent) ExtractGhost(styledScreen string) string {
 		return ""
 	}
 	top, bot, ok := promptBoxRange(plainLines)
-	if !ok {
+	if !ok || dialogBelow(plainLines[bot+1:]) {
 		return ""
 	}
 
-	var ghost strings.Builder
-	started := false
+	var rows []string
 	for i := top + 1; i < bot; i++ {
 		line := styledLines[i]
-		if !started {
+		first := len(rows) == 0
+		if first {
 			after, found := cutAfterPromptGlyph(line)
 			if !found {
 				continue
 			}
-			text, ok := extractDimGhostLine(after, true)
-			if !ok {
-				return ""
-			}
-			ghost.WriteString(text)
-			started = true
-			continue
-		}
-		// Continuation lines inside a multi-line wrapped ghost suggestion.
-		if strings.TrimSpace(plainLines[i]) == "" {
+			line = after
+		} else if strings.TrimSpace(plainLines[i]) == "" {
+			// The rows of a suggestion Claude Code wrapped end at a blank one.
 			break
 		}
-		text, ok := extractDimGhostLine(line, false)
+		text, ok := extractDimGhostLine(line, first)
 		if !ok {
 			return ""
 		}
-		if text != "" {
-			if ghost.Len() > 0 {
-				ghost.WriteByte(' ')
+		rows = append(rows, stripHint(text))
+	}
+	return cleanGhostSuggestion(joinRows(rows))
+}
+
+// plainScreen is styledScreen without its escape sequences, the blank cells
+// the formatter writes as cursor-forward sequences put back as spaces, so
+// that the words of a footer such as "Esc to cancel" stay apart.
+func plainScreen(styledScreen string) string {
+	var b strings.Builder
+	b.Grow(len(styledScreen))
+	for i := 0; i < len(styledScreen); {
+		if styledScreen[i] != 0x1b {
+			j := strings.IndexByte(styledScreen[i:], 0x1b)
+			if j < 0 {
+				j = len(styledScreen) - i
 			}
-			ghost.WriteString(text)
+			b.WriteString(styledScreen[i : i+j])
+			i += j
+			continue
+		}
+		end, final, params := parseEscape(styledScreen, i)
+		if final == 'C' {
+			b.WriteString(strings.Repeat(" ", cursorForward(params)))
+		}
+		i = end
+	}
+	return b.String()
+}
+
+// dialogFooters are what the footer of a dialog, picker or form drawn under
+// the prompt box says, in lower case. Claude Code is not resting at its
+// prompt while one shows, whatever the box above holds.
+var dialogFooters = []string{
+	"esc to cancel",
+	"enter to select",
+	"enter to confirm",
+	"to navigate",
+	"do you want to proceed?",
+	"select model",
+}
+
+// dialogBelow reports whether the rows under the prompt box's bottom rule
+// show a dialog's footer.
+func dialogBelow(rows []string) bool {
+	for _, row := range rows {
+		row = strings.ToLower(row)
+		for _, f := range dialogFooters {
+			if strings.Contains(row, f) {
+				return true
+			}
 		}
 	}
-	return cleanGhostSuggestion(ghost.String())
+	return false
+}
+
+// joinRows joins the rows Claude Code wrapped a suggestion into. It wraps at
+// spaces, which the rows leave out, and splits a word only when the word is
+// wider than a whole row, filling the row with it: a long path or URL, or a
+// run of CJK text written without spaces. So two rows join with a space,
+// unless the word ending one and the word starting the next are together
+// wider than any row, and so could only have been one word split in two.
+func joinRows(rows []string) string {
+	widest := 0
+	for _, row := range rows {
+		widest = max(widest, cells(row))
+	}
+	var b strings.Builder
+	for i, row := range rows {
+		if row == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			prev := rows[i-1]
+			if cells(lastWord(prev))+cells(firstWord(row)) <= widest {
+				b.WriteByte(' ')
+			}
+		}
+		b.WriteString(row)
+	}
+	return b.String()
+}
+
+func lastWord(s string) string {
+	if i := strings.LastIndexFunc(s, unicode.IsSpace); i >= 0 {
+		_, size := utf8.DecodeRuneInString(s[i:])
+		return s[i+size:]
+	}
+	return s
+}
+
+func firstWord(s string) string {
+	if i := strings.IndexFunc(s, unicode.IsSpace); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// cells is how many terminal cells s takes: two for each wide (East Asian)
+// rune, one for any other.
+func cells(s string) int {
+	n := 0
+	for _, r := range s {
+		n++
+		if wideRune(r) {
+			n++
+		}
+	}
+	return n
+}
+
+func wideRune(r rune) bool {
+	return r >= 0x1100 && r <= 0x115F || r >= 0x2E80 && r <= 0xA4CF && r != 0x303F ||
+		r >= 0xAC00 && r <= 0xD7A3 || r >= 0xF900 && r <= 0xFAFF || r >= 0xFE30 && r <= 0xFE4F ||
+		r >= 0xFF00 && r <= 0xFF60 || r >= 0xFFE0 && r <= 0xFFE6 || r >= 0x20000 && r <= 0x3FFFD
 }
 
 // promptBoxRange finds the line indices (top, bot) of the last pair of
@@ -155,11 +250,7 @@ func extractDimGhostLine(s string, firstLine bool) (string, bool) {
 				applySGR(params, &dim, &inverse)
 			case 'C':
 				if seenVisible {
-					n, err := strconv.Atoi(params)
-					if err != nil || n < 1 {
-						n = 1
-					}
-					out.WriteString(strings.Repeat(" ", min(n, maxCursorForward)))
+					out.WriteString(strings.Repeat(" ", cursorForward(params)))
 				}
 			}
 			i = end
@@ -199,9 +290,21 @@ func extractDimGhostLine(s string, firstLine bool) (string, bool) {
 	return strings.TrimRight(out.String(), " "), true
 }
 
+// cursorForward is how many cells a cursor-forward sequence with params
+// moves: one when it names none, at most maxCursorForward.
+func cursorForward(params string) int {
+	n, err := strconv.Atoi(params)
+	if err != nil || n < 1 {
+		n = 1
+	}
+	return min(n, maxCursorForward)
+}
+
 // parseEscape advances past an ANSI escape sequence starting at s[start]. For
-// a CSI sequence it returns its final byte and parameters; final is 0 for any
-// other sequence.
+// a plain CSI sequence it returns its final byte and parameters; final is 0
+// for any other sequence, a CSI sequence with a private parameter prefix
+// (such as the "\x1b[>4;2m" of a keyboard mode) or intermediate bytes among
+// them, whose parameters do not mean what an SGR's or a cursor move's do.
 func parseEscape(s string, start int) (end int, final byte, params string) {
 	if start+1 >= len(s) {
 		return len(s), 0, ""
@@ -215,7 +318,11 @@ func parseEscape(s string, start int) (end int, final byte, params string) {
 		if j >= len(s) {
 			return len(s), 0, ""
 		}
-		return j + 1, s[j], s[start+2 : j]
+		params = s[start+2 : j]
+		if params != "" && params[0] >= '<' && params[0] <= '?' || strings.ContainsFunc(params, func(r rune) bool { return r >= 0x20 && r <= 0x2f }) {
+			return j + 1, 0, ""
+		}
+		return j + 1, s[j], params
 	case ']':
 		j := start + 2
 		for j < len(s) {
@@ -277,19 +384,36 @@ func applySGR(params string, dim, inverse *bool) {
 	}
 }
 
-// cleanGhostSuggestion strips trailing right-aligned shortcut hints (separated
-// by 3+ spaces, e.g. "↵ send" or "tab to accept") and ignores Claude Code's
-// static placeholders.
+// stripHint cuts a right-aligned shortcut hint, such as "↵ send" or "tab to
+// accept", off the end of one row of a suggestion: a few words set off by
+// three spaces or more, as a suggestion's own words never are.
+func stripHint(row string) string {
+	row = strings.TrimRight(row, " ")
+	idx := strings.LastIndex(row, "   ")
+	if idx < 0 {
+		return row
+	}
+	tail := strings.ToLower(strings.TrimSpace(row[idx:]))
+	words := strings.Fields(tail)
+	if len(words) == 0 || len(words) > 4 {
+		return row
+	}
+	hint := strings.HasPrefix(tail, "↵") || strings.HasPrefix(tail, "→")
+	for _, w := range words {
+		hint = hint || w == "send" || w == "accept" || w == "tab"
+	}
+	if !hint {
+		return row
+	}
+	return strings.TrimRight(row[:idx], " ")
+}
+
+// cleanGhostSuggestion trims a suggestion and ignores Claude Code's static
+// placeholders.
 func cleanGhostSuggestion(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return ""
-	}
-	if idx := strings.Index(s, "   "); idx >= 0 {
-		tail := strings.ToLower(strings.TrimSpace(s[idx:]))
-		if strings.Contains(tail, "send") || strings.Contains(tail, "accept") || strings.Contains(tail, "tab") || strings.HasPrefix(tail, "↵") {
-			s = strings.TrimSpace(s[:idx])
-		}
 	}
 	for _, p := range staticPlaceholders {
 		if strings.HasPrefix(s, p) {

@@ -573,7 +573,7 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 	content := widget.Column(
 		attachmentStrip(m, id, state),
 		ghostComposerField(m, id, state, field, defaultPlaceholder),
-		composerBar(m, id, state, disabled),
+		composerBar(m, id, state, field.Input(), disabled),
 	).Gap(6).Stretch()
 	box := ggui.View(over, func(o bool) ggui.Widget {
 		var border color.Color = skin.Border
@@ -607,7 +607,7 @@ func composerField(field *ui.TextFieldWidget) ggui.Widget {
 // ghostComposerField is composerField for a session's chat composer: it
 // also paints the agent's inline ghost text suggestion.
 func ghostComposerField(m *model, id string, state *chatState, field *ui.TextFieldWidget, defaultPlaceholder string) ggui.Widget {
-	tracked := &caretFollow{child: field, input: field.Input()}
+	tracked := &caretFollow{child: state.composerFocus.Attach(field), input: field.Input()}
 	return composerScroll(newGhostField(m, id, state, field, tracked, defaultPlaceholder))
 }
 

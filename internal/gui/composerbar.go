@@ -31,7 +31,7 @@ import (
 const composerRadius = 20
 
 // composerBar is the bar of session id's composer.
-func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[bool]) ggui.Widget {
+func composerBar(m *model, id string, state *chatState, input *widget.TextInputWidget, disabled ggui.Readable[bool]) ggui.Widget {
 	attach := ui.Tooltip(ui.ButtonOf(icon("plus").Size(17).Color(skin.Fg), func() { m.attachFiles(id) }).
 		Ghost().Pad(5).Radius(15).Name(T("Attach files")).BindDisabled(disabled), T("Attach files"))
 	usage := ggui.Map(state.result, func(v chatResult) *protocol.Usage { return v.Chat.GetUsage() }).WithEqual(protocol.Same)
@@ -68,7 +68,7 @@ func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[b
 		left = append(left, ui.Tooltip(ui.ButtonOf(icon("square-terminal").Size(16).Color(skin.Muted), state.inTerminal).
 			Ghost().Pad(5).Radius(15).Name(T("Type in the terminal")).BindDisabled(disabled), T("Type in the terminal")))
 	}
-	return widget.Row(append(left, mode, ghostAcceptChip(m, id, state, disabled), widget.Spacer(), model, button)...).Gap(6).Align(widget.AlignCenter)
+	return widget.Row(append(left, mode, ghostAcceptChip(m, id, state, input, disabled), widget.Spacer(), model, button)...).Gap(6).Align(widget.AlignCenter)
 }
 
 // roundButton is the composer's main button: a light disc with glyph.

@@ -271,6 +271,23 @@ func (h *liveHub) clearSuggestion(session string) {
 	c.dirty = true
 }
 
+// resetSuggestion forgets session's suggestion and that its live mod pushed
+// one, as its process ends: a crash fires no SessionEnd hook, and a process
+// started again under the same ID may run without the mod.
+func (h *liveHub) resetSuggestion(session string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := h.chats[liveKey(session, "")]
+	if c == nil {
+		return
+	}
+	c.nativeSuggestion = false
+	if c.suggestion != "" {
+		c.suggestion = ""
+		c.dirty = true
+	}
+}
+
 // live is what the followers hear: any active ghost text suggestion, then
 // the blocks as they stand. The suggestion goes first so a front-end that
 // reads the last block as the reply's thinking line still finds it there.

@@ -553,7 +553,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		go d.followProjectAgent(s, parent)
 	}
 	d.log.Info("session started", "id", id, "agent", req.GetAgent(), "project", req.GetProject())
-	go func() { <-s.Done(); cleanup(); d.releaseSession(id) }()
+	go func() { <-s.Done(); d.live.resetSuggestion(id); cleanup(); d.releaseSession(id) }()
 	return s, nil
 }
 

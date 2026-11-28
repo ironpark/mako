@@ -1170,6 +1170,15 @@ done
 		return suggestionBlock(l.GetBlocks()) == "Run go test and commit"
 	})
 
+	// While the agent asks the user something, the screen offers nothing,
+	// and once it rests at its prompt again the suggestion is read again.
+	s.SetStatus(protocol.AgentWaiting)
+	waitFor("no suggestion while waiting", func(l *protocol.ChatLive) bool { return suggestionBlock(l.GetBlocks()) == "" })
+	s.SetStatus(protocol.AgentDone)
+	waitFor("screen ghost suggestion again", func(l *protocol.ChatLive) bool {
+		return suggestionBlock(l.GetBlocks()) == "Run go test and commit"
+	})
+
 	// 2. Native /suggestion push takes precedence over PTY screen fallback.
 	postSuggestion := func(token, text string) int {
 		t.Helper()
@@ -1271,6 +1280,28 @@ func TestLiveSuggestionLifecycle(t *testing.T) {
 	if got := suggestionBlock(h.blocks(liveKey("screen", ""))); got != "" {
 		t.Fatalf("the last follower left and the screen suggestion %q stayed", got)
 	}
+}
+
+// A process that ends forgets the suggestion its mod pushed, and that it
+// pushed one, so that the screen is read again for one started under the
+// same ID, which may run without the mod.
+func TestLiveSuggestionResetsWhenTheProcessEnds(t *testing.T) {
+	var h liveHub
+	key := liveKey("s", "")
+	feed, stop := h.follow(key, func() int64 { return 0 })
+	defer stop()
+	<-feed
+	h.setSuggestion("s", "Run the tests")
+	gen := h.chats[key].gen
+	h.resetSuggestion("s")
+	if got := suggestionBlock(h.blocks(key)); got != "" {
+		t.Fatalf("after the process ended, suggestion = %q", got)
+	}
+	h.setSuggestionForGen(gen, "s", "read off the screen")
+	if got := suggestionBlock(h.blocks(key)); got != "read off the screen" {
+		t.Fatalf("the screen fallback stayed off after a reset: %q", got)
+	}
+	h.resetSuggestion("unknown") // a session with no chat is no matter
 }
 
 func TestLiveSuggestionEndpointRejects(t *testing.T) {

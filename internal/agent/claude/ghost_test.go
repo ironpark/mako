@@ -120,6 +120,48 @@ func TestExtractGhost(t *testing.T) {
 			screen: "Compiling...\nstill working",
 			want:   "",
 		},
+		{
+			name: "dialog footer under the box, its words apart by cursor-forward gaps",
+			screen: strings.Join([]string{
+				"Done.", rule, "❯ \x1b[2mRun the tests\x1b[0m", rule,
+				"\x1b[2CEnter\x1b[1Cto\x1b[1Cselect\x1b[1C·\x1b[1CEsc\x1b[1Cto\x1b[1Ccancel",
+			}, "\r\n"),
+			want: "",
+		},
+		{
+			name: "hint on the first row leaves the next row",
+			screen: "Done.\n" + rule + "\n❯ \x1b[2mAdd tests for the empty\x1b[0m\x1b[20C\x1b[2m↵ send\x1b[0m\n" +
+				"  \x1b[2minput case\x1b[0m\n" + rule + "\n  ? for shortcuts",
+			want: "Add tests for the empty input case",
+		},
+		{
+			name:   "three spaces in the suggestion itself are no hint",
+			screen: "Done.\n" + rule + "\n❯ \x1b[2mAlign the table   so each tab stop lines up\x1b[0m\n" + rule + "\n  ? for shortcuts",
+			want:   "Align the table   so each tab stop lines up",
+		},
+		{
+			name: "a path wider than a row joins where it was split",
+			screen: "Done.\n" + rule + "\n❯ \x1b[2mRead internal/agent/claude/mod/hooks/regi\x1b[0m\n" +
+				"  \x1b[2mster.ts and fix the hook\x1b[0m\n" + rule + "\n  ? for shortcuts",
+			want: "Read internal/agent/claude/mod/hooks/register.ts and fix the hook",
+		},
+		{
+			name: "CJK written without spaces joins without one",
+			screen: "Done.\n" + rule + "\n❯ \x1b[2mテストを実行してコミットする\x1b[0m\n" +
+				"  \x1b[2mください\x1b[0m\n" + rule + "\n  ? for shortcuts",
+			want: "テストを実行してコミットするください",
+		},
+		{
+			name: "Korean wraps at its spaces",
+			screen: "Done.\n" + rule + "\n❯ \x1b[2m테스트를 실행하고 변경 사항을\x1b[0m\n" +
+				"  \x1b[2m커밋해 주세요\x1b[0m\n" + rule + "\n  ? for shortcuts",
+			want: "테스트를 실행하고 변경 사항을 커밋해 주세요",
+		},
+		{
+			name:   "a private CSI sequence is no SGR dim",
+			screen: "Done.\n" + rule + "\n❯ \x1b[>4;2mfix the failing test\n" + rule + "\n  ? for shortcuts",
+			want:   "",
+		},
 	}
 
 	for _, tc := range cases {

@@ -124,11 +124,15 @@ func (p *screenLivePoller) tick(size func() int64) (checked bool, logSize int64)
 		p.wasWorking = false
 		p.lastOutputs = 0
 		p.hadLog = false
-		if p.ghost != nil && !p.hub.hasNativeSuggestion(p.s.ID()) {
+		// A suggestion is read only while the agent rests at its prompt:
+		// not while it compacts, nor while it asks the user something.
+		if status := info.GetStatus(); p.ghost != nil && (protocol.AtWork(status) || status == protocol.AgentWaiting) {
+			p.clearGhost()
+		} else if p.ghost != nil && !p.hub.hasNativeSuggestion(p.s.ID()) {
 			if !p.hasGhostScan || outputs != p.ghostOutputs || wasWorking {
 				p.ghostOutputs = outputs
 				p.hasGhostScan = true
-				if styled, err := p.s.StyledTextUnwrapped(); err == nil {
+				if styled, err := p.s.StyledScreen(); err == nil {
 					got := p.ghost.ExtractGhost(styled)
 					if got != p.lastGhost {
 						p.lastGhost = got

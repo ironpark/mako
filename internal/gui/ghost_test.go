@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -113,6 +114,13 @@ func TestGhostTabAcceptsTheSuggestion(t *testing.T) {
 	if acceptChipShown(p) {
 		t.Fatal("the Accept chip stayed with nothing left to accept")
 	}
+	// Taking it is a step of the editor's history, as typing is.
+	undo := ggui.Mods{Ctrl: runtime.GOOS != "darwin", Meta: runtime.GOOS == "darwin"}
+	p.Type(undo, ggui.KeyZ)
+	p.Type(undo, ggui.KeyZ)
+	if got := ggui.Peek(state.draft); got != "" {
+		t.Fatalf("draft %q after undoing the typing and the Tab", got)
+	}
 }
 
 // → takes the rest of a suggestion the draft begins, whatever its case, and
@@ -182,5 +190,86 @@ func TestGhostYieldsToWorkAndTheCommandMenu(t *testing.T) {
 	p.Frame()
 	if acceptChipShown(p) {
 		t.Fatal("the Accept chip shows over the command menu")
+	}
+}
+
+// No suggestion shows unless the agent rests at its prompt: not while it
+// compacts or asks the user anything, nor while it needs signing in again,
+// nor for a session the window is not attached to.
+func TestGhostOnlyWhileTheAgentRestsAtItsPrompt(t *testing.T) {
+	m, _, p := ghostComposer(t, "Run the unit tests")
+	idle := func(edit func(s *protocol.SessionInfo)) {
+		s := &protocol.SessionInfo{Id: "s", Agent: "claude", Project: "/tmp", State: protocol.StateRunning, Status: protocol.AgentIdle}
+		edit(s)
+		m.Sessions.Set([]*protocol.SessionInfo{s})
+		p.Frame()
+	}
+	for _, tc := range []struct {
+		name string
+		edit func(s *protocol.SessionInfo)
+	}{
+		{"compacting", func(s *protocol.SessionInfo) { s.Status = protocol.AgentCompacting }},
+		{"waiting", func(s *protocol.SessionInfo) { s.Status = protocol.AgentWaiting }},
+		{"an approval", func(s *protocol.SessionInfo) { s.Approval = &protocol.Approval{Id: "a"} }},
+		{"a dialog", func(s *protocol.SessionInfo) { s.Dialog = &protocol.ScreenDialog{Id: "d"} }},
+		{"signed out", func(s *protocol.SessionInfo) { s.AuthError = &protocol.AuthError{Kind: protocol.AuthErrorOAuthExpired} }},
+	} {
+		idle(tc.edit)
+		if acceptChipShown(p) {
+			t.Fatalf("the Accept chip shows while %s", tc.name)
+		}
+		p.Type(ggui.Mods{}, ggui.KeyTab)
+		if got := m.composerDraft("s"); got != "" {
+			t.Fatalf("Tab took the suggestion while %s: %q", tc.name, got)
+		}
+		idle(func(*protocol.SessionInfo) {})
+		if !acceptChipShown(p) {
+			t.Fatalf("no Accept chip once the agent rests again after %s", tc.name)
+		}
+	}
+	m.Attached.Set(nil)
+	p.Frame()
+	if acceptChipShown(p) {
+		t.Fatal("the Accept chip shows for a detached session")
+	}
+}
+
+// The Accept chip shows only while Tab would take the suggestion, which a
+// caret moved off the end of the draft stops.
+func TestGhostChipFollowsTheCaret(t *testing.T) {
+	_, _, p := ghostComposer(t, "Run the unit tests")
+	p.Text("run")
+	p.Frame()
+	if !acceptChipShown(p) {
+		t.Fatal("no Accept chip with the caret after the draft")
+	}
+	p.Type(ggui.Mods{}, ggui.KeyArrowLeft)
+	p.Frame()
+	if acceptChipShown(p) {
+		t.Fatal("the Accept chip shows with the caret inside the draft, where Tab takes nothing")
+	}
+	p.Type(ggui.Mods{}, ggui.KeyArrowRight)
+	p.Frame()
+	if !acceptChipShown(p) {
+		t.Fatal("no Accept chip once the caret is back at the end")
+	}
+}
+
+// A click on the Accept chip takes the suggestion and hands the field the
+// focus back, its caret after the text, to type on.
+func TestGhostChipClickKeepsTyping(t *testing.T) {
+	m, state, p := ghostComposer(t, "Run the unit tests")
+	chip, ok := p.Semantics().Find(ggui.RoleButton, T("Accept suggestion"))
+	if !ok {
+		t.Fatal("no Accept chip")
+	}
+	p.Click(chip.Rect.Origin.Add(ggui.Pt(chip.Rect.Size.W/2, chip.Rect.Size.H/2)))
+	p.Frame()
+	if got := m.composerDraft("s"); got != "Run the unit tests" {
+		t.Fatalf("draft %q after a click on the chip", got)
+	}
+	p.Text("!")
+	if got := ggui.Peek(state.draft); got != "Run the unit tests!" {
+		t.Fatalf("draft %q after the click and typing, want the text typed after it", got)
 	}
 }

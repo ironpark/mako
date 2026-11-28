@@ -84,6 +84,13 @@ type chatState struct {
 	// one the user explicitly dismissed with Escape.
 	suggestion          *ggui.StateValue[string]
 	dismissedSuggestion *ggui.StateValue[string]
+	// ghostCaret is whether the composer's editor, as last painted, would
+	// take ghost text: its caret at the end, nothing selected, no input
+	// method composing. The Accept chip follows it, as Tab does.
+	ghostCaret *ggui.StateValue[bool]
+	// composerFocus focuses the composer's field from code, as the Accept
+	// chip does after taking the suggestion.
+	composerFocus ggui.FocusRef
 	// afterRead runs once a read lands that went out after it was asked
 	// for; reread asks for one more read, the one out having gone first.
 	afterRead []func()
@@ -112,6 +119,7 @@ func newChatState() *chatState {
 		live:                ggui.State[[]*protocol.LiveBlock](nil).WithEqual(deepEqual),
 		suggestion:          ggui.State(""),
 		dismissedSuggestion: ggui.State(""),
+		ghostCaret:          ggui.State(true),
 		pending: ggui.State[[]pendingMessage](nil).WithEqual(func(a, b []pendingMessage) bool {
 			return slices.Equal(a, b)
 		}),
