@@ -96,16 +96,29 @@ func (m *model) usageState(id string) *usageState {
 	}
 	state := &usageState{usage: ggui.State(&protocol.Usage{}).WithEqual(protocol.Same)}
 	m.usages[id] = state
+	m.UsagesRev.Update(func(n int) int { return n + 1 })
 	return state
 }
 
 // loadUsage asks for a session's usage alone, without its messages.
-func (m *model) loadUsage(id string, state *usageState) {
+func (m *model) loadUsage(id string, state *usageState) { m.loadUsageThen(id, state, nil) }
+
+// loadUsageThen is loadUsage, calling done, if not nil, once the answer
+// is in, or at once when there is nothing to ask: a request already under
+// way, which sets the usage itself, or a session no longer listed.
+func (m *model) loadUsageThen(id string, state *usageState, done func()) {
+	finish := func() {
+		if done != nil {
+			done()
+		}
+	}
 	if state.loading || m.usages[id] != state {
+		finish()
 		return
 	}
 	info, ok := m.session(id)
 	if !ok {
+		finish()
 		return
 	}
 	state.loading = true
@@ -113,6 +126,7 @@ func (m *model) loadUsage(id string, state *usageState) {
 	fetch(m, 10*time.Second, func(ctx context.Context, c *client.Client) (*protocol.Chat, error) {
 		return c.ReadChat(ctx, req)
 	}, func(chat *protocol.Chat, err error) {
+		defer finish()
 		if m.usages[id] != state {
 			return
 		}

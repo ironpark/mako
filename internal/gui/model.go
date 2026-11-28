@@ -176,6 +176,9 @@ type model struct {
 	usages       map[string]*usageState // for the usage overlay
 	AccountUsage *accountUsageState     // session-independent global account quotas; see accountusage.go
 	Races        *raceState             // multi-agent A/B comparison races; see race.go
+	// UsagesRev counts the entries put in usages, which is no signal: a
+	// view listing them reads it to see the ones added since it was built.
+	UsagesRev *ggui.StateValue[int]
 
 	files *filesState // the Files tab's; see filesstate.go
 
@@ -396,6 +399,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		chats:               map[string]*chatState{},
 		chatImages:          newImageCache(),
 		usages:              map[string]*usageState{},
+		UsagesRev:           ggui.State(0),
 		AccountUsage:        newAccountUsageState(),
 		Races:               newRaceState(),
 		diffChanges:         newDiffChangesState(),

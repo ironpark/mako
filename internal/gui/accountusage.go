@@ -26,7 +26,10 @@ const (
 	quotaWarnThreshold          = 85.0
 )
 
+// projectUsageSummary is the tokens a repository's sessions on one node
+// spent: its worktrees' sessions count as its own.
 type projectUsageSummary struct {
+	NodeID   string
 	Project  string
 	Sessions int
 	Input    int64
@@ -87,18 +90,22 @@ func suggestFallbackAgent(data *protocol.AccountUsage, currentTarget string, ava
 	return true, bestTarget
 }
 
+// aggregateProjectUsage adds up the sessions' usage by node and repository:
+// a session in a worktree counts for the repository the worktree is of,
+// and one folder on two nodes is two rows.
 func aggregateProjectUsage(sessions []*protocol.SessionInfo, usageBySession map[string]*protocol.Usage) []projectUsageSummary {
-	byProj := map[string]*projectUsageSummary{}
+	type key struct{ node, project string }
+	byProj := map[key]*projectUsageSummary{}
 	for _, s := range sessions {
 		u := usageBySession[s.GetId()]
 		if u == nil || (u.GetInput() == 0 && u.GetCachedInput() == 0 && u.GetOutput() == 0 && u.GetCostUsd() == 0) {
 			continue
 		}
-		proj := cmp.Or(s.GetProject(), "(unknown)")
-		row := byProj[proj]
+		k := key{s.GetNodeId(), cmp.Or(s.GetWorktree().GetRepo(), s.GetProject(), "(unknown)")}
+		row := byProj[k]
 		if row == nil {
-			row = &projectUsageSummary{Project: proj}
-			byProj[proj] = row
+			row = &projectUsageSummary{NodeID: k.node, Project: k.project}
+			byProj[k] = row
 		}
 		row.Sessions++
 		row.Input += u.GetInput() + u.GetCachedInput()
@@ -116,7 +123,7 @@ func aggregateProjectUsage(sessions []*protocol.SessionInfo, usageBySession map[
 		if a.Input+a.Output != b.Input+b.Output {
 			return cmp.Compare(b.Input+b.Output, a.Input+a.Output)
 		}
-		return strings.Compare(a.Project, b.Project)
+		return cmp.Or(strings.Compare(a.Project, b.Project), strings.Compare(a.NodeID, b.NodeID))
 	})
 	return out
 }
@@ -127,7 +134,20 @@ type accountUsageState struct {
 	Loading  *ggui.StateValue[bool]
 	Err      *ggui.StateValue[string]
 	inFlight bool
+	// Sessions is how far the Analytics tab's refresh of every session's
+	// usage has come.
+	Sessions *ggui.StateValue[usageRefresh]
 }
+
+// usageRefresh is a refresh of every chat session's usage: how many
+// sessions it asks about, and how many have answered.
+type usageRefresh struct{ Done, Total int }
+
+// running reports whether the refresh has sessions left to hear from.
+func (r usageRefresh) running() bool { return r.Done < r.Total }
+
+// usageRefreshConcurrency is how many sessions a refresh asks at once.
+const usageRefreshConcurrency = 4
 
 func newAccountUsageState() *accountUsageState {
 	return &accountUsageState{
@@ -135,8 +155,41 @@ func newAccountUsageState() *accountUsageState {
 		Data: ggui.State((*protocol.AccountUsage)(nil)).WithEqual(func(a, b *protocol.AccountUsage) bool {
 			return proto.Equal(a, b)
 		}),
-		Loading: ggui.State(false),
-		Err:     ggui.State(""),
+		Loading:  ggui.State(false),
+		Err:      ggui.State(""),
+		Sessions: ggui.State(usageRefresh{}),
+	}
+}
+
+// refreshSessionUsages asks every chat session for its usage again, a few
+// at a time, as Sessions counts.
+func (m *model) refreshSessionUsages() {
+	st := m.AccountUsage
+	if ggui.Peek(st.Sessions).running() {
+		return
+	}
+	var ids []string
+	for _, s := range ggui.Peek(m.Sessions) {
+		if hasCap(s, protocol.CapChat) {
+			ids = append(ids, s.GetId())
+		}
+	}
+	st.Sessions.Set(usageRefresh{Total: len(ids)})
+	next := 0
+	var ask func()
+	ask = func() {
+		if next >= len(ids) {
+			return
+		}
+		id := ids[next]
+		next++
+		m.loadUsageThen(id, m.usageState(id), func() {
+			st.Sessions.Update(func(r usageRefresh) usageRefresh { r.Done++; return r })
+			ask()
+		})
+	}
+	for range min(usageRefreshConcurrency, len(ids)) {
+		ask()
 	}
 }
 
@@ -347,62 +400,75 @@ func accountUsageDialog(m *model) ggui.Widget {
 	return keyedDialog(st.Open, body).Title(T("Account usage & quotas")).Width(600)
 }
 
+// accountAnalyticsView is the Analytics tab: the sessions' usage by
+// repository. It follows UsagesRev as well as each usage it reads, so a
+// session whose usage a refresh asks for the first time shows once it is in.
 func accountAnalyticsView(m *model) ggui.Widget {
-	sessions := m.Sessions.Get()
-	usageBySession := map[string]*protocol.Usage{}
-	for _, s := range sessions {
-		id := s.GetId()
-		if st := m.chats[id]; st != nil {
-			if res := st.result.Get(); res.Chat != nil && res.Chat.GetUsage() != nil {
-				usageBySession[id] = res.Chat.GetUsage()
-				continue
-			}
-		}
-		if us := m.usages[id]; us != nil {
-			if u := us.usage.Get(); u != nil {
-				usageBySession[id] = u
-			}
-		}
-	}
-	projects := aggregateProjectUsage(sessions, usageBySession)
-	var totalIn, totalOut int64
-	var totalCost float64
-	for _, p := range projects {
-		totalIn += p.Input
-		totalOut += p.Output
-		totalCost += p.CostUSD
-	}
-
-	rows := []ggui.Widget{
-		widget.Row(
-			widget.Expanded(muted(widget.Text(Tf("Loaded sessions total: %s in · %s out · $%.2f", tokens(totalIn), tokens(totalOut), totalCost)).Size(12.5))),
-			ui.Button(T("Refresh"), func() {
-				for _, s := range ggui.Peek(m.Sessions) {
-					if hasCap(s, protocol.CapChat) {
-						m.loadUsage(s.GetId(), m.usageState(s.GetId()))
-					}
+	return ggui.Reactive(func() ggui.Widget {
+		sessions := m.Sessions.Get()
+		m.UsagesRev.Get()
+		refresh := m.AccountUsage.Sessions.Get()
+		usageBySession := map[string]*protocol.Usage{}
+		for _, s := range sessions {
+			id := s.GetId()
+			if st := m.chats[id]; st != nil {
+				if res := st.result.Get(); res.Chat != nil && res.Chat.GetUsage() != nil {
+					usageBySession[id] = res.Chat.GetUsage()
+					continue
 				}
-			}).Ghost().Pad(4, 8).Radius(6),
-		).Gap(8).Align(widget.AlignCenter),
-	}
-	if len(projects) == 0 {
-		rows = append(rows, muted(widget.Text(T("No session token usage loaded yet. Click Refresh or open a session's Chat to populate usage metrics.")).Size(12.5)))
-		return widget.Column(rows...).Gap(10).Stretch()
-	}
-	for _, p := range projects[:min(len(projects), 10)] {
-		costStr := "-"
-		if p.CostUSD > 0 {
-			costStr = fmt.Sprintf("$%.2f", p.CostUSD)
+			}
+			if us := m.usages[id]; us != nil {
+				if u := us.usage.Get(); u != nil {
+					usageBySession[id] = u
+				}
+			}
 		}
-		rows = append(rows, widget.Box(widget.Row(
-			widget.Expanded(widget.Column(
-				widget.Text(projectName(p.Project)).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis(),
-				muted(widget.Text(Tf("%d sessions · %s in · %s out", p.Sessions, tokens(p.Input), tokens(p.Output))).Size(11.5).NoWrap()),
-			).Gap(2).Stretch()),
-			widget.Text(costStr).Size(12.5).Weight(ggui.WeightSemibold).NoWrap(),
-		).Gap(8).Align(widget.AlignCenter)).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(8, 12))
-	}
-	return widget.Column(rows...).Gap(8).Stretch()
+		projects := aggregateProjectUsage(sessions, usageBySession)
+		var totalIn, totalOut int64
+		var totalCost float64
+		nodes := map[string]bool{}
+		for _, p := range projects {
+			totalIn += p.Input
+			totalOut += p.Output
+			totalCost += p.CostUSD
+			nodes[p.NodeID] = true
+		}
+
+		summary := Tf("Loaded sessions total: %s in · %s out · $%.2f", tokens(totalIn), tokens(totalOut), totalCost)
+		if refresh.running() {
+			summary = Tf("Loading usage: %d of %d sessions…", refresh.Done, refresh.Total)
+		}
+		rows := []ggui.Widget{
+			widget.Row(
+				widget.Expanded(muted(widget.Text(summary).Size(12.5))),
+				ui.Button(T("Refresh"), m.refreshSessionUsages).Ghost().Pad(4, 8).Radius(6).Disabled(refresh.running()),
+			).Gap(8).Align(widget.AlignCenter),
+		}
+		if len(projects) == 0 {
+			rows = append(rows, muted(widget.Text(T("No session token usage loaded yet. Click Refresh or open a session's Chat to populate usage metrics.")).Size(12.5)))
+			return widget.Column(rows...).Gap(10).Stretch()
+		}
+		allNodes := m.Nodes.Get()
+		for _, p := range projects[:min(len(projects), 10)] {
+			costStr := "-"
+			if p.CostUSD > 0 {
+				costStr = fmt.Sprintf("$%.2f", p.CostUSD)
+			}
+			title := []ggui.Widget{widget.Flexible(widget.Text(projectName(p.Project)).Size(13).Weight(ggui.WeightMedium).NoWrap().Ellipsis())}
+			if len(nodes) > 1 {
+				// The same folder on two nodes is two rows: each says its node.
+				title = append(title, muted(widget.Text(nodeName(allNodes, p.NodeID)).Size(11.5).NoWrap()))
+			}
+			rows = append(rows, widget.Box(widget.Row(
+				widget.Expanded(widget.Column(
+					widget.Row(title...).Gap(6).Align(widget.AlignCenter),
+					muted(widget.Text(Tf("%d sessions · %s in · %s out", p.Sessions, tokens(p.Input), tokens(p.Output))).Size(11.5).NoWrap()),
+				).Gap(2).Stretch()),
+				widget.Text(costStr).Size(12.5).Weight(ggui.WeightSemibold).NoWrap(),
+			).Gap(8).Align(widget.AlignCenter)).Fill(skin.Surface1).Border(1, skin.Border).Radius(8).Pad(8, 12))
+		}
+		return widget.Column(rows...).Gap(8).Stretch()
+	})
 }
 
 func accountUsageCard(m *model, acc *protocol.AgentAccountUsage, now time.Time, displayMode, defaultAgent string) ggui.Widget {

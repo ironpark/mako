@@ -2089,4 +2089,7 @@ var catalogKo = map[string]string{
 	"Removed %d other race worktree(s)":                                                  "나머지 비교 워크트리 %d개를 삭제했습니다",
 	"Their sessions stopped, and their branches were deleted.":                           "해당 세션을 종료하고 브랜치를 삭제했습니다.",
 	"%s: its session did not stop, so its worktree was kept":                             "%s: 세션이 종료되지 않아 워크트리를 유지했습니다",
+
+	// Usage analytics refresh
+	"Loading usage: %d of %d sessions…": "사용량 불러오는 중: 세션 %[2]d개 중 %[1]d개…",
 }

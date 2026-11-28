@@ -160,3 +160,50 @@ func TestSuggestFallbackAgentSkipsSpentAlternatives(t *testing.T) {
 		}
 	}
 }
+
+func TestAggregateProjectUsage(t *testing.T) {
+	sessions := []*protocol.SessionInfo{
+		{Id: "s1", Project: "/repo/a", Agent: "claude"},
+		{Id: "s2", Project: "/repo/a", Agent: "codex"},
+		{Id: "s3", Project: "/repo/b", Agent: "claude"},
+	}
+	usages := map[string]*protocol.Usage{
+		"s1": {Input: 1000, CachedInput: 500, Output: 200, CostUsd: 0.40},
+		"s2": {Input: 2000, Output: 400, CostUsd: 0.60},
+		"s3": {Input: 500, Output: 100, CostUsd: 0.10},
+	}
+	rows := aggregateProjectUsage(sessions, usages)
+	if len(rows) != 2 {
+		t.Fatalf("rows len = %d, want 2", len(rows))
+	}
+	if rows[0].Project != "/repo/a" || rows[0].Sessions != 2 || rows[0].Input != 3500 || rows[0].Output != 600 {
+		t.Fatalf("top project row = %+v", rows[0])
+	}
+}
+
+func TestAggregateProjectUsageByRepoAndNode(t *testing.T) {
+	sessions := []*protocol.SessionInfo{
+		{Id: "main", NodeId: "n1", Project: "/repo/a"},
+		// Two race contestants, each in a worktree of /repo/a.
+		{Id: "w1", NodeId: "n1", Project: "/repo/a.worktrees/race-claude-1", Worktree: &protocol.Worktree{Repo: "/repo/a", Path: "/repo/a.worktrees/race-claude-1"}},
+		{Id: "w2", NodeId: "n1", Project: "/repo/a.worktrees/race-codex-2", Worktree: &protocol.Worktree{Repo: "/repo/a", Path: "/repo/a.worktrees/race-codex-2"}},
+		// The same folder on another node.
+		{Id: "other", NodeId: "n2", Project: "/repo/a"},
+	}
+	usages := map[string]*protocol.Usage{
+		"main":  {Input: 100, CostUsd: 0.10},
+		"w1":    {Input: 200, CostUsd: 0.20},
+		"w2":    {Input: 300, CostUsd: 0.30},
+		"other": {Input: 50, CostUsd: 0.05},
+	}
+	rows := aggregateProjectUsage(sessions, usages)
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v, want one per node", rows)
+	}
+	if r := rows[0]; r.NodeID != "n1" || r.Project != "/repo/a" || r.Sessions != 3 || r.Input != 600 {
+		t.Fatalf("n1 row = %+v", r)
+	}
+	if r := rows[1]; r.NodeID != "n2" || r.Project != "/repo/a" || r.Sessions != 1 || r.Input != 50 {
+		t.Fatalf("n2 row = %+v", r)
+	}
+}

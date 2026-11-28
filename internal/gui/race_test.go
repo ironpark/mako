@@ -51,23 +51,3 @@ func TestRaceWinnerBodySaysWhatIsCommitted(t *testing.T) {
 		t.Fatalf("dirty body %q", dirty)
 	}
 }
-
-func TestAggregateProjectUsage(t *testing.T) {
-	sessions := []*protocol.SessionInfo{
-		{Id: "s1", Project: "/repo/a", Agent: "claude"},
-		{Id: "s2", Project: "/repo/a", Agent: "codex"},
-		{Id: "s3", Project: "/repo/b", Agent: "claude"},
-	}
-	usages := map[string]*protocol.Usage{
-		"s1": {Input: 1000, CachedInput: 500, Output: 200, CostUsd: 0.40},
-		"s2": {Input: 2000, Output: 400, CostUsd: 0.60},
-		"s3": {Input: 500, Output: 100, CostUsd: 0.10},
-	}
-	rows := aggregateProjectUsage(sessions, usages)
-	if len(rows) != 2 {
-		t.Fatalf("rows len = %d, want 2", len(rows))
-	}
-	if rows[0].Project != "/repo/a" || rows[0].Sessions != 2 || rows[0].Input != 3500 || rows[0].Output != 600 {
-		t.Fatalf("top project row = %+v", rows[0])
-	}
-}
