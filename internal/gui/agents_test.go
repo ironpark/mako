@@ -769,3 +769,68 @@ func TestFastModeAgentAndProfileSettings(t *testing.T) {
 		}
 	}
 }
+
+// Saving Settings > Agents keeps the sandbox of agents and profiles, next
+// to their fast mode, and the cards choose it.
+func TestAgentSandboxSettings(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	on, off := true, false
+	in := map[string]agentspec.Agent{
+		"claude": {Sandbox: agentspec.SandboxWorkspace, Fast: &on, Profiles: []agentspec.Profile{
+			{Name: "inherits"},
+			{Name: "open", Sandbox: agentspec.SandboxOff, Fast: &off},
+		}},
+		"codex": {Sandbox: agentspec.SandboxOff, Profiles: []agentspec.Profile{{Name: "boxed", Sandbox: agentspec.SandboxWorkspace}}},
+	}
+	got, err := applyAgents(draftAgents(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude, codex := got["claude"], got["codex"]
+	if claude.Sandbox != agentspec.SandboxWorkspace || claude.Profiles[0].Sandbox != "" || claude.Profiles[1].Sandbox != agentspec.SandboxOff {
+		t.Fatalf("claude sandbox round-trip = %+v", claude)
+	}
+	if codex.Sandbox != "" || codex.Profiles[0].Sandbox != agentspec.SandboxWorkspace {
+		t.Fatalf("codex sandbox round-trip = %+v", codex)
+	}
+	if claude.Fast == nil || !*claude.Fast || claude.Profiles[0].Fast != nil || claude.Profiles[1].Fast == nil || *claude.Profiles[1].Fast {
+		t.Fatalf("claude fast mode round-trip beside the sandbox = %+v", claude)
+	}
+
+	m := newModel(&config.Config{Agents: map[string]agentspec.Agent{
+		"claude": {Fast: &on, Profiles: []agentspec.Profile{{Name: "work"}}},
+	}}, "")
+	var row, profile agentDraft
+	for _, r := range ggui.Peek(m.AgentDraft) {
+		if r.Agent == "claude" {
+			if r.IsProfile {
+				profile = r
+			} else {
+				row = r
+			}
+		}
+	}
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(agentEditor(m, row, []agentDraft{profile})) }, ggui.Sz(700, 2000))
+	defer p.Close()
+	p.Frame()
+	for label, choice := range map[string]string{
+		Tf("%s sandbox", "claude"):      T("Workspace"),
+		Tf("%s sandbox", "claude:work"): T("Off"),
+	} {
+		sel, ok := p.Semantics().Find(ggui.RoleSelect, label)
+		if !ok {
+			t.Fatalf("missing select %q:\n%s", label, p.Semantics().String())
+		}
+		p.PerformAction(sel.ID, ggui.Action{Kind: ggui.ActionSelect, Text: choice})
+	}
+	after, err := applyAgents(ggui.Peek(m.AgentDraft))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after["claude"].Sandbox != agentspec.SandboxWorkspace || after["claude"].Profiles[0].Sandbox != agentspec.SandboxOff {
+		t.Fatalf("after choosing, claude = %+v", after["claude"])
+	}
+	if f := after["claude"].Fast; f == nil || !*f {
+		t.Fatalf("choosing the sandbox lost fast mode: %+v", after["claude"])
+	}
+}
