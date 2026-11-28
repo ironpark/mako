@@ -427,7 +427,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 			}
 			w.Base = gitstat.Branch(project)
 		}
-		wtCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		wtCtx, cancel := context.WithTimeout(ctx, gitstat.WorktreeTimeout)
 		// The repository's setup_cmd runs only while the user trusts its
 		// file as it reads; the worktree says it was skipped otherwise.
 		made, err := gitstat.AddWorktree(wtCtx, project, gitstat.NewWorktree{Branch: w.GetBranch(), Start: cmp.Or(start, w.GetBase()), Trusted: d.repoTrust.Trusted})

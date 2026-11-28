@@ -874,8 +874,9 @@ func (m *model) startSession(tab string, f newSession) {
 		// Without a branch the node names one after the repository.
 		req.Worktree = &protocol.Worktree{Branch: strings.TrimSpace(f.Branch), Base: f.Base, Start: f.Start}
 	}
+	wait := openTimeout(req, 10*time.Second)
 	ggui.Async(func() (*protocol.SessionInfo, error) {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), wait)
 		defer cancel()
 		c, err := m.link.client(ctx)
 		if err != nil {

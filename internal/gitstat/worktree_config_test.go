@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/repotrust"
@@ -211,4 +212,30 @@ func TestWorktreeHooksRunOnlyWhileTrusted(t *testing.T) {
 	write(t, root, ".mako/worktree.toml", config)
 	t.Setenv("MAKO_NO_WORKTREE_HOOKS", "1")
 	check("feat/off", false, false)
+}
+
+// A worktree whose setup_cmd ran out the request's time is still rolled
+// back: undoing it does not run on the context that ended.
+func TestWorktreeBootstrapRollsBackAfterTheContextEnds(t *testing.T) {
+	root, run := cliRepo(t)
+	write(t, root, "a.txt", "one\n")
+	write(t, root, ".mako/worktree.toml", "setup_cmd = \"sleep 30\"\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "initial")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	if _, err := AddWorktree(ctx, root, NewWorktree{Branch: "feat/slow", Start: "main", Trusted: trustAll}); err == nil {
+		t.Fatal("a setup_cmd past the deadline succeeded")
+	}
+	if took := time.Since(started); took > 20*time.Second {
+		t.Fatalf("took %v after the deadline", took)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(root), filepath.Base(root)+".worktrees", "feat-slow")); !os.IsNotExist(err) {
+		t.Fatal("worktree left behind")
+	}
+	if strings.Contains(run("branch"), "feat/slow") {
+		t.Fatal("branch left behind")
+	}
 }

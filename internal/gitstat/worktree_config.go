@@ -444,6 +444,9 @@ func runWorktreeHook(ctx context.Context, wtPath, repo, branch, base, command st
 		cmd = exec.CommandContext(hookCtx, "sh", "-c", command)
 	}
 	cmd.Dir = wtPath
+	// A command the timeout killed can leave children holding its output
+	// open, which waiting on it would wait for too.
+	cmd.WaitDelay = 5 * time.Second
 	cmd.Env = append(os.Environ(),
 		"MAKO_WORKTREE_PATH="+wtPath,
 		"MAKO_WORKTREE_REPO="+repo,

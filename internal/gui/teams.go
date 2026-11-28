@@ -14,6 +14,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/client"
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -83,14 +84,17 @@ func (m *model) teamNamed(name string) (agentTeam, bool) {
 
 // startTeam starts team's agents as ones session parent spawned, in its
 // folder on its node, each with its role and task; and says which did
-// not start.
+// not start. Agents isolated in worktrees start one after another, as
+// the repository's setup_cmd for one could fight another's over the
+// paths they share.
 func (m *model) startTeam(parent string, team agentTeam, task string) {
 	s, ok := m.session(parent)
 	if !ok {
 		return
 	}
 	node := m.remoteID(s.GetNodeId())
-	for _, mb := range team.Members {
+	reqs := make([]*protocol.OpenSession, len(team.Members))
+	for i, mb := range team.Members {
 		agent, profile := agentspec.SplitTarget(mb.Agent)
 		project := s.GetProject()
 		wt := s.GetWorktree()
@@ -98,11 +102,18 @@ func (m *model) startTeam(parent string, team agentTeam, task string) {
 			project = cmp.Or(s.GetWorktree().GetRepo(), s.GetProject())
 			wt = &protocol.Worktree{Base: cmp.Or(s.GetWorktree().GetBase(), s.GetBranch())}
 		}
-		req := &protocol.OpenSession{NodeId: node, Agent: agent, Profile: profile, Project: project, Worktree: wt,
+		reqs[i] = &protocol.OpenSession{NodeId: node, Agent: agent, Profile: profile, Project: project, Worktree: wt,
 			Cols: 120, Rows: 36, ParentSessionId: parent, Name: mb.Name, Prompt: memberPrompt(mb, task)}
-		fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
+	}
+	var open func(i int)
+	open = func(i int) {
+		mb, req := team.Members[i], reqs[i]
+		fetch(m, openTimeout(req, 20*time.Second), func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
 			return c.Open(ctx, req)
 		}, func(info *protocol.SessionInfo, err error) {
+			if team.IsolateWorktrees && i+1 < len(reqs) {
+				defer open(i + 1)
+			}
 			if err != nil {
 				m.toaster.Push(ui.Toast(Tf("%s did not start", mb.Name), err.Error()).Destructive())
 				return
@@ -113,6 +124,25 @@ func (m *model) startTeam(parent string, team agentTeam, task string) {
 			m.noteSkippedHooks(info)
 		})
 	}
+	if team.IsolateWorktrees {
+		if len(reqs) > 0 {
+			open(0)
+		}
+		return
+	}
+	for i := range reqs {
+		open(i)
+	}
+}
+
+// openTimeout is how long to wait for the session req opens, wait at
+// most when it starts in no new worktree: making one, its setup_cmd
+// included, can take the node gitstat.WorktreeTimeout more.
+func openTimeout(req *protocol.OpenSession, wait time.Duration) time.Duration {
+	if w := req.GetWorktree(); w != nil && w.GetPath() == "" {
+		return wait + gitstat.WorktreeTimeout
+	}
+	return wait
 }
 
 // startable are the teams with agents to start.

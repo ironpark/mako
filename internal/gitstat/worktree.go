@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -18,6 +19,15 @@ import (
 // so agents working on one repository at once do not write over each
 // other's files. The worktree sits beside the repository, in a folder
 // named after it: ../<repo>.worktrees/<branch>.
+
+// WorktreeTimeout is how long making a worktree can take, the
+// repository's setup_cmd included, which itself has two minutes: a
+// front-end waits at least this long for a session that starts in one.
+const WorktreeTimeout = 3 * time.Minute
+
+// rollbackTimeout is how long undoing a worktree that failed to bootstrap
+// can take, even after the request it was made for ended.
+const rollbackTimeout = 30 * time.Second
 
 // NewWorktree is a worktree for AddWorktree to make.
 type NewWorktree struct {
@@ -89,9 +99,12 @@ func AddWorktree(ctx context.Context, dir string, w NewWorktree) (MadeWorktree, 
 	skipped, err := applyWorktreeBootstrap(ctx, repo, path, branch, base, cfg, w.Trusted)
 	if err != nil {
 		// Roll back the newly created worktree and branch so failed setup
-		// hooks do not leave orphaned broken worktrees behind.
-		_, _ = run(ctx, repo, nil, "worktree", "remove", "--force", path)
-		_, _ = run(ctx, repo, nil, "branch", "-D", branch)
+		// hooks do not leave orphaned broken worktrees behind; on a context
+		// of its own, since ctx ending is often why the setup failed.
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
+		defer cancel()
+		_, _ = run(rctx, repo, nil, "worktree", "remove", "--force", path)
+		_, _ = run(rctx, repo, nil, "branch", "-D", branch)
 		return MadeWorktree{}, err
 	}
 	made := MadeWorktree{Repo: repo, Path: path, Branch: branch}
