@@ -191,6 +191,47 @@ public  final class ForgeView extends
     number_ = 0L;
   }
 
+  public static final int NO_FILES_FIELD_NUMBER = 5;
+  private boolean noFiles_;
+  /**
+   * <pre>
+   * no_files leaves a pull request's files out, for a reader that wants
+   * its checks and comments alone.
+   * </pre>
+   *
+   * <code>bool no_files = 5 [json_name = "noFiles"];</code>
+   * @return The noFiles.
+   */
+  @java.lang.Override
+  public boolean getNoFiles() {
+    return noFiles_;
+  }
+  /**
+   * <pre>
+   * no_files leaves a pull request's files out, for a reader that wants
+   * its checks and comments alone.
+   * </pre>
+   *
+   * <code>bool no_files = 5 [json_name = "noFiles"];</code>
+   * @param value The noFiles to set.
+   */
+  private void setNoFiles(boolean value) {
+    
+    noFiles_ = value;
+  }
+  /**
+   * <pre>
+   * no_files leaves a pull request's files out, for a reader that wants
+   * its checks and comments alone.
+   * </pre>
+   *
+   * <code>bool no_files = 5 [json_name = "noFiles"];</code>
+   */
+  private void clearNoFiles() {
+
+    noFiles_ = false;
+  }
+
   public static dev.ironpark.mako.v2.ForgeView parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -468,6 +509,49 @@ public  final class ForgeView extends
       return this;
     }
 
+    /**
+     * <pre>
+     * no_files leaves a pull request's files out, for a reader that wants
+     * its checks and comments alone.
+     * </pre>
+     *
+     * <code>bool no_files = 5 [json_name = "noFiles"];</code>
+     * @return The noFiles.
+     */
+    @java.lang.Override
+    public boolean getNoFiles() {
+      return instance.getNoFiles();
+    }
+    /**
+     * <pre>
+     * no_files leaves a pull request's files out, for a reader that wants
+     * its checks and comments alone.
+     * </pre>
+     *
+     * <code>bool no_files = 5 [json_name = "noFiles"];</code>
+     * @param value The noFiles to set.
+     * @return This builder for chaining.
+     */
+    public Builder setNoFiles(boolean value) {
+      copyOnWrite();
+      instance.setNoFiles(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * no_files leaves a pull request's files out, for a reader that wants
+     * its checks and comments alone.
+     * </pre>
+     *
+     * <code>bool no_files = 5 [json_name = "noFiles"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearNoFiles() {
+      copyOnWrite();
+      instance.clearNoFiles();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ForgeView)
   }
   @java.lang.Override
@@ -488,10 +572,11 @@ public  final class ForgeView extends
             "root_",
             "kind_",
             "number_",
+            "noFiles_",
           };
           java.lang.String info =
-              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0002";
+              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0002\u0005\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -78,6 +78,9 @@ func (d *Daemon) startP2P(ctx context.Context, dir string) error {
 	d.keyPrint, d.ownerPrint = fingerprint(h.Key()), fingerprint(h.Owner())
 	h.HandleStreams(func(s network.Stream) {
 		defer s.Close()
+		// What a peer asks is its: a session host binds a front-end to the
+		// peer that passes its requests on.
+		ctx := withPeer(ctx, s.Conn().RemotePeer().String())
 		if err := d.serveStream(ctx, transport.NewPeerStream(s), true); err != nil && !isClosed(err) {
 			d.log.Debug("peer stream ended", "err", err)
 		}

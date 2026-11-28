@@ -11,6 +11,7 @@ require (
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/godbus/dbus/v5 v5.2.2
 	github.com/gorilla/websocket v1.5.3
+	github.com/gosuda/go-ahp v0.2.0
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/fswatch v0.4.0
 	github.com/ironpark/ggfx v0.3.2
@@ -23,6 +24,7 @@ require (
 	github.com/kevinburke/ssh_config v1.2.0
 	github.com/klauspost/compress v1.20.3
 	github.com/libp2p/go-libp2p v0.51.0
+	github.com/microsoft/agent-host-protocol/clients/go v1.1.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/multiformats/go-multiaddr v0.16.1
 	github.com/multiformats/go-multistream v0.6.1
@@ -53,6 +55,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
+	github.com/coder/websocket v1.8.15 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect

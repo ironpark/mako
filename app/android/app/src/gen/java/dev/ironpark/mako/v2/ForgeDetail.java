@@ -25,6 +25,7 @@ public  final class ForgeDetail extends
     checks_ = emptyProtobufList();
     forge_ = "";
     ops_ = emptyProtobufList();
+    viewer_ = "";
   }
   private int bitField0_;
   public static final int ITEM_FIELD_NUMBER = 1;
@@ -767,6 +768,78 @@ public  final class ForgeDetail extends
     checkByteStringIsUtf8(value);
     ensureOpsIsMutable();
     ops_.add(value.toStringUtf8());
+  }
+
+  public static final int VIEWER_FIELD_NUMBER = 9;
+  private java.lang.String viewer_;
+  /**
+   * <pre>
+   * viewer is the account the forge answered for, as a pull request's
+   * comments name it; "" when the forge does not tell.
+   * </pre>
+   *
+   * <code>string viewer = 9 [json_name = "viewer"];</code>
+   * @return The viewer.
+   */
+  @java.lang.Override
+  public java.lang.String getViewer() {
+    return viewer_;
+  }
+  /**
+   * <pre>
+   * viewer is the account the forge answered for, as a pull request's
+   * comments name it; "" when the forge does not tell.
+   * </pre>
+   *
+   * <code>string viewer = 9 [json_name = "viewer"];</code>
+   * @return The bytes for viewer.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getViewerBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(viewer_);
+  }
+  /**
+   * <pre>
+   * viewer is the account the forge answered for, as a pull request's
+   * comments name it; "" when the forge does not tell.
+   * </pre>
+   *
+   * <code>string viewer = 9 [json_name = "viewer"];</code>
+   * @param value The viewer to set.
+   */
+  private void setViewer(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    viewer_ = value;
+  }
+  /**
+   * <pre>
+   * viewer is the account the forge answered for, as a pull request's
+   * comments name it; "" when the forge does not tell.
+   * </pre>
+   *
+   * <code>string viewer = 9 [json_name = "viewer"];</code>
+   */
+  private void clearViewer() {
+
+    viewer_ = getDefaultInstance().getViewer();
+  }
+  /**
+   * <pre>
+   * viewer is the account the forge answered for, as a pull request's
+   * comments name it; "" when the forge does not tell.
+   * </pre>
+   *
+   * <code>string viewer = 9 [json_name = "viewer"];</code>
+   * @param value The bytes for viewer to set.
+   */
+  private void setViewerBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    viewer_ = value.toStringUtf8();
+
   }
 
   public static dev.ironpark.mako.v2.ForgeDetail parseFrom(
@@ -1653,6 +1726,80 @@ public  final class ForgeDetail extends
       return this;
     }
 
+    /**
+     * <pre>
+     * viewer is the account the forge answered for, as a pull request's
+     * comments name it; "" when the forge does not tell.
+     * </pre>
+     *
+     * <code>string viewer = 9 [json_name = "viewer"];</code>
+     * @return The viewer.
+     */
+    @java.lang.Override
+    public java.lang.String getViewer() {
+      return instance.getViewer();
+    }
+    /**
+     * <pre>
+     * viewer is the account the forge answered for, as a pull request's
+     * comments name it; "" when the forge does not tell.
+     * </pre>
+     *
+     * <code>string viewer = 9 [json_name = "viewer"];</code>
+     * @return The bytes for viewer.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getViewerBytes() {
+      return instance.getViewerBytes();
+    }
+    /**
+     * <pre>
+     * viewer is the account the forge answered for, as a pull request's
+     * comments name it; "" when the forge does not tell.
+     * </pre>
+     *
+     * <code>string viewer = 9 [json_name = "viewer"];</code>
+     * @param value The viewer to set.
+     * @return This builder for chaining.
+     */
+    public Builder setViewer(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setViewer(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * viewer is the account the forge answered for, as a pull request's
+     * comments name it; "" when the forge does not tell.
+     * </pre>
+     *
+     * <code>string viewer = 9 [json_name = "viewer"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearViewer() {
+      copyOnWrite();
+      instance.clearViewer();
+      return this;
+    }
+    /**
+     * <pre>
+     * viewer is the account the forge answered for, as a pull request's
+     * comments name it; "" when the forge does not tell.
+     * </pre>
+     *
+     * <code>string viewer = 9 [json_name = "viewer"];</code>
+     * @param value The bytes for viewer to set.
+     * @return This builder for chaining.
+     */
+    public Builder setViewerBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setViewerBytes(value);
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ForgeDetail)
   }
   @java.lang.Override
@@ -1681,10 +1828,11 @@ public  final class ForgeDetail extends
             "none_",
             "forge_",
             "ops_",
+            "viewer_",
           };
           java.lang.String info =
-              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0004\u0000\u0001\u1009\u0000\u0002\u0208\u0003" +
-              "\u001b\u0004\u001b\u0005\u001b\u0006\u0007\u0007\u0208\b\u021a";
+              "\u0000\t\u0000\u0001\u0001\t\t\u0000\u0004\u0000\u0001\u1009\u0000\u0002\u0208\u0003" +
+              "\u001b\u0004\u001b\u0005\u001b\u0006\u0007\u0007\u0208\b\u021a\t\u0208";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

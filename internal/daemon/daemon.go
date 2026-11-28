@@ -51,6 +51,7 @@ type Daemon struct {
 	sessionMu   sync.Mutex // protects saved launches and activation
 	saved       map[string]savedSession
 	sessionPath string
+	hosts       hostHub // the sessions' hosts, for their subscribers
 	// starting are the sessions whose launch is being made ready, each
 	// closed as its start ends; guarded by sessionMu.
 	starting map[string]chan struct{}
@@ -242,6 +243,15 @@ func (d *Daemon) Run(ctx context.Context) error {
 	if err := d.loadSessions(dir); err != nil {
 		return err
 	}
+	if err := d.hosts.load(dir, func(id string) bool { _, ok := d.savedEntry(id); return ok }); err != nil {
+		return err
+	}
+	defer func() {
+		d.stopHosts()
+		if err := d.hosts.flush(); err != nil {
+			d.log.Warn("session host: drafts not saved", "err", err)
+		}
+	}()
 	cfg := d.config()
 	d.workspace.load(dir, cfg.NodeID)
 	d.pluginConfigSync.load(dir, cfg.NodeID)
@@ -304,6 +314,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 	wg.Go(func() { d.maintain(ctx) })
 	wg.Go(func() { d.watchState(ctx) })
 	wg.Go(func() { d.runRoutines(ctx) })
+	if cfg.AHP.Listen != "" {
+		wg.Go(func() { d.serveAHP(ctx, dir, run, cfg.AHP) })
+	}
 
 	<-ctx.Done()
 	_ = d.ln.Close()
@@ -521,6 +534,10 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleListRoutines(ctx, stream, env)
 	case protocol.TypeRoutineAction:
 		return d.handleRoutineAction(ctx, stream, env)
+	case protocol.TypeSubscribeSession:
+		return d.handleSubscribeSession(ctx, stream, env)
+	case protocol.TypeSessionAction:
+		return d.handleSessionAction(ctx, stream, env, fromPeer)
 	case protocol.TypeInspectAgentHome:
 		return d.handleInspectAgentHome(ctx, stream, env)
 	case protocol.TypeMigrateAgentHome:

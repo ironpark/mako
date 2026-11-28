@@ -1,0 +1,192 @@
+syntax = "proto3";
+
+package mako.v2;
+
+import "google/protobuf/timestamp.proto";
+import "mako/v2/chat.proto";
+import "mako/v2/session.proto";
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// The session host: what the daemon running a session holds of it for the
+// front-ends that show it, so that any of them, on any node, picks the
+// session up where another left it (revision 54). A front-end subscribes
+// with subscribe_session and is sent the host's state, then each event
+// that changes it, numbered; it writes with session_action. See
+// docs/protocol.md, "Session host".
+
+// SubscribeSession turns its stream into a feed of one session's host:
+// a HostSubscribed, then a HostEvent for each change, until the front-end
+// closes the stream. Routed by node_id.
+message SubscribeSession {
+  string node_id = 1;
+  string session_id = 2;
+  // client_id names the front-end, the same across its restarts: the
+  // events of its actions carry it, and the host counts its streams as
+  // one client.
+  string client_id = 3;
+  // client_name is how other front-ends name it, as "desktop (laptop)".
+  string client_name = 4;
+  // last_seen_seq is the seq of the last event the front-end applied of
+  // this session, 0 for none: the host replays what came after it, or
+  // sends its state when it no longer has that.
+  uint64 last_seen_seq = 5;
+  // approvals says the front-end shows approvals: while it is subscribed,
+  // and for a while after, the session's approvals wait for an answer
+  // rather than going to the agent's terminal.
+  bool approvals = 6;
+}
+
+// HostSubscribed is the first frame of a subscription: the host's whole
+// state, or the events the front-end missed since last_seen_seq.
+message HostSubscribed {
+  HostState state = 1;              // set when the front-end starts over
+  repeated HostEvent replay = 2;    // else what came after last_seen_seq, in order
+  // epoch is the seq of the host's first event since its daemon started:
+  // a seq below it is of an earlier run, which the host cannot replay.
+  uint64 epoch = 3;
+}
+
+// HostState is a session's host as of seq.
+message HostState {
+  uint64 seq = 1;
+  SessionInfo info = 2;
+  Chat chat = 3;           // the latest messages, as read_chat answers
+  ChatLive live = 4;       // what streams of the reply, not yet in the log
+  HostDraft draft = 5;
+  HostQueue queue = 6;
+  HostClients clients = 7;
+}
+
+// HostEvent is one change of a session's host. Applied in seq order to
+// the state, or to the state the events before it made, it makes the
+// host's state as of its seq.
+message HostEvent {
+  uint64 seq = 1;
+  HostOrigin origin = 2; // the front-end whose action it is; unset for the host's own
+  oneof body {
+    SessionInfo info = 10;                     // the session's info, whole
+    HostChatPatch chat = 11;                   // the conversation changed
+    ChatLive live = 12;                        // what streams, whole
+    HostDraft draft = 13;                      // the draft, whole
+    HostQueue queue = 14;                      // the queue, whole
+    HostClients clients = 15;                  // the front-ends subscribed, whole
+    HostPrompt prompt = 16;                    // a prompt went to the agent
+    HostApprovalAnswered approval_answered = 17;
+  }
+}
+
+// HostOrigin is the front-end, and its action, an event comes of.
+message HostOrigin {
+  string client_id = 1;
+  uint64 client_seq = 2;
+}
+
+// HostChatPatch is the conversation's latest messages anew: the ones held
+// before, from drop on, keep of them, then messages. With whole, the
+// messages are all of them, and the conversation's other fields come too.
+message HostChatPatch {
+  int32 drop = 1;
+  int32 keep = 2;
+  repeated ChatMessage messages = 3;
+  bool whole = 4;
+  string conversation = 5;
+  bool truncated = 6;
+  int64 start = 7;
+  Usage usage = 8;
+  repeated SubAgent agents = 9;
+  bool supported = 10;
+}
+
+// HostDraft is the message being written to the session's agent, shared
+// by its front-ends: the last written wins.
+message HostDraft {
+  string text = 1;
+  string client_id = 2; // who wrote it last
+  google.protobuf.Timestamp at = 3;
+}
+
+// HostQueue is what waits to go to the agent once it is at its prompt,
+// first first.
+message HostQueue {
+  repeated HostQueued items = 1;
+}
+
+message HostQueued {
+  string id = 1;
+  string text = 2;
+  HostOrigin origin = 3;
+  google.protobuf.Timestamp at = 4;
+}
+
+// HostClients are the front-ends subscribed to the session.
+message HostClients {
+  repeated HostClient clients = 1;
+}
+
+message HostClient {
+  string id = 1;
+  string name = 2;
+  google.protobuf.Timestamp since = 3;
+  bool approvals = 4;
+}
+
+// HostPrompt is a prompt that went to the agent: typed at once, or taken
+// from the queue (queued_id).
+message HostPrompt {
+  string text = 1;
+  string queued_id = 2;
+}
+
+// HostApprovalAnswered is an approval a front-end answered.
+message HostApprovalAnswered {
+  string approval_id = 1;
+  string decision = 2;
+}
+
+// SessionAction is a front-end's change of a session's host. The host
+// takes each (client_id, client_seq) once: an action sent again, as after
+// a lost reply, is answered as it was the first time. Routed by node_id.
+message SessionAction {
+  string node_id = 1;
+  string session_id = 2;
+  string client_id = 3;
+  uint64 client_seq = 4; // growing with each action of the client's
+  oneof action {
+    HostSetDraft set_draft = 10;
+    HostSendPrompt send_prompt = 11;
+    HostCancelQueued cancel_queued = 12;
+    AnswerApproval answer_approval = 13;
+  }
+}
+
+message HostSetDraft {
+  string text = 1;
+}
+
+// HostSendPrompt sends text to the agent as a prompt, typed at once as
+// the composer types it, the agent taking it as it takes typing while it
+// works. With queue, it waits in the host's queue instead until the agent
+// is at its prompt, for every front-end to see and cancel. With
+// clear_draft, the draft is emptied with it, unless another front-end
+// wrote it since this one did.
+message HostSendPrompt {
+  string text = 1;
+  bool queue = 2;
+  bool clear_draft = 3;
+  // keys submit it, as the front-end's terminal sends Enter; "\r" when
+  // empty.
+  bytes keys = 4;
+}
+
+message HostCancelQueued {
+  string id = 1;
+}
+
+// SessionActionResult answers a SessionAction: the seq of the last event
+// it made, 0 for none; and whether it had been taken before.
+message SessionActionResult {
+  uint64 seq = 1;
+  bool duplicate = 2;
+  bool queued = 3; // a prompt was queued rather than sent
+}

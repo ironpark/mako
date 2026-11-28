@@ -24,6 +24,7 @@ public  final class ForgeComment extends
     body_ = "";
     review_ = "";
     path_ = "";
+    association_ = "";
   }
   private int bitField0_;
   public static final int AUTHOR_FIELD_NUMBER = 1;
@@ -337,6 +338,121 @@ public  final class ForgeComment extends
   private void clearLine() {
 
     line_ = 0L;
+  }
+
+  public static final int ASSOCIATION_FIELD_NUMBER = 7;
+  private java.lang.String association_;
+  /**
+   * <pre>
+   * association is the author's tie to the repository, as GitHub names
+   * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+   * when the forge does not tell.
+   * </pre>
+   *
+   * <code>string association = 7 [json_name = "association"];</code>
+   * @return The association.
+   */
+  @java.lang.Override
+  public java.lang.String getAssociation() {
+    return association_;
+  }
+  /**
+   * <pre>
+   * association is the author's tie to the repository, as GitHub names
+   * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+   * when the forge does not tell.
+   * </pre>
+   *
+   * <code>string association = 7 [json_name = "association"];</code>
+   * @return The bytes for association.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getAssociationBytes() {
+    return com.google.protobuf.ByteString.copyFromUtf8(association_);
+  }
+  /**
+   * <pre>
+   * association is the author's tie to the repository, as GitHub names
+   * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+   * when the forge does not tell.
+   * </pre>
+   *
+   * <code>string association = 7 [json_name = "association"];</code>
+   * @param value The association to set.
+   */
+  private void setAssociation(
+      java.lang.String value) {
+    java.util.Objects.requireNonNull(value);
+
+    association_ = value;
+  }
+  /**
+   * <pre>
+   * association is the author's tie to the repository, as GitHub names
+   * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+   * when the forge does not tell.
+   * </pre>
+   *
+   * <code>string association = 7 [json_name = "association"];</code>
+   */
+  private void clearAssociation() {
+
+    association_ = getDefaultInstance().getAssociation();
+  }
+  /**
+   * <pre>
+   * association is the author's tie to the repository, as GitHub names
+   * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+   * when the forge does not tell.
+   * </pre>
+   *
+   * <code>string association = 7 [json_name = "association"];</code>
+   * @param value The bytes for association to set.
+   */
+  private void setAssociationBytes(
+      com.google.protobuf.ByteString value) {
+    checkByteStringIsUtf8(value);
+    association_ = value.toStringUtf8();
+
+  }
+
+  public static final int BOT_FIELD_NUMBER = 8;
+  private boolean bot_;
+  /**
+   * <pre>
+   * the author is a bot or an app
+   * </pre>
+   *
+   * <code>bool bot = 8 [json_name = "bot"];</code>
+   * @return The bot.
+   */
+  @java.lang.Override
+  public boolean getBot() {
+    return bot_;
+  }
+  /**
+   * <pre>
+   * the author is a bot or an app
+   * </pre>
+   *
+   * <code>bool bot = 8 [json_name = "bot"];</code>
+   * @param value The bot to set.
+   */
+  private void setBot(boolean value) {
+    
+    bot_ = value;
+  }
+  /**
+   * <pre>
+   * the author is a bot or an app
+   * </pre>
+   *
+   * <code>bool bot = 8 [json_name = "bot"];</code>
+   */
+  private void clearBot() {
+
+    bot_ = false;
   }
 
   public static dev.ironpark.mako.v2.ForgeComment parseFrom(
@@ -764,6 +880,125 @@ public  final class ForgeComment extends
       return this;
     }
 
+    /**
+     * <pre>
+     * association is the author's tie to the repository, as GitHub names
+     * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+     * when the forge does not tell.
+     * </pre>
+     *
+     * <code>string association = 7 [json_name = "association"];</code>
+     * @return The association.
+     */
+    @java.lang.Override
+    public java.lang.String getAssociation() {
+      return instance.getAssociation();
+    }
+    /**
+     * <pre>
+     * association is the author's tie to the repository, as GitHub names
+     * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+     * when the forge does not tell.
+     * </pre>
+     *
+     * <code>string association = 7 [json_name = "association"];</code>
+     * @return The bytes for association.
+     */
+    @java.lang.Override
+    public com.google.protobuf.ByteString
+        getAssociationBytes() {
+      return instance.getAssociationBytes();
+    }
+    /**
+     * <pre>
+     * association is the author's tie to the repository, as GitHub names
+     * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+     * when the forge does not tell.
+     * </pre>
+     *
+     * <code>string association = 7 [json_name = "association"];</code>
+     * @param value The association to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAssociation(
+        java.lang.String value) {
+      copyOnWrite();
+      instance.setAssociation(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * association is the author's tie to the repository, as GitHub names
+     * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+     * when the forge does not tell.
+     * </pre>
+     *
+     * <code>string association = 7 [json_name = "association"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAssociation() {
+      copyOnWrite();
+      instance.clearAssociation();
+      return this;
+    }
+    /**
+     * <pre>
+     * association is the author's tie to the repository, as GitHub names
+     * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+     * when the forge does not tell.
+     * </pre>
+     *
+     * <code>string association = 7 [json_name = "association"];</code>
+     * @param value The bytes for association to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAssociationBytes(
+        com.google.protobuf.ByteString value) {
+      copyOnWrite();
+      instance.setAssociationBytes(value);
+      return this;
+    }
+
+    /**
+     * <pre>
+     * the author is a bot or an app
+     * </pre>
+     *
+     * <code>bool bot = 8 [json_name = "bot"];</code>
+     * @return The bot.
+     */
+    @java.lang.Override
+    public boolean getBot() {
+      return instance.getBot();
+    }
+    /**
+     * <pre>
+     * the author is a bot or an app
+     * </pre>
+     *
+     * <code>bool bot = 8 [json_name = "bot"];</code>
+     * @param value The bot to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBot(boolean value) {
+      copyOnWrite();
+      instance.setBot(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * the author is a bot or an app
+     * </pre>
+     *
+     * <code>bool bot = 8 [json_name = "bot"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBot() {
+      copyOnWrite();
+      instance.clearBot();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ForgeComment)
   }
   @java.lang.Override
@@ -787,10 +1022,12 @@ public  final class ForgeComment extends
             "review_",
             "path_",
             "line_",
+            "association_",
+            "bot_",
           };
           java.lang.String info =
-              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u1009\u0000\u0004\u0208\u0005\u0208\u0006\u0002";
+              "\u0000\b\u0000\u0001\u0001\b\b\u0000\u0000\u0000\u0001\u0208\u0002\u0208\u0003\u1009" +
+              "\u0000\u0004\u0208\u0005\u0208\u0006\u0002\u0007\u0208\b\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

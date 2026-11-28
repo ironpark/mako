@@ -1650,5 +1650,68 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.RoutineAction getRoutineAction();
 
+  /**
+   * <pre>
+   * The session host: subscriptions and actions (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+   * @return Whether the subscribeSession field is set.
+   */
+  boolean hasSubscribeSession();
+  /**
+   * <pre>
+   * The session host: subscriptions and actions (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+   * @return The subscribeSession.
+   */
+  dev.ironpark.mako.v2.SubscribeSession getSubscribeSession();
+
+  /**
+   * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+   * @return Whether the hostSubscribed field is set.
+   */
+  boolean hasHostSubscribed();
+  /**
+   * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+   * @return The hostSubscribed.
+   */
+  dev.ironpark.mako.v2.HostSubscribed getHostSubscribed();
+
+  /**
+   * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+   * @return Whether the hostEvent field is set.
+   */
+  boolean hasHostEvent();
+  /**
+   * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+   * @return The hostEvent.
+   */
+  dev.ironpark.mako.v2.HostEvent getHostEvent();
+
+  /**
+   * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+   * @return Whether the sessionAction field is set.
+   */
+  boolean hasSessionAction();
+  /**
+   * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+   * @return The sessionAction.
+   */
+  dev.ironpark.mako.v2.SessionAction getSessionAction();
+
+  /**
+   * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+   * @return Whether the sessionActionResult field is set.
+   */
+  boolean hasSessionActionResult();
+  /**
+   * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+   * @return The sessionActionResult.
+   */
+  dev.ironpark.mako.v2.SessionActionResult getSessionActionResult();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

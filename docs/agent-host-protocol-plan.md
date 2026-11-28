@@ -1,6 +1,6 @@
 # Agent Host Protocol 도입과 클라이언트 간 Seamless Handoff 계획
 
-작성 기준일: 2026년 11월 28일. 분석 기준 커밋: `main` @ `148b43e` (`protocol.Revision` 52). 상태: 기획. 첫 단계(`read_agent`) 구현 중, Phase 0 (검증) 대기.
+작성 기준일: 2026년 11월 28일. 분석 기준 커밋: `main` @ `148b43e` (`protocol.Revision` 52). 상태: 기획. 첫 단계(`read_agent`), 두 번째 단계(session host, `subscribe_session`), 세 번째 단계(AHP endpoint) 구현 중, Phase 0 (검증) 대기.
 
 이 문서는 Microsoft의 [Agent Host Protocol](https://microsoft.github.io/agent-host-protocol/) (이하 AHP)을 mako에 도입하는 계획이다. 목표는 세션을 `makod`가 들고 있는 동안 클라이언트가 바뀌어도 작업이 끊기지 않는 것이다. 데스크톱 창, CLI, Android 앱, 그리고 VS Code Agents 창이나 웹 클라이언트 같은 외부 AHP 클라이언트가 모두 대상이다.
 
@@ -414,6 +414,53 @@ sequenceDiagram
 - 자세한 필드와 한도는 [`docs/agent-mcp.md`](agent-mcp.md)의 "Reading another agent"를 따른다.
 
 다음 단계에서 이 읽기를 구독(`subscribe_session`)으로 바꾸면, 같은 view가 액션 스트림으로 이어진다.
+
+### 두 번째 단계. session host와 `subscribe_session` (AHP 없이)
+
+AHP 어댑터 없이, 1절 목표의 handoff를 mako 자체 프로토콜로 먼저 만든다. Phase 1과 Phase 2의 핵심을 한 번에 담고, reducer 대신 daemon 안의 session host가 상태를 들고 있다. 프로토콜은 [`docs/protocol.md`](protocol.md)의 "Session host"에 적었다 (revision 54).
+
+- `proto/mako/v2/host.proto`: `SubscribeSession`, `HostSubscribed`, `HostEvent`, `HostState`, `SessionAction`, `SessionActionResult`. envelope 필드 170부터 174까지.
+- `internal/daemon/host.go`: 세션마다 host 하나. 구독자가 처음 올 때 시작하고, 마지막 구독자가 떠나고 10분 뒤에 멈춘다 (큐가 비어 있을 때만).
+  - 상태: `info`, `chat` (최신 메시지), `live` (스트리밍 중인 응답), `draft`, `queue`, `clients`.
+  - 순번: daemon 전체에서 하나. 상위 32비트가 실행 번호(epoch)이고, `host.json`에 저장해 재시작마다 올린다. 이전 실행의 seq는 스냅샷을 받는다 (D6).
+  - 링버퍼: 2048개 또는 4 MiB. replay에서는 뒤의 이벤트가 덮어쓰는 이벤트(전체 값을 담는 종류)를 뺀다. 너무 뒤처진 구독자는 같은 스트림에서 스냅샷을 다시 받는다.
+  - 대화: live hub가 로그가 자랐다고 하면 다시 읽고, 이전 대화와 비교한 patch(`drop`, `keep`, `messages`)를 보낸다.
+  - 중복 제거: client마다 마지막 256개의 `client_seq` 결과를 기억한다. 같은 액션이 다시 오면 처음 결과와 `duplicate`를 준다.
+  - 초안: 마지막에 쓴 것이 이긴다. `host.json`에 저장해 daemon 재시작 뒤에도 남는다.
+  - 큐: `send_prompt`의 `queue`로 넣고, 에이전트가 프롬프트에서 멈추면 mako 메시지 배달과 같은 규칙으로 하나씩 입력한다. 누가 넣었는지(`origin`)가 `prompt` 이벤트에 남는다.
+  - 승인 유예: `approvals`로 구독한 client가 떠나도 그 세션의 승인은 2분 동안 창에서 답을 기다린다 (`approvals.holdSession`). handoff 중에 승인이 터미널로 빠지지 않는다.
+  - 메시: `subscribe_session`은 `attach`처럼 `relayToPeer`로, `session_action`은 `serve`로 세션의 노드에 전달된다 (D4).
+- `internal/client/host.go`: `SubscribeSession`, `FollowSession` (상태를 들고 재접속 때 replay를 받는다), `SessionAction`.
+- 데스크톱 (`internal/gui/sessionhost.go`): 대화 화면이 열려 있는 동안 host를 구독한다.
+  - composer 초안을 400ms 뒤에 host로 보낸다. 다른 client가 쓴 초안은, 이 창에서 3초 안에 입력한 적이 없으면 composer에 보인다.
+  - 프롬프트는 `session_action`으로 보내고, 응답이 없으면 같은 `client_seq`로 한 번 더 보낸다.
+  - composer 위에 같은 세션을 연 다른 client를 보여 준다.
+
+남은 일은 다음과 같다.
+
+- 대화 화면은 아직 `read_chat`과 `watch_chat`으로 그린다. host의 `chat`과 `live`로 옮기는 일은 따로 한다.
+- 터미널 크기 규칙 (6.5절)과 읽음 상태 (6.6절).
+- Android 앱을 `subscribe_session`으로 옮기는 일.
+- `internal/e2e`의 6.8절 시나리오.
+- AHP 어댑터 (Phase 3).
+
+### 세 번째 단계. AHP endpoint (`internal/ahp`)
+
+Phase 3의 최소 범위를 만든다. 사용법은 [`docs/ahp.md`](ahp.md)에 적었다.
+
+- AHP 서버는 [`gosuda/go-ahp`](https://github.com/gosuda/go-ahp) v0.2.0이다. mako 세션처럼 client가 만들지 않은 세션을 보여 주려고 `Host.AddSession`과 `Host.RemoveSession`을 go-ahp에 추가했다.
+- `internal/ahp`는 bridge다. makod의 자기 socket에 front-end로 접속해 `subscribe_session`으로 각 세션을 따라가고, AHP 세션(`ahp-session:/<id>`)과 채팅(`ahp-chat:/<id>`)으로 옮긴다. 메시의 다른 노드 세션도 같은 방식으로 보인다 (Phase 4의 일부).
+- 대화: 사용자 메시지 하나가 턴 하나이고, 응답 텍스트는 markdown part, 도구 호출은 tool call이다. 에이전트가 일을 멈추면 턴이 끝난다. 보류 중인 승인은 확인을 기다리는 tool call(`approval:<id>`)이다.
+- 쓰기: `chat/turnStarted`는 `send_prompt`, `chat/turnCancelled`는 Escape, steering 메시지는 바로 입력, `chat/toolCallConfirmed`는 `answer_approval`, `chat/draftChanged`는 `set_draft`가 된다. 초안은 양방향이다.
+- 승인 보류: 세션에 AHP active client가 있을 때만 bridge가 `approvals`로 구독한다. 그래서 아무도 보지 않을 때 승인이 창에서 무한히 기다리지 않는다.
+- endpoint는 기본으로 꺼져 있다 (D5). `config.json`의 `ahp.listen`(loopback만), 토큰은 `ahp-token`(`0600`), 그리고 run 디렉터리의 `ahp.sock`(`0600`, 토큰 없음). epoch는 `ahp-epoch`에 저장한다 (D6).
+- 시험: 공식 Go 클라이언트로 접속, 구독, 에이전트 턴, client 턴, 초안 양방향, active client의 승인 보류를 확인한다.
+
+남은 일은 다음과 같다.
+
+- 입력 요청(`chat/inputRequested`, 질문 승인), 터미널 채널, resource, changeset.
+- `dispatchAction` 속도 제한 (9절).
+- 공식 TypeScript 클라이언트와 VS Code 연결 시험 (Phase 0의 확인 항목).
 
 ### Phase 0. 검증
 

@@ -27,6 +27,7 @@ and this document describes how the messages are used.
 - [Routing across the mesh](#routing-across-the-mesh)
 - [Message reference](#message-reference)
 - [Attach streams](#attach-streams)
+- [Session host](#session-host)
 - [Discovery](#discovery)
 - [The mesh over libp2p](#the-mesh-over-libp2p)
 - [Compatibility](#compatibility)
@@ -258,6 +259,7 @@ error { message: "unknown session \"7f3a…\"", code: "" }
 | `changed` | A `write_file` was refused because the file changed since the writer read it. |
 | `unsupported` | The daemon does not know the request's type; it predates the caller. |
 | `no_plugin` | A `watch_block` or `block_event` of a plugin the node does not have, or a node that runs no plugins: asking again changes nothing until the plugin is installed (revision 31). |
+| `not_taken` | A `session_action` that the session's host refused: it changed nothing, and sending it again changes nothing either (revision 54). Any other error of a `session_action`, as one from a daemon that passed it on, may come after the host took it. |
 
 From revision 34, the plugin store's refusals, and a plugin enabled while
 it is blocked, carry a code and `args`, what its sentence names, in
@@ -527,6 +529,8 @@ is polled as before.
 | `send` | `Send` | `session_info` | Types into the session without attaching: `text` pasted, bracketed when its program asked for that, then `keys` as they are, such as `\r` to submit. A `text` holding a paste's end marker is refused. With `text`, an agent that shows a view over its own prompt (Claude Code's or Codex's subagent, transcript, or agents list) is first taken back to that prompt, as its screen shows, so the text reaches the agent itself. |
 | `configure_agent` | `ConfigureAgent` | `session_info` | Sets what is given of the session's agent, as `SessionInfo.controls` offers: `mode`, by the key that moves its permission mode on, pressed at its prompt until its screen names the mode; `model` and `effort`, by its own commands typed there (Claude Code's `/model` and `/effort`, which it also keeps as the user's defaults); and `fast_mode` (revision 52), toggling session/thread-scoped Codex Fast Mode via its managed app-server bridge without mutating global Codex config. Refused for a value not offered, or a mode the agent does not reach. |
 | `goal_action` | `GoalAction` | `session_info` | Sets, edits, or clears a session's tracked long-running goal (`action`: `set`, `edit`, or `clear`; `objective` for `set`/`edit`). Uses `thread/goal/set` and `thread/goal/clear` on managed Codex app-server sessions and `/goal` commands at an idle prompt on Claude Code sessions. Routed by `node_id`. Revision 51. |
+| `subscribe_session` | `SubscribeSession` | `host_subscribed`, then `host_event`, a stream | Follows the session's host: its info, conversation, draft, queue and front-ends, with what a front-end missed replayed when it comes back. See [Session host](#session-host). Routed by `node_id`. Revision 54. |
+| `session_action` | `SessionAction` | `session_action_result` | Changes the session's host: sets its draft, sends or queues a prompt, cancels a queued one, or answers an approval, each action taken once. See [Session host](#session-host). Routed by `node_id`. Revision 54. |
 | `sleep_session` | `SleepSession` | `session_info` | Stops the program of a session whose agent rests, to free what it holds: running, with a `conversation_id` its agent resumes natively, not at work, waiting on nothing of the user's (`approval`, `dialog`, status `waiting`), with no background task running, no subagent at work and no session it started at work, and nothing attached to its terminal. The session stays, `stopped`, and the next `attach` starts its agent again on its conversation. Refused otherwise, saying why. Revision 21. |
 | `see_session` | `SeeSession` | `session_info` | Says the user has looked at the session's attention up to `seq` (`SessionInfo.attention_seq`), as the front-end showing it saw: its `seen_seq` moves there, never past its `attention_seq`, and never back. Routed by `node_id`. Revision 36. |
 | `answer_dialog` | `AnswerDialog` | `session_info` | Picks `option`, by index, of the dialog `dialog_id` the session's agent shows in its terminal (`SessionInfo.dialog`), as the user would there: the cursor moved with the arrow keys, then Enter. Refused once the screen shows another dialog, or none. |
@@ -1018,6 +1022,110 @@ A daemon attaching a front-end to a peer's session opens an attach stream to
 the peer, then copies the bytes between the two streams in both directions
 without reading them: both speak the same frames.
 
+## Session host
+
+The daemon that runs a session is its host. For each session that a
+front-end subscribes to, the host keeps the state that the session's
+front-ends share, and numbers each change. When a front-end that lost its stream comes back,
+it gets what it missed. A front-end that takes over
+from another, on the same node or on another one, starts with the same
+draft, queue and conversation. Revision 54.
+
+A host keeps this state for a session:
+
+| Field | What it holds |
+|---|---|
+| `info` | The session's `SessionInfo`, as `list_sessions` gives it. |
+| `chat` | The latest messages of its conversation, as `read_chat` gives them with no span. |
+| `live` | What streams of the agent's reply and is not yet in its log, as `watch_chat` gives it. |
+| `draft` | The message that a front-end writes to the agent (`HostDraft`: `text`, `client_id` of the front-end that wrote it last, `at`). The last write wins. The daemon saves drafts in `host.json` in its configuration directory, so they outlast a restart. |
+| `queue` | The prompts that wait until the agent is at its prompt (`HostQueued`: `id`, `text`, `origin`, `at`), first first. |
+| `clients` | The front-ends subscribed now (`HostClient`: `id`, `name`, `since`, `approvals`). |
+
+### Subscribing
+
+`subscribe_session` (`SubscribeSession`) turns its stream into a feed of
+one session's host. It is routed by `node_id`, and a daemon passes it on to
+the session's node as it passes on `attach`. The request names the
+front-end:
+
+- `client_id` is the front-end's own ID, at most 128 bytes, with no
+  control characters. The host counts the streams of one `client_id` as
+  one client, and the events of its actions carry it. The first request
+  with a `client_id` binds it to where the request came from: this
+  daemon's socket, or the peer daemon that passed it on. The host refuses
+  a subscription or an action with that `client_id` from anywhere else,
+  until it forgets the front-end, 10 minutes after its last stream ended
+  and its last action.
+- `client_name` is how the other front-ends show it, as `desktop (laptop)`.
+  The host shows it on one line, with control characters escaped, and cuts
+  it to 64 characters.
+- `last_seen_seq` is the `seq` of the last event that the front-end
+  applied, 0 for none.
+- With `approvals`, the front-end shows approvals. While it is subscribed,
+  and for 2 minutes after it leaves, the session's approvals wait for an
+  answer in a window. They do not go to the agent's terminal. A front-end
+  that hands the session to another one does not lose an approval on the
+  way.
+
+The first frame is a `host_subscribed` (`HostSubscribed`). If the host still
+holds every event after `last_seen_seq`, it carries those events in
+`replay`, in order. Otherwise it carries the whole `state`. Then a
+`host_event` (`HostEvent`) comes for each change. A front-end that falls
+too far behind gets a `host_subscribed` with the whole state again, in the
+same stream.
+
+Each event has a `seq`, an `origin` and one body. The `origin` names the
+action that made the event (`client_id`, `client_seq`). It is unset for
+the host's own events.
+
+| Body | Applied as |
+|---|---|
+| `info`, `live`, `draft`, `queue`, `clients` | The new value, whole. |
+| `chat` | A `HostChatPatch`. Keep `keep` of the messages held, from `drop` on, then add `messages`. With `whole`, `messages` are all of them. The other fields of the conversation come whole. |
+| `prompt` | A prompt went to the agent: `text`, and `queued_id` for one from the queue. It changes no state. |
+| `approval_answered` | A front-end answered an approval: `approval_id`, `decision`. It changes no state. |
+
+`protocol.ApplyHostEvent` applies an event to a `HostState`, and
+`client.FollowSession` follows a host and keeps its state. An event that
+is not after the state's `seq`, or a `chat` patch of another conversation
+or outside the messages held, does not apply: the front-end subscribes
+again from nothing.
+
+Seqs grow across all the hosts of a daemon. The high 32 bits number the
+daemon's run, and `HostSubscribed.epoch` is the first seq of the current
+run. A seq from an earlier run is below it, so the front-end gets the whole
+state. If its queue is empty, a host stops 10 minutes after its last
+subscriber leaves and its last action ends. It also stops when its session
+closes, and when its daemon stops. Its replay starts again with the next
+host. A host keeps at
+most 2048 events or 4 MiB. In a replay, the host leaves out each event of
+a whole-value body that a later event of the same body replaces.
+
+### Actions
+
+`session_action` (`SessionAction`) changes a session's host, and its reply
+is a `session_action_result` (`SessionActionResult`). It is routed by
+`node_id`. Each action names its front-end with `client_id`, and a
+`client_seq` that grows with each action. The host takes each
+(`client_id`, `client_seq`) once. If an action comes again, as after a lost
+reply, the host answers with the first result and `duplicate`. A
+`client_seq` of 0 is taken each time. The host remembers the last 256
+actions of each front-end.
+
+| Action | What it does |
+|---|---|
+| `set_draft` | Sets the draft. At most 64 KiB. |
+| `send_prompt` | Sends `text`, then `keys`, as `send` does. `text` is at most 64 KiB and `keys` at most 64 bytes. If `text` is set and `keys` are empty, the keys are `\r`, queued or not. With `queue`, the prompt waits in the queue until the agent is at its prompt, as Mako's own messages to it do. The host refuses a queued prompt that ends a paste (`ESC [201~`), and takes a queued prompt out of the queue after it fails to be typed 5 times. With `clear_draft`, the host also empties the draft that this front-end wrote last. The queue holds 32 prompts at most. |
+| `cancel_queued` | Takes the queued prompt `id` out of the queue. |
+| `answer_approval` | Answers an approval of this session as `answer_approval` does. The host refuses an approval of another session. |
+
+The result carries `seq`, the seq of the last event that the action made,
+or 0. It sets `queued` for a prompt that went to the queue. A refused action
+gets an error with code `not_taken`, and the host does not remember it. An
+action that gets another error, or no answer, may have been taken: the
+front-end sends it again with the same `client_seq`.
+
 ## Discovery
 
 A daemon learns of its peers these ways, recorded as the node's `source`:
@@ -1169,7 +1277,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 46) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 54) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end

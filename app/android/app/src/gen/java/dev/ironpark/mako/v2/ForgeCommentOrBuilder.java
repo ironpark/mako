@@ -94,4 +94,38 @@ public interface ForgeCommentOrBuilder extends
    * @return The line.
    */
   long getLine();
+
+  /**
+   * <pre>
+   * association is the author's tie to the repository, as GitHub names
+   * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+   * when the forge does not tell.
+   * </pre>
+   *
+   * <code>string association = 7 [json_name = "association"];</code>
+   * @return The association.
+   */
+  java.lang.String getAssociation();
+  /**
+   * <pre>
+   * association is the author's tie to the repository, as GitHub names
+   * it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+   * when the forge does not tell.
+   * </pre>
+   *
+   * <code>string association = 7 [json_name = "association"];</code>
+   * @return The bytes for association.
+   */
+  com.google.protobuf.ByteString
+      getAssociationBytes();
+
+  /**
+   * <pre>
+   * the author is a bot or an app
+   * </pre>
+   *
+   * <code>bool bot = 8 [json_name = "bot"];</code>
+   * @return The bot.
+   */
+  boolean getBot();
 }

@@ -95,6 +95,9 @@ type chatState struct {
 	// for; reread asks for one more read, the one out having gone first.
 	afterRead []func()
 	reread    bool
+	// host is what the chat keeps of its session's host, while it shows
+	// (followHost).
+	host hostShare
 }
 
 func (m *model) chatState(id string) *chatState {
@@ -120,6 +123,7 @@ func newChatState() *chatState {
 		suggestion:          ggui.State(""),
 		dismissedSuggestion: ggui.State(""),
 		ghostCaret:          ggui.State(true),
+		host:                hostShare{others: ggui.State[[]*protocol.HostClient](nil).WithEqual(deepEqual), note: ggui.State("")},
 		pending: ggui.State[[]pendingMessage](nil).WithEqual(func(a, b []pendingMessage) bool {
 			return slices.Equal(a, b)
 		}),
@@ -494,6 +498,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 	ggui.Effect(func() ggui.Cleanup {
 		m.loadChat(id, state)
 		unfollow := m.followChat(id, "", state, func(then func()) { readThen(state, then, func() { m.loadChat(id, state) }) })
+		unhost := m.followHost(id, state)
 		// Read every few seconds too, for a node that cannot be followed,
 		// and now and then in case a word of it is lost.
 		stop := m.every(2*time.Second, func() {
@@ -501,7 +506,7 @@ func chatView(m *model, id string, group int) ggui.Widget {
 				m.loadChat(id, state)
 			}
 		})
-		return func() { unfollow(); stop() }
+		return func() { unfollow(); unhost(); stop() }
 	})
 
 	scroll := &widget.ScrollController{}

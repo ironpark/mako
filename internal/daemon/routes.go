@@ -156,3 +156,17 @@ func hopsOf(ctx context.Context) uint32 {
 	h, _ := ctx.Value(hopsKey{}).(uint32)
 	return h
 }
+
+type peerKey struct{}
+
+// withPeer marks ctx as a request of the peer id, on libp2p.
+func withPeer(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, peerKey{}, id)
+}
+
+// peerOf is the peer that passed the request of ctx on, "" for one of a
+// front-end on this daemon's socket.
+func peerOf(ctx context.Context) string {
+	p, _ := ctx.Value(peerKey{}).(string)
+	return p
+}
