@@ -832,6 +832,7 @@ leaves the commits out.
 | `detach`, `cherry_pick`, `revert`, `tag` | Of `commit`: check it out on no branch, apply it, undo it as a new commit, or tag it `tag` (annotated with `message`). |
 | `continue`, `abort` | Go on with the `operation` under way, adding what was resolved, or abandon it. |
 | `merge`, `pull_request`, `remove_worktree` | Of a session's `worktree`: merge its branch into its base, push it and open a pull request, or remove it once nothing is left in it. |
+| `list_checkpoints`, `restore_checkpoint` | List turn and pre-restore code checkpoints for session `message` at `root` as JSON, or restore `root` to checkpoint `commit` after capturing a pre-restore safety snapshot returned as JSON (revision 53). |
 
 Diff lines are `{op, text, old, new}`, where `op` is `+`, `-`, a space for
 context, or `@` for a hunk header, and `old`/`new` are line numbers on each
@@ -854,7 +855,7 @@ values: the root of the repository with its links resolved, the path of
 the file from that root (slash-separated), and the SHA-256 of the file's
 content. The node keeps these in `repo-trust.json` in its configuration
 directory. When the file changes, it is not trusted. The user must trust
-it again as it reads then. Revision 53.
+it again as it reads then. Revision 54.
 
 | Request | Payload | Reply | |
 |---|---|---|---|
@@ -889,7 +890,7 @@ git keeps for it (`git credential fill`), or none, for what is public.
 
 | Request | Payload | Reply | |
 |---|---|---|---|
-| `forge_list` | `ForgeList` | `forge_items` | Pull requests, issues or Actions runs (`kind`: `pr`, `issue`, `run`), `state` `open`, `closed` or `all`; of `branch`, or with `current` of the branch checked out. |
+| `forge_list` | `ForgeList` | `forge_items` | Pull requests, issues or Actions runs (`kind`: `pr`, `issue`, `run`), `state` `open`, `closed` or `all`; of `branch`, or with `current` of the branch checked out. The most recently active come first, or with `order` `created` (revision 53) the newest opened. An item's `fork` says a pull request, or a run, is of another repository's branch, and a pull request's `association` is its author's tie to the repository, where the forge tells (revision 53). |
 | `forge_view` | `ForgeView` | `forge_detail` | One in full: its body, comments, reviews and line comments oldest first, a pull request's files and checks, a run's jobs. Pull request 0 is the branch's, `none` when it has none. `no_files` leaves a pull request's files out. Each comment carries its author's `association` with the repository, as the forge names it, and `bot` for an app or bot account; `viewer` is the login the node reads as. |
 | `forge_run` | `ForgeRun` | `git_result` | An operation, and what the forge said: a run's failed logs, or the address of what was made. |
 
@@ -906,6 +907,25 @@ A run's `number` is its ID. `forge_run` operations (`op`):
 
 On a Forgejo or Gitea a run has no jobs, a pull request in a list no
 checks, and a draft is one titled `WIP:`.
+
+### Routines
+
+A node's routines are agent runs its daemon starts by itself: on a cron
+schedule, or when the forge of the routine's project has a new pull
+request or a failed CI run. The daemon keeps them in `routines.json`, and
+their latest runs in `routines-history.json`, in its configuration
+directory, and changes them one request at a time, so front-ends never
+write those files themselves. A run started from a Forge event is given
+the routine's prompt first and the event after it, fenced as untrusted
+data. A Forge trigger runs for the repository's own branches and members
+only, unless `allow_external`; `max_concurrent`, `max_per_poll` and
+`cooldown` hold its runs back, and a trigger held back is recorded as a
+run of status `skipped`. Revision 53.
+
+| Request | Payload | Reply | |
+|---|---|---|---|
+| `list_routines` | `ListRoutines` | `routines` | The node's routines, and its latest `runs` (at most `runs` of them, newest first); `runs_error` says why the runs could not be read. Routed by `node_id`. |
+| `routine_action` | `RoutineAction` | `routines` | `op` `add` (`spec`, given an ID of its own, and last of the reply's routines), `update` (`spec`, by its ID), `remove`, `enable`, `disable` or `run` the routine `routine` names, by ID or by a name no other routine has. `run` starts it now, as its triggers would but for their limits, and the reply's `session` is the session started. The reply is the node's routines after. Routed by `node_id`. |
 
 ### Plugins
 
@@ -1179,7 +1199,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 53) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 54) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end

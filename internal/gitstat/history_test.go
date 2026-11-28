@@ -220,3 +220,33 @@ func TestCheckoutBranchUsedByAnotherWorktree(t *testing.T) {
 		t.Fatalf("main repo status after stale checkout = %+v, %v", st, err)
 	}
 }
+
+// A turn's checkpoint, or a restore's, leaves the history's fingerprint as
+// it was: the panel need not read the history again for it.
+func TestCheckpointsLeaveTheHistoryFingerprint(t *testing.T) {
+	root, run := cliRepo(t)
+	ctx := context.Background()
+	write(t, root, "a.txt", "one\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "init")
+	h, err := Log(ctx, root, 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, root, "a.txt", "two\n")
+	cp, err := CaptureSnapshot(ctx, root, Checkpoint{Kind: CheckpointTurn, Session: "s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RestoreSnapshot(ctx, root, cp.Commit); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := Log(ctx, root, 0, h.GetFingerprint()); err != nil || !again.GetUnchanged() {
+		t.Fatalf("checkpoints changed the fingerprint: %+v %v", again, err)
+	}
+	// A branch still does.
+	run("branch", "other")
+	if again, err := Log(ctx, root, 0, h.GetFingerprint()); err != nil || again.GetUnchanged() {
+		t.Fatalf("a branch left the fingerprint: %+v %v", again, err)
+	}
+}

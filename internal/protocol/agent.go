@@ -29,11 +29,20 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 53
+const Revision = 54
+
+// RevisionRoutines adds a node's routines, read and changed through its
+// daemon (ListRoutines, Routines and RoutineAction, Envelope 167 to 169),
+// ForgeList.order, and ForgeItem.fork and ForgeItem.association.
+const RevisionRoutines = 53
+
+// RevisionCodeCheckpoints adds turn code checkpoints and code-inclusive
+// rewind (GitRun ops list_checkpoints and restore_checkpoint).
+const RevisionCodeCheckpoints = 53
 
 // RevisionRepoTrust adds the user's trust in repositories' command files:
-// RepoTrust and RepoTrustInfo (Envelope 167 and 168).
-const RevisionRepoTrust = 53
+// RepoTrust and RepoTrustInfo (Envelope 170 and 171).
+const RevisionRepoTrust = 54
 
 // RevisionCodexFastMode adds session-scoped Codex Fast Mode state and control:
 // SessionInfo.fast_mode (field 44), AgentControls.fast_mode (field 4),

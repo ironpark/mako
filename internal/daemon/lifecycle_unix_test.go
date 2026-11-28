@@ -33,8 +33,8 @@ func shellHooks(t *testing.T) {
 	}
 }
 
-// gitRepo is a new repository with branch checked out, no commits in it.
-func gitRepo(t *testing.T, branch string) string {
+// emptyGitRepo is a new repository with branch checked out, no commits in it.
+func emptyGitRepo(t *testing.T, branch string) string {
 	t.Helper()
 	repo := t.TempDir()
 	if out, err := exec.Command("git", "init", "-q", "-b", branch, repo).CombinedOutput(); err != nil {
@@ -103,7 +103,7 @@ func TestLifecycleHooksRunOnTheSessionsEventsWithItsBranch(t *testing.T) {
 		lifecycle.Hook{Event: lifecycle.SessionEnd, Command: record},
 		lifecycle.Hook{Event: lifecycle.TurnDone, Command: "echo not codex >> " + sh(out), Agents: []string{"codex"}},
 	)
-	repo := gitRepo(t, "feat/hooks")
+	repo := emptyGitRepo(t, "feat/hooks")
 	s, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: repo})
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestRepositoryHooksRunOnlyWhileTrusted(t *testing.T) {
 	d.dir = t.TempDir()
 	d.repoTrust = repotrust.Open(d.dir)
 
-	repo := gitRepo(t, "main")
+	repo := emptyGitRepo(t, "main")
 	sub := filepath.Join(repo, "sub")
 	if err := os.MkdirAll(filepath.Join(repo, ".mako"), 0o700); err != nil {
 		t.Fatal(err)

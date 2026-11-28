@@ -550,6 +550,17 @@ func (c *Client) ListProviders(ctx context.Context) (*protocol.Providers, error)
 	return request[*protocol.Providers](ctx, c, protocol.TypeListProviders, &protocol.ListProviders{})
 }
 
+// Routines lists a node's routines and their latest runs.
+func (c *Client) Routines(ctx context.Context, req *protocol.ListRoutines) (*protocol.Routines, error) {
+	return request[*protocol.Routines](ctx, c, protocol.TypeListRoutines, req)
+}
+
+// ActRoutine adds, changes, removes or runs one of a node's routines, and
+// returns the node's routines after.
+func (c *Client) ActRoutine(ctx context.Context, req *protocol.RoutineAction) (*protocol.Routines, error) {
+	return request[*protocol.Routines](ctx, c, protocol.TypeRoutineAction, req)
+}
+
 // ActProvider sets or clears a provider API key or updates decision model defaults.
 func (c *Client) ActProvider(ctx context.Context, req *protocol.ProviderAction) (*protocol.Providers, error) {
 	return request[*protocol.Providers](ctx, c, protocol.TypeProviderAction, req)

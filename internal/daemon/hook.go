@@ -139,6 +139,13 @@ func runHook(args []string, stdin io.Reader, out io.Writer) {
 		return
 	}
 	defer conn.Close()
+	if startsTurn(ev.Event) {
+		// The turn waits for its checkpoint, which the daemon captures
+		// before it hangs up.
+		_ = conn.SetDeadline(time.Now().Add(turnWait))
+		_, _ = io.Copy(io.Discard, conn)
+		return
+	}
 	if ev.Event != "PermissionRequest" {
 		return
 	}
@@ -327,6 +334,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 					// clear an active in-app approval (e.g. save_template, layout).
 					s.ReportToolStatus(protocol.AgentWorking, msg.Seq)
 				case agent.Idle:
+					d.turns.end(s.ID(), msg.Seq)
 					// Clear waiting state once a terminal confirmation finishes,
 					// without clobbering an active in-app approval or AgentDone.
 					if s.Info().GetStatus() == protocol.AgentWaiting {
@@ -352,6 +360,10 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		return
 	}
 	switch ev.Kind {
+	case agent.Started, agent.Stopped, agent.Ended, agent.Idle:
+		d.turns.end(s.ID(), msg.Seq)
+	}
+	switch ev.Kind {
 	case agent.Started:
 		if !s.ReportStatus(protocol.AgentIdle, msg.Seq) {
 			return
@@ -364,6 +376,13 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.ReportToolDone(msg.Seq)
 	case agent.Prompted:
 		if !s.ReportStatus(protocol.AgentWorking, msg.Seq) {
+			// Codex app-server turn/started or agy statusLine heartbeats can
+			// advance statusSeq in-process before the external prompt hook
+			// connects. Still capture the turn checkpoint if the session is
+			// actively working rather than exited or from a stale ended turn.
+			if info := s.Info(); info.GetState() != protocol.StateExited && info.GetStatus() == protocol.AgentWorking {
+				d.checkpointTurn(ctx, s, msg.Seq, ev)
+			}
 			return
 		}
 		// Only a prompt of this turn makes the suggestion stale, not a
@@ -376,6 +395,8 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 				d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
 			}
 		}
+		// Last, as the hook waits for it: the turn waits on the hook.
+		d.checkpointTurn(ctx, s, msg.Seq, ev)
 	case agent.Compacting:
 		s.ReportToolStatus(protocol.AgentCompacting, msg.Seq)
 	case agent.Waiting:

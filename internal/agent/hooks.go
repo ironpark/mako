@@ -40,6 +40,9 @@ type Event struct {
 	// AuthError is non-nil when a failure hook (such as Claude's StopFailure)
 	// reports a top-level provider authentication failure on the host.
 	AuthError *protocol.AuthError
+	// Prompt is the user's words a Prompted turn starts with, when the
+	// agent hands them its hook.
+	Prompt string
 }
 
 // ApprovalTimeout is how long an agent waits on the hook for an approval:
@@ -72,6 +75,8 @@ type HookInput struct {
 	// Suggestions are Claude's permission_suggestions: rules to add, a
 	// mode to switch to, which allow a call from then on.
 	Suggestions json.RawMessage `json:"permission_suggestions"`
+	// Prompt is what the user said, on UserPromptSubmit.
+	Prompt string `json:"prompt"`
 }
 
 // ParseHookInput reads a hook's input as HookInput, false for input it
@@ -92,7 +97,7 @@ func (in HookInput) Base() (Event, bool) {
 	case "SessionStart":
 		ev.Kind = Started
 	case "UserPromptSubmit":
-		ev.Kind = Prompted
+		ev.Kind, ev.Prompt = Prompted, in.Prompt
 	case "PostToolUse":
 		ev.Kind = ToolDone
 	case "PermissionRequest":
