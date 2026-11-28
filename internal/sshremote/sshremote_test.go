@@ -321,3 +321,24 @@ func TestFindConfigHost(t *testing.T) {
 		}
 	}
 }
+
+// A control path with a space or a % reaches ssh whole: ssh -G, which
+// only parses its options, reports the path unchanged.
+func TestBaseArgsControlPathWithSpace(t *testing.T) {
+	ssh, err := exec.LookPath("ssh")
+	if err != nil {
+		t.Skip("no ssh client")
+	}
+	ctrl := "/Users/me/Library/Application Support/mako/run/ssh-c-5%d.sock"
+	args, err := BaseArgs(config.SSHHost{Host: "example.com"}, Options{ControlPath: ctrl})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(ssh, append([]string{"-G", "-F", "/dev/null"}, args...)...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("ssh -G %v: %v\n%s", args, err, out)
+	}
+	if !slices.Contains(strings.Split(string(out), "\n"), "controlpath "+ctrl) {
+		t.Fatalf("ssh -G does not report controlpath %q:\n%s", ctrl, out)
+	}
+}

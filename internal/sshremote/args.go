@@ -85,7 +85,7 @@ func BaseArgs(h config.SSHHost, opts Options) ([]string, error) {
 	if opts.ControlPath != "" && !opts.NoControlMaster && runtime.GOOS != "windows" {
 		args = append(args,
 			"-o", "ControlMaster=auto",
-			"-o", "ControlPath="+opts.ControlPath,
+			"-S", controlPathArg(opts.ControlPath),
 			"-o", "ControlPersist=10m",
 		)
 	}
@@ -103,6 +103,15 @@ func BaseArgs(h config.SSHHost, opts Options) ([]string, error) {
 	}
 	args = append(args, "--", Target(h))
 	return args, nil
+}
+
+// controlPathArg is controlPath as ssh's -S flag takes it. Unlike
+// -o ControlPath, which ssh splits into words as a config line, -S keeps
+// the path whole, spaces and all: on macOS the run folder is in
+// "Application Support". ssh still expands % tokens in it, so a literal %
+// is doubled.
+func controlPathArg(controlPath string) string {
+	return strings.ReplaceAll(controlPath, "%", "%%")
 }
 
 // LookSSH returns the resolved ssh executable path.
@@ -166,7 +175,7 @@ func CloseControlMaster(h config.SSHHost, controlPath string) {
 	if _, err := os.Stat(controlPath); err != nil {
 		return
 	}
-	args := []string{"-S", controlPath, "-O", "exit", "--", Target(h)}
+	args := []string{"-S", controlPathArg(controlPath), "-O", "exit", "--", Target(h)}
 	_ = exec.Command(SSHBinary, args...).Run()
 	_ = os.Remove(controlPath)
 }
