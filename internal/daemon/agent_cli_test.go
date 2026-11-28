@@ -951,3 +951,30 @@ func TestAgentProjectCLIAddLocalAndGitURL(t *testing.T) {
 		}
 	}
 }
+
+func TestRunAgySidecarStopsWhenItCannotReadItsToken(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads every file")
+	}
+	// As in the workspace sandbox, which keeps the token from the sidecar
+	// of a sandboxed agy: it stops, rather than try again for ever.
+	dir := t.TempDir()
+	token := filepath.Join(dir, sidecarTokenFile)
+	if err := os.WriteFile(token, []byte("x"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runAgySidecarLoop(t.Context(), filepath.Join(dir, "agent-cli.sock"), noopSidecarDeliverer{}, io.Discard, sidecarRetryPolicy{
+			initial: time.Second, max: time.Second, maxMissing: time.Minute,
+		})
+	}()
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, errSidecarUnauthorized) {
+			t.Fatalf("runAgySidecarLoop = %v, want errSidecarUnauthorized", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the sidecar kept trying without its token")
+	}
+}
