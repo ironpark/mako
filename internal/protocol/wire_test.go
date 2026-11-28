@@ -36,6 +36,7 @@ func TestEveryTypeHasABody(t *testing.T) {
 		TypeRelaySpawnAgent, TypeRelayStopAgent,
 		TypeReadAccountUsage, TypeAccountUsage, TypeRewindSession,
 		TypeGoalAction,
+		TypeListRoutines, TypeRoutines, TypeRoutineAction,
 		TypeRepoTrust, TypeRepoTrustInfo,
 	}
 	for _, typ := range types {

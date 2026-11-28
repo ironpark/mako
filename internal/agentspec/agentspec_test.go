@@ -654,3 +654,73 @@ func TestResolveDoesNotExpandAmbientSessionScopedEnv(t *testing.T) {
 		t.Fatalf("profile explicit CODEX_THREAD_ID = %q, want from-profile", l2.Env["CODEX_THREAD_ID"])
 	}
 }
+
+func TestResolveFastMode(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"claude", "codex"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+
+	on, off := true, false
+	agents := map[string]Agent{
+		"claude": {
+			Fast: &on,
+			Profiles: []Profile{
+				{Name: "inherit"},
+				{Name: "slow", Fast: &off},
+			},
+		},
+		"codex": {
+			Profiles: []Profile{
+				{Name: "fast", Fast: &on},
+				{Name: "slow", Fast: &off},
+			},
+		},
+	}
+
+	// Claude inherits agent Fast=true and merges with CommitSignature=false.
+	l, err := Resolve("claude", "inherit", nil, nil, agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(l.Command[1:], []string{"--settings", `{"attribution":{"commit":""},"fastMode":true}`}) {
+		t.Fatalf("claude inherit fast = %q", l.Command[1:])
+	}
+
+	// Claude profile Fast=false overrides agent Fast=true.
+	l, err = Resolve("claude", "slow", nil, nil, agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(l.Command[1:], []string{"--settings", `{"attribution":{"commit":""},"fastMode":false}`}) {
+		t.Fatalf("claude slow = %q", l.Command[1:])
+	}
+
+	// Codex agent with Fast=nil adds no service_tier override.
+	l, err = Resolve("codex", "", nil, nil, agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Command) != 1 {
+		t.Fatalf("codex default fast should add no flags, got %q", l.Command[1:])
+	}
+
+	// Codex profile Fast=true and Fast=false add -c service_tier="fast"/"default".
+	l, err = Resolve("codex", "fast", nil, nil, agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(l.Command[1:], []string{"-c", `service_tier="fast"`}) {
+		t.Fatalf("codex fast = %q", l.Command[1:])
+	}
+	l, err = Resolve("codex", "slow", nil, nil, agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(l.Command[1:], []string{"-c", `service_tier="default"`}) {
+		t.Fatalf("codex slow = %q", l.Command[1:])
+	}
+}

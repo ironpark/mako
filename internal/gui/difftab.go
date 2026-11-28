@@ -398,6 +398,7 @@ func diffTabView(m *model, id string) ggui.Widget {
 		if !v.Sel.empty() {
 			rows = append(rows, selectionBar(m, dt.Root, joinPath(subfolder(dt.Repo, dt.Root.Path), dt.File.GetPath()), dt.Diff.GetLines(), sel))
 		}
+		rows = append(rows, draftReviewBar(m, dt.Root))
 		return widget.Column(rows...).Stretch()
 	})
 }

@@ -206,3 +206,22 @@ func TestSplitRemoteLaunch(t *testing.T) {
 		}
 	}
 }
+
+func TestCodexWithFastAndSplitRemoteLaunchServiceTier(t *testing.T) {
+	c := New()
+	l := agent.Launch{Command: []string{"codex", "--model", "gpt-5.4"}}
+	c.WithFast(&l, true)
+	split := SplitRemoteLaunch(l.Command)
+	if split.ServiceTier != "fast" {
+		t.Fatalf("SplitRemoteLaunch ServiceTier = %q, want fast", split.ServiceTier)
+	}
+	if !slices.Contains(split.ServerArgs, `service_tier="fast"`) {
+		t.Fatalf("ServerArgs missing service_tier override: %q", split.ServerArgs)
+	}
+
+	lOff := agent.Launch{Command: []string{"codex"}}
+	c.WithFast(&lOff, false)
+	if splitOff := SplitRemoteLaunch(lOff.Command); splitOff.ServiceTier != "default" {
+		t.Fatalf("SplitRemoteLaunch ServiceTier(off) = %q, want default", splitOff.ServiceTier)
+	}
+}

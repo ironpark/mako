@@ -9,6 +9,7 @@ import (
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/protocol"
+	"google.golang.org/protobuf/proto"
 )
 
 // What of an agent a front-end may set, at its prompt, as the user would:
@@ -25,7 +26,10 @@ func controls(name string) *protocol.AgentControls {
 	if m, ok := agents.As[agent.Models](name); ok {
 		c.Models, c.Efforts = m.Models(), m.Efforts()
 	}
-	if len(c.Modes)+len(c.Models)+len(c.Efforts) == 0 {
+	if _, ok := agents.As[agent.FastMode](name); ok {
+		c.FastMode = true
+	}
+	if len(c.Modes)+len(c.Models)+len(c.Efforts) == 0 && !c.FastMode {
 		return nil
 	}
 	return &c
@@ -123,6 +127,30 @@ func (s *Session) ReportFastMode(enabled bool) {
 	}
 	s.fastMode = enabled
 	s.changedLocked()
+}
+
+// ConfigureFastMode toggles fast mode on a running session using the agent's
+// slash command when its driver implements agent.FastMode.
+func (s *Session) ConfigureFastMode(enabled bool) error {
+	fm, ok := agents.As[agent.FastMode](s.spec.Agent)
+	if !ok {
+		return errors.New("the agent does not support fast mode")
+	}
+	cmd := fm.FastModeCommand(enabled)
+	if cmd == "" {
+		return errors.New("the agent does not support fast mode")
+	}
+	if err := s.Send(cmd, []byte{'\r'}); err != nil {
+		return err
+	}
+	if m, ok := agents.As[agent.Models](s.spec.Agent); ok {
+		if err := s.confirm(m); err != nil {
+			return err
+		}
+	}
+	s.ReportFastMode(enabled)
+	s.Report(&protocol.Usage{FastMode: proto.Bool(enabled)})
+	return nil
 }
 
 // Configure sets what of mode, model and effort is given.

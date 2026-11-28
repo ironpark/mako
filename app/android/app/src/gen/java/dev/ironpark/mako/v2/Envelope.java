@@ -153,8 +153,11 @@ public  final class Envelope extends
     ACCOUNT_USAGE(164),
     REWIND_SESSION(165),
     GOAL_ACTION(166),
-    REPO_TRUST(167),
-    REPO_TRUST_INFO(168),
+    LIST_ROUTINES(167),
+    ROUTINES(168),
+    ROUTINE_ACTION(169),
+    REPO_TRUST(170),
+    REPO_TRUST_INFO(171),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -297,8 +300,11 @@ public  final class Envelope extends
         case 164: return ACCOUNT_USAGE;
         case 165: return REWIND_SESSION;
         case 166: return GOAL_ACTION;
-        case 167: return REPO_TRUST;
-        case 168: return REPO_TRUST_INFO;
+        case 167: return LIST_ROUTINES;
+        case 168: return ROUTINES;
+        case 169: return ROUTINE_ACTION;
+        case 170: return REPO_TRUST;
+        case 171: return REPO_TRUST_INFO;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -7207,56 +7213,56 @@ public  final class Envelope extends
     }
   }
 
-  public static final int REPO_TRUST_FIELD_NUMBER = 167;
+  public static final int LIST_ROUTINES_FIELD_NUMBER = 167;
   /**
    * <pre>
-   * The user's trust in repositories' command files (revision 53).
+   * A node's routines: scheduled and Forge-triggered runs (revision 53).
    * </pre>
    *
-   * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+   * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
    */
   @java.lang.Override
-  public boolean hasRepoTrust() {
+  public boolean hasListRoutines() {
     return bodyCase_ == 167;
   }
   /**
    * <pre>
-   * The user's trust in repositories' command files (revision 53).
+   * A node's routines: scheduled and Forge-triggered runs (revision 53).
    * </pre>
    *
-   * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+   * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
    */
   @java.lang.Override
-  public dev.ironpark.mako.v2.RepoTrust getRepoTrust() {
+  public dev.ironpark.mako.v2.ListRoutines getListRoutines() {
     if (bodyCase_ == 167) {
-       return (dev.ironpark.mako.v2.RepoTrust) body_;
+       return (dev.ironpark.mako.v2.ListRoutines) body_;
     }
-    return dev.ironpark.mako.v2.RepoTrust.getDefaultInstance();
+    return dev.ironpark.mako.v2.ListRoutines.getDefaultInstance();
   }
   /**
    * <pre>
-   * The user's trust in repositories' command files (revision 53).
+   * A node's routines: scheduled and Forge-triggered runs (revision 53).
    * </pre>
    *
-   * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+   * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
    */
-  private void setRepoTrust(dev.ironpark.mako.v2.RepoTrust value) {
+  private void setListRoutines(dev.ironpark.mako.v2.ListRoutines value) {
     java.util.Objects.requireNonNull(value);
     body_ = value;
     bodyCase_ = 167;
   }
   /**
    * <pre>
-   * The user's trust in repositories' command files (revision 53).
+   * A node's routines: scheduled and Forge-triggered runs (revision 53).
    * </pre>
    *
-   * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+   * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
    */
-  private void mergeRepoTrust(dev.ironpark.mako.v2.RepoTrust value) {
+  private void mergeListRoutines(dev.ironpark.mako.v2.ListRoutines value) {
     java.util.Objects.requireNonNull(value);
     if (bodyCase_ == 167 &&
-        body_ != dev.ironpark.mako.v2.RepoTrust.getDefaultInstance()) {
-      body_ = dev.ironpark.mako.v2.RepoTrust.newBuilder((dev.ironpark.mako.v2.RepoTrust) body_)
+        body_ != dev.ironpark.mako.v2.ListRoutines.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.ListRoutines.newBuilder((dev.ironpark.mako.v2.ListRoutines) body_)
           .mergeFrom(value).buildPartial();
     } else {
       body_ = value;
@@ -7265,52 +7271,52 @@ public  final class Envelope extends
   }
   /**
    * <pre>
-   * The user's trust in repositories' command files (revision 53).
+   * A node's routines: scheduled and Forge-triggered runs (revision 53).
    * </pre>
    *
-   * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+   * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
    */
-  private void clearRepoTrust() {
+  private void clearListRoutines() {
     if (bodyCase_ == 167) {
       bodyCase_ = 0;
       body_ = null;
     }
   }
 
-  public static final int REPO_TRUST_INFO_FIELD_NUMBER = 168;
+  public static final int ROUTINES_FIELD_NUMBER = 168;
   /**
-   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+   * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
    */
   @java.lang.Override
-  public boolean hasRepoTrustInfo() {
+  public boolean hasRoutines() {
     return bodyCase_ == 168;
   }
   /**
-   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+   * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
    */
   @java.lang.Override
-  public dev.ironpark.mako.v2.RepoTrustInfo getRepoTrustInfo() {
+  public dev.ironpark.mako.v2.Routines getRoutines() {
     if (bodyCase_ == 168) {
-       return (dev.ironpark.mako.v2.RepoTrustInfo) body_;
+       return (dev.ironpark.mako.v2.Routines) body_;
     }
-    return dev.ironpark.mako.v2.RepoTrustInfo.getDefaultInstance();
+    return dev.ironpark.mako.v2.Routines.getDefaultInstance();
   }
   /**
-   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+   * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
    */
-  private void setRepoTrustInfo(dev.ironpark.mako.v2.RepoTrustInfo value) {
+  private void setRoutines(dev.ironpark.mako.v2.Routines value) {
     java.util.Objects.requireNonNull(value);
     body_ = value;
     bodyCase_ = 168;
   }
   /**
-   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+   * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
    */
-  private void mergeRepoTrustInfo(dev.ironpark.mako.v2.RepoTrustInfo value) {
+  private void mergeRoutines(dev.ironpark.mako.v2.Routines value) {
     java.util.Objects.requireNonNull(value);
     if (bodyCase_ == 168 &&
-        body_ != dev.ironpark.mako.v2.RepoTrustInfo.getDefaultInstance()) {
-      body_ = dev.ironpark.mako.v2.RepoTrustInfo.newBuilder((dev.ironpark.mako.v2.RepoTrustInfo) body_)
+        body_ != dev.ironpark.mako.v2.Routines.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.Routines.newBuilder((dev.ironpark.mako.v2.Routines) body_)
           .mergeFrom(value).buildPartial();
     } else {
       body_ = value;
@@ -7318,10 +7324,180 @@ public  final class Envelope extends
     bodyCase_ = 168;
   }
   /**
-   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+   * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
+   */
+  private void clearRoutines() {
+    if (bodyCase_ == 168) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int ROUTINE_ACTION_FIELD_NUMBER = 169;
+  /**
+   * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRoutineAction() {
+    return bodyCase_ == 169;
+  }
+  /**
+   * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.RoutineAction getRoutineAction() {
+    if (bodyCase_ == 169) {
+       return (dev.ironpark.mako.v2.RoutineAction) body_;
+    }
+    return dev.ironpark.mako.v2.RoutineAction.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+   */
+  private void setRoutineAction(dev.ironpark.mako.v2.RoutineAction value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 169;
+  }
+  /**
+   * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+   */
+  private void mergeRoutineAction(dev.ironpark.mako.v2.RoutineAction value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 169 &&
+        body_ != dev.ironpark.mako.v2.RoutineAction.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.RoutineAction.newBuilder((dev.ironpark.mako.v2.RoutineAction) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 169;
+  }
+  /**
+   * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+   */
+  private void clearRoutineAction() {
+    if (bodyCase_ == 169) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int REPO_TRUST_FIELD_NUMBER = 170;
+  /**
+   * <pre>
+   * The user's trust in repositories' command files (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRepoTrust() {
+    return bodyCase_ == 170;
+  }
+  /**
+   * <pre>
+   * The user's trust in repositories' command files (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.RepoTrust getRepoTrust() {
+    if (bodyCase_ == 170) {
+       return (dev.ironpark.mako.v2.RepoTrust) body_;
+    }
+    return dev.ironpark.mako.v2.RepoTrust.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * The user's trust in repositories' command files (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
+   */
+  private void setRepoTrust(dev.ironpark.mako.v2.RepoTrust value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 170;
+  }
+  /**
+   * <pre>
+   * The user's trust in repositories' command files (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
+   */
+  private void mergeRepoTrust(dev.ironpark.mako.v2.RepoTrust value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 170 &&
+        body_ != dev.ironpark.mako.v2.RepoTrust.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.RepoTrust.newBuilder((dev.ironpark.mako.v2.RepoTrust) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 170;
+  }
+  /**
+   * <pre>
+   * The user's trust in repositories' command files (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
+   */
+  private void clearRepoTrust() {
+    if (bodyCase_ == 170) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int REPO_TRUST_INFO_FIELD_NUMBER = 171;
+  /**
+   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
+   */
+  @java.lang.Override
+  public boolean hasRepoTrustInfo() {
+    return bodyCase_ == 171;
+  }
+  /**
+   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.RepoTrustInfo getRepoTrustInfo() {
+    if (bodyCase_ == 171) {
+       return (dev.ironpark.mako.v2.RepoTrustInfo) body_;
+    }
+    return dev.ironpark.mako.v2.RepoTrustInfo.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
+   */
+  private void setRepoTrustInfo(dev.ironpark.mako.v2.RepoTrustInfo value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 171;
+  }
+  /**
+   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
+   */
+  private void mergeRepoTrustInfo(dev.ironpark.mako.v2.RepoTrustInfo value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 171 &&
+        body_ != dev.ironpark.mako.v2.RepoTrustInfo.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.RepoTrustInfo.newBuilder((dev.ironpark.mako.v2.RepoTrustInfo) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 171;
+  }
+  /**
+   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
    */
   private void clearRepoTrustInfo() {
-    if (bodyCase_ == 168) {
+    if (bodyCase_ == 171) {
       bodyCase_ = 0;
       body_ = null;
     }
@@ -14164,10 +14340,178 @@ public  final class Envelope extends
 
     /**
      * <pre>
-     * The user's trust in repositories' command files (revision 53).
+     * A node's routines: scheduled and Forge-triggered runs (revision 53).
      * </pre>
      *
-     * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+     * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
+     */
+    @java.lang.Override
+    public boolean hasListRoutines() {
+      return instance.hasListRoutines();
+    }
+    /**
+     * <pre>
+     * A node's routines: scheduled and Forge-triggered runs (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.ListRoutines getListRoutines() {
+      return instance.getListRoutines();
+    }
+    /**
+     * <pre>
+     * A node's routines: scheduled and Forge-triggered runs (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
+     */
+    public Builder setListRoutines(dev.ironpark.mako.v2.ListRoutines value) {
+      copyOnWrite();
+      instance.setListRoutines(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * A node's routines: scheduled and Forge-triggered runs (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
+     */
+    public Builder setListRoutines(
+        dev.ironpark.mako.v2.ListRoutines.Builder builderForValue) {
+      copyOnWrite();
+      instance.setListRoutines(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * A node's routines: scheduled and Forge-triggered runs (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
+     */
+    public Builder mergeListRoutines(dev.ironpark.mako.v2.ListRoutines value) {
+      copyOnWrite();
+      instance.mergeListRoutines(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * A node's routines: scheduled and Forge-triggered runs (revision 53).
+     * </pre>
+     *
+     * <code>.mako.v2.ListRoutines list_routines = 167 [json_name = "listRoutines"];</code>
+     */
+    public Builder clearListRoutines() {
+      copyOnWrite();
+      instance.clearListRoutines();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRoutines() {
+      return instance.hasRoutines();
+    }
+    /**
+     * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.Routines getRoutines() {
+      return instance.getRoutines();
+    }
+    /**
+     * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
+     */
+    public Builder setRoutines(dev.ironpark.mako.v2.Routines value) {
+      copyOnWrite();
+      instance.setRoutines(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
+     */
+    public Builder setRoutines(
+        dev.ironpark.mako.v2.Routines.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRoutines(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
+     */
+    public Builder mergeRoutines(dev.ironpark.mako.v2.Routines value) {
+      copyOnWrite();
+      instance.mergeRoutines(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.Routines routines = 168 [json_name = "routines"];</code>
+     */
+    public Builder clearRoutines() {
+      copyOnWrite();
+      instance.clearRoutines();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+     */
+    @java.lang.Override
+    public boolean hasRoutineAction() {
+      return instance.hasRoutineAction();
+    }
+    /**
+     * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.RoutineAction getRoutineAction() {
+      return instance.getRoutineAction();
+    }
+    /**
+     * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+     */
+    public Builder setRoutineAction(dev.ironpark.mako.v2.RoutineAction value) {
+      copyOnWrite();
+      instance.setRoutineAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+     */
+    public Builder setRoutineAction(
+        dev.ironpark.mako.v2.RoutineAction.Builder builderForValue) {
+      copyOnWrite();
+      instance.setRoutineAction(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+     */
+    public Builder mergeRoutineAction(dev.ironpark.mako.v2.RoutineAction value) {
+      copyOnWrite();
+      instance.mergeRoutineAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.RoutineAction routine_action = 169 [json_name = "routineAction"];</code>
+     */
+    public Builder clearRoutineAction() {
+      copyOnWrite();
+      instance.clearRoutineAction();
+      return this;
+    }
+
+    /**
+     * <pre>
+     * The user's trust in repositories' command files (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
      */
     @java.lang.Override
     public boolean hasRepoTrust() {
@@ -14175,10 +14519,10 @@ public  final class Envelope extends
     }
     /**
      * <pre>
-     * The user's trust in repositories' command files (revision 53).
+     * The user's trust in repositories' command files (revision 54).
      * </pre>
      *
-     * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+     * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
      */
     @java.lang.Override
     public dev.ironpark.mako.v2.RepoTrust getRepoTrust() {
@@ -14186,10 +14530,10 @@ public  final class Envelope extends
     }
     /**
      * <pre>
-     * The user's trust in repositories' command files (revision 53).
+     * The user's trust in repositories' command files (revision 54).
      * </pre>
      *
-     * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+     * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
      */
     public Builder setRepoTrust(dev.ironpark.mako.v2.RepoTrust value) {
       copyOnWrite();
@@ -14198,10 +14542,10 @@ public  final class Envelope extends
     }
     /**
      * <pre>
-     * The user's trust in repositories' command files (revision 53).
+     * The user's trust in repositories' command files (revision 54).
      * </pre>
      *
-     * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+     * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
      */
     public Builder setRepoTrust(
         dev.ironpark.mako.v2.RepoTrust.Builder builderForValue) {
@@ -14211,10 +14555,10 @@ public  final class Envelope extends
     }
     /**
      * <pre>
-     * The user's trust in repositories' command files (revision 53).
+     * The user's trust in repositories' command files (revision 54).
      * </pre>
      *
-     * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+     * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
      */
     public Builder mergeRepoTrust(dev.ironpark.mako.v2.RepoTrust value) {
       copyOnWrite();
@@ -14223,10 +14567,10 @@ public  final class Envelope extends
     }
     /**
      * <pre>
-     * The user's trust in repositories' command files (revision 53).
+     * The user's trust in repositories' command files (revision 54).
      * </pre>
      *
-     * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+     * <code>.mako.v2.RepoTrust repo_trust = 170 [json_name = "repoTrust"];</code>
      */
     public Builder clearRepoTrust() {
       copyOnWrite();
@@ -14235,21 +14579,21 @@ public  final class Envelope extends
     }
 
     /**
-     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
      */
     @java.lang.Override
     public boolean hasRepoTrustInfo() {
       return instance.hasRepoTrustInfo();
     }
     /**
-     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
      */
     @java.lang.Override
     public dev.ironpark.mako.v2.RepoTrustInfo getRepoTrustInfo() {
       return instance.getRepoTrustInfo();
     }
     /**
-     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
      */
     public Builder setRepoTrustInfo(dev.ironpark.mako.v2.RepoTrustInfo value) {
       copyOnWrite();
@@ -14257,7 +14601,7 @@ public  final class Envelope extends
       return this;
     }
     /**
-     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
      */
     public Builder setRepoTrustInfo(
         dev.ironpark.mako.v2.RepoTrustInfo.Builder builderForValue) {
@@ -14266,7 +14610,7 @@ public  final class Envelope extends
       return this;
     }
     /**
-     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
      */
     public Builder mergeRepoTrustInfo(dev.ironpark.mako.v2.RepoTrustInfo value) {
       copyOnWrite();
@@ -14274,7 +14618,7 @@ public  final class Envelope extends
       return this;
     }
     /**
-     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+     * <code>.mako.v2.RepoTrustInfo repo_trust_info = 171 [json_name = "repoTrustInfo"];</code>
      */
     public Builder clearRepoTrustInfo() {
       copyOnWrite();
@@ -14429,11 +14773,14 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.AccountUsage.class,
             dev.ironpark.mako.v2.RewindSession.class,
             dev.ironpark.mako.v2.GoalAction.class,
+            dev.ironpark.mako.v2.ListRoutines.class,
+            dev.ironpark.mako.v2.Routines.class,
+            dev.ironpark.mako.v2.RoutineAction.class,
             dev.ironpark.mako.v2.RepoTrust.class,
             dev.ironpark.mako.v2.RepoTrustInfo.class,
           };
           java.lang.String info =
-              "\u0000\u0083\u0001\u0000\u0001\u00a8\u0083\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
+              "\u0000\u0086\u0001\u0000\u0001\u00ab\u0086\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
               "\n<\u0000\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000" +
               "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <" +
               "\u0000!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000" +
@@ -14449,7 +14796,8 @@ public  final class Envelope extends
               "<\u0000\u0091<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000" +
               "\u0097<\u0000\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000\u009d" +
               "<\u0000\u009e<\u0000\u009f<\u0000\u00a0<\u0000\u00a1<\u0000\u00a2<\u0000\u00a3<\u0000" +
-              "\u00a4<\u0000\u00a5<\u0000\u00a6<\u0000\u00a7<\u0000\u00a8<\u0000";
+              "\u00a4<\u0000\u00a5<\u0000\u00a6<\u0000\u00a7<\u0000\u00a8<\u0000\u00a9<\u0000\u00aa" +
+              "<\u0000\u00ab<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

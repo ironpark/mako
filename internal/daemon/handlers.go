@@ -289,11 +289,11 @@ func (d *Daemon) handleConfigureAgent(ctx context.Context, stream *transport.Str
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
 		if r.FastMode != nil {
-			b := d.codexBridge(s.ID())
-			if b == nil {
-				return nil, errors.New("the agent does not support fast mode")
-			}
-			if err := b.setFastMode(ctx, s, r.GetFastMode()); err != nil {
+			if b := d.codexBridge(s.ID()); b != nil {
+				if err := b.setFastMode(ctx, s, r.GetFastMode()); err != nil {
+					return nil, err
+				}
+			} else if err := s.ConfigureFastMode(r.GetFastMode()); err != nil {
 				return nil, err
 			}
 		}

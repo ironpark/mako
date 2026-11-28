@@ -383,6 +383,25 @@ type CommitSignatureFlag interface {
 	WithCommitSignature(l *Launch, enabled bool)
 }
 
+// FastFlag is an agent whose fast mode (higher-speed inference tier) can be
+// configured at launch. WithFast enables fast mode when enabled is true, or
+// explicitly disables it when false.
+type FastFlag interface {
+	WithFast(l *Launch, enabled bool)
+}
+
+// FastMode is an agent whose fast mode can be toggled in a running session
+// via a slash command submitted at its prompt (such as Claude Code's /fast).
+type FastMode interface {
+	FastModeCommand(enabled bool) string
+}
+
+// FastModeReader is an optional interface for agents whose initial fast mode
+// state can be read from a resolved launch (e.g. --settings or user settings).
+type FastModeReader interface {
+	InitialFastMode(l Launch) (enabled, ok bool)
+}
+
 // OneShotRequest configures a single non-interactive prompt invocation.
 type OneShotRequest struct {
 	Prompt     string

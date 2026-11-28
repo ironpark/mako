@@ -298,7 +298,7 @@ func TestSettingsWideScreenLayout(t *testing.T) {
 			}
 		}
 	}
-	wantAgentIDs := []string{"agents", "apikeys", "teams", "templates", "skills", "plugins", "extensions"}
+	wantAgentIDs := []string{"agents", "apikeys", "teams", "templates", "skills", "plugins", "extensions", "routines"}
 	if !slices.Equal(agentIDs, wantAgentIDs) {
 		t.Fatalf("Agents & extensions sections = %v, want %v", agentIDs, wantAgentIDs)
 	}

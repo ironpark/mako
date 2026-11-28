@@ -8,7 +8,7 @@ package dev.ironpark.mako.v2;
 /**
  * <pre>
  * RepoTrust asks which command files of repositories the user of a node
- * trusts, or changes that (revision 53). A command file is one a
+ * trusts, or changes that (revision 54). A command file is one a
  * repository tracks whose commands mako would run for it on its own, such
  * as the setup_cmd of .mako/worktree.toml: mako runs them only while the
  * user trusts the file as it reads, by its content's SHA-256.
@@ -367,7 +367,7 @@ public  final class RepoTrust extends
   /**
    * <pre>
    * RepoTrust asks which command files of repositories the user of a node
-   * trusts, or changes that (revision 53). A command file is one a
+   * trusts, or changes that (revision 54). A command file is one a
    * repository tracks whose commands mako would run for it on its own, such
    * as the setup_cmd of .mako/worktree.toml: mako runs them only while the
    * user trusts the file as it reads, by its content's SHA-256.

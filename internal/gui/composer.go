@@ -102,6 +102,7 @@ func (m *model) sendPrompt(id string, state *chatState, draft, prompt string) {
 	text := composed(prompt, ggui.Peek(state.attached), s.GetProject())
 	m.submit(id, conn, text)
 	m.notePending(id, text)
+	m.draftReviewSent(id, text)
 	if strings.TrimSpace(text) != "" && (len(state.sent) == 0 || state.sent[len(state.sent)-1] != text) {
 		state.sent = append(state.sent, text)
 		if len(state.sent) > composerHistory {
