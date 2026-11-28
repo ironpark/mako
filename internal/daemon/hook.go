@@ -16,7 +16,6 @@ import (
 	"github.com/ironpark/mako/internal/agent/agy"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
-	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
 	"github.com/ironpark/mako/internal/transport"
@@ -140,6 +139,13 @@ func runHook(args []string, stdin io.Reader, out io.Writer) {
 		return
 	}
 	defer conn.Close()
+	if startsTurn(ev.Event) {
+		// The turn waits for its checkpoint, which the daemon captures
+		// before it hangs up.
+		_ = conn.SetDeadline(time.Now().Add(turnWait))
+		_, _ = io.Copy(io.Discard, conn)
+		return
+	}
 	if ev.Event != "PermissionRequest" {
 		return
 	}
@@ -328,6 +334,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 					// clear an active in-app approval (e.g. save_template, layout).
 					s.ReportToolStatus(protocol.AgentWorking, msg.Seq)
 				case agent.Idle:
+					d.turns.end(s.ID())
 					// Clear waiting state once a terminal confirmation finishes,
 					// without clobbering an active in-app approval or AgentDone.
 					if s.Info().GetStatus() == protocol.AgentWaiting {
@@ -353,6 +360,10 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		return
 	}
 	switch ev.Kind {
+	case agent.Started, agent.Stopped, agent.Ended, agent.Idle:
+		d.turns.end(s.ID())
+	}
+	switch ev.Kind {
 	case agent.Started:
 		if !s.ReportStatus(protocol.AgentIdle, msg.Seq) {
 			return
@@ -367,16 +378,6 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		if !s.ReportStatus(protocol.AgentWorking, msg.Seq) {
 			return
 		}
-		// Capture a lightweight shadow git snapshot before the agent edits
-		// files on this turn, enabling file-inclusive rewind later.
-		if proj := s.Info().GetProject(); proj != "" {
-			sid := msg.Session
-			go func() {
-				snapCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				_, _ = gitstat.CaptureSnapshot(snapCtx, proj, gitstat.Checkpoint{Kind: gitstat.CheckpointTurn, Session: sid})
-			}()
-		}
 		// Only a prompt of this turn makes the suggestion stale, not a
 		// late hook of an earlier one.
 		d.live.clearSuggestion(msg.Session)
@@ -387,6 +388,8 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 				d.log.Warn("hooks: report dropped", "session", msg.Session, "err", err)
 			}
 		}
+		// Last, as the hook waits for it: the turn waits on the hook.
+		d.checkpointTurn(ctx, s, ev)
 	case agent.Compacting:
 		s.ReportToolStatus(protocol.AgentCompacting, msg.Seq)
 	case agent.Waiting:

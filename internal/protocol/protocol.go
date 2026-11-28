@@ -531,7 +531,6 @@ const (
 
 	// Checkpoints are snapshots of a work tree, which the daemon takes as
 	// each turn of an agent's starts (gitstat's CaptureSnapshot).
-	GitOpCheckpoint        = "checkpoint"         // no longer run: the daemon captures a turn's checkpoint itself
 	GitOpRestoreCheckpoint = "restore_checkpoint" // the files of Root and under it as checkpoint Commit has them, after a safety snapshot it returns as JSON
 	GitOpListCheckpoints   = "list_checkpoints"   // Message's (a session ID) and Root's restores' checkpoints, newest first, as JSON
 )

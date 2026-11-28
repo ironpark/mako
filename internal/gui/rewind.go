@@ -82,23 +82,6 @@ func (m *model) openRewindDialog(id string, info *protocol.SessionInfo, msg *pro
 	})
 }
 
-func (m *model) captureSessionCheckpoint(id string) {
-	info, ok := m.session(id)
-	if !ok || info.GetProject() == "" {
-		return
-	}
-	key := fmt.Sprintf("turn-%d", time.Now().UnixMilli())
-	req := &protocol.GitRun{
-		NodeId:  m.remoteID(info.GetNodeId()),
-		Root:    info.GetProject(),
-		Op:      protocol.GitOpCheckpoint,
-		Message: id + ":" + key,
-	}
-	fetch(m, 5*time.Second, func(ctx context.Context, c *client.Client) (*protocol.GitResult, error) {
-		return c.GitRun(ctx, req)
-	}, func(_ *protocol.GitResult, _ error) {})
-}
-
 func (m *model) restoreCodeCheckpoint(info *protocol.SessionInfo, sha string, after func()) {
 	req := &protocol.GitRun{
 		NodeId: m.remoteID(info.GetNodeId()),

@@ -99,9 +99,6 @@ func (m *model) sendPrompt(id string, state *chatState, draft, prompt string) {
 		return
 	}
 	s, _ := m.session(id)
-	if s.GetBranch() != "" {
-		m.captureSessionCheckpoint(id)
-	}
 	text := composed(prompt, ggui.Peek(state.attached), s.GetProject())
 	m.submit(id, conn, text)
 	m.notePending(id, text)
