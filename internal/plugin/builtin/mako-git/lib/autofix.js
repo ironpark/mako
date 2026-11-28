@@ -148,6 +148,10 @@ export function defaultAutoFix(prNumber = 0) {
     folder: "",
     root: "",
     enabled: false,
+    // configured says the pull request's enabled state has been decided (by
+    // the user or by autofix_default), so the default does not re-enable one
+    // the user turned off.
+    configured: false,
     fixCi: true,
     fixReviews: true,
     replyOnGitHub: true,
@@ -206,6 +210,7 @@ export function normalizeAutoFix(raw, prNumber = 0) {
     folder: String(raw.folder || ""),
     root: String(raw.root || ""),
     enabled: Boolean(raw.enabled),
+    configured: raw.configured !== undefined ? Boolean(raw.configured) : true,
     fixCi: raw.fixCi !== false,
     fixReviews: raw.fixReviews !== false,
     replyOnGitHub: raw.replyOnGitHub !== false,
@@ -243,11 +248,32 @@ export function normalizeAutoFix(raw, prNumber = 0) {
   };
 }
 
+// readAutoFixDefault reads the plugin's autofix_default setting for the
+// folder's project (falling back to the global setting).
+export async function readAutoFixDefault(ctx, mako) {
+  if (!mako || !mako.settings || typeof mako.settings.getSetting !== "function") return false;
+  const scope = ctx && ctx.projectId ? `project:${ctx.projectId}` : "";
+  try {
+    const res = await mako.settings.getSetting({ key: "autofix_default", scope });
+    return Boolean(res && res.setting && res.setting.flag);
+  } catch {
+    if (!scope) return false;
+    try {
+      const res = await mako.settings.getSetting({ key: "autofix_default", scope: "" });
+      return Boolean(res && res.setting && res.setting.flag);
+    } catch {
+      return false;
+    }
+  }
+}
+
 // loadAutoFixState links s.autofix to the shared record of the panel's folder
-// and pull request, reading it from storage the first time. A record read
-// enabled has the panel load again, to poll: the host reads how often before
-// each load, and read none before this one.
-export async function loadAutoFixState(s, ctx, mako, prNumber) {
+// and pull request, reading it from storage the first time. When applyDefault
+// is set and the pull request has not been configured yet, autofix_default
+// turns it on automatically. A record loaded or auto-enabled has the panel
+// load again, to poll: the host reads how often before each load, and read
+// none before this one.
+export async function loadAutoFixState(s, ctx, mako, prNumber, opts = {}) {
   const num = Number(prNumber) || 0;
   if (!num) {
     s.autofix = null;
@@ -256,7 +282,7 @@ export async function loadAutoFixState(s, ctx, mako, prNumber) {
   const scopeKey = (ctx && ctx.scopeKey) || "";
   const key = recordKey(scopeKey, num);
   let rec = records.get(key);
-  let fromStorage = false;
+  let shouldWake = false;
   if (!rec) {
     let raw = null;
     try {
@@ -269,17 +295,26 @@ export async function loadAutoFixState(s, ctx, mako, prNumber) {
     rec = records.get(key);
     if (!rec) {
       rec = normalizeAutoFix(raw, num);
-      fromStorage = rec.enabled;
+      shouldWake = rec.enabled;
     }
     rec.scopeKey = scopeKey;
     records.set(key, rec);
+  }
+  if (opts.applyDefault && !rec.configured && !rec.enabled) {
+    if (await readAutoFixDefault(ctx, mako)) {
+      if (!rec.configured && !rec.enabled) {
+        enableAutoFix(rec);
+        await persist(rec, mako);
+        shouldWake = true;
+      }
+    }
   }
   const vk = runtimeKey(ctx);
   if (!views.has(key)) views.set(key, new Map());
   views.get(key).set(vk, Date.now());
   s.autofix = rec;
   await syncSessionSubscription(mako);
-  if (fromStorage && mako && mako.blocks) mako.blocks.reload("panel", vk);
+  if (shouldWake) wakeViews(mako, rec);
   return rec;
 }
 
@@ -387,6 +422,7 @@ export function enableAutoFix(rec) {
     clearHold(rec);
   }
   rec.enabled = true;
+  rec.configured = true;
   if (rec.phase === "off" || rec.phase === "closed" || rec.phase === "error") setPhase(rec, "watching");
   rec.lastError = "";
 }
@@ -394,6 +430,7 @@ export function enableAutoFix(rec) {
 export function disableAutoFix(rec) {
   if (rec.pendingRequestId) pendingStarts.delete(rec.pendingRequestId);
   rec.enabled = false;
+  rec.configured = true;
   rec.inFlight = false;
   rec.sawBusy = false;
   rec.pendingRequestId = "";

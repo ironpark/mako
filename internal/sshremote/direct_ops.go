@@ -851,7 +851,18 @@ git -C "$_r" --no-optional-locks diff-tree --root --no-commit-id --name-status -
 // stash, discard, clone, etc.) on the remote SSH host.
 func GitRun(ctx context.Context, h config.SSHHost, controlPath, remoteHome string, req *protocol.GitRun) (*protocol.GitResult, error) {
 	root := ExpandRemotePath(req.GetRoot(), remoteHome)
-	var cmd string
+	cmd, err := gitRunCommand(root, req)
+	if err != nil {
+		return nil, err
+	}
+	out, err := runSSH(ctx, h, controlPath, cmd)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.GitResult{Output: strings.TrimSpace(string(out))}, nil
+}
+
+func gitRunCommand(root string, req *protocol.GitRun) (string, error) {
 	switch req.GetOp() {
 	case protocol.GitOpCommit:
 		var b strings.Builder
@@ -868,9 +879,9 @@ func GitRun(ctx context.Context, h config.SSHHost, controlPath, remoteHome strin
 		}
 		cargs = append(cargs, "-m", req.GetMessage())
 		b.WriteString(ShellJoin(cargs))
-		cmd = b.String()
+		return b.String(), nil
 	case protocol.GitOpPush:
-		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "push"})
+		return remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "push"}), nil
 	case protocol.GitOpPull:
 		args := []string{"git", "-C", root, "pull"}
 		if req.GetRebase() {
@@ -878,62 +889,56 @@ func GitRun(ctx context.Context, h config.SSHHost, controlPath, remoteHome strin
 		} else {
 			args = append(args, "--ff-only")
 		}
-		cmd = remotePathPrelude + "; " + ShellJoin(args)
+		return remotePathPrelude + "; " + ShellJoin(args), nil
 	case protocol.GitOpFetch:
-		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "fetch", "--all", "--prune"})
+		return remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "fetch", "--all", "--prune"}), nil
 	case protocol.GitOpCheckout:
 		if err := rejectLeadingDash("branch", req.GetBranch()); err != nil {
-			return nil, err
+			return "", err
 		}
-		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "checkout", req.GetBranch(), "--"})
+		return remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "checkout", "--ignore-other-worktrees", req.GetBranch(), "--"}), nil
 	case protocol.GitOpBranch:
 		if err := rejectLeadingDash("branch", req.GetBranch()); err != nil {
-			return nil, err
+			return "", err
 		}
 		if err := rejectLeadingDash("commit", req.GetCommit()); err != nil {
-			return nil, err
+			return "", err
 		}
 		args := []string{"git", "-C", root, "checkout", "-b", req.GetBranch()}
 		if req.GetCommit() != "" {
 			args = append(args, req.GetCommit())
 		}
-		cmd = remotePathPrelude + "; " + ShellJoin(args)
+		return remotePathPrelude + "; " + ShellJoin(args), nil
 	case protocol.GitOpStash:
 		args := []string{"git", "-C", root, "stash", "push", "-u"}
 		if req.GetMessage() != "" {
 			args = append(args, "-m", req.GetMessage())
 		}
-		cmd = remotePathPrelude + "; " + ShellJoin(args)
+		return remotePathPrelude + "; " + ShellJoin(args), nil
 	case protocol.GitOpStashApply:
-		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "stash", "apply", fmt.Sprintf("stash@{%d}", req.GetStash())})
+		return remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "stash", "apply", fmt.Sprintf("stash@{%d}", req.GetStash())}), nil
 	case protocol.GitOpStashPop:
-		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "stash", "pop", fmt.Sprintf("stash@{%d}", req.GetStash())})
+		return remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "stash", "pop", fmt.Sprintf("stash@{%d}", req.GetStash())}), nil
 	case protocol.GitOpStashDrop:
-		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "stash", "drop", fmt.Sprintf("stash@{%d}", req.GetStash())})
+		return remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "stash", "drop", fmt.Sprintf("stash@{%d}", req.GetStash())}), nil
 	case protocol.GitOpDiscardFiles:
 		args := append([]string{"git", "-C", root, "checkout", "--"}, req.GetPaths()...)
-		cmd = remotePathPrelude + "; " + ShellJoin(args)
+		return remotePathPrelude + "; " + ShellJoin(args), nil
 	case protocol.GitOpDeleteBranch:
 		if err := rejectLeadingDash("branch", req.GetBranch()); err != nil {
-			return nil, err
+			return "", err
 		}
 		flag := "-d"
 		if req.GetForce() {
 			flag = "-D"
 		}
-		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "branch", flag, "--", req.GetBranch()})
+		return remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "branch", flag, "--", req.GetBranch()}), nil
 	case protocol.GitOpClone:
 		if err := rejectLeadingDash("clone URL", req.GetMessage()); err != nil {
-			return nil, err
+			return "", err
 		}
-		cmd = fmt.Sprintf(`%s; mkdir -p -- "$(dirname -- %s)" && git clone -- %s %s`, remotePathPrelude, ShellQuote(root), ShellQuote(req.GetMessage()), ShellQuote(root))
+		return fmt.Sprintf(`%s; mkdir -p -- "$(dirname -- %s)" && git clone -- %s %s`, remotePathPrelude, ShellQuote(root), ShellQuote(req.GetMessage()), ShellQuote(root)), nil
 	default:
-		return nil, fmt.Errorf("git op %q is not supported in direct SSH mode (install makod on the remote host for full git operations)", req.GetOp())
+		return "", fmt.Errorf("git op %q is not supported in direct SSH mode (install makod on the remote host for full git operations)", req.GetOp())
 	}
-
-	out, err := runSSH(ctx, h, controlPath, cmd)
-	if err != nil {
-		return nil, err
-	}
-	return &protocol.GitResult{Output: strings.TrimSpace(string(out))}, nil
 }

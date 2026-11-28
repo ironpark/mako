@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ironpark/ggfx/svg"
 	"github.com/ironpark/ggui/widget"
+	"github.com/ironpark/svgx"
 )
 
 // Prepared holds cached body geometry derived once per definition.
@@ -25,7 +25,7 @@ var (
 	prepCache = map[string]*prepared{}
 
 	docMu    sync.Mutex
-	docCache = map[docKey]*svg.Document{}
+	docCache = map[docKey]*svgx.Document{}
 	docOrder []docKey
 )
 
@@ -140,8 +140,8 @@ func resolveOpts(def Definition, opts Options) (colorHex, eyeHex string, state S
 	return
 }
 
-// Document returns a cached parsed *svg.Document ready for widget.SVG.
-func Document(def Definition, opts Options) (*svg.Document, error) {
+// Document returns a cached parsed *svgx.Document ready for widget.SVG.
+func Document(def Definition, opts Options) (*svgx.Document, error) {
 	colorHex, eyeHex, state, mood, depth, _ := resolveOpts(def, opts)
 	key := docKey{
 		id:       def.ID,

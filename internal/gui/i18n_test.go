@@ -10,9 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BurntSushi/toml"
+
 	"github.com/ironpark/mako/internal/gui/i18n"
 	"github.com/ironpark/mako/internal/gui/skin"
 	"github.com/ironpark/mako/internal/layoutdoc"
+	"github.com/ironpark/mako/internal/plugin/builtin"
 )
 
 // Every string the window translates has a translation in each catalog:
@@ -79,6 +82,39 @@ func TestEveryStringIsTranslated(t *testing.T) {
 	for _, c := range skin.Colors {
 		want[c.Label] = "skin.Colors"
 		want[c.Group] = "skin.Colors"
+	}
+	// Bundled plugins' setting labels and descriptions are translated in
+	// Settings ▸ Plugins (pluginSettingRow).
+	if err := fs.WalkDir(builtin.FS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Base(path) != "plugin.toml" {
+			return err
+		}
+		data, err := fs.ReadFile(builtin.FS, path)
+		if err != nil {
+			return err
+		}
+		var manifest struct {
+			Contributes struct {
+				Settings map[string]struct {
+					Label       string `toml:"label"`
+					Description string `toml:"description"`
+				} `toml:"settings"`
+			} `toml:"contributes"`
+		}
+		if _, err := toml.Decode(string(data), &manifest); err != nil {
+			return err
+		}
+		for key, s := range manifest.Contributes.Settings {
+			if s.Label != "" {
+				want[s.Label] = path + " setting " + key + " label"
+			}
+			if s.Description != "" {
+				want[s.Description] = path + " setting " + key + " description"
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("scan bundled plugin manifests: %v", err)
 	}
 	if len(want) < 100 {
 		t.Fatalf("found only %d strings to translate; is the scan broken?", len(want))
