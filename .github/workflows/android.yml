@@ -95,11 +95,27 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* --verify-tag \
             --title "mako Android ${GITHUB_REF_NAME#android-v}" \
             --notes-file app/RELEASE.md
+      - name: Compute artifact name
+        id: artifact
+        if: always()
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_NUMBER" ]; then
+            ref="pr-${PR_NUMBER}"
+          else
+            ref="$(printf '%s' "$REF_NAME" | LC_ALL=C tr -cs 'A-Za-z0-9._-' '-' | sed 's/^-*//; s/-*$//')"
+            ref="${ref:-ref}"
+          fi
+          echo "name=android-${ref}-${RUN_NUMBER}" >> "$GITHUB_OUTPUT"
       - name: Upload APK and test reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: android-${{ github.ref_name }}-${{ github.run_number }}
+          name: ${{ steps.artifact.outputs.name || format('android-run-{0}', github.run_number) }}
           path: |
             app/android/app/build/outputs/apk/**/*.apk
             app/android/app/build/reports/
