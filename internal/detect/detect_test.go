@@ -42,6 +42,17 @@ func TestRegions(t *testing.T) {
 		{"prompt box", PromptBox(in), "❯ write"},
 		{"above prompt box", LastAbovePromptBox(in), "reply"},
 		{"no prompt box", PromptBox(Input{Screen: "a\n────\nb"}), ""},
+		{"empty bottom", Bottom(2)(Input{Screen: ""}), ""},
+		{"blank bottom", Bottom(2)(Input{Screen: " \n\t\n"}), ""},
+		{"empty top", Top(2)(Input{Screen: ""}), ""},
+		{"blank top", Top(2)(Input{Screen: " \n\t\n"}), ""},
+		{"after rule at end", AfterRule(Input{Screen: "a\n────"}), ""},
+		{"after rule trailing nl", AfterRule(Input{Screen: "a\n────\n"}), ""},
+		{"adjacent prompt rules", PromptBox(Input{Screen: "────\n────"}), ""},
+		{"blank prompt box", PromptBox(Input{Screen: "────\n\n────"}), ""},
+		{"multiline prompt box", PromptBox(Input{Screen: "────\na\nb\n────"}), "a\nb"},
+		{"above prompt box at start", LastAbovePromptBox(Input{Screen: "────\nhi\n────"}), ""},
+		{"above prompt box no rules", LastAbovePromptBox(Input{Screen: "first\nsecond\n\n"}), "second"},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, c.got, c.want)
@@ -49,6 +60,24 @@ func TestRegions(t *testing.T) {
 	}
 	if !horizontalRule("─── title ") || horizontalRule("── title") || horizontalRule("text ───") {
 		t.Error("horizontal rules")
+	}
+
+	// Region extractors must slice in.Screen directly without allocating.
+	bottom3 := Bottom(3)
+	top3 := Top(3)
+	for _, tc := range []struct {
+		name string
+		fn   Region
+	}{
+		{"Bottom", bottom3},
+		{"Top", top3},
+		{"AfterRule", AfterRule},
+		{"PromptBox", PromptBox},
+		{"LastAbovePromptBox", LastAbovePromptBox},
+	} {
+		if allocs := testing.AllocsPerRun(50, func() { _ = tc.fn(in) }); allocs != 0 {
+			t.Errorf("%s allocated %v times, want 0", tc.name, allocs)
+		}
 	}
 }
 
