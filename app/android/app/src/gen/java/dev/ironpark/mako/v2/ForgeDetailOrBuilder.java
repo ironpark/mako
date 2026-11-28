@@ -181,4 +181,26 @@ public interface ForgeDetailOrBuilder extends
    */
   com.google.protobuf.ByteString
       getOpsBytes(int index);
+
+  /**
+   * <pre>
+   * viewer is the account the forge answered for, as a pull request's
+   * comments name it; "" when the forge does not tell.
+   * </pre>
+   *
+   * <code>string viewer = 9 [json_name = "viewer"];</code>
+   * @return The viewer.
+   */
+  java.lang.String getViewer();
+  /**
+   * <pre>
+   * viewer is the account the forge answered for, as a pull request's
+   * comments name it; "" when the forge does not tell.
+   * </pre>
+   *
+   * <code>string viewer = 9 [json_name = "viewer"];</code>
+   * @return The bytes for viewer.
+   */
+  com.google.protobuf.ByteString
+      getViewerBytes();
 }
