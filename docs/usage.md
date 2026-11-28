@@ -509,3 +509,26 @@ Between daemons, each side is held to its own key, and one whose key is not
 let in gets nothing: no requests, no sessions, no relay. The CLI and the app
 talk to their own daemon on a socket only your user can open, so nothing
 but port 4243 faces the network, and it can face the internet.
+
+## Repository commands
+
+A repository can track a file that tells mako to run commands for it on
+its own, such as a command to run in each new worktree or on a session's
+events. Each feature that reads such a file says which file it reads.
+Anyone who can commit to the repository can write such a file, and so
+can an agent that works in it. So mako runs these commands only after
+you read the file and trust it. Each trust is for one file of one
+repository, as the file reads now. When the file changes, mako stops
+running its commands until you trust it again. Agents cannot trust a
+file for you.
+
+```sh
+mako repo-trust allow path/to/file   # show the file, ask, and trust it as it reads
+mako repo-trust show path/to/file    # show the file, and if it is trusted
+mako repo-trust                      # list the files you trust
+mako repo-trust revoke ~/src/app     # forget every file of a repository
+```
+
+The desktop app shows the whole file in a dialog with a Trust button when
+mako skips its commands. The trust is kept on the machine of the
+repository, in `repo-trust.json` in its configuration folder.
