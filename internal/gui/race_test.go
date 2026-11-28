@@ -119,6 +119,19 @@ func TestRemoveRaceGroup(t *testing.T) {
 	}
 }
 
+func TestActiveRace(t *testing.T) {
+	list := []raceGroup{{ID: "race-2"}, {ID: "race-1"}}
+	if g, ok := activeRace(list, "race-1"); !ok || g.ID != "race-1" {
+		t.Fatalf("activeRace(race-1) = %+v %v", g, ok)
+	}
+	if g, ok := activeRace(list, "gone"); !ok || g.ID != "race-2" {
+		t.Fatalf("activeRace(gone) = %+v %v, want the newest", g, ok)
+	}
+	if _, ok := activeRace(nil, "race-1"); ok {
+		t.Fatal("an active race without races")
+	}
+}
+
 func TestSetAgentDropsTheComparison(t *testing.T) {
 	l := &launchState{Form: ggui.State(newSession{Agent: "claude", RaceTargets: []string{"codex", "agy"}})}
 	l.setAgent("claude")

@@ -283,25 +283,29 @@ func (m *model) openRaceDialog() {
 	if len(groups) > 0 && ggui.Peek(m.Races.Active) == "" {
 		m.Races.Active.Set(groups[0].ID)
 	}
+	// raceDialog reads the diffs as it opens.
 	m.Races.Open.Set(true)
-	m.refreshActiveRaceDiffs()
+}
+
+// activeRace is the race the dialog shows: the one picked, or the newest.
+func activeRace(groups []raceGroup, activeID string) (raceGroup, bool) {
+	for _, g := range groups {
+		if g.ID == activeID {
+			return g, true
+		}
+	}
+	if len(groups) > 0 {
+		return groups[0], true
+	}
+	return raceGroup{}, false
 }
 
 func (m *model) refreshActiveRaceDiffs() {
-	activeID := ggui.Peek(m.Races.Active)
-	var group *raceGroup
-	for _, g := range ggui.Peek(m.Races.Groups) {
-		if g.ID == activeID {
-			cp := g
-			group = &cp
-			break
-		}
-	}
-	if group == nil {
+	group, ok := activeRace(ggui.Peek(m.Races.Groups), ggui.Peek(m.Races.Active))
+	if !ok {
 		return
 	}
-	for _, entry := range group.Entries {
-		e := entry
+	for _, e := range group.Entries {
 		s, ok := m.session(e.SessionID)
 		if !ok {
 			continue
@@ -593,26 +597,44 @@ func raceFooterButton(m *model) ggui.Widget {
 	})
 }
 
+// raceCardWidth is how wide a contestant's card is once a race has more
+// of them than fit side by side; they then scroll sideways.
+const raceCardWidth = 300.0
+
+// raceDialogMaxHeight is the most of the window the race dialog's body
+// takes before it scrolls.
+const raceDialogMaxHeight = 560.0
+
 func raceDialog(m *model) ggui.Widget {
 	st := m.Races
+	// What the dialog shows: the race picked, and who in it has started.
+	shown := ggui.Derived(func() string {
+		g, ok := activeRace(st.Groups.Get(), st.Active.Get())
+		if !ok {
+			return ""
+		}
+		key := g.ID
+		for _, e := range g.Entries {
+			key += "\x00" + e.SessionID
+		}
+		return key
+	})
+	// Its diffs are read again as it opens, when another race is picked,
+	// and when a contestant joins the race shown.
+	ggui.Effect(func() ggui.Cleanup {
+		if st.Open.Get() && shown.Get() != "" {
+			m.refreshActiveRaceDiffs()
+		}
+		return nil
+	})
 	body := ggui.Reactive(func() ggui.Widget {
 		if !st.Open.Get() {
 			return widget.Box()
 		}
 		groups := st.Groups.Get()
-		if len(groups) == 0 {
+		cur, ok := activeRace(groups, st.Active.Get())
+		if !ok {
 			return muted(widget.Text(T("No comparison races started yet. Pick Compare in a New session tab to run two or more agents side by side.")).Size(13))
-		}
-		activeID := st.Active.Get()
-		var cur *raceGroup
-		for i := range groups {
-			if groups[i].ID == activeID {
-				cur = &groups[i]
-				break
-			}
-		}
-		if cur == nil {
-			cur = &groups[0]
 		}
 		changes := st.Changes.Get()
 		sessions := m.Sessions.Get()
@@ -634,9 +656,9 @@ func raceDialog(m *model) ggui.Widget {
 			}, topRow...)
 		}
 
+		wide := len(cur.Entries) <= 2
 		cards := make([]ggui.Widget, 0, len(cur.Entries))
-		for _, entry := range cur.Entries {
-			e := entry
+		for _, e := range cur.Entries {
 			s, hasSess := sessionIn(sessions, e.SessionID)
 			ch := changes[e.SessionID]
 			isWinner := cur.WinnerID != "" && cur.WinnerID == e.SessionID
@@ -675,8 +697,7 @@ func raceDialog(m *model) ggui.Widget {
 			}
 			if ch != nil {
 				cardRows = append(cardRows, widget.Text(Tf("%d files changed · +%d -%d", len(ch.GetFiles()), added, removed)).Size(12).Weight(ggui.WeightMedium))
-				for _, f := range ch.GetFiles()[:min(len(ch.GetFiles()), 6)] {
-					file := f
+				for _, file := range ch.GetFiles()[:min(len(ch.GetFiles()), 6)] {
 					cardRows = append(cardRows, ui.ButtonOf(widget.Row(
 						widget.Expanded(widget.Text(file.GetPath()).Size(11.5).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()),
 						widget.Text(fmt.Sprintf("+%d -%d", file.GetAdded(), file.GetRemoved())).Size(11).Color(skin.Muted).NoWrap(),
@@ -704,7 +725,7 @@ func raceDialog(m *model) ggui.Widget {
 				footer = append(footer, widget.Box(widget.Text(T("Winner")).Size(11.5).Weight(ggui.WeightSemibold).Color(skin.DotRunning).NoWrap()).
 					Fill(skin.DotRunning.Alpha(0.15)).Radius(6).Pad(4, 8))
 			} else if cur.WinnerID == "" {
-				grp := *cur
+				grp := cur
 				footer = append(footer, ui.Button(T("Pick winner & merge"), func() {
 					m.askPickRaceWinner(grp, e.SessionID)
 				}).Pad(4, 10).Radius(6).Disabled(busy))
@@ -715,14 +736,26 @@ func raceDialog(m *model) ggui.Widget {
 			if isWinner {
 				borderCol = skin.DotRunning
 			}
-			cards = append(cards, widget.Expanded(widget.Box(widget.Column(cardRows...).Gap(8).Stretch()).
-				Fill(skin.Surface1).Border(1, borderCol).Radius(10).Pad(12, 14)))
+			card := widget.Box(widget.Column(cardRows...).Gap(8).Stretch()).
+				Fill(skin.Surface1).Border(1, borderCol).Radius(10).Pad(12, 14)
+			if wide {
+				cards = append(cards, widget.Expanded(card))
+			} else {
+				cards = append(cards, card.Width(raceCardWidth))
+			}
 		}
 
+		// Two cards share the dialog's width; more keep theirs and scroll
+		// sideways rather than squeeze.
+		var cardRow ggui.Widget = widget.Row(cards...).Gap(12).Stretch()
+		if !wide {
+			cardRow = widget.Scroll(cardRow).Horizontal().Bar(skin.Surface3)
+		}
 		return widget.Column(
 			widget.Row(topRow...).Gap(8).Align(widget.AlignCenter),
-			widget.Row(cards...).Gap(12).Stretch(),
+			cardRow,
 		).Gap(12).Stretch()
 	})
-	return keyedDialog(st.Open, body).Title(T("Compare agent races")).Width(760)
+	content := widget.Box(widget.Scroll(body).Shrink().Bar(skin.Surface3)).MaxHeight(raceDialogMaxHeight)
+	return keyedDialog(st.Open, content).Title(T("Compare agent races")).Width(760)
 }
