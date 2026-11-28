@@ -569,7 +569,8 @@ for example `mako-k3x9q2`. The session's `worktree` reports that name.
 The repository's `.mako/worktree.toml` can give a `setup_cmd`. The daemon
 runs it only if the user trusts that file as it reads (Repository trust).
 If not, the daemon makes the worktree without it and sets the worktree's
-`skipped_hooks` to the file's absolute path (revision 54).
+`skipped_hooks` to the file's absolute path. A daemon that does not know
+`skipped_hooks` leaves it empty, so it needs no revision.
 
 **`SessionInfo`** is what listings and most replies describe a session with.
 The fields a front-end usually needs:

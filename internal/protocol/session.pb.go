@@ -304,7 +304,7 @@ type Worktree struct {
 	// skipped_hooks is the repository's command file, an absolute path on
 	// the node, whose setup_cmd mako did not run as it made the worktree,
 	// since the user does not trust the file as it reads (RepoTrust); ""
-	// when none was skipped (revision 54).
+	// when none was skipped, as a daemon that does not know it leaves it.
 	SkippedHooks  string `protobuf:"bytes,6,opt,name=skipped_hooks,json=skippedHooks,proto3" json:"skipped_hooks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

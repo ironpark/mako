@@ -115,7 +115,7 @@ public interface WorktreeOrBuilder extends
    * skipped_hooks is the repository's command file, an absolute path on
    * the node, whose setup_cmd mako did not run as it made the worktree,
    * since the user does not trust the file as it reads (RepoTrust); ""
-   * when none was skipped (revision 54).
+   * when none was skipped, as a daemon that does not know it leaves it.
    * </pre>
    *
    * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
@@ -127,7 +127,7 @@ public interface WorktreeOrBuilder extends
    * skipped_hooks is the repository's command file, an absolute path on
    * the node, whose setup_cmd mako did not run as it made the worktree,
    * since the user does not trust the file as it reads (RepoTrust); ""
-   * when none was skipped (revision 54).
+   * when none was skipped, as a daemon that does not know it leaves it.
    * </pre>
    *
    * <code>string skipped_hooks = 6 [json_name = "skippedHooks"];</code>
