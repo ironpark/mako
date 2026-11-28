@@ -38,6 +38,8 @@ type savedSession struct {
 	ParentID       string
 	ParentNodeID   string
 	PluginID       string
+	PinnedRepo     *string
+	PinnedRemote   *string
 }
 
 // savedJSON is a savedSession as sessions.json has it. The messages are in
@@ -50,6 +52,8 @@ type savedJSON struct {
 	ParentID       string          `json:"parent_session,omitempty"`
 	ParentNodeID   string          `json:"parent_node,omitempty"`
 	PluginID       string          `json:"plugin_id,omitempty"`
+	PinnedRepo     *string         `json:"pinned_repo,omitempty"`
+	PinnedRemote   *string         `json:"pinned_remote,omitempty"`
 }
 
 var (
@@ -66,7 +70,11 @@ func (e savedSession) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(savedJSON{Info: info, Request: req, TranscriptPath: e.TranscriptPath, ParentID: e.ParentID, ParentNodeID: e.ParentNodeID, PluginID: e.PluginID})
+	return json.Marshal(savedJSON{
+		Info: info, Request: req, TranscriptPath: e.TranscriptPath,
+		ParentID: e.ParentID, ParentNodeID: e.ParentNodeID, PluginID: e.PluginID,
+		PinnedRepo: e.PinnedRepo, PinnedRemote: e.PinnedRemote,
+	})
 }
 
 func (e *savedSession) UnmarshalJSON(data []byte) error {
@@ -78,6 +86,8 @@ func (e *savedSession) UnmarshalJSON(data []byte) error {
 	e.ParentID = raw.ParentID
 	e.ParentNodeID = raw.ParentNodeID
 	e.PluginID = raw.PluginID
+	e.PinnedRepo = raw.PinnedRepo
+	e.PinnedRemote = raw.PinnedRemote
 	if len(raw.Info) > 0 {
 		if err := savedUnmarshal.Unmarshal(raw.Info, e.Info); err != nil {
 			return fmt.Errorf("info: %w", err)
@@ -89,6 +99,41 @@ func (e *savedSession) UnmarshalJSON(data []byte) error {
 		}
 	}
 	return nil
+}
+
+func cloneStringPtr(p *string) *string {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}
+
+func (d *Daemon) savedSession(id string) (savedSession, bool) {
+	d.sessionMu.Lock()
+	saved, ok := d.saved[id]
+	d.sessionMu.Unlock()
+	return saved, ok
+}
+
+// pinnedGit returns the git repository root and remote pinned when session id
+// started, and whether the session has a pinned scope. An empty pinned remote
+// is distinct from unpinned (legacy/synthetic SessionInfo) so editing
+// .git/config mid-session cannot move a session into another repo: scope.
+func (d *Daemon) pinnedGit(id string) (repo, remote string, pinned bool) {
+	if id == "" {
+		return "", "", false
+	}
+	d.sessionMu.Lock()
+	saved, ok := d.saved[id]
+	d.sessionMu.Unlock()
+	if !ok || saved.PinnedRemote == nil {
+		return "", "", false
+	}
+	if saved.PinnedRepo != nil {
+		repo = *saved.PinnedRepo
+	}
+	return repo, *saved.PinnedRemote, true
 }
 
 type sessionFile struct {
@@ -460,16 +505,41 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	d.sessionMu.Lock()
 	previous, existed := d.saved[id]
 	var pluginID string
+	var pinnedRepo, pinnedRemote *string
+	var parentProject string
+	var parentPinnedRepo, parentPinnedRemote *string
 	if existed {
 		parent = previous.ParentID
 		parentNode = previous.ParentNodeID
 		pluginID = previous.PluginID
+		pinnedRepo = cloneStringPtr(previous.PinnedRepo)
+		pinnedRemote = cloneStringPtr(previous.PinnedRemote)
+	} else if parent != "" && parentNode == "" {
+		if parentSaved, ok := d.saved[parent]; ok && parentSaved.PinnedRemote != nil {
+			parentProject = parentSaved.Info.GetProject()
+			parentPinnedRepo = cloneStringPtr(parentSaved.PinnedRepo)
+			parentPinnedRemote = cloneStringPtr(parentSaved.PinnedRemote)
+		}
 	}
 	var claimed map[string]bool // only an older saved session recovers one
 	if existed && previous.Info.GetConversationId() == "" {
 		claimed = d.claimedLocked(id)
 	}
 	d.sessionMu.Unlock()
+
+	if pinnedRemote == nil && parentPinnedRemote != nil && parentProject != "" && cleanPath(parentProject) == cleanPath(req.GetProject()) {
+		pinnedRepo = parentPinnedRepo
+		pinnedRemote = parentPinnedRemote
+	}
+	if pinnedRepo == nil || pinnedRemote == nil {
+		_, repo, _, remote := gitstat.Head(req.GetProject())
+		if pinnedRepo == nil {
+			pinnedRepo = &repo
+		}
+		if pinnedRemote == nil {
+			pinnedRemote = &remote
+		}
+	}
 
 	// Populate standard Mako session environment variables for all agent runs.
 	mode := "main"
@@ -567,7 +637,11 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	info := s.Info()
 	// Commands can embed ephemeral MCP config and secrets; only persist inputs.
 	info.Command = nil
-	d.saved[id] = savedSession{Info: info, Request: req, TranscriptPath: transcriptPath, ParentID: parent, ParentNodeID: parentNode, PluginID: pluginID}
+	d.saved[id] = savedSession{
+		Info: info, Request: req, TranscriptPath: transcriptPath,
+		ParentID: parent, ParentNodeID: parentNode, PluginID: pluginID,
+		PinnedRepo: pinnedRepo, PinnedRemote: pinnedRemote,
+	}
 	if err := d.saveSessionsLocked(); err != nil {
 		if existed {
 			d.saved[id] = previous

@@ -105,7 +105,7 @@ func TestProjectMCPSpawnMessageAndStop(t *testing.T) {
 	d, parent := projectMCPDaemon(t)
 	client := projectMCPClient(t, d, parent)
 	tools, err := client.ListTools(t.Context(), nil)
-	if err != nil || len(tools.Tools) != 16 {
+	if err != nil || len(tools.Tools) != 17 {
 		t.Fatalf("tools: %v, %v", tools, err)
 	}
 	if !strings.Contains(client.InitializeResult().Instructions, parent.ID()) {
@@ -649,7 +649,7 @@ func TestProjectMCPSettingsReflectLiveAcrossSessions(t *testing.T) {
 		t.Fatal("existing stdio MCP connection did not receive tools/list_changed on config reload")
 	}
 	tools, err := httpClient.ListTools(t.Context(), nil)
-	if err != nil || len(tools.Tools) != 16 {
+	if err != nil || len(tools.Tools) != 17 {
 		t.Fatalf("http tools before disable: %+v, %v", tools, err)
 	}
 	findAvail := func(list []availableAgent, name string) (availableAgent, bool) {
@@ -706,7 +706,7 @@ func TestProjectMCPSettingsReflectLiveAcrossSessions(t *testing.T) {
 		t.Fatalf("mcp-%s.json retained mako after disable: %s", httpSess.ID(), mcpCfgBody)
 	}
 
-	// 3. Re-enable built-in mako MCP; existing sessions recover all 16 tools and config without restart.
+	// 3. Re-enable built-in mako MCP; existing sessions recover all 17 tools and config without restart.
 	for len(toolChanged) > 0 {
 		<-toolChanged
 	}
@@ -719,8 +719,8 @@ func TestProjectMCPSettingsReflectLiveAcrossSessions(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("existing stdio MCP connection did not receive tools/list_changed when re-enabled")
 	}
-	if gotTools, err := httpClient.ListTools(t.Context(), nil); err != nil || len(gotTools.Tools) != 16 {
-		t.Fatalf("http tools after re-enable = %d (err=%v), want 16", len(gotTools.Tools), err)
+	if gotTools, err := httpClient.ListTools(t.Context(), nil); err != nil || len(gotTools.Tools) != 17 {
+		t.Fatalf("http tools after re-enable = %d (err=%v), want 17", len(gotTools.Tools), err)
 	}
 	if res := callProjectTool[listAgentsResult](t, stdioClient, "list_agents", struct{}{}); func() bool {
 		cl, ok := findAvail(res.Available, "claude")

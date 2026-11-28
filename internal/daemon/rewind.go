@@ -126,7 +126,7 @@ func (d *Daemon) rewindSession(ctx context.Context, req *protocol.RewindSession)
 		return d.withHead(s.Info()), nil
 	}
 
-	s, err := d.openForkedSession(ctx, nextReq, forkedName, forkedID, forkedPath)
+	s, err := d.openForkedSession(ctx, nextReq, forkedName, forkedID, forkedPath, saved.PinnedRepo, saved.PinnedRemote)
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +229,7 @@ func (d *Daemon) openForkedSession(
 	ctx context.Context,
 	req *protocol.OpenSession,
 	name, conversationID, transcriptPath string,
+	pinnedRepo, pinnedRemote *string,
 ) (*session.Session, error) {
 	if conversationID == "" {
 		return nil, errors.New("rewind: forked conversation ID is empty")
@@ -249,6 +250,8 @@ func (d *Daemon) openForkedSession(
 		},
 		Request:        proto.CloneOf(req),
 		TranscriptPath: transcriptPath,
+		PinnedRepo:     cloneStringPtr(pinnedRepo),
+		PinnedRemote:   cloneStringPtr(pinnedRemote),
 	}
 
 	d.sessionMu.Lock()

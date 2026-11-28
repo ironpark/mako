@@ -9,6 +9,7 @@ import (
 	"sync"
 	"weak"
 
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
@@ -21,7 +22,58 @@ func (d *Daemon) handleReadChat(ctx context.Context, stream *transport.Stream, e
 	return serve(d, ctx, stream, env, protocol.TypeChat, func(r *protocol.ReadChat) (*protocol.Chat, error) {
 		s, ok := d.sessions.get(r.GetSessionId())
 		if !ok {
-			return nil, fmt.Errorf("unknown session %s", r.GetSessionId())
+			saved, hasSaved := d.savedSession(r.GetSessionId())
+			if !hasSaved || saved.Info == nil {
+				return nil, fmt.Errorf("unknown session %s", r.GetSessionId())
+			}
+			info := proto.CloneOf(saved.Info)
+			if r.GetUsageOnly() {
+				if saved.TranscriptPath == "" || config.IsSSHNodeID(info.GetNodeId()) {
+					return &protocol.Chat{}, nil
+				}
+				var once transcript.Cache
+				u, err := once.ReadUsage(info, saved.TranscriptPath)
+				if err != nil {
+					return nil, err
+				}
+				return &protocol.Chat{Usage: u}, nil
+			}
+			span := transcript.Span{After: max(r.GetAfter(), 0), Before: max(r.GetBefore(), 0)}
+			if r.GetAgent() != "" {
+				chat, err := d.chatForSaved(ctx, info, saved, transcript.Span{})
+				if err != nil {
+					return nil, err
+				}
+				var logPath string
+				for _, a := range chat.GetAgents() {
+					if a.GetId() == r.GetAgent() {
+						logPath = a.GetLog()
+					}
+				}
+				if logPath == "" {
+					return nil, fmt.Errorf("no subagent %s in this session", r.GetAgent())
+				}
+				chat, err = transcript.ReadAgent(info, logPath, span)
+				if err != nil {
+					return nil, err
+				}
+				reply := shallow(chat)
+				reply.Digest = combine(chatDigests.of(chat), digest(reply.GetUsage()))
+				if r.GetSeen() == reply.GetDigest() {
+					return &protocol.Chat{Digest: reply.GetDigest(), Unchanged: true}, nil
+				}
+				return reply, nil
+			}
+			chat, err := d.chatForSaved(ctx, info, saved, span)
+			if err != nil {
+				return nil, err
+			}
+			reply := shallow(chat)
+			reply.Digest = combine(chatDigests.of(chat), digest(reply.GetUsage()))
+			if r.GetSeen() == reply.GetDigest() {
+				return &protocol.Chat{Digest: reply.GetDigest(), Unchanged: true}, nil
+			}
+			return reply, nil
 		}
 		if r.GetUsageOnly() {
 			u, err := d.usageForSession(s)

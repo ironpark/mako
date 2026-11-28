@@ -22,7 +22,7 @@ import (
 // messaging from any agent's shell (e.g., Claude Code Bash(run_in_background)).
 func runAgentMsg(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) < 2 {
-		fmt.Fprintln(stderr, "usage: mako-msg <wait|read|send|list|profiles> [flags]")
+		fmt.Fprintln(stderr, "usage: mako-msg <wait|read|send|list|profiles|inspect> [flags]")
 		return 2
 	}
 	socket := args[0]
@@ -98,6 +98,21 @@ func runAgentMsg(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	case "list":
 		// no extra args required
 
+	case "inspect":
+		fs := flag.NewFlagSet("mako-msg inspect", flag.ContinueOnError)
+		fs.SetOutput(stderr)
+		turns := fs.Int("turns", readAgentTurns, fmt.Sprintf("latest conversation turns to show, 0 to %d (0 shows the session alone)", readAgentMaxTurns))
+		pos, err := parseInterleavedAgentFlags(fs, rest)
+		if err != nil {
+			return 2
+		}
+		if len(pos) != 1 {
+			fmt.Fprintln(stderr, "usage: mako-msg inspect [--turns <n>] <session-id>")
+			return 2
+		}
+		req.Inspect = pos[0]
+		req.Turns = turns
+
 	case "profiles":
 		fs := flag.NewFlagSet("mako-msg profiles", flag.ContinueOnError)
 		fs.SetOutput(stderr)
@@ -108,7 +123,7 @@ func runAgentMsg(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		req.Node = strings.TrimSpace(*node)
 
 	default:
-		fmt.Fprintf(stderr, "mako-msg: unknown subcommand %q (expected wait, read, send, list, profiles)\n", sub)
+		fmt.Fprintf(stderr, "mako-msg: unknown subcommand %q (expected wait, read, send, list, profiles, inspect)\n", sub)
 		return 2
 	}
 
