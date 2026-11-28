@@ -41,7 +41,7 @@ type Daemon struct {
 	cfgMu   sync.Mutex
 	cfgSnap atomic.Pointer[config.Config]
 	log     *slog.Logger
-	dir     string // the configuration directory, config.Dir() when empty
+	dir     string // the configuration directory; Run sets config.Dir() when empty
 
 	loggedCommands loggedCommands // the commands agents' logs name
 	live           liveHub        // the replies streaming, by session
@@ -224,6 +224,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 		if dir, err = config.Dir(); err != nil {
 			return err
 		}
+		// Kept, so what reads d.dir later reads the folder this daemon
+		// runs on, not "", which reads as none.
+		d.dir = dir
 	}
 	run, err := config.RunDir(dir)
 	if err != nil {
