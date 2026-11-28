@@ -29,7 +29,7 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 53
+const Revision = 54
 
 // RevisionRoutines adds a node's routines, read and changed through its
 // daemon (ListRoutines, Routines and RoutineAction, Envelope 167 to 169),
@@ -39,6 +39,13 @@ const RevisionRoutines = 53
 // RevisionCodeCheckpoints adds turn code checkpoints and code-inclusive
 // rewind (GitRun ops list_checkpoints and restore_checkpoint).
 const RevisionCodeCheckpoints = 53
+
+// RevisionSessionHost adds the session host: subscribe_session (Envelope
+// 170, HostSubscribed 171, HostEvent 172) for a front-end to follow a
+// session's state and events with replay after a reconnect, and
+// session_action (173, SessionActionResult 174) for its shared draft,
+// prompts sent once, the prompt queue and approvals.
+const RevisionSessionHost = 54
 
 // RevisionCodexFastMode adds session-scoped Codex Fast Mode state and control:
 // SessionInfo.fast_mode (field 44), AgentControls.fast_mode (field 4),

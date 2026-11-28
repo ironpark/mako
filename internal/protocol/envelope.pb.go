@@ -172,6 +172,11 @@ type Envelope struct {
 	//	*Envelope_ListRoutines
 	//	*Envelope_Routines
 	//	*Envelope_RoutineAction
+	//	*Envelope_SubscribeSession
+	//	*Envelope_HostSubscribed
+	//	*Envelope_HostEvent
+	//	*Envelope_SessionAction
+	//	*Envelope_SessionActionResult
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1398,6 +1403,51 @@ func (x *Envelope) GetRoutineAction() *RoutineAction {
 	return nil
 }
 
+func (x *Envelope) GetSubscribeSession() *SubscribeSession {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SubscribeSession); ok {
+			return x.SubscribeSession
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetHostSubscribed() *HostSubscribed {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_HostSubscribed); ok {
+			return x.HostSubscribed
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetHostEvent() *HostEvent {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_HostEvent); ok {
+			return x.HostEvent
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetSessionAction() *SessionAction {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SessionAction); ok {
+			return x.SessionAction
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetSessionActionResult() *SessionActionResult {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_SessionActionResult); ok {
+			return x.SessionActionResult
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1944,6 +1994,27 @@ type Envelope_RoutineAction struct {
 	RoutineAction *RoutineAction `protobuf:"bytes,169,opt,name=routine_action,json=routineAction,proto3,oneof"`
 }
 
+type Envelope_SubscribeSession struct {
+	// The session host: subscriptions and actions (revision 54).
+	SubscribeSession *SubscribeSession `protobuf:"bytes,170,opt,name=subscribe_session,json=subscribeSession,proto3,oneof"`
+}
+
+type Envelope_HostSubscribed struct {
+	HostSubscribed *HostSubscribed `protobuf:"bytes,171,opt,name=host_subscribed,json=hostSubscribed,proto3,oneof"`
+}
+
+type Envelope_HostEvent struct {
+	HostEvent *HostEvent `protobuf:"bytes,172,opt,name=host_event,json=hostEvent,proto3,oneof"`
+}
+
+type Envelope_SessionAction struct {
+	SessionAction *SessionAction `protobuf:"bytes,173,opt,name=session_action,json=sessionAction,proto3,oneof"`
+}
+
+type Envelope_SessionActionResult struct {
+	SessionActionResult *SessionActionResult `protobuf:"bytes,174,opt,name=session_action_result,json=sessionActionResult,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -2204,6 +2275,16 @@ func (*Envelope_Routines) isEnvelope_Body() {}
 
 func (*Envelope_RoutineAction) isEnvelope_Body() {}
 
+func (*Envelope_SubscribeSession) isEnvelope_Body() {}
+
+func (*Envelope_HostSubscribed) isEnvelope_Body() {}
+
+func (*Envelope_HostEvent) isEnvelope_Body() {}
+
+func (*Envelope_SessionAction) isEnvelope_Body() {}
+
+func (*Envelope_SessionActionResult) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -2273,7 +2354,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x16mako/v2/routines.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\xb3:\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/host.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x16mako/v2/routines.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\x90=\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -2430,7 +2511,13 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"goalAction\x12=\n" +
 	"\rlist_routines\x18\xa7\x01 \x01(\v2\x15.mako.v2.ListRoutinesH\x00R\flistRoutines\x120\n" +
 	"\broutines\x18\xa8\x01 \x01(\v2\x11.mako.v2.RoutinesH\x00R\broutines\x12@\n" +
-	"\x0eroutine_action\x18\xa9\x01 \x01(\v2\x16.mako.v2.RoutineActionH\x00R\rroutineActionB\x06\n" +
+	"\x0eroutine_action\x18\xa9\x01 \x01(\v2\x16.mako.v2.RoutineActionH\x00R\rroutineAction\x12I\n" +
+	"\x11subscribe_session\x18\xaa\x01 \x01(\v2\x19.mako.v2.SubscribeSessionH\x00R\x10subscribeSession\x12C\n" +
+	"\x0fhost_subscribed\x18\xab\x01 \x01(\v2\x17.mako.v2.HostSubscribedH\x00R\x0ehostSubscribed\x124\n" +
+	"\n" +
+	"host_event\x18\xac\x01 \x01(\v2\x12.mako.v2.HostEventH\x00R\thostEvent\x12@\n" +
+	"\x0esession_action\x18\xad\x01 \x01(\v2\x16.mako.v2.SessionActionH\x00R\rsessionAction\x12S\n" +
+	"\x15session_action_result\x18\xae\x01 \x01(\v2\x1c.mako.v2.SessionActionResultH\x00R\x13sessionActionResultB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2582,6 +2669,11 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*ListRoutines)(nil),          // 128: mako.v2.ListRoutines
 	(*Routines)(nil),              // 129: mako.v2.Routines
 	(*RoutineAction)(nil),         // 130: mako.v2.RoutineAction
+	(*SubscribeSession)(nil),      // 131: mako.v2.SubscribeSession
+	(*HostSubscribed)(nil),        // 132: mako.v2.HostSubscribed
+	(*HostEvent)(nil),             // 133: mako.v2.HostEvent
+	(*SessionAction)(nil),         // 134: mako.v2.SessionAction
+	(*SessionActionResult)(nil),   // 135: mako.v2.SessionActionResult
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2714,11 +2806,16 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	128, // 127: mako.v2.Envelope.list_routines:type_name -> mako.v2.ListRoutines
 	129, // 128: mako.v2.Envelope.routines:type_name -> mako.v2.Routines
 	130, // 129: mako.v2.Envelope.routine_action:type_name -> mako.v2.RoutineAction
-	130, // [130:130] is the sub-list for method output_type
-	130, // [130:130] is the sub-list for method input_type
-	130, // [130:130] is the sub-list for extension type_name
-	130, // [130:130] is the sub-list for extension extendee
-	0,   // [0:130] is the sub-list for field type_name
+	131, // 130: mako.v2.Envelope.subscribe_session:type_name -> mako.v2.SubscribeSession
+	132, // 131: mako.v2.Envelope.host_subscribed:type_name -> mako.v2.HostSubscribed
+	133, // 132: mako.v2.Envelope.host_event:type_name -> mako.v2.HostEvent
+	134, // 133: mako.v2.Envelope.session_action:type_name -> mako.v2.SessionAction
+	135, // 134: mako.v2.Envelope.session_action_result:type_name -> mako.v2.SessionActionResult
+	135, // [135:135] is the sub-list for method output_type
+	135, // [135:135] is the sub-list for method input_type
+	135, // [135:135] is the sub-list for extension type_name
+	135, // [135:135] is the sub-list for extension extendee
+	0,   // [0:135] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2732,6 +2829,7 @@ func file_mako_v2_envelope_proto_init() {
 	file_mako_v2_files_proto_init()
 	file_mako_v2_git_proto_init()
 	file_mako_v2_forge_proto_init()
+	file_mako_v2_host_proto_init()
 	file_mako_v2_mesh_proto_init()
 	file_mako_v2_plugins_proto_init()
 	file_mako_v2_pluginstore_proto_init()
@@ -2870,6 +2968,11 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_ListRoutines)(nil),
 		(*Envelope_Routines)(nil),
 		(*Envelope_RoutineAction)(nil),
+		(*Envelope_SubscribeSession)(nil),
+		(*Envelope_HostSubscribed)(nil),
+		(*Envelope_HostEvent)(nil),
+		(*Envelope_SessionAction)(nil),
+		(*Envelope_SessionActionResult)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
