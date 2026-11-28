@@ -43,6 +43,11 @@ func (*Agent) EffortArgs(effort string) []string {
 	return []string{"-c", "model_reasoning_effort=" + jsonString(effort)}
 }
 
+// WithFast starts Codex with service_tier overridden to "fast" or "default".
+func (*Agent) WithFast(l *agent.Launch, enabled bool) {
+	l.Command = append(slices.Clone(l.Command), "-c", "service_tier="+jsonString(ServiceTierForFastMode(enabled)))
+}
+
 // WithServers gives the servers as -c overrides of Codex's mcp_servers
 // table, each value TOML, which a JSON string or array of strings also is.
 // A server at a URL is given its token in Codex's environment, which only
@@ -113,6 +118,24 @@ func jsonString(v any) string {
 	return string(b)
 }
 
+// parseServiceTierConfig parses a Codex `-c service_tier=<val>` override and
+// returns the unquoted service tier value when present.
+func parseServiceTierConfig(kv string) (string, bool) {
+	k, v, ok := strings.Cut(kv, "=")
+	if !ok || strings.TrimSpace(k) != "service_tier" {
+		return "", false
+	}
+	v = strings.TrimSpace(v)
+	if len(v) >= 2 && ((v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'')) {
+		v = v[1 : len(v)-1]
+	}
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "", false
+	}
+	return v, true
+}
+
 // RemoteLaunchSplit partitions a resolved Codex CLI command line into arguments
 // for a managed `codex app-server` process and arguments for the `codex --remote`
 // TUI process connecting to it.
@@ -122,6 +145,7 @@ type RemoteLaunchSplit struct {
 	TUIArgs        []string // TUI-safe flags for both new and resumed `codex --remote` sessions
 	NewTUIArgs     []string // permission/sandbox flags for brand-new `codex --remote` sessions (rejected by `resume`)
 	Model          string   // -m / --model (forwarded to thread/start & TUI)
+	ServiceTier    string   // -c service_tier=... if explicitly supplied
 	ApprovalPolicy string   // -a / --ask-for-approval, or "never" for YOLO
 	Sandbox        string   // -s / --sandbox, or "danger-full-access" for YOLO
 	Cwd            string   // -C / --cd if explicitly supplied
@@ -207,6 +231,9 @@ func SplitRemoteLaunch(command []string) RemoteLaunchSplit {
 		case "-c", "--config":
 			if v, ok := nextVal(); ok {
 				out.ServerArgs = append(out.ServerArgs, "-c", v)
+				if tier, ok := parseServiceTierConfig(v); ok {
+					out.ServiceTier = tier
+				}
 			}
 		case "--enable", "--disable":
 			if v, ok := nextVal(); ok {

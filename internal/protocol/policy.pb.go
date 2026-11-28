@@ -24,7 +24,7 @@ const (
 
 // ListPolicies asks this node's daemon for its cross-agent permission
 // policy rules and the approvals they decided. Local front-ends only. The
-// reply is Policies (revision 53).
+// reply is Policies (revision 54).
 type ListPolicies struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -63,7 +63,7 @@ func (*ListPolicies) Descriptor() ([]byte, []int) {
 
 // SetPolicies replaces this node's daemon's global permission policy
 // rules, each checked before any is saved. Local front-ends only. The reply
-// is Policies (revision 53).
+// is Policies (revision 54).
 type SetPolicies struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Rules         []*PolicyRule          `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`

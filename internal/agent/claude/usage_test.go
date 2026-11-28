@@ -32,3 +32,21 @@ func TestUsageSaysTheModelAndThePermissionMode(t *testing.T) {
 		t.Fatalf("tokens in %d out %d", total.GetInput(), total.GetOutput())
 	}
 }
+
+func TestUsageParsesFastModeSpeed(t *testing.T) {
+	count := (&Agent{}).NewUsage()
+	total := &protocol.Usage{}
+	count.Count([]byte(`{"type":"assistant","message":{"id":"m1","model":"claude-opus-5-5","usage":{"input_tokens":10,"output_tokens":5,"speed":"fast"}}}`), total)
+	if total.FastMode == nil || !total.GetFastMode() {
+		t.Fatalf("expected FastMode=true for speed=fast, got %v", total.FastMode)
+	}
+	// Sidechain speed does not overwrite parent session fast mode.
+	count.Count([]byte(`{"type":"assistant","isSidechain":true,"message":{"id":"s1","model":"claude-haiku-5-5","usage":{"input_tokens":1,"output_tokens":1,"speed":"standard"}}}`), total)
+	if total.FastMode == nil || !total.GetFastMode() {
+		t.Fatalf("sidechain overwrote FastMode: %v", total.FastMode)
+	}
+	count.Count([]byte(`{"type":"assistant","message":{"id":"m2","model":"claude-opus-5-5","usage":{"input_tokens":10,"output_tokens":5,"speed":"standard"}}}`), total)
+	if total.FastMode == nil || total.GetFastMode() {
+		t.Fatalf("expected FastMode=false for speed=standard, got %v", total.FastMode)
+	}
+}

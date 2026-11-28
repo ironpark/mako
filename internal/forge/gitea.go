@@ -321,13 +321,13 @@ func (g *gitea) list(ctx context.Context, r *protocol.ForgeList) (*protocol.Forg
 			state = "all" // the branch's, whatever became of it
 		}
 		var prs []gPR
-		if err := g.api(ctx, http.MethodGet, "/pulls?sort=recentupdate&state="+state+"&limit="+limit, nil, &prs); err != nil {
+		if err := g.api(ctx, http.MethodGet, pullsPath(r.GetOrder(), state, limit), nil, &prs); err != nil {
 			return nil, err
 		}
 		for _, p := range prs {
 			// The branch's own, not a fork's of the same name.
 			if branch == "" || p.Head.Ref == branch && g.own(p) {
-				out.Items = append(out.Items, p.proto(protocol.ForgePR))
+				out.Items = append(out.Items, g.prItem(p))
 			}
 		}
 		if branch != "" && len(out.Items) > 1 {
@@ -557,6 +557,24 @@ func (g *gitea) openPR(ctx context.Context, root, branch, base, title, body stri
 	var pr gPR
 	err := g.api(ctx, http.MethodPost, "/pulls", map[string]string{"head": branch, "base": base, "title": title, "body": body}, &pr)
 	return pr.HTMLURL, err
+}
+
+// pullsPath is the path a list of pull requests is read at: the most
+// recently active first, or of order created the newest opened first, as
+// the API lists them unsorted.
+func pullsPath(order, state, limit string) string {
+	sort := "sort=recentupdate&"
+	if order == protocol.ForgeOrderCreated {
+		sort = ""
+	}
+	return "/pulls?" + sort + "state=" + state + "&limit=" + limit
+}
+
+// prItem is pull request p as a list shows it, a fork's said to be.
+func (g *gitea) prItem(p gPR) *protocol.ForgeItem {
+	it := p.proto(protocol.ForgePR)
+	it.Fork = !g.own(p)
+	return it
 }
 
 // own reports whether a pull request is from a branch of this repository,

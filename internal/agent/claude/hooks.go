@@ -9,6 +9,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
+	"google.golang.org/protobuf/proto"
 )
 
 // hookEvents are the events mako hooks. Notification says when Claude asks
@@ -45,6 +46,53 @@ func (*Agent) WithCommitSignature(l *agent.Launch, enabled bool) {
 		attr["commit"] = ""
 		doc["attribution"] = attr
 	})
+}
+
+// WithFast configures Claude Code's fast mode via --settings.
+func (*Agent) WithFast(l *agent.Launch, enabled bool) {
+	mergeSettings(l, func(doc map[string]any) {
+		doc["fastMode"] = enabled
+	})
+}
+
+// InitialFastMode reads Claude Code's initial fastMode state from the launch's
+// --settings flag, falling back to the user's settings.json.
+func (*Agent) InitialFastMode(l agent.Launch) (bool, bool) {
+	for i := len(l.Command) - 1; i >= 1; i-- {
+		arg := l.Command[i]
+		var raw string
+		switch {
+		case strings.HasPrefix(arg, settingsFlag+"="):
+			raw = strings.TrimPrefix(arg, settingsFlag+"=")
+		case i > 1 && l.Command[i-1] == settingsFlag:
+			raw = arg
+		default:
+			continue
+		}
+		if doc, ok := loadSettingsJSON(raw, l.Env); ok {
+			if v, ok := doc["fastMode"].(bool); ok {
+				return v, true
+			}
+		}
+	}
+	configDir := strings.TrimSpace(l.Env["CLAUDE_CONFIG_DIR"])
+	if configDir == "" {
+		home := l.Env["HOME"]
+		if home == "" {
+			home, _ = os.UserHomeDir()
+		}
+		if home != "" {
+			configDir = filepath.Join(home, ".claude")
+		}
+	}
+	if configDir != "" {
+		if doc, ok := loadSettingsJSON(filepath.Join(configDir, "settings.json"), l.Env); ok {
+			if v, ok := doc["fastMode"].(bool); ok {
+				return v, true
+			}
+		}
+	}
+	return false, false
 }
 
 // WithHooks gives the hooks, and the status line, as a --settings document.
@@ -228,7 +276,8 @@ func (*Agent) Status(input []byte) *protocol.Usage {
 		Resets int64   `json:"resets_at"`
 	}
 	var state struct {
-		Context struct {
+		FastMode *bool `json:"fast_mode"`
+		Context  struct {
 			Size int64 `json:"context_window_size"`
 		} `json:"context_window"`
 		Limits struct {
@@ -240,6 +289,9 @@ func (*Agent) Status(input []byte) *protocol.Usage {
 		return &protocol.Usage{}
 	}
 	u := &protocol.Usage{Window: state.Context.Size}
+	if state.FastMode != nil {
+		u.FastMode = proto.Bool(*state.FastMode)
+	}
 	for minutes, l := range map[int64]*limit{protocol.FiveHours: state.Limits.FiveHour, protocol.Week: state.Limits.SevenDay} {
 		if l != nil {
 			u.SetLimit(&protocol.RateLimit{Minutes: minutes, Used: l.Used, Resets: l.Resets})

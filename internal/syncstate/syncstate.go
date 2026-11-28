@@ -486,6 +486,7 @@ func SanitizeAgent(a agentspec.Agent) agentspec.Agent {
 		Args:          slices.Clone(a.Args),
 		Model:         a.Model,
 		Effort:        a.Effort,
+		Fast:          cloneBoolPtr(a.Fast),
 		Permission:    a.Permission,
 		Yolo:          a.Yolo,
 		Enabled:       cloneBoolPtr(a.Enabled),
@@ -509,6 +510,7 @@ func SanitizeAgent(a agentspec.Agent) agentspec.Agent {
 				ReplaceArgs:    p.ReplaceArgs,
 				Model:          p.Model,
 				Effort:         p.Effort,
+				Fast:           cloneBoolPtr(p.Fast),
 				Permission:     p.Permission,
 				Yolo:           cloneBoolPtr(p.Yolo),
 				ContextServers: cloneStringSlicePtr(p.ContextServers),
@@ -538,7 +540,7 @@ func IsDefaultAgent(name string, a agentspec.Agent) bool {
 		return false
 	}
 	s := SanitizeAgent(a)
-	if len(s.Args) > 0 || len(s.Profiles) > 0 || s.Model != "" || s.Effort != "" || s.Permission != "" || s.Yolo || s.Enabled != nil || s.AllowAgent != nil || s.AllowTemplate != nil || s.Claude != (agentspec.ClaudeSettings{}) {
+	if len(s.Args) > 0 || len(s.Profiles) > 0 || s.Model != "" || s.Effort != "" || s.Fast != nil || s.Permission != "" || s.Yolo || s.Enabled != nil || s.AllowAgent != nil || s.AllowTemplate != nil || s.Claude != (agentspec.ClaudeSettings{}) {
 		return false
 	}
 	return len(s.Command) == 0 || slices.Equal(s.Command, defCmd)
