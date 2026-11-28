@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // TriggerKind describes what initiates a routine execution.
@@ -64,6 +65,9 @@ func (r Routine) Validate() error {
 	if strings.TrimSpace(r.Prompt) == "" {
 		return errors.New("routine prompt cannot be empty")
 	}
+	if err := ValidBranchPrefix(r.BranchPrefix); err != nil {
+		return err
+	}
 	switch r.Trigger {
 	case "", TriggerCron:
 		if _, err := ParseSchedule(r.Schedule); err != nil {
@@ -93,4 +97,59 @@ func (r Routine) Normalized() Routine {
 		r.Trigger = TriggerCron
 	}
 	return r
+}
+
+// ValidBranchPrefix checks a routine's worktree branch prefix: "" is the
+// default prefix, and any other must make a branch name git
+// check-ref-format --branch takes once a run's suffix is added to it.
+func ValidBranchPrefix(prefix string) error {
+	if prefix == "" {
+		return nil
+	}
+	bad := func(why string) error { return fmt.Errorf("invalid branch prefix %q: %s", prefix, why) }
+	if strings.HasSuffix(prefix, "/") {
+		return bad(`it ends with "/"`)
+	}
+	if why := badBranch(prefix + "-20060102-150405-000000"); why != "" {
+		return bad(why)
+	}
+	return nil
+}
+
+// badBranch says why name is not a branch name git check-ref-format
+// --branch takes, "" when it is.
+func badBranch(name string) string {
+	switch {
+	case strings.HasPrefix(name, "-"):
+		return `it begins with "-"`
+	case strings.HasPrefix(name, "/"):
+		return `it begins with "/"`
+	case strings.HasSuffix(name, "."):
+		return `it ends with "."`
+	case strings.Contains(name, ".."):
+		return `it contains ".."`
+	case strings.Contains(name, "//"):
+		return `it contains "//"`
+	case strings.Contains(name, "@{"), name == "@":
+		return `it contains "@{"`
+	}
+	for _, c := range name {
+		switch {
+		case c < 0x20 || c == 0x7f:
+			return "it contains a control character"
+		case unicode.IsSpace(c):
+			return "it contains white space"
+		case strings.ContainsRune(`~^:?*[\`, c):
+			return fmt.Sprintf("it contains %q", c)
+		}
+	}
+	for comp := range strings.SplitSeq(name, "/") {
+		if strings.HasPrefix(comp, ".") {
+			return `a part of it begins with "."`
+		}
+		if strings.HasSuffix(comp, ".lock") {
+			return `a part of it ends with ".lock"`
+		}
+	}
+	return ""
 }

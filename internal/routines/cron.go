@@ -17,11 +17,19 @@ type Schedule struct {
 	dom      [32]bool // 1..31
 	month    [13]bool // 1..12
 	dow      [7]bool  // 0=Sun..6=Sat
+	// domStar and dowStar mark a day-of-month or day-of-week field that
+	// begins with "*", as Vixie cron does: a day matches both fields when
+	// either is so, and either field when neither is.
+	domStar bool
+	dowStar bool
 }
 
 // ParseSchedule parses a standard 5-field cron expression
 // ("minute hour day-of-month month day-of-week") or a shorthand descriptor
-// (@hourly, @daily, @weekly, @every <duration>).
+// (@hourly, @daily, @weekly, @every <duration>). As in Vixie cron, when
+// both the day-of-month and the day-of-week fields are restricted (neither
+// begins with "*"), a day matches when either field does. An @every
+// duration is a whole number of minutes, at least one.
 func ParseSchedule(expr string) (Schedule, error) {
 	raw := strings.TrimSpace(expr)
 	if raw == "" {
@@ -44,6 +52,9 @@ func ParseSchedule(expr string) (Schedule, error) {
 		}
 		if d < time.Minute {
 			return Schedule{}, errors.New("@every interval must be at least 1m")
+		}
+		if d%time.Minute != 0 {
+			return Schedule{}, fmt.Errorf("@every interval %s is not a whole number of minutes", d)
 		}
 		s.interval = d
 		return s, nil
@@ -68,6 +79,8 @@ func ParseSchedule(expr string) (Schedule, error) {
 	if err := parseDowField(fields[4], s.dow[:]); err != nil {
 		return Schedule{}, fmt.Errorf("day-of-week field: %w", err)
 	}
+	s.domStar = strings.HasPrefix(fields[2], "*")
+	s.dowStar = strings.HasPrefix(fields[4], "*")
 	return s, nil
 }
 
@@ -85,17 +98,23 @@ func (s Schedule) Interval() time.Duration { return s.interval }
 // since the Unix epoch.
 func (s Schedule) Matches(t time.Time) bool {
 	if s.interval > 0 {
-		stepMin := int64(s.interval / time.Minute)
-		if stepMin <= 0 {
-			return false
-		}
-		return (t.Unix() / 60 % stepMin) == 0
+		return t.Unix()/60%int64(s.interval/time.Minute) == 0
 	}
 	return s.minute[t.Minute()] &&
 		s.hour[t.Hour()] &&
-		s.dom[t.Day()] &&
 		s.month[int(t.Month())] &&
-		s.dow[int(t.Weekday())]
+		s.dayMatches(t)
+}
+
+// dayMatches reports whether t's day satisfies the day-of-month and
+// day-of-week fields: both when either begins with "*", else either, as
+// Vixie cron has it.
+func (s Schedule) dayMatches(t time.Time) bool {
+	dom, dow := s.dom[t.Day()], s.dow[int(t.Weekday())]
+	if s.domStar || s.dowStar {
+		return dom && dow
+	}
+	return dom || dow
 }
 
 // Next returns the earliest time strictly after `after` (rounded up to the
@@ -103,10 +122,7 @@ func (s Schedule) Matches(t time.Time) bool {
 func (s Schedule) Next(after time.Time) time.Time {
 	t := after.Truncate(time.Minute).Add(time.Minute)
 	if s.interval > 0 {
-		step := s.interval.Truncate(time.Minute)
-		if step < time.Minute {
-			step = time.Minute
-		}
+		step := s.interval
 		rem := time.Duration(t.Unix()%int64(step/time.Second)) * time.Second
 		if rem == 0 {
 			return t
@@ -119,7 +135,7 @@ func (s Schedule) Next(after time.Time) time.Time {
 			t = time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, t.Location())
 			continue
 		}
-		if !s.dom[t.Day()] || !s.dow[int(t.Weekday())] {
+		if !s.dayMatches(t) {
 			t = time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, t.Location())
 			continue
 		}
@@ -195,9 +211,7 @@ func parseDowField(expr string, dst []bool) error {
 	if err := parseField(expr, 0, 7, tmp[:]); err != nil {
 		return err
 	}
-	for i := 0; i < 7; i++ {
-		dst[i] = tmp[i]
-	}
+	copy(dst, tmp[:7])
 	if tmp[7] {
 		dst[0] = true
 	}
