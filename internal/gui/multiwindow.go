@@ -52,6 +52,7 @@ type spaceWindowState struct {
 	sidebarWidth *ggui.StateValue[float64]
 	sidebarSplit *ggui.StateValue[float64]
 	win          *ggui.Window
+	toaster      *ui.ToasterWidget // notices over this window, such as a file trusted
 }
 
 func (sw *spaceWindowState) layoutKey() string {
@@ -809,6 +810,7 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 		sidebarPage:  ggui.State(""),
 		sidebarWidth: ggui.State(float64(sidebarWidth)),
 		sidebarSplit: ggui.State(ggui.Peek(m.Prefs).SidebarSplit),
+		toaster:      ui.NewToaster(),
 	}
 	m.spaceWindows[spaceID] = sw
 	next := maps.Clone(ggui.Peek(m.SpaceWindows))
@@ -839,6 +841,8 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 		if ggui.Peek(m.Confirmation).Owner == spaceID {
 			m.Confirmation.Set(confirmation{})
 		}
+		m.repoTrustClosed(spaceID)
+		sw.toaster.Close()
 		m.dockOwnedPanes(sw)
 	}
 	w, err := m.window.App().OpenWindow(ggui.Config{
@@ -914,6 +918,8 @@ func (m *model) closeSpaceWindow(spaceID string) {
 	if ggui.Peek(m.Confirmation).Owner == spaceID {
 		m.Confirmation.Set(confirmation{})
 	}
+	m.repoTrustClosed(spaceID)
+	sw.toaster.Close()
 	m.dockOwnedPanes(sw)
 }
 
@@ -1049,10 +1055,15 @@ func spaceWindowView(m *model, sw *spaceWindowState) ggui.Widget {
 		hline(),
 		widget.Expanded(center),
 	).Stretch()
-	return widget.Stack(
+	layers := []ggui.Widget{
 		widget.Row(left, widget.Expanded(right)).Stretch(),
 		confirmDialogFor(m, sw.spaceID),
-	).Expand()
+		repoTrustDialogFor(m, sw.spaceID),
+	}
+	if sw.toaster != nil {
+		layers = append(layers, sw.toaster)
+	}
+	return widget.Stack(layers...).Expand()
 }
 
 func spaceWindowSidebarEdge(sw *spaceWindowState) ggui.Widget {

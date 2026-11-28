@@ -93,6 +93,12 @@ func (c *Client) Access(ctx context.Context, req *protocol.Access) (*protocol.Ac
 	return request[*protocol.AccessInfo](ctx, c, protocol.TypeAccess, req)
 }
 
+// RepoTrust shows, trusts, forgets or lists the command files of
+// repositories the user of a node trusts; see protocol.RepoTrust.
+func (c *Client) RepoTrust(ctx context.Context, req *protocol.RepoTrust) (*protocol.RepoTrustInfo, error) {
+	return request[*protocol.RepoTrustInfo](ctx, c, protocol.TypeRepoTrust, req)
+}
+
 // Workspace is the workspace the daemon holds, empty for none.
 func (c *Client) Workspace(ctx context.Context) (*protocol.Workspace, error) {
 	return request[*protocol.Workspace](ctx, c, protocol.TypeGetWorkspace, &protocol.GetWorkspace{})
