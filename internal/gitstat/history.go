@@ -138,6 +138,7 @@ func Log(ctx context.Context, root string, max int, known string) (*protocol.Git
 	}
 	// show-ref fails, printing nothing, before the first commit.
 	refs, _ := gitOut(ctx, root, nil, "show-ref", "--head")
+	refs = historyRefs(refs)
 	sum := sha256.Sum256(append(refs, out.GetCurrent()...))
 	out.Fingerprint = hex.EncodeToString(sum[:8])
 	if out.GetFingerprint() == known {
@@ -161,6 +162,22 @@ func Log(ctx context.Context, root string, max int, known string) (*protocol.Git
 		out.Commits, out.More = out.GetCommits()[:max], true
 	}
 	return out, nil
+}
+
+// historyRefs is show-ref's listing without mako's own refs, as the
+// checkpoints a turn makes are: the history shows none of them, and would
+// be read again at every turn if they changed its fingerprint.
+func historyRefs(refs []byte) []byte {
+	if !bytes.Contains(refs, []byte(" "+makoRefs)) {
+		return refs
+	}
+	var kept []byte
+	for line := range bytes.Lines(refs) {
+		if _, name, _ := bytes.Cut(line, []byte(" ")); !bytes.HasPrefix(name, []byte(makoRefs)) {
+			kept = append(kept, line...)
+		}
+	}
+	return kept
 }
 
 // Show is what one commit changed against its first parent.
