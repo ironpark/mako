@@ -17,6 +17,7 @@ import "mako/v2/forge.proto";
 import "mako/v2/mesh.proto";
 import "mako/v2/plugins.proto";
 import "mako/v2/pluginstore.proto";
+import "mako/v2/repotrust.proto";
 import "mako/v2/session.proto";
 import "mako/v2/sync.proto";
 import "mako/v2/project_agents.proto";
@@ -206,6 +207,10 @@ message Envelope {
 
     // Unified agent goal status control (revision 51).
     GoalAction goal_action = 166;
+
+    // The user's trust in repositories' command files (revision 53).
+    RepoTrust repo_trust = 167;
+    RepoTrustInfo repo_trust_info = 168;
   }
 }
 

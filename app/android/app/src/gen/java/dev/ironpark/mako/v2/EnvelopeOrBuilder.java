@@ -1609,5 +1609,35 @@ public interface EnvelopeOrBuilder extends
    */
   dev.ironpark.mako.v2.GoalAction getGoalAction();
 
+  /**
+   * <pre>
+   * The user's trust in repositories' command files (revision 53).
+   * </pre>
+   *
+   * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+   * @return Whether the repoTrust field is set.
+   */
+  boolean hasRepoTrust();
+  /**
+   * <pre>
+   * The user's trust in repositories' command files (revision 53).
+   * </pre>
+   *
+   * <code>.mako.v2.RepoTrust repo_trust = 167 [json_name = "repoTrust"];</code>
+   * @return The repoTrust.
+   */
+  dev.ironpark.mako.v2.RepoTrust getRepoTrust();
+
+  /**
+   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+   * @return Whether the repoTrustInfo field is set.
+   */
+  boolean hasRepoTrustInfo();
+  /**
+   * <code>.mako.v2.RepoTrustInfo repo_trust_info = 168 [json_name = "repoTrustInfo"];</code>
+   * @return The repoTrustInfo.
+   */
+  dev.ironpark.mako.v2.RepoTrustInfo getRepoTrustInfo();
+
   public dev.ironpark.mako.v2.Envelope.BodyCase getBodyCase();
 }

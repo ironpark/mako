@@ -28,6 +28,7 @@ import (
 	"github.com/ironpark/mako/internal/plugin"
 	"github.com/ironpark/mako/internal/plugin/store"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/repotrust"
 	"github.com/ironpark/mako/internal/skills"
 	"github.com/ironpark/mako/internal/transport"
 	"github.com/ironpark/mako/internal/usage"
@@ -116,6 +117,11 @@ type Daemon struct {
 	uiWatched     onceSet          // the sessions whose end closes their blocks
 	mcp           *mcp.Resolver    // nil without a configuration directory
 	projectAgents projectAgents
+
+	// repoTrust keeps the command files of repositories the user trusts,
+	// in the configuration directory; see repo_trust.go. nil before Run,
+	// which trusts nothing.
+	repoTrust *repotrust.Store
 
 	hookBinary  string // the program agents run as their hook; see HookMain
 	hookCommand string // the shell command agents run as their hook; "" for none
@@ -223,6 +229,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 			return err
 		}
 	}
+	d.repoTrust = repotrust.Open(dir)
 	run, err := config.RunDir(dir)
 	if err != nil {
 		return err
@@ -473,6 +480,9 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 
 	case protocol.TypeGitRun:
 		return d.handleGitRun(ctx, stream, env)
+
+	case protocol.TypeRepoTrust:
+		return d.handleRepoTrust(ctx, stream, env)
 
 	case protocol.TypeForgeList:
 		return d.handleGitHubList(ctx, stream, env)
