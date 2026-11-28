@@ -14,6 +14,7 @@ import "mako/v2/devices.proto";
 import "mako/v2/files.proto";
 import "mako/v2/git.proto";
 import "mako/v2/forge.proto";
+import "mako/v2/host.proto";
 import "mako/v2/mesh.proto";
 import "mako/v2/plugins.proto";
 import "mako/v2/pluginstore.proto";
@@ -212,6 +213,13 @@ message Envelope {
     ListRoutines list_routines = 167;
     Routines routines = 168;
     RoutineAction routine_action = 169;
+
+    // The session host: subscriptions and actions (revision 54).
+    SubscribeSession subscribe_session = 170;
+    HostSubscribed host_subscribed = 171;
+    HostEvent host_event = 172;
+    SessionAction session_action = 173;
+    SessionActionResult session_action_result = 174;
   }
 }
 

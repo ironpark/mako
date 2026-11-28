@@ -576,6 +576,7 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 	// with the message.
 	over := ggui.State(false)
 	content := widget.Column(
+		hostPresence(state),
 		attachmentStrip(m, id, state),
 		ghostComposerField(m, id, state, field, defaultPlaceholder),
 		composerBar(m, id, state, field.Input(), disabled),

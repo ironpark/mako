@@ -152,7 +152,10 @@ func pendingTurns(pending []pendingMessage) []chatTurnItem {
 // Windows, where its console marks no paste's end, takes an Enter right
 // behind it as a line of the paste and does not submit. Sent through the
 // terminal's own stream, a gap kept here could close on the way. Should
-// the node not take it, it goes through the terminal as before.
+// the node not take it, it goes through the terminal as before. To a node
+// that hosts the session, it goes as the host's action, taken once, and
+// empties the draft there too: tried again until the host answers, and
+// through the terminal only from a host that does not know the action.
 func (m *model) submit(id string, conn *termConn, text string) {
 	s, ok := m.session(id)
 	enter := conn.enter()
@@ -160,6 +163,16 @@ func (m *model) submit(id string, conn *termConn, text string) {
 		conn.sendText(text)
 		return
 	}
+	var hosted *protocol.SessionAction
+	if m.hostable(id) {
+		state := m.chatState(id)
+		m.sendingPrompt(state)
+		hosted = &protocol.SessionAction{
+			NodeId: s.GetNodeId(), SessionId: id, ClientId: hostClient.id, ClientSeq: hostClient.seq.Add(1),
+			Action: &protocol.SessionAction_SendPrompt{SendPrompt: &protocol.HostSendPrompt{Text: text, Keys: enter, ClearDraft: true}},
+		}
+	}
+	dial := m.hostDialer()
 	prev, done := submitAfter(id)
 	ggui.Async(func() (struct{}, error) {
 		// One message at a time, in the order sent.
@@ -167,6 +180,10 @@ func (m *model) submit(id string, conn *termConn, text string) {
 		<-prev
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+		if hosted != nil {
+			_, err := sendHostAction(ctx, dial, hosted)
+			return struct{}{}, err
+		}
 		c, err := m.link.client(ctx)
 		if err != nil {
 			return struct{}{}, err
@@ -174,10 +191,33 @@ func (m *model) submit(id string, conn *termConn, text string) {
 		_, err = c.Send(ctx, &protocol.Send{NodeId: s.GetNodeId(), SessionId: id, Text: text, Keys: enter})
 		return struct{}{}, err
 	}, func(_ struct{}, err error) {
-		if err != nil {
+		switch {
+		case err == nil:
+			if hosted != nil {
+				m.chatState(id).host.note.Set("")
+			}
+		case hosted == nil || protocol.HasCode(err, protocol.CodeUnsupported):
 			conn.sendText(text)
+		case protocol.HasCode(err, protocol.CodeNotTaken):
+			m.promptRefused(id, text, err)
+		default:
+			// Lost on the way, after the host may have taken it: not sent
+			// again by another way, which could type it twice.
+			m.chatState(id).host.note.Set(Tf("The message may not have been sent: %s", err.Error()))
 		}
 	})
+}
+
+// promptRefused says why session id's host refused the message text,
+// takes it off the messages sent, and gives it back to the composer if it
+// is empty, to be sent again.
+func (m *model) promptRefused(id, text string, err error) {
+	state := m.chatState(id)
+	state.host.note.Set(Tf("The message was not sent: %s", err.Error()))
+	state.pending.Set(slices.DeleteFunc(slices.Clone(ggui.Peek(state.pending)), func(p pendingMessage) bool { return p.Text == text }))
+	if m.composerDraft(id) == "" {
+		m.setComposerDraft(id, text)
+	}
 }
 
 // submitted is, for each session sent to, what closes once the last

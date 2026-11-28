@@ -51,4 +51,15 @@ public interface ForgeViewOrBuilder extends
    * @return The number.
    */
   long getNumber();
+
+  /**
+   * <pre>
+   * no_files leaves a pull request's files out, for a reader that wants
+   * its checks and comments alone.
+   * </pre>
+   *
+   * <code>bool no_files = 5 [json_name = "noFiles"];</code>
+   * @return The noFiles.
+   */
+  boolean getNoFiles();
 }

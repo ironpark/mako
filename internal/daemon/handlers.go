@@ -77,30 +77,43 @@ func (d *Daemon) handleAnswerApproval(ctx context.Context, stream *transport.Str
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
-		// A template is saved by the window that allows it, on whichever
-		// node that is.
-		if d.templateAsks.owns(r.GetApprovalId()) {
-			if err := d.templateAsks.answer(r.GetApprovalId(), templateAnswer{decision: r.GetDecision(), option: r.GetOption(), message: r.GetMessage()}); err != nil {
-				return nil, err
-			}
-			return s.Info(), nil
-		}
-		// A change of the window layout is shown, and so answered, on
-		// its own node alone.
-		if d.layouts.owns(r.GetApprovalId()) {
-			if fromPeer {
-				return nil, fmt.Errorf("a layout change is answered on its own node")
-			}
-			if err := d.layouts.answer(r.GetApprovalId(), layoutAnswer{decision: r.GetDecision(), option: r.GetOption(), message: r.GetMessage()}); err != nil {
-				return nil, err
-			}
-			return s.Info(), nil
-		}
-		if err := d.approvals.answer(r.GetSessionId(), r); err != nil {
+		if err := d.answerApproval(s, r, fromPeer); err != nil {
 			return nil, err
 		}
 		return s.Info(), nil
 	})
+}
+
+// answerApproval passes a front-end's answer to the approval of session s
+// it names: a template's, a layout change's, or the agent's own.
+func (d *Daemon) answerApproval(s *session.Session, r *protocol.AnswerApproval, fromPeer bool) error {
+	// A template is saved by the window that allows it, on whichever
+	// node that is.
+	if d.templateAsks.owns(r.GetApprovalId()) {
+		return d.templateAsks.answer(r.GetApprovalId(), templateAnswer{decision: r.GetDecision(), option: r.GetOption(), message: r.GetMessage()})
+	}
+	// A change of the window layout is shown, and so answered, on its own
+	// node alone.
+	if d.layouts.owns(r.GetApprovalId()) {
+		if fromPeer {
+			return fmt.Errorf("a layout change is answered on its own node")
+		}
+		return d.layouts.answer(r.GetApprovalId(), layoutAnswer{decision: r.GetDecision(), option: r.GetOption(), message: r.GetMessage()})
+	}
+	return d.approvals.answer(s.ID(), r)
+}
+
+// approvalSession is the session the approval id waits for, whichever
+// kind it is, and whether one waits as id: a template's and a layout
+// change's say the session whose agent asked, "" for none.
+func (d *Daemon) approvalSession(id string) (string, bool) {
+	if sid, ok := d.templateAsks.sessionOf(id); ok {
+		return sid, true
+	}
+	if sid, ok := d.layouts.sessionOf(id); ok {
+		return sid, true
+	}
+	return d.approvals.sessionOf(id)
 }
 
 func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
@@ -109,23 +122,29 @@ func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
-		if d.abortNativeTurn(ctx, s, r.GetText(), r.GetKeys()) {
-			return s.Info(), nil
-		}
-		if d.deliverNativeUserPrompt(ctx, s, r.GetText(), r.GetKeys()) {
-			if strings.TrimSpace(r.GetText()) != "" {
-				s.ClearAuthErrorNow()
-			}
-			return s.Info(), nil
-		}
-		if err := s.Send(r.GetText(), r.GetKeys()); err != nil {
+		if err := d.sendToSession(ctx, s, r.GetText(), r.GetKeys()); err != nil {
 			return nil, err
-		}
-		if strings.TrimSpace(r.GetText()) != "" {
-			s.ClearAuthErrorNow()
 		}
 		return s.Info(), nil
 	})
+}
+
+// sendToSession gives session s what a front-end's composer sends: text,
+// then keys. A bare interrupt goes to an agent that stops its turn itself,
+// and a prompt to one that takes prompts itself, the terminal otherwise.
+func (d *Daemon) sendToSession(ctx context.Context, s *session.Session, text string, keys []byte) error {
+	if d.abortNativeTurn(ctx, s, text, keys) {
+		return nil
+	}
+	if !d.deliverNativeUserPrompt(ctx, s, text, keys) {
+		if err := s.Send(text, keys); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(text) != "" {
+		s.ClearAuthErrorNow()
+	}
+	return nil
 }
 
 // isInterruptKeys reports whether keys is a bare Escape interrupt sequence

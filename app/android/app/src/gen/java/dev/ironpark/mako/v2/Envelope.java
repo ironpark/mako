@@ -156,6 +156,11 @@ public  final class Envelope extends
     LIST_ROUTINES(167),
     ROUTINES(168),
     ROUTINE_ACTION(169),
+    SUBSCRIBE_SESSION(170),
+    HOST_SUBSCRIBED(171),
+    HOST_EVENT(172),
+    SESSION_ACTION(173),
+    SESSION_ACTION_RESULT(174),
     BODY_NOT_SET(0);
     private final int value;
     private BodyCase(int value) {
@@ -301,6 +306,11 @@ public  final class Envelope extends
         case 167: return LIST_ROUTINES;
         case 168: return ROUTINES;
         case 169: return ROUTINE_ACTION;
+        case 170: return SUBSCRIBE_SESSION;
+        case 171: return HOST_SUBSCRIBED;
+        case 172: return HOST_EVENT;
+        case 173: return SESSION_ACTION;
+        case 174: return SESSION_ACTION_RESULT;
         case 0: return BODY_NOT_SET;
         default: return null;
       }
@@ -7379,6 +7389,276 @@ public  final class Envelope extends
     }
   }
 
+  public static final int SUBSCRIBE_SESSION_FIELD_NUMBER = 170;
+  /**
+   * <pre>
+   * The session host: subscriptions and actions (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSubscribeSession() {
+    return bodyCase_ == 170;
+  }
+  /**
+   * <pre>
+   * The session host: subscriptions and actions (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SubscribeSession getSubscribeSession() {
+    if (bodyCase_ == 170) {
+       return (dev.ironpark.mako.v2.SubscribeSession) body_;
+    }
+    return dev.ironpark.mako.v2.SubscribeSession.getDefaultInstance();
+  }
+  /**
+   * <pre>
+   * The session host: subscriptions and actions (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+   */
+  private void setSubscribeSession(dev.ironpark.mako.v2.SubscribeSession value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 170;
+  }
+  /**
+   * <pre>
+   * The session host: subscriptions and actions (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+   */
+  private void mergeSubscribeSession(dev.ironpark.mako.v2.SubscribeSession value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 170 &&
+        body_ != dev.ironpark.mako.v2.SubscribeSession.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SubscribeSession.newBuilder((dev.ironpark.mako.v2.SubscribeSession) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 170;
+  }
+  /**
+   * <pre>
+   * The session host: subscriptions and actions (revision 54).
+   * </pre>
+   *
+   * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+   */
+  private void clearSubscribeSession() {
+    if (bodyCase_ == 170) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int HOST_SUBSCRIBED_FIELD_NUMBER = 171;
+  /**
+   * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+   */
+  @java.lang.Override
+  public boolean hasHostSubscribed() {
+    return bodyCase_ == 171;
+  }
+  /**
+   * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.HostSubscribed getHostSubscribed() {
+    if (bodyCase_ == 171) {
+       return (dev.ironpark.mako.v2.HostSubscribed) body_;
+    }
+    return dev.ironpark.mako.v2.HostSubscribed.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+   */
+  private void setHostSubscribed(dev.ironpark.mako.v2.HostSubscribed value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 171;
+  }
+  /**
+   * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+   */
+  private void mergeHostSubscribed(dev.ironpark.mako.v2.HostSubscribed value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 171 &&
+        body_ != dev.ironpark.mako.v2.HostSubscribed.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.HostSubscribed.newBuilder((dev.ironpark.mako.v2.HostSubscribed) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 171;
+  }
+  /**
+   * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+   */
+  private void clearHostSubscribed() {
+    if (bodyCase_ == 171) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int HOST_EVENT_FIELD_NUMBER = 172;
+  /**
+   * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+   */
+  @java.lang.Override
+  public boolean hasHostEvent() {
+    return bodyCase_ == 172;
+  }
+  /**
+   * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.HostEvent getHostEvent() {
+    if (bodyCase_ == 172) {
+       return (dev.ironpark.mako.v2.HostEvent) body_;
+    }
+    return dev.ironpark.mako.v2.HostEvent.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+   */
+  private void setHostEvent(dev.ironpark.mako.v2.HostEvent value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 172;
+  }
+  /**
+   * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+   */
+  private void mergeHostEvent(dev.ironpark.mako.v2.HostEvent value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 172 &&
+        body_ != dev.ironpark.mako.v2.HostEvent.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.HostEvent.newBuilder((dev.ironpark.mako.v2.HostEvent) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 172;
+  }
+  /**
+   * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+   */
+  private void clearHostEvent() {
+    if (bodyCase_ == 172) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SESSION_ACTION_FIELD_NUMBER = 173;
+  /**
+   * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSessionAction() {
+    return bodyCase_ == 173;
+  }
+  /**
+   * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SessionAction getSessionAction() {
+    if (bodyCase_ == 173) {
+       return (dev.ironpark.mako.v2.SessionAction) body_;
+    }
+    return dev.ironpark.mako.v2.SessionAction.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+   */
+  private void setSessionAction(dev.ironpark.mako.v2.SessionAction value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 173;
+  }
+  /**
+   * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+   */
+  private void mergeSessionAction(dev.ironpark.mako.v2.SessionAction value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 173 &&
+        body_ != dev.ironpark.mako.v2.SessionAction.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SessionAction.newBuilder((dev.ironpark.mako.v2.SessionAction) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 173;
+  }
+  /**
+   * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+   */
+  private void clearSessionAction() {
+    if (bodyCase_ == 173) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
+  public static final int SESSION_ACTION_RESULT_FIELD_NUMBER = 174;
+  /**
+   * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+   */
+  @java.lang.Override
+  public boolean hasSessionActionResult() {
+    return bodyCase_ == 174;
+  }
+  /**
+   * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+   */
+  @java.lang.Override
+  public dev.ironpark.mako.v2.SessionActionResult getSessionActionResult() {
+    if (bodyCase_ == 174) {
+       return (dev.ironpark.mako.v2.SessionActionResult) body_;
+    }
+    return dev.ironpark.mako.v2.SessionActionResult.getDefaultInstance();
+  }
+  /**
+   * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+   */
+  private void setSessionActionResult(dev.ironpark.mako.v2.SessionActionResult value) {
+    java.util.Objects.requireNonNull(value);
+    body_ = value;
+    bodyCase_ = 174;
+  }
+  /**
+   * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+   */
+  private void mergeSessionActionResult(dev.ironpark.mako.v2.SessionActionResult value) {
+    java.util.Objects.requireNonNull(value);
+    if (bodyCase_ == 174 &&
+        body_ != dev.ironpark.mako.v2.SessionActionResult.getDefaultInstance()) {
+      body_ = dev.ironpark.mako.v2.SessionActionResult.newBuilder((dev.ironpark.mako.v2.SessionActionResult) body_)
+          .mergeFrom(value).buildPartial();
+    } else {
+      body_ = value;
+    }
+    bodyCase_ = 174;
+  }
+  /**
+   * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+   */
+  private void clearSessionActionResult() {
+    if (bodyCase_ == 174) {
+      bodyCase_ = 0;
+      body_ = null;
+    }
+  }
+
   public static dev.ironpark.mako.v2.Envelope parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -14382,6 +14662,270 @@ public  final class Envelope extends
       return this;
     }
 
+    /**
+     * <pre>
+     * The session host: subscriptions and actions (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSubscribeSession() {
+      return instance.hasSubscribeSession();
+    }
+    /**
+     * <pre>
+     * The session host: subscriptions and actions (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SubscribeSession getSubscribeSession() {
+      return instance.getSubscribeSession();
+    }
+    /**
+     * <pre>
+     * The session host: subscriptions and actions (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+     */
+    public Builder setSubscribeSession(dev.ironpark.mako.v2.SubscribeSession value) {
+      copyOnWrite();
+      instance.setSubscribeSession(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The session host: subscriptions and actions (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+     */
+    public Builder setSubscribeSession(
+        dev.ironpark.mako.v2.SubscribeSession.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSubscribeSession(builderForValue.build());
+      return this;
+    }
+    /**
+     * <pre>
+     * The session host: subscriptions and actions (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+     */
+    public Builder mergeSubscribeSession(dev.ironpark.mako.v2.SubscribeSession value) {
+      copyOnWrite();
+      instance.mergeSubscribeSession(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * The session host: subscriptions and actions (revision 54).
+     * </pre>
+     *
+     * <code>.mako.v2.SubscribeSession subscribe_session = 170 [json_name = "subscribeSession"];</code>
+     */
+    public Builder clearSubscribeSession() {
+      copyOnWrite();
+      instance.clearSubscribeSession();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+     */
+    @java.lang.Override
+    public boolean hasHostSubscribed() {
+      return instance.hasHostSubscribed();
+    }
+    /**
+     * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.HostSubscribed getHostSubscribed() {
+      return instance.getHostSubscribed();
+    }
+    /**
+     * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+     */
+    public Builder setHostSubscribed(dev.ironpark.mako.v2.HostSubscribed value) {
+      copyOnWrite();
+      instance.setHostSubscribed(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+     */
+    public Builder setHostSubscribed(
+        dev.ironpark.mako.v2.HostSubscribed.Builder builderForValue) {
+      copyOnWrite();
+      instance.setHostSubscribed(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+     */
+    public Builder mergeHostSubscribed(dev.ironpark.mako.v2.HostSubscribed value) {
+      copyOnWrite();
+      instance.mergeHostSubscribed(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.HostSubscribed host_subscribed = 171 [json_name = "hostSubscribed"];</code>
+     */
+    public Builder clearHostSubscribed() {
+      copyOnWrite();
+      instance.clearHostSubscribed();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+     */
+    @java.lang.Override
+    public boolean hasHostEvent() {
+      return instance.hasHostEvent();
+    }
+    /**
+     * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.HostEvent getHostEvent() {
+      return instance.getHostEvent();
+    }
+    /**
+     * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+     */
+    public Builder setHostEvent(dev.ironpark.mako.v2.HostEvent value) {
+      copyOnWrite();
+      instance.setHostEvent(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+     */
+    public Builder setHostEvent(
+        dev.ironpark.mako.v2.HostEvent.Builder builderForValue) {
+      copyOnWrite();
+      instance.setHostEvent(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+     */
+    public Builder mergeHostEvent(dev.ironpark.mako.v2.HostEvent value) {
+      copyOnWrite();
+      instance.mergeHostEvent(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.HostEvent host_event = 172 [json_name = "hostEvent"];</code>
+     */
+    public Builder clearHostEvent() {
+      copyOnWrite();
+      instance.clearHostEvent();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSessionAction() {
+      return instance.hasSessionAction();
+    }
+    /**
+     * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SessionAction getSessionAction() {
+      return instance.getSessionAction();
+    }
+    /**
+     * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+     */
+    public Builder setSessionAction(dev.ironpark.mako.v2.SessionAction value) {
+      copyOnWrite();
+      instance.setSessionAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+     */
+    public Builder setSessionAction(
+        dev.ironpark.mako.v2.SessionAction.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSessionAction(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+     */
+    public Builder mergeSessionAction(dev.ironpark.mako.v2.SessionAction value) {
+      copyOnWrite();
+      instance.mergeSessionAction(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SessionAction session_action = 173 [json_name = "sessionAction"];</code>
+     */
+    public Builder clearSessionAction() {
+      copyOnWrite();
+      instance.clearSessionAction();
+      return this;
+    }
+
+    /**
+     * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+     */
+    @java.lang.Override
+    public boolean hasSessionActionResult() {
+      return instance.hasSessionActionResult();
+    }
+    /**
+     * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+     */
+    @java.lang.Override
+    public dev.ironpark.mako.v2.SessionActionResult getSessionActionResult() {
+      return instance.getSessionActionResult();
+    }
+    /**
+     * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+     */
+    public Builder setSessionActionResult(dev.ironpark.mako.v2.SessionActionResult value) {
+      copyOnWrite();
+      instance.setSessionActionResult(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+     */
+    public Builder setSessionActionResult(
+        dev.ironpark.mako.v2.SessionActionResult.Builder builderForValue) {
+      copyOnWrite();
+      instance.setSessionActionResult(builderForValue.build());
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+     */
+    public Builder mergeSessionActionResult(dev.ironpark.mako.v2.SessionActionResult value) {
+      copyOnWrite();
+      instance.mergeSessionActionResult(value);
+      return this;
+    }
+    /**
+     * <code>.mako.v2.SessionActionResult session_action_result = 174 [json_name = "sessionActionResult"];</code>
+     */
+    public Builder clearSessionActionResult() {
+      copyOnWrite();
+      instance.clearSessionActionResult();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Envelope)
   }
   @java.lang.Override
@@ -14532,9 +15076,14 @@ public  final class Envelope extends
             dev.ironpark.mako.v2.ListRoutines.class,
             dev.ironpark.mako.v2.Routines.class,
             dev.ironpark.mako.v2.RoutineAction.class,
+            dev.ironpark.mako.v2.SubscribeSession.class,
+            dev.ironpark.mako.v2.HostSubscribed.class,
+            dev.ironpark.mako.v2.HostEvent.class,
+            dev.ironpark.mako.v2.SessionAction.class,
+            dev.ironpark.mako.v2.SessionActionResult.class,
           };
           java.lang.String info =
-              "\u0000\u0084\u0001\u0000\u0001\u00a9\u0084\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
+              "\u0000\u0089\u0001\u0000\u0001\u00ae\u0089\u0000\u0000\u0000\u0001\u0208\u0002\u000b" +
               "\n<\u0000\u000b<\u0000\f<\u0000\u0014<\u0000\u0015<\u0000\u0017<\u0000\u0018<\u0000" +
               "\u0019<\u0000\u001a<\u0000\u001b<\u0000\u001c<\u0000\u001e<\u0000\u001f<\u0000 <" +
               "\u0000!<\u0000\"<\u0000#<\u0000$<\u0000%<\u0000&<\u0000\'<\u0000(<\u0000)<\u0000" +
@@ -14550,7 +15099,8 @@ public  final class Envelope extends
               "<\u0000\u0091<\u0000\u0092<\u0000\u0093<\u0000\u0094<\u0000\u0095<\u0000\u0096<\u0000" +
               "\u0097<\u0000\u0098<\u0000\u0099<\u0000\u009a<\u0000\u009b<\u0000\u009c<\u0000\u009d" +
               "<\u0000\u009e<\u0000\u009f<\u0000\u00a0<\u0000\u00a1<\u0000\u00a2<\u0000\u00a3<\u0000" +
-              "\u00a4<\u0000\u00a5<\u0000\u00a6<\u0000\u00a7<\u0000\u00a8<\u0000\u00a9<\u0000";
+              "\u00a4<\u0000\u00a5<\u0000\u00a6<\u0000\u00a7<\u0000\u00a8<\u0000\u00a9<\u0000\u00aa" +
+              "<\u0000\u00ab<\u0000\u00ac<\u0000\u00ad<\u0000\u00ae<\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

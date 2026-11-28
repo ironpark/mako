@@ -301,6 +301,17 @@ func (w *windowLayouts) owns(id string) bool {
 	return w.stage != nil && w.stage.pb.GetId() == id
 }
 
+// sessionOf is the session whose agent asked for the staged change id,
+// "" for a plugin's, and whether id is the staged change's.
+func (w *windowLayouts) sessionOf(id string) (string, bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.stage == nil || w.stage.pb.GetId() != id {
+		return "", false
+	}
+	return w.stage.pb.GetSessionId(), true
+}
+
 // answer passes the user's answer to the staged change of the ID, as its
 // phase takes it: allow or deny while it is to be approved, keep or
 // revert once applied.

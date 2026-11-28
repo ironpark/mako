@@ -146,6 +146,11 @@ const (
 	TypeListRoutines          Type = "list_routines"
 	TypeRoutines              Type = "routines"
 	TypeRoutineAction         Type = "routine_action"
+	TypeSubscribeSession      Type = "subscribe_session"
+	TypeHostSubscribed        Type = "host_subscribed"
+	TypeHostEvent             Type = "host_event"
+	TypeSessionAction         Type = "session_action"
+	TypeSessionActionResult   Type = "session_action_result"
 )
 
 // Newer reports whether the edit made at version v on node is newer than
@@ -463,6 +468,11 @@ const (
 	// CodeAuthError is a provider authentication failure on the host (e.g.
 	// expired OAuth session), separate from Mako node access.
 	CodeAuthError = "auth_error"
+	// CodeNotTaken is a session action its session's host refused: it
+	// changed nothing, and sending it again changes nothing either. Any
+	// other error of one, as a daemon passing it on fails, may come after
+	// the host took it.
+	CodeNotTaken = "not_taken"
 )
 
 // HasFeature reports whether a node speaks a protocol extension.
