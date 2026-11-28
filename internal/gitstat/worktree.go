@@ -27,6 +27,17 @@ import (
 // front-end waits at least this long for a session that starts in one.
 const WorktreeTimeout = 3 * time.Minute
 
+// RemoveWorktreeTimeout is how long removing a worktree can take, the
+// repository's teardown_cmd included, which itself has two minutes and
+// leaves removeReserve of what is left to git: a front-end, or a daemon
+// answering one, gives a removal at least this long.
+const RemoveWorktreeTimeout = 3 * time.Minute
+
+// removeReserve is what a removal keeps of its time for git once the
+// teardown_cmd ran, so that a teardown_cmd that runs out of time, which
+// does not stop the removal, does not leave git none.
+const removeReserve = 30 * time.Second
+
 // rollbackTimeout is how long undoing a worktree that failed to bootstrap
 // can take, even after the request it was made for ended.
 const rollbackTimeout = 30 * time.Second
@@ -51,7 +62,7 @@ func lockRepo(ctx context.Context, repo string) (unlock func(), err error) {
 	case token <- struct{}{}:
 		return func() { <-token }, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("waiting for another worktree of %s to be made or removed: %w", repo, ctx.Err())
 	}
 }
 
@@ -313,9 +324,10 @@ func samePath(a, b string) bool {
 // all. The worktree must be one git has of the repository w names, and
 // its branch a branch's name. It refuses a worktree with changes before
 // anything else, so one it refuses is left as it was. Then the
-// repository's teardown_cmd runs if opts.Trusted says so, and what the
-// bootstrap made is taken out for git to remove the worktree; it is put
-// back if git does not. The output ends saying so when the teardown_cmd did not run
+// repository's teardown_cmd runs if opts.Trusted says so, in time of its
+// own that leaves git removeReserve of ctx's, and what the bootstrap made
+// is taken out for git to remove the worktree; it is put back if git
+// does not. The output ends saying so when the teardown_cmd did not run
 // or failed, which does not stop the removal.
 func RemoveWorktree(ctx context.Context, w *protocol.Worktree, opts RemoveWorktreeOptions) (string, error) {
 	repo, path, branch := w.GetRepo(), w.GetPath(), w.GetBranch()

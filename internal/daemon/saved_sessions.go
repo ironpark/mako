@@ -488,7 +488,8 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		createdWorktree = proto.CloneOf(w)
 		defer func() {
 			if !startedOK && createdWorktree != nil {
-				rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				// Its teardown_cmd undoes what its setup_cmd did.
+				rmCtx, rmCancel := context.WithTimeout(context.Background(), gitstat.RemoveWorktreeTimeout)
 				defer rmCancel()
 				if _, rmErr := gitstat.RemoveWorktree(rmCtx, createdWorktree, gitstat.RemoveWorktreeOptions{Trusted: d.repoTrust.Trusted}); rmErr != nil {
 					d.log.Warn("failed to roll back worktree after session start error", "path", createdWorktree.GetPath(), "err", rmErr)

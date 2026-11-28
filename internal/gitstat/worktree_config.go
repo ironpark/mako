@@ -272,7 +272,7 @@ func applyWorktreeBootstrap(ctx context.Context, repo, wtPath, branch, base stri
 	if !cfg.hooksRun(repo, trusted) {
 		return cfg.data != nil && os.Getenv(worktreeHookDisableEnv) != "1", nil
 	}
-	if out, err := runWorktreeHook(ctx, wtPath, repo, branch, base, cmdStr); err != nil {
+	if out, err := runWorktreeHook(ctx, 0, wtPath, repo, branch, base, cmdStr); err != nil {
 		if out != "" {
 			return false, fmt.Errorf("worktree setup_cmd failed: %w\n%s", err, out)
 		}
@@ -282,9 +282,10 @@ func applyWorktreeBootstrap(ctx context.Context, repo, wtPath, branch, base stri
 }
 
 // teardownWorktree runs the repository's teardown_cmd in the worktree at
-// wtPath if trusted. notice is what to tell of it: that it did not run,
-// untrusted, or that it failed, which does not stop the worktree's
-// removal, with the end of what it printed.
+// wtPath if trusted, leaving removeReserve of ctx's time for the removal
+// after it. notice is what to tell of it: that it did not run, untrusted,
+// or that it failed or ran out of time, which does not stop the
+// worktree's removal, with the end of what it printed.
 func teardownWorktree(ctx context.Context, repo, wtPath, branch, base string, cfg WorktreeConfig, trusted HookTrust) (notice string) {
 	cmdStr := strings.TrimSpace(cfg.TeardownCmd)
 	switch {
@@ -296,7 +297,7 @@ func teardownWorktree(ctx context.Context, repo, wtPath, branch, base string, cf
 		}
 		return ""
 	}
-	out, err := runWorktreeHook(ctx, wtPath, repo, branch, base, cmdStr)
+	out, err := runWorktreeHook(ctx, removeReserve, wtPath, repo, branch, base, cmdStr)
 	if err == nil {
 		return ""
 	}
@@ -597,8 +598,21 @@ func copyRegularFile(src, wt *os.Root, name string) error {
 	return out.Close()
 }
 
-func runWorktreeHook(ctx context.Context, wtPath, repo, branch, base, command string) (string, error) {
-	hookCtx, cancel := context.WithTimeout(ctx, worktreeHookTimeout)
+// runWorktreeHook runs a repository's setup_cmd or teardown_cmd, command,
+// in the worktree at wtPath, told of the worktree as the environment
+// says, and nothing of it in its words. It has worktreeHookTimeout, and
+// leaves reserve of ctx's time for what comes after it. When its time is
+// up, what it started goes with it: on unix its process group is killed,
+// not only its shell.
+func runWorktreeHook(ctx context.Context, reserve time.Duration, wtPath, repo, branch, base, command string) (string, error) {
+	limit := worktreeHookTimeout
+	if dl, ok := ctx.Deadline(); ok {
+		limit = min(limit, time.Until(dl)-reserve)
+	}
+	if limit <= 0 {
+		return "", errors.New("no time was left for it")
+	}
+	hookCtx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
@@ -607,6 +621,7 @@ func runWorktreeHook(ctx context.Context, wtPath, repo, branch, base, command st
 		cmd = exec.CommandContext(hookCtx, "sh", "-c", command)
 	}
 	cmd.Dir = wtPath
+	hookGroup(cmd)
 	// A command the timeout killed can leave children holding its output
 	// open, which waiting on it would wait for too.
 	cmd.WaitDelay = 5 * time.Second
@@ -617,5 +632,8 @@ func runWorktreeHook(ctx context.Context, wtPath, repo, branch, base, command st
 		"MAKO_WORKTREE_BASE="+base,
 	)
 	out, err := safeexec.CombinedOutput(cmd)
+	if err != nil && errors.Is(hookCtx.Err(), context.DeadlineExceeded) {
+		err = fmt.Errorf("ran out of its %s", limit.Round(time.Second))
+	}
 	return strings.TrimSpace(string(out)), err
 }

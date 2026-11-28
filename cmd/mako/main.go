@@ -15,6 +15,7 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/client"
 	"github.com/ironpark/mako/internal/config"
+	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
 	"rsc.io/qr"
 )
@@ -537,10 +538,17 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project string, use
 		Cols:    uint32(cols),
 		Rows:    uint32(rows),
 	}
+	openCtx := ctx
 	if useWorktree {
 		req.Worktree = &protocol.Worktree{Branch: branch}
+		// The node makes the worktree first, the repository's setup_cmd
+		// included, which takes longer than a node waits for another's
+		// reply to a request with no deadline.
+		var cancel context.CancelFunc
+		openCtx, cancel = context.WithTimeout(ctx, worktreeOpenWait)
+		defer cancel()
 	}
-	info, err := c.Open(ctx, req)
+	info, err := c.Open(openCtx, req)
 	if err != nil {
 		return err
 	}
@@ -548,6 +556,10 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project string, use
 	fmt.Fprint(os.Stderr, skippedHooksNotice(nodeID, info.GetWorktree()))
 	return c.Attach(ctx, &protocol.Attach{SessionId: info.GetId(), NodeId: nodeID, Replay: false})
 }
+
+// worktreeOpenWait is how long mako run waits for a session that starts
+// in a new worktree: what making the worktree can take, and its start.
+const worktreeOpenWait = gitstat.WorktreeTimeout + 30*time.Second
 
 // skippedHooksNotice says, for a worktree made without its repository's
 // setup_cmd, which file was not trusted and how to trust it; "" for any

@@ -509,7 +509,12 @@ func (h *host) GitRun(_ context.Context, req *hostapi.GitServiceRunRequest) (*ho
 		return &hostapi.GitServiceRunResponse{}, nil
 	}
 	jobID := "g" + nonce()
-	jobCtx, cancel := context.WithTimeout(h.p.m.ctx, gitRunTimeout)
+	timeout := gitRunTimeout
+	if op == protocol.GitOpRemoveWT {
+		// The repository's teardown_cmd has time of its own in it.
+		timeout = max(timeout, gitstat.RemoveWorktreeTimeout)
+	}
+	jobCtx, cancel := context.WithTimeout(h.p.m.ctx, timeout)
 	h.p.pendingMu.Lock()
 	h.p.gitJobs[jobID] = cancel
 	h.p.pendingMu.Unlock()
