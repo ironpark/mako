@@ -317,6 +317,10 @@ func accountUsageDialog(m *model) ggui.Widget {
 	})
 
 	body := ggui.Reactive(func() ggui.Widget {
+		// Built as it opens, so what it reads is as it is then.
+		if !st.Open.Get() {
+			return widget.Box()
+		}
 		data := st.Data.Get()
 		loading := st.Loading.Get()
 		errText := st.Err.Get()
@@ -397,12 +401,19 @@ func accountUsageDialog(m *model) ggui.Widget {
 		}
 		return widget.Column(rows...).Gap(10).Stretch()
 	})
-	return keyedDialog(st.Open, body).Title(T("Account usage & quotas")).Width(600)
+	// Many accounts or projects scroll, in a window of any height.
+	content := widget.Box(widget.Scroll(body).Shrink().Bar(skin.Surface3)).MaxHeight(accountUsageMaxHeight)
+	return keyedDialog(st.Open, content).Title(T("Account usage & quotas")).Width(600)
 }
 
+// accountUsageMaxHeight is the most of the window the Account usage
+// dialog's body takes before it scrolls.
+const accountUsageMaxHeight = 560.0
+
 // accountAnalyticsView is the Analytics tab: the sessions' usage by
-// repository. It follows UsagesRev as well as each usage it reads, so a
-// session whose usage a refresh asks for the first time shows once it is in.
+// repository, as usages has it, which Refresh and each chat's reads keep.
+// It follows UsagesRev as well as each usage it reads, so a session whose
+// usage a refresh or a chat reads for the first time shows once it is in.
 func accountAnalyticsView(m *model) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		sessions := m.Sessions.Get()
@@ -410,16 +421,9 @@ func accountAnalyticsView(m *model) ggui.Widget {
 		refresh := m.AccountUsage.Sessions.Get()
 		usageBySession := map[string]*protocol.Usage{}
 		for _, s := range sessions {
-			id := s.GetId()
-			if st := m.chats[id]; st != nil {
-				if res := st.result.Get(); res.Chat != nil && res.Chat.GetUsage() != nil {
-					usageBySession[id] = res.Chat.GetUsage()
-					continue
-				}
-			}
-			if us := m.usages[id]; us != nil {
+			if us := m.usages[s.GetId()]; us != nil {
 				if u := us.usage.Get(); u != nil {
-					usageBySession[id] = u
+					usageBySession[s.GetId()] = u
 				}
 			}
 		}

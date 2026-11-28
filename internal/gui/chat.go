@@ -238,6 +238,11 @@ func (m *model) readChat(id, agent string, state *chatState, current func() bool
 			next.Err = err.Error()
 		}
 		state.result.Set(next)
+		if err == nil && agent == "" && chat.GetUsage() != nil {
+			// The session's usage, as Account usage adds it up, is as
+			// fresh as its chat: one place, which its Refresh reads too.
+			m.usageState(id).usage.Set(chat.GetUsage())
+		}
 		settlePending(state)
 		// The latest moved on past the older pages: what came between
 		// joins them.
