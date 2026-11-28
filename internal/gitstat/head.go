@@ -184,8 +184,13 @@ func findGitDir(dir string) (gitDir, top string) {
 			if err != nil {
 				return "", ""
 			}
-			to, ok := strings.CutPrefix(strings.TrimSpace(string(b)), "gitdir: ")
-			if !ok {
+			line, _, _ := strings.Cut(strings.TrimSpace(string(b)), "\n")
+			rest, ok := strings.CutPrefix(line, "gitdir:")
+			if !ok || rest == "" || (rest[0] != ' ' && rest[0] != '\t') {
+				return "", ""
+			}
+			to := strings.TrimSpace(rest)
+			if to == "" {
 				return "", ""
 			}
 			if !filepath.IsAbs(to) {

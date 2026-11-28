@@ -129,7 +129,7 @@ func (d *Daemon) rewindSession(ctx context.Context, req *protocol.RewindSession)
 
 	// The forked conversation is in the sandbox home of a sandboxed
 	// session, where only a session in the sandbox finds it.
-	s, err := d.openForkedSession(ctx, nextReq, forkedName, forkedID, forkedPath, saved.Sandbox)
+	s, err := d.openForkedSession(ctx, nextReq, forkedName, forkedID, forkedPath, saved.Sandbox, saved.PinnedRepo, saved.PinnedRemote)
 	if err != nil {
 		return nil, err
 	}
@@ -251,6 +251,7 @@ func (d *Daemon) openForkedSession(
 	ctx context.Context,
 	req *protocol.OpenSession,
 	name, conversationID, transcriptPath, sandboxOf string,
+	pinnedRepo, pinnedRemote *string,
 ) (*session.Session, error) {
 	if conversationID == "" {
 		return nil, errors.New("rewind: forked conversation ID is empty")
@@ -272,6 +273,8 @@ func (d *Daemon) openForkedSession(
 		Request:        proto.CloneOf(req),
 		TranscriptPath: transcriptPath,
 		Sandbox:        sandboxOf,
+		PinnedRepo:     cloneStringPtr(pinnedRepo),
+		PinnedRemote:   cloneStringPtr(pinnedRemote),
 	}
 
 	d.sessionMu.Lock()

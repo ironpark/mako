@@ -261,7 +261,7 @@ func (d *Daemon) listProjectAgents(peer *agentPeer) (listAgentsResult, error) {
 		Nodes:     d.projectNodes(self, info.GetProject()),
 		Available: []availableAgent{},
 	}
-	if s, _ := d.projectFor(info.GetProject(), cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())); s != nil {
+	if s, _ := d.projectForSession(info); s != nil {
 		out.ProjectName = cmp.Or(s.GetName(), s.GetId())
 	}
 	d.sessionMu.Lock()

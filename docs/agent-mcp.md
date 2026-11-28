@@ -20,6 +20,7 @@ support do not receive these tools.
 | `send_message` | `to`, `text` | Sends a message: typed into the recipient's terminal as a prompt once it waits at its prompt, kept in its inbox until then. Works across nodes of the same project. Returns its `id`, authenticated `from`, `to`, text and creation time. |
 | `read_messages` | Optional `after_id`, `ack_through`, `limit` | Instant, non-blocking snapshot of pending messages in your inbox. Returns `messages` and `next_after_id`. |
 | `watch_agent` | `session_id`, optional `until` (`turn` or `output`), `text` | Registers a non-blocking one-shot notification for another agent in the project: Mako pushes a note into your session when its turn ends (`until=turn`, default), when its terminal prints `text` (`until=output`, this node only), or early if it waits on the user or exits. Returns immediately (`watch_id` or `already_matched: true`). |
+| `read_agent` | `session_id`, optional `turns` (0 to 20, default 3) | Reads another agent of the project, on this node or another: its session (status, what it waits on, branch, background tasks, subagents, context usage) and its latest conversation turns, clipped. Read-only and instant; see [Reading another agent](#reading-another-agent). |
 | `stop_agent` | `session_id` | Terminates and removes a session you spawned directly (locally or on another node of this project), including a child whose process has already exited. |
 
 The MCP client may prefix tool names with the server name. The server's
@@ -248,7 +249,7 @@ To avoid repeated `read_messages` timeout polling loops:
 
 - **Antigravity (`agy`)**: Mako writes a `mako-bridge` sidecar manifest under `~/.gemini/config/sidecars/mako-bridge/sidecar.json` (and enables it in `~/.gemini/config/config.json`) and pushes incoming messages directly into the target conversation via `agy agentapi send-message` (preferring the live sidecar when connected, falling back to direct `agentapi`, then PTY). The conversation wakes reactively with no polling.
 - **Claude Code (`mako-live` Mod)**: On Claude Code v2.1.287+, Mako's embedded `mako-live` mod (loaded via `--plugin-dir`) long-polls the daemon over `MAKO_LIVE_SOCKET` (`/messages/poll`), delivers incoming messages natively via `$.prompt.submit`, acknowledges delivery via `/messages/ack` (retrying on `turn.complete` if interrupted), and suppresses PTY fallback typing while active — with zero confirmation dialogs and full Bedrock/Vertex/Foundry compatibility.
-- **CLI agents & fallback (`mako-msg`)**: Mako places a `mako-msg` command (`mako-msg.cmd` on Windows) on every session's `PATH` backed by the daemon's `agent-cli.sock`. An agent can wait asynchronously without polling by running `mako-msg wait`, `mako-msg wait --session id1,id2`, or `mako-msg wait --all-children` as a background shell command (e.g., `Bash` with `run_in_background=true`): it blocks event-driven (suppressing PTY fallback typing while waiting to prevent duplicate delivery) and exits with the message JSON (auto-acknowledging unless `--no-ack` is set) as soon as a reply arrives or any watched child finishes. Subcommands: `mako-msg wait`, `mako-msg read`, `mako-msg send <to> <text>`, `mako-msg list`, `mako-msg profiles`.
+- **CLI agents & fallback (`mako-msg`)**: Mako places a `mako-msg` command (`mako-msg.cmd` on Windows) on every session's `PATH` backed by the daemon's `agent-cli.sock`. An agent can wait asynchronously without polling by running `mako-msg wait`, `mako-msg wait --session id1,id2`, or `mako-msg wait --all-children` as a background shell command (e.g., `Bash` with `run_in_background=true`): it blocks event-driven (suppressing PTY fallback typing while waiting to prevent duplicate delivery) and exits with the message JSON (auto-acknowledging unless `--no-ack` is set) as soon as a reply arrives or any watched child finishes. Subcommands: `mako-msg wait`, `mako-msg read`, `mako-msg send <to> <text>`, `mako-msg list`, `mako-msg profiles`, `mako-msg inspect [--turns <n>] <session-id>` (the same view as `read_agent`).
 - **Default session environment variables**: Every agent session receives `AGENT_MAKO_SESSION` (session ID), `AGENT_MAKO_PROJECT` (project path), `AGENT_MAKO_MODE` (`main` or `subagent`), `AGENT_MAKO_NODE` (node ID), plus `AGENT_MAKO_PROFILE` (when using a profile), `AGENT_MAKO_PARENT` (for spawned subagents and one-shot calls from a session), and `AGENT_MAKO_SOCKET` / `MAKO_AGENT_MCP_TOKEN` when messaging is active.
 
 When an immediate non-blocking inbox snapshot is needed, call `read_messages` and acknowledge processed messages with `ack_through`:
@@ -328,6 +329,36 @@ peers, in the state it sends them, which such project each of its agents is in,
 which multi-folder projects it holds, and whether each agent takes messages or
 is spawnable, so the two nodes must let each other in, or reach each other
 through nodes that do. A folder outside such a project is one node's only.
+
+## Reading another agent
+
+`read_agent` (and `mako-msg inspect`) lets an agent see what another agent of
+its project is doing, without sending it a message. The caller must be an
+agent of the project, and the session it names must be one that
+`list_agents` lists: on this node, or on another node of the same project.
+
+The result has two parts:
+
+| Field | Content |
+| --- | --- |
+| `session` | The session as `list_agents` shows it, and also `title`, `branch`, `worktree`, `status_at`, `turns_ended`, `started_at`, `last_message`, `auth_error`, `goal`, its recent background `tasks`, and `waiting_on` (`kind` is `approval`, `question` or `dialog`, with the tool, a short detail, and the questions or options). When turns are read, it also has `subagents` (those at work first) and `usage` (`model`, `effort`, `permission_mode`, `context`, `window`). |
+| `turns` | The latest turns of its conversation, oldest first. A turn is the user's `message` and the `parts` of the reply in order: `text` parts, and `tool_call` parts with `tool`, `call_kind`, `detail`, `result`, `error` and `pending`. `state` is `in_progress` for the turn the agent is at work on or waits on the user in, else `complete`. A turn begun before what was read has no `message`. |
+
+`turns` asks for that many turns, 0 to 20, 3 when left out; 0 returns the
+session alone and does not read the conversation. Texts are clipped (2000
+characters of a message or reply, 300 of a call's detail, 500 of its
+result), a turn keeps its latest 40 parts, and the turns together keep to
+about 48 KiB: older turns are left out first, and `earlier_turns` and
+`omitted_parts` count what was left out. `truncated` says the agent's log
+holds more before what was read. `chat_unavailable` says why no turns were
+read: an agent whose log mako cannot read, one that has saved no
+conversation, or a node that did not answer.
+
+An agent of another node is read from its node's state and with a
+`read_chat` request routed to that node, which answers it as it answers
+the window of a node it lets in. The view's shape follows the session and
+chat state of the Agent Host Protocol (see
+[agent-host-protocol-plan.md](agent-host-protocol-plan.md)).
 
 ## Session lifecycle
 

@@ -88,7 +88,7 @@ func writeAgentProjectTool(dir, program, socket string) error {
 type agentCLIRequest struct {
 	Session string `json:"session"`
 	Token   string `json:"token"`
-	Op      string `json:"op"` // wait, read, send, list, profiles, plugin_list, plugin_call, sidecar_subscribe
+	Op      string `json:"op"` // wait, read, send, list, profiles, inspect, plugin_list, plugin_call, sidecar_subscribe
 
 	// wait / read options:
 	AfterID       uint64   `json:"after_id,omitempty"`
@@ -114,6 +114,10 @@ type agentCLIRequest struct {
 	ToolID   string          `json:"tool_id,omitempty"`
 	Args     json.RawMessage `json:"args,omitempty"`
 
+	// inspect options:
+	Inspect string `json:"inspect_session_id,omitempty"`
+	Turns   *int   `json:"turns,omitempty"`
+
 	// project_add options:
 	Target  string `json:"target,omitempty"`
 	Name    string `json:"name,omitempty"`
@@ -137,6 +141,7 @@ type agentCLIResponse struct {
 	Projects    []agentProjectSummary    `json:"projects,omitempty"`
 	ProjectDirs []string                 `json:"project_dirs,omitempty"`
 	Added       *agentProjectAddResult   `json:"added,omitempty"`
+	Inspected   *readAgentResult         `json:"inspected,omitempty"`
 	Status      string                   `json:"status,omitempty"`
 	State       string                   `json:"state,omitempty"`
 }
@@ -297,6 +302,14 @@ func (d *Daemon) serveAgentCLI(ctx context.Context, conn net.Conn) {
 		}
 		writeResp(agentCLIResponse{OK: true, Profiles: &out})
 
+	case "inspect":
+		out, err := d.readProjectAgent(reqCtx, peer, readAgentArgs{SessionID: req.Inspect, Turns: req.Turns})
+		if err != nil {
+			writeResp(agentCLIResponse{Error: err.Error()})
+			return
+		}
+		writeResp(agentCLIResponse{OK: true, Inspected: &out})
+
 	case "wait":
 		resp := d.cliWait(reqCtx, peer, req)
 		writeResp(resp)
@@ -409,15 +422,19 @@ func (d *Daemon) cliWait(ctx context.Context, peer *agentPeer, req agentCLIReque
 	}
 	scope := d.projectScope(caller.Info())
 	if req.WatchChildren {
+		var childIDs []string
 		d.sessionMu.Lock()
 		for id, saved := range d.saved {
 			if saved.ParentID == peer.id && saved.ParentNodeID == "" && !slices.Contains(watchIDs, id) {
-				if s, ok := d.sessions.get(id); ok && s.Info().GetState() == protocol.StateRunning && d.inProject(scope, s.Info()) {
-					watchIDs = append(watchIDs, id)
-				}
+				childIDs = append(childIDs, id)
 			}
 		}
 		d.sessionMu.Unlock()
+		for _, id := range childIDs {
+			if s, ok := d.sessions.get(id); ok && s.Info().GetState() == protocol.StateRunning && d.inProject(scope, s.Info()) {
+				watchIDs = append(watchIDs, id)
+			}
+		}
 		selfNodeID := d.config().NodeID
 		for _, remote := range d.remoteAgents(scope) {
 			if remote.GetParentSessionId() == peer.id &&
