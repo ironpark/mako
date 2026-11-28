@@ -169,6 +169,8 @@ type Envelope struct {
 	//	*Envelope_AccountUsage
 	//	*Envelope_RewindSession
 	//	*Envelope_GoalAction
+	//	*Envelope_RepoTrust
+	//	*Envelope_RepoTrustInfo
 	Body          isEnvelope_Body `protobuf_oneof:"body"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1368,6 +1370,24 @@ func (x *Envelope) GetGoalAction() *GoalAction {
 	return nil
 }
 
+func (x *Envelope) GetRepoTrust() *RepoTrust {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RepoTrust); ok {
+			return x.RepoTrust
+		}
+	}
+	return nil
+}
+
+func (x *Envelope) GetRepoTrustInfo() *RepoTrustInfo {
+	if x != nil {
+		if x, ok := x.Body.(*Envelope_RepoTrustInfo); ok {
+			return x.RepoTrustInfo
+		}
+	}
+	return nil
+}
+
 type isEnvelope_Body interface {
 	isEnvelope_Body()
 }
@@ -1901,6 +1921,15 @@ type Envelope_GoalAction struct {
 	GoalAction *GoalAction `protobuf:"bytes,166,opt,name=goal_action,json=goalAction,proto3,oneof"`
 }
 
+type Envelope_RepoTrust struct {
+	// The user's trust in repositories' command files (revision 53).
+	RepoTrust *RepoTrust `protobuf:"bytes,167,opt,name=repo_trust,json=repoTrust,proto3,oneof"`
+}
+
+type Envelope_RepoTrustInfo struct {
+	RepoTrustInfo *RepoTrustInfo `protobuf:"bytes,168,opt,name=repo_trust_info,json=repoTrustInfo,proto3,oneof"`
+}
+
 func (*Envelope_Hello) isEnvelope_Body() {}
 
 func (*Envelope_Welcome) isEnvelope_Body() {}
@@ -2155,6 +2184,10 @@ func (*Envelope_RewindSession) isEnvelope_Body() {}
 
 func (*Envelope_GoalAction) isEnvelope_Body() {}
 
+func (*Envelope_RepoTrust) isEnvelope_Body() {}
+
+func (*Envelope_RepoTrustInfo) isEnvelope_Body() {}
+
 // Error reports a failed request, in place of its reply.
 type Error struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
@@ -2224,7 +2257,7 @@ var File_mako_v2_envelope_proto protoreflect.FileDescriptor
 
 const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\n" +
-	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\x809\n" +
+	"\x16mako/v2/envelope.proto\x12\amako.v2\x1a\x12mako/v2/chat.proto\x1a\x16mako/v2/decision.proto\x1a\x15mako/v2/devices.proto\x1a\x13mako/v2/files.proto\x1a\x11mako/v2/git.proto\x1a\x13mako/v2/forge.proto\x1a\x12mako/v2/mesh.proto\x1a\x15mako/v2/plugins.proto\x1a\x19mako/v2/pluginstore.proto\x1a\x17mako/v2/repotrust.proto\x1a\x15mako/v2/session.proto\x1a\x12mako/v2/sync.proto\x1a\x1cmako/v2/project_agents.proto\"\xf99\n" +
 	"\bEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\twithin_ms\x18\x02 \x01(\rR\bwithinMs\x12&\n" +
@@ -2378,7 +2411,10 @@ const file_mako_v2_envelope_proto_rawDesc = "" +
 	"\raccount_usage\x18\xa4\x01 \x01(\v2\x15.mako.v2.AccountUsageH\x00R\faccountUsage\x12@\n" +
 	"\x0erewind_session\x18\xa5\x01 \x01(\v2\x16.mako.v2.RewindSessionH\x00R\rrewindSession\x127\n" +
 	"\vgoal_action\x18\xa6\x01 \x01(\v2\x13.mako.v2.GoalActionH\x00R\n" +
-	"goalActionB\x06\n" +
+	"goalAction\x124\n" +
+	"\n" +
+	"repo_trust\x18\xa7\x01 \x01(\v2\x12.mako.v2.RepoTrustH\x00R\trepoTrust\x12A\n" +
+	"\x0frepo_trust_info\x18\xa8\x01 \x01(\v2\x16.mako.v2.RepoTrustInfoH\x00R\rrepoTrustInfoB\x06\n" +
 	"\x04bodyJ\x04\b\x16\x10\x17R\x06gossip\"I\n" +
 	"\x05Error\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\x12\x12\n" +
@@ -2527,6 +2563,8 @@ var file_mako_v2_envelope_proto_goTypes = []any{
 	(*AccountUsage)(nil),          // 125: mako.v2.AccountUsage
 	(*RewindSession)(nil),         // 126: mako.v2.RewindSession
 	(*GoalAction)(nil),            // 127: mako.v2.GoalAction
+	(*RepoTrust)(nil),             // 128: mako.v2.RepoTrust
+	(*RepoTrustInfo)(nil),         // 129: mako.v2.RepoTrustInfo
 }
 var file_mako_v2_envelope_proto_depIdxs = []int32{
 	2,   // 0: mako.v2.Envelope.hello:type_name -> mako.v2.Hello
@@ -2656,11 +2694,13 @@ var file_mako_v2_envelope_proto_depIdxs = []int32{
 	125, // 124: mako.v2.Envelope.account_usage:type_name -> mako.v2.AccountUsage
 	126, // 125: mako.v2.Envelope.rewind_session:type_name -> mako.v2.RewindSession
 	127, // 126: mako.v2.Envelope.goal_action:type_name -> mako.v2.GoalAction
-	127, // [127:127] is the sub-list for method output_type
-	127, // [127:127] is the sub-list for method input_type
-	127, // [127:127] is the sub-list for extension type_name
-	127, // [127:127] is the sub-list for extension extendee
-	0,   // [0:127] is the sub-list for field type_name
+	128, // 127: mako.v2.Envelope.repo_trust:type_name -> mako.v2.RepoTrust
+	129, // 128: mako.v2.Envelope.repo_trust_info:type_name -> mako.v2.RepoTrustInfo
+	129, // [129:129] is the sub-list for method output_type
+	129, // [129:129] is the sub-list for method input_type
+	129, // [129:129] is the sub-list for extension type_name
+	129, // [129:129] is the sub-list for extension extendee
+	0,   // [0:129] is the sub-list for field type_name
 }
 
 func init() { file_mako_v2_envelope_proto_init() }
@@ -2677,6 +2717,7 @@ func file_mako_v2_envelope_proto_init() {
 	file_mako_v2_mesh_proto_init()
 	file_mako_v2_plugins_proto_init()
 	file_mako_v2_pluginstore_proto_init()
+	file_mako_v2_repotrust_proto_init()
 	file_mako_v2_session_proto_init()
 	file_mako_v2_sync_proto_init()
 	file_mako_v2_project_agents_proto_init()
@@ -2808,6 +2849,8 @@ func file_mako_v2_envelope_proto_init() {
 		(*Envelope_AccountUsage)(nil),
 		(*Envelope_RewindSession)(nil),
 		(*Envelope_GoalAction)(nil),
+		(*Envelope_RepoTrust)(nil),
+		(*Envelope_RepoTrustInfo)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
