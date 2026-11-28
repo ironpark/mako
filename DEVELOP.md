@@ -381,7 +381,7 @@ The window does not poll the files it shows. It has each node follow,
 with `watch_files`, the folders it lists, in the Files tab and the file
 browsers, the files open in its editor and preview, and the work tree the
 Git tab shows (`internal/gui/filewatch.go`); the node watches them with
-ggui's `pkg/fswatch` (`internal/daemon/watchfiles.go`), and the window
+[fswatch](https://github.com/ironpark/fswatch) (`internal/daemon/watchfiles.go`), and the window
 reads again what it is told changed. The folders and files are stamped
 and stated by fswatch's `Watcher`, a few of them at a time. A work tree is
 not: it may hold millions of files, as a home folder kept in git does,

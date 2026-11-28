@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/ironpark/ggui/pkg/fswatch"
+	"github.com/ironpark/fswatch"
 )
 
 type fswatchFactory struct{}
@@ -18,11 +18,14 @@ func (fswatchFactory) NewPathWatcher(logf func(string, ...any)) PathWatcher {
 }
 
 func (fswatchFactory) NewTreeWatcher(settle time.Duration) TreeWatcher {
+	// The patterns are fswatch's own, so the only error NewIgnore has, a
+	// pattern that does not parse, cannot happen.
+	ignore, err := fswatch.NewIgnore(fswatch.IgnoreOptions{Defaults: true, Git: true})
+	if err != nil {
+		panic(err)
+	}
 	return &fswatchTreeWatcher{
-		t: fswatch.NewTree(fswatch.TreeOptions{
-			Ignore: fswatch.NewIgnore(fswatch.IgnoreConfig{Patterns: fswatch.DefaultPatterns, Git: true}).Match,
-			Settle: settle,
-		}),
+		t: fswatch.NewTree(fswatch.TreeOptions{Ignore: ignore, Settle: settle}),
 	}
 }
 
@@ -77,5 +80,21 @@ func (t *fswatchTreeWatcher) Set(trees []string) {
 }
 
 func (t *fswatchTreeWatcher) Run(ctx context.Context, out chan<- []string) error {
-	return t.t.Run(ctx, out)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	batches := make(chan fswatch.TreeBatch)
+	done := make(chan error, 1)
+	go func() { done <- t.t.Run(ctx, batches) }()
+	for {
+		select {
+		case b := <-batches:
+			select {
+			case out <- b.Dirs:
+			case err := <-done:
+				return err
+			}
+		case err := <-done:
+			return err
+		}
+	}
 }

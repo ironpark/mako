@@ -45,7 +45,7 @@ func (d *Daemon) watcher() FileWatcher {
 // A window follows the files it shows with watch_files: the folders it
 // lists, the files open in its editor, the work trees whose changes it
 // shows. What decides that a path changed is the configured FileWatcher
-// (ggui's fswatch on desktop/CLI, which stats what it watches and is woken
+// (fswatch on desktop/CLI, which stats what it watches and is woken
 // by the system's notifications); the window then reads what changed again,
 // as it would have on its next poll.
 //
