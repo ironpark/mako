@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ironpark/ggui"
@@ -68,6 +70,9 @@ func TestSSHHostDialogFillAndSave(t *testing.T) {
 	}
 	m := newModel(cfg, "")
 
+	// The test supplies ConfigHosts itself: what the dialog's own scan of
+	// ~/.ssh/config posts back is dropped, so it cannot overwrite them.
+	m.post = func(func()) {}
 	var savedNodeID string
 	m.openAddSSHHost(func(id string) { savedNodeID = id })
 	m.SSH.ConfigHosts.Set([]sshremote.ConfigHost{
@@ -123,16 +128,27 @@ func TestSSHHostDialogFillAndSave(t *testing.T) {
 // alias: the alias becomes the target, and OpenSSH applies its settings.
 func TestSSHHostDialogNameOnlyUsesConfigAlias(t *testing.T) {
 	t.Setenv("MAKO_HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".ssh", "config"), []byte("Host dev-gpu\n  HostName 10.0.0.9\n  User ubuntu\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	cfg := config.Default()
 	if err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
 	m := newModel(cfg, "")
-	m.openAddSSHHost(nil)
-	m.SSH.ConfigHosts.Set([]sshremote.ConfigHost{{Alias: "dev-gpu", HostName: "10.0.0.9", User: "ubuntu"}})
-
 	p := ggui.ProbeBuilder(func() ggui.Widget { return sshHostForm(m, T("Add host")) }, ggui.Sz(560, 620))
 	defer p.Close()
+	// The dialog reads ~/.ssh/config off the UI goroutine and posts what it
+	// found, which the probe runs on its frames.
+	m.post = p.Post
+	m.openAddSSHHost(nil)
+	probeUntil(t, p, "the ~/.ssh/config scan", func() bool { return len(ggui.Peek(m.SSH.ConfigHosts)) == 1 })
 	addEnabled := func() bool {
 		p.Frame()
 		n, ok := p.Semantics().Find(ggui.RoleButton, T("Add host"))
