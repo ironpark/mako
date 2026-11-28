@@ -110,6 +110,7 @@ func (m *model) sendPrompt(id string, state *chatState, draft, prompt string) {
 		}
 	}
 	if m.composerDraft(id) == draft {
+		m.composerCleared(state)
 		m.setComposerDraft(id, "")
 		state.attached.Set(nil)
 	}

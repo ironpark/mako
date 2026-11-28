@@ -123,7 +123,7 @@ func newChatState() *chatState {
 		suggestion:          ggui.State(""),
 		dismissedSuggestion: ggui.State(""),
 		ghostCaret:          ggui.State(true),
-		host:                hostShare{others: ggui.State[[]*protocol.HostClient](nil).WithEqual(deepEqual)},
+		host:                hostShare{others: ggui.State[[]*protocol.HostClient](nil).WithEqual(deepEqual), note: ggui.State("")},
 		pending: ggui.State[[]pendingMessage](nil).WithEqual(func(a, b []pendingMessage) bool {
 			return slices.Equal(a, b)
 		}),
