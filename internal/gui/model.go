@@ -292,6 +292,11 @@ type model struct {
 	secWinMu      sync.RWMutex
 	secWins       map[*ggui.Window]struct{}
 
+	// Persistent drafts for the Needs You inbox so background polls never wipe
+	// in-progress deny reasons or quick replies.
+	inboxDeny  map[string]*ggui.StateValue[string]
+	inboxReply map[string]*ggui.StateValue[string]
+
 	// recorder keeps the terminal streams the developer option records.
 	recorder *streamRecorder
 }
@@ -430,6 +435,8 @@ func newModel(cfg *config.Config, addr string) *model {
 		spaceWindows:  map[string]*spaceWindowState{},
 		wsRev:         ggui.State(uint64(0)),
 		secWins:       map[*ggui.Window]struct{}{},
+		inboxDeny:     map[string]*ggui.StateValue[string]{},
+		inboxReply:    map[string]*ggui.StateValue[string]{},
 	}
 	m.winStates = m.builtinNodeStates()
 	m.drawWindowDoc(doc)

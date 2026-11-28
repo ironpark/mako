@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 )
 
 // The message composer's state: drafts, attachments, sending and recall.
@@ -146,6 +147,42 @@ func (m *model) recallComposer(id string, step int) bool {
 		m.setComposerDraft(id, "")
 	} else {
 		m.setComposerDraft(id, state.sent[next])
+	}
+	return true
+}
+
+// deleteLineKey implements macOS line deletion chords for session composers,
+// which ggui's TextInputWidget otherwise handles as a single-rune delete:
+// ⌘+Delete (Meta+Backspace) deletes to the start of the current line, and
+// ⌘+Fn+Delete (Meta+Delete) deletes to the end of the current line.
+func deleteLineKey(input *widget.TextInputWidget, ev ggui.KeyEvent) bool {
+	if ev.Kind != ggui.KeyPress || !ev.Mods.Meta || ev.Mods.Ctrl || ev.Mods.Alt || ev.Mods.Shift {
+		return false
+	}
+	if ev.Key != ggui.KeyBackspace && ev.Key != ggui.KeyDelete {
+		return false
+	}
+	st := input.EditingState()
+	if st.Anchor != st.Caret {
+		input.Replace("")
+		return true
+	}
+	caret := min(max(st.Caret, 0), len(st.Text))
+	if ev.Key == ggui.KeyBackspace {
+		lineStart := strings.LastIndexByte(st.Text[:caret], '\n') + 1
+		if caret > lineStart {
+			input.Select(lineStart, caret)
+			input.Replace("")
+		}
+		return true
+	}
+	lineEnd := len(st.Text)
+	if rel := strings.IndexByte(st.Text[caret:], '\n'); rel >= 0 {
+		lineEnd = caret + rel
+	}
+	if lineEnd > caret {
+		input.Select(caret, lineEnd)
+		input.Replace("")
 	}
 	return true
 }

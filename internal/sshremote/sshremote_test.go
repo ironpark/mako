@@ -360,3 +360,23 @@ func TestSanitizeWorktreeSlugAndLeadingDashGuards(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestGitRunCommandCheckoutIgnoresOtherWorktrees(t *testing.T) {
+	cmd, err := gitRunCommand("/srv/repo", &protocol.GitRun{
+		Op:     protocol.GitOpCheckout,
+		Branch: "feat/wt",
+	})
+	if err != nil {
+		t.Fatalf("gitRunCommand checkout: %v", err)
+	}
+	want := ShellJoin([]string{"git", "-C", "/srv/repo", "checkout", "--ignore-other-worktrees", "feat/wt", "--"})
+	if !strings.Contains(cmd, want) {
+		t.Fatalf("checkout cmd = %q; want substring %q", cmd, want)
+	}
+	if _, err := gitRunCommand("/srv/repo", &protocol.GitRun{
+		Op:     protocol.GitOpCheckout,
+		Branch: "--orphan",
+	}); err == nil {
+		t.Fatal("expected leading-dash branch to be rejected")
+	}
+}

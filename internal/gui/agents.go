@@ -39,8 +39,8 @@ type agentDraft struct {
 	IsProfile bool // a profile's name may be blank while it is typed
 	// PickServers gives a profile's sessions the MCP servers in Servers,
 	// one ID a line, rather than every one enabled.
-	PickServers   bool
-	Servers       string
+	PickServers           bool
+	Servers               string
 	Model                 string // "" for default (agent) or inherit (profile)
 	Effort                string // "" for default (agent) or inherit (profile)
 	Permission            string // "", "default", driver mode, or "yolo"

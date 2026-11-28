@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	ggsvg "github.com/ironpark/ggfx/svg"
+	"github.com/ironpark/svgx"
 )
 
 // badge is an SVG as shields.io draws one: a clip, a mask, a gradient, and
@@ -24,17 +24,17 @@ const badge = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w
 <foreignObject><div>not drawn</div></foreignObject>
 </svg>`
 
-// A badge, which ggfx cannot read as it comes, is drawn without what it
+// A badge, which svgx cannot read as it comes, is drawn without what it
 // cannot draw, and its text is taken out to be set over it.
 func TestABadgeIsDrawnWithItsText(t *testing.T) {
-	if _, err := ggsvg.Parse(strings.NewReader(badge)); err == nil {
-		t.Log("ggfx reads the badge itself now")
+	if _, err := svgx.Parse(strings.NewReader(badge)); err == nil {
+		t.Log("svgx reads the badge itself now")
 	}
 	clean, texts, embeds, err := clean([]byte(badge))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ggsvg.Parse(bytes.NewReader(clean)); err != nil {
+	if _, err := svgx.Parse(bytes.NewReader(clean)); err != nil {
 		t.Fatalf("the cleaned badge does not parse: %v\n%s", err, clean)
 	}
 	if strings.Contains(string(clean), "not drawn") || !strings.Contains(string(clean), "clipPath") {
