@@ -65,9 +65,12 @@ func (m *model) dotFor(id string) func() dotState {
 }
 
 // inView reports whether the user can see a session now: the tab a pane
-// shows, in the focused window.
+// shows, in the focused window, not covered by a sidebar page such as Needs You.
 func (m *model) inView(id string) bool {
 	if m.window != nil && !ggui.Peek(m.window.Focused()) {
+		return false
+	}
+	if m.SidebarPage != nil && ggui.Peek(m.SidebarPage) != "" {
 		return false
 	}
 	for _, g := range ggui.Peek(m.Layout).groups() {
@@ -123,6 +126,7 @@ func (m *model) noteStatus(next []*protocol.SessionInfo) {
 			set(id, false)
 		}
 	}
+	m.pruneInboxDrafts(next)
 	if changed {
 		m.Unread.Set(unread)
 	}
@@ -284,6 +288,9 @@ func followAttention(m *model) {
 		m.Selected.Get()
 		m.Layout.Get()
 		m.Page.Get()
+		if m.SidebarPage != nil {
+			m.SidebarPage.Get()
+		}
 		if m.window != nil {
 			m.window.Focused().Get()
 		}

@@ -57,7 +57,7 @@ func TestBuiltinFSContainsMakoGit(t *testing.T) {
 		}
 	}
 	manifest, _ := fs.ReadFile(builtin.FS, "mako-git/plugin.toml")
-	for _, want := range []string{`id = "mako-git"`, `publisher = "mako"`, `scope = "folder"`, `chrome = "toolbar"`, `hidden = true`} {
+	for _, want := range []string{`id = "mako-git"`, `publisher = "mako"`, `scope = "folder"`, `chrome = "toolbar"`, `hidden = true`, `[contributes.settings.autofix_default]`} {
 		if !strings.Contains(string(manifest), want) {
 			t.Fatalf("plugin.toml missing %s:\n%s", want, manifest)
 		}
@@ -1623,4 +1623,370 @@ func TestMakoGitAutoFixFallbackStartSettingsPauseAndKorean(t *testing.T) {
 		st := findByKeySuffix(n, "af-status")
 		return st != nil && strings.Contains(st.GetText(), "CI와 리뷰 감시 중")
 	})
+}
+
+func TestMakoGitSwitchBranchCheckedOutInOtherWorktree(t *testing.T) {
+	repo, git := initTestRepo(t)
+	// Clean working tree so branch switches succeed without conflict.
+	git("reset", "--hard", "HEAD")
+	git("clean", "-fd")
+
+	wtPath := filepath.Join(t.TempDir(), "wt-side")
+	git("worktree", "add", "-q", "-b", "side-wt", wtPath, "main")
+
+	r := startBuiltinRig(t)
+
+	// 1. In the main repo, switch to "side-wt" even though it is checked out in wtPath.
+	mainScope := protocol.FolderScope(protocol.LocalScopeNode, repo)
+	wMain := r.watch(mainScope, "en", plugin.View{Standalone: false})
+	tree := wMain.until("main repo loaded", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		bm := findByKeySuffix(n, "branch-menu")
+		return bm != nil && bm.GetText() == "main" && findByKindAndText(n, "menu_item", "side-wt") != nil
+	})
+	sideItem := findByKindAndText(tree, "menu_item", "side-wt")
+	r.sendEvent(mainScope, sideItem.GetId(), protocol.UiTap, "", nil)
+	wMain.until("switched main repo to side-wt", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		bm := findByKeySuffix(n, "branch-menu")
+		return bm != nil && bm.GetText() == "side-wt"
+	})
+	if cur := strings.TrimSpace(git("rev-parse", "--abbrev-ref", "HEAD")); cur != "side-wt" {
+		t.Fatalf("main repo HEAD = %q; want side-wt", cur)
+	}
+
+	// Switch main repo back to "main".
+	git("switch", "-q", "main")
+
+	// 2. In the linked worktree, switch to "main" even though it is checked out in the main repo.
+	wtScope := protocol.FolderScope(protocol.LocalScopeNode, wtPath)
+	wWT := r.watch(wtScope, "en", plugin.View{Standalone: false})
+	wtTree := wWT.until("worktree loaded", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		bm := findByKeySuffix(n, "branch-menu")
+		return bm != nil && bm.GetText() == "side-wt" && findByKindAndText(n, "menu_item", "main") != nil
+	})
+	mainItem := findByKindAndText(wtTree, "menu_item", "main")
+	r.sendEvent(wtScope, mainItem.GetId(), protocol.UiTap, "", nil)
+	wWT.until("switched worktree to main", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		bm := findByKeySuffix(n, "branch-menu")
+		return bm != nil && bm.GetText() == "main"
+	})
+	if cur := strings.TrimSpace(git("-C", wtPath, "rev-parse", "--abbrev-ref", "HEAD")); cur != "main" {
+		t.Fatalf("worktree HEAD = %q; want main", cur)
+	}
+}
+
+func TestMakoGitAutoFixDefaultSetting(t *testing.T) {
+	repoA := "/tmp/autofix-default-a"
+	repoB := "/tmp/autofix-default-b"
+	repoMerged := "/tmp/autofix-default-merged"
+
+	fg := &fakeGitScenarioHost{
+		status: &protocol.GitChanges{
+			Root:     repoA,
+			Branch:   "feat/default",
+			Branches: []string{"main", "feat/default"},
+		},
+		history: &protocol.GitHistory{
+			Current:     "abc1234",
+			Fingerprint: "fp-def-1",
+			Commits: []*protocol.GitCommit{
+				{Hash: "abc1234", Author: "Ada", Subject: "Initial PR"},
+			},
+		},
+	}
+
+	fixtures := map[string]*routedPRFixture{
+		repoA: {
+			branch: &plugin.ForgeBranch{
+				Forge:     "github",
+				HasPR:     true,
+				PRNumber:  101,
+				PRTitle:   "PR in project A",
+				PRState:   "OPEN",
+				PRChecks:  "failure",
+				Runs:      1,
+				RunsState: "failure",
+				RunID:     901,
+				RunHead:   "abc1234",
+			},
+			detail: &plugin.ForgePRDetail{
+				Forge:   "github",
+				Number:  101,
+				Title:   "PR in project A",
+				State:   "OPEN",
+				URL:     "https://github.com/org/a/pull/101",
+				Head:    "feat/default",
+				Base:    "main",
+				HeadOID: "abc1234",
+				Checks:  "failure",
+				CheckItems: []plugin.ForgeCheck{
+					{Name: "unit", Workflow: "CI", Status: "completed", Conclusion: "failure"},
+				},
+				Comments: []plugin.ForgeComment{
+					{Author: "reviewer", Association: "MEMBER", Body: "Pre-existing comment", Time: "2026-11-28T01:00:00Z"},
+				},
+			},
+		},
+		repoB: {
+			branch: &plugin.ForgeBranch{
+				Forge:     "github",
+				HasPR:     true,
+				PRNumber:  202,
+				PRTitle:   "PR in project B",
+				PRState:   "OPEN",
+				PRChecks:  "success",
+				Runs:      1,
+				RunsState: "success",
+				RunID:     902,
+				RunHead:   "abc1234",
+			},
+			detail: &plugin.ForgePRDetail{
+				Forge:   "github",
+				Number:  202,
+				Title:   "PR in project B",
+				State:   "OPEN",
+				URL:     "https://github.com/org/b/pull/202",
+				Head:    "feat/default",
+				Base:    "main",
+				HeadOID: "abc1234",
+				Checks:  "success",
+			},
+		},
+		repoMerged: {
+			branch: &plugin.ForgeBranch{
+				Forge:    "github",
+				HasPR:    true,
+				PRNumber: 303,
+				PRTitle:  "Already merged PR",
+				PRState:  "MERGED",
+			},
+			detail: &plugin.ForgePRDetail{
+				Forge:  "github",
+				Number: 303,
+				Title:  "Already merged PR",
+				State:  "MERGED",
+			},
+		},
+	}
+
+	multiGit := &routedGitHost{base: fg}
+	multiForge := &routedForgeHost{fixtures: fixtures}
+	fa := &fakeAutoFixAgents{
+		sessions: []*protocol.SessionInfo{
+			{Id: "sess-a", Name: "Claude A", Agent: "claude", Project: repoA, State: protocol.StateRunning, Status: "idle"},
+			{Id: "sess-b", Name: "Claude B", Agent: "claude", Project: repoB, State: protocol.StateRunning, Status: "idle"},
+		},
+	}
+
+	base := t.TempDir()
+	dir := filepath.Join(base, "plugins")
+	data := filepath.Join(base, "plugin-data")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logs := &syncBuffer{}
+	m := plugin.New(plugin.Config{
+		Dir:      dir,
+		DataDir:  data,
+		Poll:     50 * time.Millisecond,
+		Log:      slog.New(slog.NewTextHandler(io.MultiWriter(logs), &slog.HandlerOptions{Level: slog.LevelDebug})),
+		Limits:   plugin.Limits{CPU: 10 * time.Second, Wall: 20 * time.Second, Memory: 32 << 20, Updates: 20 * time.Millisecond},
+		Bundled:  builtin.FS,
+		Git:      multiGit,
+		Forge:    multiForge,
+		Agents:   fa,
+		Sessions: fa.listSessions,
+		ResolveScope: func(scopeKey string) plugin.ScopeContext {
+			_, folder, ok := protocol.ParseFolderScope(scopeKey)
+			if !ok {
+				return plugin.ScopeContext{}
+			}
+			switch folder {
+			case repoA:
+				return plugin.ScopeContext{ProjectID: "proj-a", ProjectName: "Project A"}
+			case repoB:
+				return plugin.ScopeContext{ProjectID: "proj-b", ProjectName: "Project B"}
+			case repoMerged:
+				return plugin.ScopeContext{ProjectID: "proj-merged", ProjectName: "Project Merged"}
+			}
+			return plugin.ScopeContext{}
+		},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	doneCh := make(chan struct{})
+	go func() { defer close(doneCh); m.Run(ctx) }()
+	t.Cleanup(func() {
+		cancel()
+		<-doneCh
+		if t.Failed() {
+			t.Logf("plugin manager log:\n%s", logs.String())
+		}
+	})
+	r := &testRig{t: t, m: m, cancel: cancel, done: doneCh, logs: logs}
+	info := r.waitPlugin("mako-git", func(p *protocol.PluginInfo) bool {
+		return p.GetBundled() && (p.GetState() == protocol.PluginReady || p.GetState() == protocol.PluginRunning)
+	})
+	if len(info.GetSettings()) != 1 || info.GetSettings()[0].GetKey() != "autofix_default" || info.GetSettings()[0].GetValue() != "false" {
+		t.Fatalf("mako-git settings = %+v; want autofix_default=false", info.GetSettings())
+	}
+
+	setSetting := func(scope, val string) {
+		t.Helper()
+		actCtx, actCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer actCancel()
+		if _, err := m.Act(actCtx, &protocol.PluginAction{
+			PluginId: "mako-git",
+			Op:       protocol.PluginSet,
+			Key:      "autofix_default",
+			Scope:    scope,
+			Value:    val,
+		}); err != nil {
+			t.Fatalf("PluginSet(%q, %q): %v", scope, val, err)
+		}
+	}
+
+	// 1. Default setting is off: PR #101 starts with Auto-fix off and dialog shows the default hint.
+	scopeA := protocol.FolderScope(protocol.LocalScopeNode, repoA)
+	wA := r.watch(scopeA, "en", plugin.View{Standalone: false})
+	treeA := wA.until("PR #101 loaded with Auto-fix off", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return findByKeySuffix(n, "forge-autofix") != nil && findByKeySuffix(n, "op-autofix") != nil
+	})
+	if findByKeySuffix(treeA, "af-strip") != nil {
+		t.Fatal("Auto-fix strip should be hidden while autofix_default is false")
+	}
+	r.sendEvent(scopeA, findByKeySuffix(treeA, "op-autofix").GetId(), protocol.UiTap, "", nil)
+	treeA = wA.until("Auto-fix dialog shows default-off note", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		note := findByKeySuffix(n, "af-default-note")
+		return note != nil && strings.Contains(note.GetText(), "Settings ▸ Plugins ▸ mako-git") && strings.Contains(note.GetText(), "enable it")
+	})
+	r.sendEvent(scopeA, findByKeySuffix(treeA, "dlg-cancel").GetId(), protocol.UiTap, "", nil)
+	wA.until("dialog closed", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return findByKeySuffix(n, "git-dialog") == nil
+	})
+
+	// 2. Enable global autofix_default: open unconfigured PR #101 reloads, turns on,
+	// baselines pre-existing comments, and sends failing CI to the idle session.
+	setSetting("", "true")
+	treeA = wA.until("PR #101 auto-enabled and fixing CI", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		st := findByKeySuffix(n, "af-status")
+		return st != nil && strings.Contains(st.GetText(), "fixing CI")
+	})
+	deadline := time.Now().Add(5 * time.Second)
+	for fa.sentCount() < 1 && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	msg := fa.sentAt(t, 0)
+	if !strings.Contains(msg.text, "#101") || strings.Contains(msg.text, "Pre-existing comment") {
+		t.Fatalf("unexpected auto-fix prompt on default enable:\n%s", msg.text)
+	}
+
+	// Dialog now reflects that Auto-fix is on by default.
+	r.sendEvent(scopeA, findByKeySuffix(treeA, "af-settings").GetId(), protocol.UiTap, "", nil)
+	treeA = wA.until("Auto-fix dialog shows default-on note", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		note := findByKeySuffix(n, "af-default-note")
+		return note != nil && strings.Contains(note.GetText(), "on by default")
+	})
+	r.sendEvent(scopeA, findByKeySuffix(treeA, "dlg-cancel").GetId(), protocol.UiTap, "", nil)
+	treeA = wA.until("dialog closed", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return findByKeySuffix(n, "git-dialog") == nil && findByKeySuffix(n, "af-off") != nil
+	})
+
+	// 3. Explicitly turning Auto-fix off on PR #101 persists opt-out; reload must NOT re-enable it.
+	r.sendEvent(scopeA, findByKeySuffix(treeA, "af-off").GetId(), protocol.UiTap, "", nil)
+	treeA = wA.until("PR #101 disabled", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return findByKeySuffix(n, "af-strip") == nil && findByKeySuffix(n, "op-refresh") != nil
+	})
+	r.sendEvent(scopeA, findByKeySuffix(treeA, "op-refresh").GetId(), protocol.UiTap, "", nil)
+	time.Sleep(150 * time.Millisecond)
+	wA.until("PR #101 stays off after refresh", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return findByKeySuffix(n, "forge-autofix") != nil && findByKeySuffix(n, "af-strip") == nil
+	})
+
+	// 4. Per-project override: proj-b set to false overrides global true -> PR #202 stays off.
+	setSetting("project:proj-b", "false")
+	scopeB := protocol.FolderScope(protocol.LocalScopeNode, repoB)
+	wB := r.watch(scopeB, "en", plugin.View{Standalone: false})
+	treeB := wB.until("PR #202 loaded with project override off", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return findByKeySuffix(n, "forge-autofix") != nil
+	})
+	if findByKeySuffix(treeB, "af-strip") != nil {
+		t.Fatal("project override autofix_default=false should keep PR #202 off")
+	}
+
+	// Flipping proj-b override to true reloads the folder-scoped panel and enables Auto-fix.
+	setSetting("project:proj-b", "true")
+	wB.until("PR #202 auto-enabled after project override turned on", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		st := findByKeySuffix(n, "af-status")
+		return st != nil && strings.Contains(st.GetText(), "watching CI and reviews")
+	})
+
+	// 5. Merged PR is never auto-enabled even when global autofix_default is true.
+	scopeMerged := protocol.FolderScope(protocol.LocalScopeNode, repoMerged)
+	wMerged := r.watch(scopeMerged, "en", plugin.View{Standalone: false})
+	mergedTree := wMerged.until("merged PR loaded", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return findByKeySuffix(n, "forge-pr") != nil
+	})
+	if findByKeySuffix(mergedTree, "forge-autofix") != nil || findByKeySuffix(mergedTree, "af-strip") != nil {
+		t.Fatal("merged PR should not enable or show Auto-fix")
+	}
+}
+
+type routedGitHost struct {
+	base *fakeGitScenarioHost
+}
+
+func (r *routedGitHost) Allowed(plugin.GitTarget) bool { return true }
+
+func (r *routedGitHost) Status(ctx context.Context, t plugin.GitTarget, base string) (*protocol.GitChanges, error) {
+	st, err := r.base.Status(ctx, t, base)
+	if err != nil {
+		return nil, err
+	}
+	cp := proto.CloneOf(st)
+	cp.Root = t.Path
+	return cp, nil
+}
+
+func (r *routedGitHost) Log(ctx context.Context, t plugin.GitTarget, max int, known string) (*protocol.GitHistory, error) {
+	return r.base.Log(ctx, t, max, known)
+}
+
+func (r *routedGitHost) Show(ctx context.Context, t plugin.GitTarget, hash string) (*protocol.GitCommitInfo, error) {
+	return r.base.Show(ctx, t, hash)
+}
+
+func (r *routedGitHost) Run(ctx context.Context, t plugin.GitTarget, req *protocol.GitRun, wt bool) (string, error) {
+	return r.base.Run(ctx, t, req, wt)
+}
+
+func (r *routedGitHost) Watch(ctx context.Context, t plugin.GitTarget, changed func()) error {
+	return r.base.Watch(ctx, t, changed)
+}
+
+type routedPRFixture struct {
+	branch *plugin.ForgeBranch
+	detail *plugin.ForgePRDetail
+}
+
+type routedForgeHost struct {
+	fixtures map[string]*routedPRFixture
+}
+
+func (f *routedForgeHost) BranchStatus(_ context.Context, t plugin.GitTarget, _ string) (*plugin.ForgeBranch, error) {
+	if fx := f.fixtures[t.Path]; fx != nil && fx.branch != nil {
+		cp := *fx.branch
+		return &cp, nil
+	}
+	return &plugin.ForgeBranch{}, nil
+}
+
+func (f *routedForgeHost) PullRequestDetail(_ context.Context, t plugin.GitTarget, _ int32) (*plugin.ForgePRDetail, error) {
+	if fx := f.fixtures[t.Path]; fx != nil && fx.detail != nil {
+		cp := *fx.detail
+		return &cp, nil
+	}
+	return &plugin.ForgePRDetail{}, nil
+}
+
+func (f *routedForgeHost) FailedLogs(_ context.Context, _ plugin.GitTarget, _ int64, _ int32) (*plugin.ForgeFailedLogs, error) {
+	return &plugin.ForgeFailedLogs{Logs: "FAIL: unit test", Workflow: "CI"}, nil
 }
