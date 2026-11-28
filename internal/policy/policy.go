@@ -176,24 +176,24 @@ func LoadProjectDenyRules(projectDir string) []Rule {
 //
 // Interactive approvals (questions, plans, layout changes, templates) are never
 // auto-approved. Deny rules always take precedence over allow rules.
-func Evaluate(configDir, projectDir, agentName, kind, tool, detail string) Decision {
-	switch kind {
+func Evaluate(configDir, projectDir string, call Call) Decision {
+	switch call.Kind {
 	case protocol.ToolQuestion, protocol.ToolExitPlan, protocol.ToolLayout, protocol.ToolTemplate:
 		return Decision{}
 	}
 	globalRules, _ := LoadRules(configDir)
 	projectRules := LoadProjectDenyRules(projectDir)
-	return EvaluateRules(slices.Concat(globalRules, projectRules), agentName, tool, detail)
+	return EvaluateRules(slices.Concat(globalRules, projectRules), call)
 }
 
 // EvaluateRules evaluates an explicit rule slice with deny-first precedence.
-func EvaluateRules(rules []Rule, agentName, tool, detail string) Decision {
+func EvaluateRules(rules []Rule, call Call) Decision {
 	var allowMatch *Rule
 	for i := range rules {
 		r := rules[i]
 		// A rule edited by hand into one Validate refuses, an empty
 		// tool among them, matches nothing.
-		if !r.Enabled || r.Validate() != nil || !ruleMatches(r, agentName, tool, detail) {
+		if !r.Enabled || r.Validate() != nil || !ruleMatches(r, call) {
 			continue
 		}
 		if r.Action == ActionDeny {
@@ -218,11 +218,11 @@ func EvaluateRules(rules []Rule, agentName, tool, detail string) Decision {
 	return Decision{}
 }
 
-func ruleMatches(r Rule, agentName, tool, detail string) bool {
+func ruleMatches(r Rule, call Call) bool {
 	if len(r.Agents) > 0 {
 		matchedAgent := false
 		for _, a := range r.Agents {
-			if a == "*" || strings.EqualFold(strings.TrimSpace(a), agentName) {
+			if a == "*" || strings.EqualFold(strings.TrimSpace(a), call.Agent) {
 				matchedAgent = true
 				break
 			}
@@ -231,11 +231,11 @@ func ruleMatches(r Rule, agentName, tool, detail string) bool {
 			return false
 		}
 	}
-	if !matchGlobFold(r.Tool, tool) {
+	if !matchGlobFold(r.Tool, call.Tool) {
 		return false
 	}
 	if r.Pattern != "" {
-		return matchGlobFold(r.Pattern, detail)
+		return patternMatches(r, call)
 	}
 	return true
 }

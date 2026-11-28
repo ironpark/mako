@@ -406,8 +406,10 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 				kind, canon = k, read
 			}
 		}
-		detail := agent.Detail(kind, canon)
-		if dec := policy.Evaluate(d.dir, s.Info().GetProject(), name, kind, ev.Tool, detail); dec.Matched {
+		// Rules read the whole call; the detail, cut to a line, is only
+		// what the audit log shows of it.
+		call := policy.Call{Agent: name, Tool: ev.Tool, Kind: kind, Input: canon}
+		if dec := policy.Evaluate(d.dir, s.Info().GetProject(), call); dec.Matched {
 			reply := hookReply{Decision: string(dec.Action), Message: dec.Reason}
 			if len(reply.Output) == 0 {
 				reply.Output = hooks.Reply(reply.Decision, reply.Message)
@@ -416,7 +418,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 				Session: msg.Session,
 				Agent:   name,
 				Tool:    ev.Tool,
-				Detail:  detail,
+				Detail:  agent.Detail(kind, canon),
 				Action:  dec.Action,
 				RuleID:  dec.Rule.ID,
 				Rule:    dec.Rule.Name,
