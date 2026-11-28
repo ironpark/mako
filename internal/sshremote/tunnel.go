@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -49,13 +50,18 @@ func ensureRemoteMakodScript(makodPath string) string {
 	b.WriteString(`_os="$(uname -s 2>/dev/null)"; `)
 	b.WriteString(`if [ "$_os" = "Darwin" ]; then _cfg="$HOME/Library/Application Support/mako"; else _cfg="${XDG_CONFIG_HOME:-$HOME/.config}/mako"; fi; `)
 	b.WriteString(`_sock="$_cfg/run/daemon.sock"; `)
-	// Check if an existing makod socket is already present and responsive (or check ~/.mako-ssh/run/daemon.sock).
-	b.WriteString(`if [ -S "$_sock" ]; then printf 'SOCK=%s\n' "$_sock"; exit 0; fi; `)
+	// Check if an existing makod socket is present and responsive (avoiding stale sockets left after crashes).
+	b.WriteString(`_sock_alive() { [ -S "$1" ] || return 1; `)
+	b.WriteString(`if command -v python3 >/dev/null 2>&1; then python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.settimeout(1); s.connect(sys.argv[1]); s.close()' "$1" >/dev/null 2>&1; return $?; fi; `)
+	b.WriteString(`if command -v lsof >/dev/null 2>&1; then lsof -U -- "$1" >/dev/null 2>&1; return $?; fi; `)
+	b.WriteString(`return 0; }; `)
+	b.WriteString(`if _sock_alive "$_sock"; then printf 'SOCK=%s\n' "$_sock"; exit 0; fi; `)
 	b.WriteString(`_alt="$HOME/.mako-ssh"; _altsock="$_alt/run/daemon.sock"; `)
-	b.WriteString(`if [ -S "$_altsock" ]; then printf 'SOCK=%s\n' "$_altsock"; exit 0; fi; `)
+	b.WriteString(`if _sock_alive "$_altsock"; then printf 'SOCK=%s\n' "$_altsock"; exit 0; fi; `)
+	b.WriteString(`rm -f "$_altsock"; `)
 	b.WriteString(`mkdir -p "$_alt/run" && chmod 700 "$_alt" "$_alt/run"; `)
 	b.WriteString(`MAKO_HOME="$_alt" nohup "$_bin" >/dev/null 2>"$_alt/makod.log" </dev/null & `)
-	b.WriteString(`_i=0; while [ $_i -lt 50 ]; do [ -S "$_altsock" ] && { printf 'SOCK=%s\n' "$_altsock"; exit 0; }; sleep 0.1; _i=$((_i + 1)); done; `)
+	b.WriteString(`_i=0; while [ $_i -lt 50 ]; do _sock_alive "$_altsock" && { printf 'SOCK=%s\n' "$_altsock"; exit 0; }; sleep 0.1; _i=$((_i + 1)); done; `)
 	b.WriteString(`echo "remote makod did not open its socket" >&2; [ -f "$_alt/makod.log" ] && tail -n 5 "$_alt/makod.log" >&2; exit 1`)
 	return b.String()
 }
@@ -64,6 +70,9 @@ func ensureRemoteMakodScript(makodPath string) string {
 // local Unix-socket forwarder to it, and verifies the forwarded daemon responds
 // to a mako protocol Hello/Welcome handshake.
 func StartDaemonTunnel(ctx context.Context, h config.SSHHost, makodPath, controlPath, localSock string, hello *protocol.Hello) (*DaemonTunnel, error) {
+	if runtime.GOOS == "windows" {
+		return nil, errors.New("SSH Unix-socket daemon tunnel is not supported on Windows; use direct SSH mode")
+	}
 	if makodPath == "" {
 		return nil, errors.New("remote makod binary not found")
 	}

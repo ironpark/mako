@@ -264,15 +264,15 @@ func FileOp(ctx context.Context, h config.SSHHost, controlPath, remoteHome strin
 	var script string
 	switch req.GetOp() {
 	case protocol.FileCreate:
-		script = fmt.Sprintf(`_p=%s; [ ! -e "$_p" ] || { echo "already exists" >&2; exit 1; }; mkdir -p "$(dirname "$_p")" && : > "$_p"`, ShellQuote(p))
+		script = fmt.Sprintf(`_p=%s; [ ! -e "$_p" ] || { echo "already exists" >&2; exit 1; }; mkdir -p -- "$(dirname -- "$_p")" && : > "$_p"`, ShellQuote(p))
 	case protocol.FileMkdir:
-		script = fmt.Sprintf(`_p=%s; [ ! -e "$_p" ] || { echo "already exists" >&2; exit 1; }; mkdir -p "$_p"`, ShellQuote(p))
+		script = fmt.Sprintf(`_p=%s; [ ! -e "$_p" ] || { echo "already exists" >&2; exit 1; }; mkdir -p -- "$_p"`, ShellQuote(p))
 	case protocol.FileRename:
-		script = fmt.Sprintf(`_p=%s; _to=%s; [ ! -e "$_to" ] || { echo "destination exists" >&2; exit 1; }; mkdir -p "$(dirname "$_to")" && mv "$_p" "$_to"`, ShellQuote(p), ShellQuote(to))
+		script = fmt.Sprintf(`_p=%s; _to=%s; [ ! -e "$_to" ] || { echo "destination exists" >&2; exit 1; }; mkdir -p -- "$(dirname -- "$_to")" && mv -- "$_p" "$_to"`, ShellQuote(p), ShellQuote(to))
 	case protocol.FileDelete:
 		script = fmt.Sprintf(`rm -rf -- %s`, ShellQuote(p))
 	case protocol.FileCopy:
-		script = fmt.Sprintf(`_p=%s; _to=%s; [ ! -e "$_to" ] || { echo "destination exists" >&2; exit 1; }; mkdir -p "$(dirname "$_to")" && cp -R "$_p" "$_to"`, ShellQuote(p), ShellQuote(to))
+		script = fmt.Sprintf(`_p=%s; _to=%s; [ ! -e "$_to" ] || { echo "destination exists" >&2; exit 1; }; mkdir -p -- "$(dirname -- "$_to")" && cp -R -- "$_p" "$_to"`, ShellQuote(p), ShellQuote(to))
 	default:
 		return nil, fmt.Errorf("unsupported file op %q", req.GetOp())
 	}
@@ -619,8 +619,21 @@ func xyStatus(xy string) string {
 	return protocol.GitModified
 }
 
+func rejectLeadingDash(field, v string) error {
+	if strings.HasPrefix(strings.TrimSpace(v), "-") {
+		return fmt.Errorf("invalid %s %q", field, v)
+	}
+	return nil
+}
+
 // GitDiff computes the unified diff for one file on the remote SSH host.
 func GitDiff(ctx context.Context, h config.SSHHost, controlPath, remoteHome string, req *protocol.GitDiff) (*protocol.Diff, error) {
+	if err := rejectLeadingDash("commit", req.GetCommit()); err != nil {
+		return nil, err
+	}
+	if err := rejectLeadingDash("base", req.GetBase()); err != nil {
+		return nil, err
+	}
 	root := ExpandRemotePath(req.GetRoot(), remoteHome)
 	var gitArgs []string
 	switch {
@@ -631,10 +644,10 @@ func GitDiff(ctx context.Context, h config.SSHHost, controlPath, remoteHome stri
 	default:
 		gitArgs = []string{"-C", root, "--no-optional-locks", "diff", "-U3", "HEAD", "--", req.GetPath()}
 	}
-	// If the file is untracked, `git diff HEAD` returns empty; fall back to `--no-index /dev/null <path>`.
+	// If the file is untracked, `git diff HEAD` returns empty; fall back to `--no-index -- /dev/null <path>`.
 	script := fmt.Sprintf(`%s; _out="$(git %s 2>/dev/null || true)"
 if [ -z "$_out" ] && [ -f %s ]; then
-  git -C %s --no-optional-locks diff --no-index -U3 /dev/null %s 2>/dev/null || true
+  git -C %s --no-optional-locks diff --no-index -U3 -- /dev/null %s 2>/dev/null || true
 else
   printf '%%s\n' "$_out"
 fi`, remotePathPrelude, ShellJoin(gitArgs), ShellQuote(path.Join(root, req.GetPath())), ShellQuote(root), ShellQuote(req.GetPath()))
@@ -778,11 +791,14 @@ git -C "$_r" --no-optional-locks log -n %d --format='%%H%%x1f%%P%%x1f%%an%%x1f%%
 
 // GitShow inspects a single commit on the remote SSH host.
 func GitShow(ctx context.Context, h config.SSHHost, controlPath, remoteHome string, req *protocol.GitShow) (*protocol.GitCommitInfo, error) {
+	if err := rejectLeadingDash("commit hash", req.GetHash()); err != nil {
+		return nil, err
+	}
 	root := ExpandRemotePath(req.GetRoot(), remoteHome)
 	script := fmt.Sprintf(`%s; _r=%s; _h=%s
-git -C "$_r" --no-optional-locks show -s --format='%%H%%x1f%%P%%x1f%%an%%x1f%%ae%%x1f%%ct%%x1f%%s%%x1f%%b' "$_h"
+git -C "$_r" --no-optional-locks show -s --format='%%H%%x1f%%P%%x1f%%an%%x1f%%ae%%x1f%%ct%%x1f%%s%%x1f%%b' "$_h" --
 printf '\n===FILES===\n'
-git -C "$_r" --no-optional-locks diff-tree --root --no-commit-id --name-status -r "$_h"`, remotePathPrelude, ShellQuote(root), ShellQuote(req.GetHash()))
+git -C "$_r" --no-optional-locks diff-tree --root --no-commit-id --name-status -r "$_h" --`, remotePathPrelude, ShellQuote(root), ShellQuote(req.GetHash()))
 
 	out, err := runSSH(ctx, h, controlPath, script)
 	if err != nil {
@@ -866,8 +882,17 @@ func GitRun(ctx context.Context, h config.SSHHost, controlPath, remoteHome strin
 	case protocol.GitOpFetch:
 		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "fetch", "--all", "--prune"})
 	case protocol.GitOpCheckout:
-		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "checkout", req.GetBranch()})
+		if err := rejectLeadingDash("branch", req.GetBranch()); err != nil {
+			return nil, err
+		}
+		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "checkout", req.GetBranch(), "--"})
 	case protocol.GitOpBranch:
+		if err := rejectLeadingDash("branch", req.GetBranch()); err != nil {
+			return nil, err
+		}
+		if err := rejectLeadingDash("commit", req.GetCommit()); err != nil {
+			return nil, err
+		}
 		args := []string{"git", "-C", root, "checkout", "-b", req.GetBranch()}
 		if req.GetCommit() != "" {
 			args = append(args, req.GetCommit())
@@ -889,13 +914,19 @@ func GitRun(ctx context.Context, h config.SSHHost, controlPath, remoteHome strin
 		args := append([]string{"git", "-C", root, "checkout", "--"}, req.GetPaths()...)
 		cmd = remotePathPrelude + "; " + ShellJoin(args)
 	case protocol.GitOpDeleteBranch:
+		if err := rejectLeadingDash("branch", req.GetBranch()); err != nil {
+			return nil, err
+		}
 		flag := "-d"
 		if req.GetForce() {
 			flag = "-D"
 		}
-		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "branch", flag, req.GetBranch()})
+		cmd = remotePathPrelude + "; " + ShellJoin([]string{"git", "-C", root, "branch", flag, "--", req.GetBranch()})
 	case protocol.GitOpClone:
-		cmd = fmt.Sprintf(`%s; mkdir -p "$(dirname %s)" && git clone %s %s`, remotePathPrelude, ShellQuote(root), ShellQuote(req.GetMessage()), ShellQuote(root))
+		if err := rejectLeadingDash("clone URL", req.GetMessage()); err != nil {
+			return nil, err
+		}
+		cmd = fmt.Sprintf(`%s; mkdir -p -- "$(dirname -- %s)" && git clone -- %s %s`, remotePathPrelude, ShellQuote(root), ShellQuote(req.GetMessage()), ShellQuote(root))
 	default:
 		return nil, fmt.Errorf("git op %q is not supported in direct SSH mode (install makod on the remote host for full git operations)", req.GetOp())
 	}

@@ -345,7 +345,10 @@ func (d *Daemon) attachSession(ctx context.Context, id string) (*session.Session
 	case !ok:
 		return nil, fmt.Errorf("unknown session %q", id)
 	}
-	if config.IsSSHNodeID(saved.Request.GetNodeId()) && d.isDirectSSH(saved.Request.GetNodeId()) {
+	if nodeID := saved.Request.GetNodeId(); config.IsSSHNodeID(nodeID) {
+		if !d.isDirectSSH(nodeID) {
+			return nil, fmt.Errorf("SSH host %q is no longer available in direct SSH mode", nodeID)
+		}
 		return d.startDirectSSHSession(ctx, id, saved.Request, saved.ParentID)
 	}
 	return d.startSession(ctx, id, saved.Request)

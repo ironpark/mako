@@ -32,6 +32,7 @@ func TestSSHHostValidateAndNormalize(t *testing.T) {
 		{Host: "ok", ProxyJump: "-evil"},
 		{Host: "ok", Mode: "unknown"},
 		{Host: "ok", ExtraArgs: []string{"bad\narg"}},
+		{Host: "ok", ExtraArgs: []string{"--"}},
 	}
 	for i, h := range invalid {
 		if err := h.Validate(); err == nil {

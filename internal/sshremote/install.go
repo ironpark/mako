@@ -255,18 +255,22 @@ func uploadMakodBinary(ctx context.Context, h config.SSHHost, controlPath, local
 	}
 	defer f.Close()
 
-	// Stop any older ~/.mako-ssh daemon so replacing the binary is clean, then
-	// stream the new binary atomically into place with 0755 permissions.
+	// Stop any older ~/.mako-ssh daemon so replacing the binary is clean and the
+	// next reconnect starts the updated binary, then stream atomically into place.
 	script := fmt.Sprintf(`set -e
 _dst=%s
 case "$_dst" in '~') _dst="$HOME/makod";; '~/'*) _dst="$HOME/${_dst#~/}";; esac
-_dir="$(dirname "$_dst")"
-mkdir -p "$_dir"
+_dir="$(dirname -- "$_dst")"
+mkdir -p -- "$_dir"
+if [ -S "$HOME/.mako-ssh/run/daemon.sock" ]; then
+  pkill -f "$_dst" >/dev/null 2>&1 || true
+  rm -f "$HOME/.mako-ssh/run/daemon.sock"
+fi
 _tmp="${_dst}.tmp.$$"
 trap 'rm -f "$_tmp"' EXIT
 cat > "$_tmp"
 chmod 755 "$_tmp"
-mv -f "$_tmp" "$_dst"
+mv -f -- "$_tmp" "$_dst"
 trap - EXIT`, ShellQuote(remoteDest))
 
 	_, err = runSSHStdin(ctx, h, controlPath, script, f)

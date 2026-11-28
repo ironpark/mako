@@ -120,7 +120,8 @@ func (m *sshManager) sync(hosts []config.SSHHost) {
 	var toStop []*sshEntry
 	changed := false
 
-	// Stop removed or modified entries.
+	// Phase 1: Detach removed or modified entries and stop them BEFORE starting
+	// replacements, since replaced entries share the same controlPath/tunnelSock.
 	for id, e := range m.entries {
 		next, ok := want[id]
 		if !ok {
@@ -138,8 +139,18 @@ func (m *sshManager) sync(hosts []config.SSHHost) {
 			changed = true
 		}
 	}
+	m.mu.Unlock()
 
-	// Start new or replaced entries.
+	for _, e := range toStop {
+		e.stop()
+	}
+
+	// Phase 2: Start new or replaced entries now that old sockets are cleaned up.
+	m.mu.Lock()
+	if !m.started {
+		m.mu.Unlock()
+		return
+	}
 	for _, id := range order {
 		if _, ok := m.entries[id]; ok {
 			continue
@@ -172,9 +183,6 @@ func (m *sshManager) sync(hosts []config.SSHHost) {
 	}
 	m.mu.Unlock()
 
-	for _, e := range toStop {
-		e.stop()
-	}
 	if changed {
 		m.d.changes.fire(true, true)
 	}
@@ -226,6 +234,15 @@ func (m *sshManager) reconnect(nodeID string) error {
 
 // runEntry is the lifecycle loop for one configured SSH host.
 func (m *sshManager) runEntry(ctx context.Context, e *sshEntry) {
+	defer func() {
+		e.mu.Lock()
+		tun := e.tunnel
+		e.tunnel = nil
+		e.mu.Unlock()
+		if tun != nil {
+			_ = tun.Close()
+		}
+	}()
 	e.mu.Lock()
 	disabled := e.host.Disabled
 	e.mu.Unlock()
@@ -260,11 +277,12 @@ func (m *sshManager) runEntry(ctx context.Context, e *sshEntry) {
 		e.linkErr = err.Error()
 		e.relinkAt = time.Now().Add(wait)
 		e.remoteSessions = nil
-		if e.tunnel != nil {
-			_ = e.tunnel.Close()
-			e.tunnel = nil
-		}
+		tun := e.tunnel
+		e.tunnel = nil
 		e.mu.Unlock()
+		if tun != nil {
+			_ = tun.Close()
+		}
 		m.d.changes.fire(true, true)
 
 		timer := time.NewTimer(wait)
@@ -296,6 +314,11 @@ func (m *sshManager) connectOnce(ctx context.Context, e *sshEntry, host config.S
 		tunCancel()
 		if tunErr == nil {
 			e.mu.Lock()
+			if ctx.Err() != nil {
+				e.mu.Unlock()
+				_ = tun.Close()
+				return ctx.Err()
+			}
 			e.probe = probe
 			e.tunnel = tun
 			e.remoteNode = tun.RemoteNode

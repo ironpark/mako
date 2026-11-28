@@ -230,7 +230,7 @@ func (d *Daemon) deliverNativeUserPrompt(ctx context.Context, s *session.Session
 // its terminal, by typing the answers there, as its driver says to, once
 // its screen shows them asked.
 func (d *Daemon) handleAnswerQuestion(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
-	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.AnswerQuestion) (*protocol.SessionInfo, error) {
+	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.AnswerQuestion) (*protocol.SessionInfo, error) {
 		s, ok := d.sessions.get(r.GetSessionId())
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())

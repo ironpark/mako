@@ -151,6 +151,9 @@ func (h SSHHost) Validate() error {
 		if strings.ContainsRune(arg, 0) || strings.ContainsAny(arg, "\r\n") {
 			return errors.New("extra SSH argument contains invalid characters")
 		}
+		if strings.TrimSpace(arg) == "--" {
+			return errors.New("extra SSH argument must not be '--'")
+		}
 	}
 	return nil
 }

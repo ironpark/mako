@@ -342,3 +342,21 @@ func TestBaseArgsControlPathWithSpace(t *testing.T) {
 		t.Fatalf("ssh -G does not report controlpath %q:\n%s", ctrl, out)
 	}
 }
+
+func TestSanitizeWorktreeSlugAndLeadingDashGuards(t *testing.T) {
+	if got := sanitizeWorktreeSlug(`feat/$(id);rm -rf /`); strings.ContainsAny(got, `$();" `) {
+		t.Fatalf("unsafe worktree slug: %q", got)
+	}
+	if got := sanitizeWorktreeSlug("../evil/branch"); strings.Contains(got, "..") || strings.HasPrefix(got, "-") {
+		t.Fatalf("traversal or dash slug: %q", got)
+	}
+	if got := sanitizeWorktreeSlug("///"); got != "worktree" {
+		t.Fatalf("empty slug fallback = %q, want worktree", got)
+	}
+	if err := rejectLeadingDash("branch", "--upload-pack=evil"); err == nil {
+		t.Fatal("expected leading-dash rejection")
+	}
+	if err := rejectLeadingDash("branch", "feat/ok"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
