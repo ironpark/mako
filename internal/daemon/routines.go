@@ -1,11 +1,13 @@
 package daemon
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ironpark/mako/internal/agentspec"
@@ -17,15 +19,44 @@ import (
 const (
 	routineTickInterval  = 30 * time.Second
 	routineForgeInterval = 3 * time.Minute
+	routineForgeTimeout  = 20 * time.Second // one routine's poll of its forge
 )
 
-// routineRunner serializes what the daemon reads and writes of its
-// routines: routines.json and routines-history.json, which the front-ends
-// change through it (routines_requests.go), and the scheduler and the runs
-// it starts append to.
+// routineRunner is the daemon's side of its routines. Its lock serializes
+// what the daemon reads and writes of them: routines.json and
+// routines-history.json, which the front-ends change through it
+// (routines_requests.go), and the scheduler and the runs it starts append
+// to. The scheduler's cron ticks and its polls of the forges run apart,
+// so a slow forge never costs a cron schedule its minute, and runs, the
+// runs the scheduler starts and its poll, which the daemon's shutdown
+// waits for.
 type routineRunner struct {
 	mu sync.Mutex
+
+	runs    sync.WaitGroup
+	polling atomic.Bool // a poll of the forges is under way
+
+	// The intervals of the cron ticks and of the polls, the constants
+	// above when zero, and how the forges are listed, forge.List when
+	// nil: tests' stand-ins.
+	cronEvery, forgeEvery time.Duration
+	forgeList             func(context.Context, *protocol.ForgeList) (*protocol.ForgeItems, error)
+
+	lastFired map[string]int64 // routine ID: the unix minute it last ran by its schedule; the cron ticks'
+	// What each Forge routine's polls have seen, by routine ID; the poll's
+	// alone, which never runs twice at once.
+	seenPRs, seenFailed map[string]map[int64]bool
 }
+
+func (rr *routineRunner) list(ctx context.Context, req *protocol.ForgeList) (*protocol.ForgeItems, error) {
+	if rr.forgeList != nil {
+		return rr.forgeList(ctx, req)
+	}
+	return forge.List(ctx, req)
+}
+
+// start runs fn on a goroutine shutdown waits for.
+func (rr *routineRunner) start(fn func()) { rr.runs.Go(fn) }
 
 // loadRoutines reads the routines.
 func (d *Daemon) loadRoutines() ([]routines.Routine, error) {
@@ -71,49 +102,70 @@ func (d *Daemon) routineRuns() ([]routines.RunRecord, error) {
 	return routines.LoadHistory(d.dir)
 }
 
-// runRoutines executes enabled cron schedules and Forge event triggers defined
-// in routines.json inside the daemon's configuration directory.
+// runRoutines runs the enabled routines of routines.json, in the daemon's
+// configuration directory, as their schedules and Forge triggers say, until
+// ctx is done and the runs it started are.
 func (d *Daemon) runRoutines(ctx context.Context) {
 	if d.dir == "" {
 		return
 	}
-	ticker := time.NewTicker(routineTickInterval)
-	defer ticker.Stop()
-
-	lastFiredMinute := map[string]int64{} // routineID -> unix minute
-	seenPRs := map[string]map[int64]bool{}
-	seenFailedRuns := map[string]map[int64]bool{}
-	var lastForgePoll time.Time
-
+	rr := &d.routines
+	defer rr.runs.Wait()
+	cron := time.NewTicker(cmp.Or(rr.cronEvery, routineTickInterval))
+	defer cron.Stop()
+	// The first poll comes with the first tick, and then one an interval.
+	poll := time.NewTimer(cmp.Or(rr.cronEvery, routineTickInterval))
+	defer poll.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case now := <-ticker.C:
-			list, err := d.loadRoutines()
-			if err != nil {
-				d.log.Warn("routines: load failed", "err", err)
-				continue
-			}
-			if len(list) == 0 {
-				continue
-			}
-			d.tickCronRoutines(ctx, list, now, lastFiredMinute)
-			if time.Since(lastForgePoll) >= routineForgeInterval {
-				lastForgePoll = now
-				d.tickForgeRoutines(ctx, list, seenPRs, seenFailedRuns)
-			}
+		case now := <-cron.C:
+			d.tickCronRoutines(ctx, now)
+		case <-poll.C:
+			d.startForgePoll(ctx)
+			poll.Reset(cmp.Or(rr.forgeEvery, routineForgeInterval))
 		}
 	}
 }
 
-func (d *Daemon) tickCronRoutines(ctx context.Context, list []routines.Routine, now time.Time, lastFired map[string]int64) {
+// startForgePoll polls the forges of the Forge routines on a goroutine of
+// its own, and reports whether it did: not while the last poll is still
+// under way, which a slow or unreachable forge can make longer than an
+// interval.
+func (d *Daemon) startForgePoll(ctx context.Context) bool {
+	rr := &d.routines
+	if !rr.polling.CompareAndSwap(false, true) {
+		return false
+	}
+	rr.start(func() {
+		defer rr.polling.Store(false)
+		list, err := d.loadRoutines()
+		if err != nil {
+			d.log.Warn("routines: load failed", "err", err)
+			return
+		}
+		d.tickForgeRoutines(ctx, list)
+	})
+	return true
+}
+
+func (d *Daemon) tickCronRoutines(ctx context.Context, now time.Time) {
+	list, err := d.loadRoutines()
+	if err != nil {
+		d.log.Warn("routines: load failed", "err", err)
+		return
+	}
+	rr := &d.routines
+	if rr.lastFired == nil {
+		rr.lastFired = map[string]int64{}
+	}
 	minKey := now.Unix() / 60
 	for _, r := range list {
 		if !r.Enabled || r.Trigger != routines.TriggerCron {
 			continue
 		}
-		if lastFired[r.ID] == minKey {
+		if rr.lastFired[r.ID] == minKey {
 			continue
 		}
 		sched, err := routines.ParseSchedule(r.Schedule)
@@ -123,20 +175,25 @@ func (d *Daemon) tickCronRoutines(ctx context.Context, list []routines.Routine, 
 		if !sched.Matches(now) {
 			continue
 		}
-		lastFired[r.ID] = minKey
-		go d.executeRoutine(ctx, r, "cron:"+r.Schedule, "")
+		rr.lastFired[r.ID] = minKey
+		rr.start(func() { _, _ = d.executeRoutine(ctx, r, "cron:"+r.Schedule, "") })
 	}
 }
 
-func (d *Daemon) tickForgeRoutines(ctx context.Context, list []routines.Routine, seenPRs, seenFailed map[string]map[int64]bool) {
+func (d *Daemon) tickForgeRoutines(ctx context.Context, list []routines.Routine) {
+	rr := &d.routines
+	if rr.seenPRs == nil {
+		rr.seenPRs, rr.seenFailed = map[string]map[int64]bool{}, map[string]map[int64]bool{}
+	}
+	seenPRs, seenFailed := rr.seenPRs, rr.seenFailed
 	for _, r := range list {
 		if !r.Enabled || r.Project == "" {
 			continue
 		}
 		switch r.Trigger {
 		case routines.TriggerForgePR:
-			pollCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			items, err := forge.List(pollCtx, &protocol.ForgeList{Root: r.Project, Kind: protocol.ForgePR, State: "open", Max: 20})
+			pollCtx, cancel := context.WithTimeout(ctx, routineForgeTimeout)
+			items, err := rr.list(pollCtx, &protocol.ForgeList{Root: r.Project, Kind: protocol.ForgePR, State: "open", Max: 20})
 			cancel()
 			if err != nil {
 				continue
@@ -157,11 +214,11 @@ func (d *Daemon) tickForgeRoutines(ctx context.Context, list []routines.Routine,
 				}
 				known[num] = true
 				extra := fmt.Sprintf("Triggered by newly opened PR #%d: %s (%s)", num, it.GetTitle(), it.GetUrl())
-				go d.executeRoutine(ctx, r, fmt.Sprintf("pr:#%d", num), extra)
+				rr.start(func() { _, _ = d.executeRoutine(ctx, r, fmt.Sprintf("pr:#%d", num), extra) })
 			}
 		case routines.TriggerForgeCIFail:
-			pollCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			items, err := forge.List(pollCtx, &protocol.ForgeList{Root: r.Project, Kind: protocol.ForgeRuns, Max: 20})
+			pollCtx, cancel := context.WithTimeout(ctx, routineForgeTimeout)
+			items, err := rr.list(pollCtx, &protocol.ForgeList{Root: r.Project, Kind: protocol.ForgeRuns, Max: 20})
 			cancel()
 			if err != nil {
 				continue
@@ -187,7 +244,7 @@ func (d *Daemon) tickForgeRoutines(ctx context.Context, list []routines.Routine,
 				}
 				known[num] = true
 				extra := fmt.Sprintf("Triggered by failed CI run #%d: %s (%s)", num, it.GetTitle(), it.GetUrl())
-				go d.executeRoutine(ctx, r, fmt.Sprintf("ci:#%d", num), extra)
+				rr.start(func() { _, _ = d.executeRoutine(ctx, r, fmt.Sprintf("ci:#%d", num), extra) })
 			}
 		}
 	}

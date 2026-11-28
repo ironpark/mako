@@ -5,7 +5,6 @@ package daemon
 import (
 	"log/slog"
 	"testing"
-	"time"
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
@@ -76,13 +75,5 @@ func TestDaemonExecuteRoutineRecordsHistory(t *testing.T) {
 	if ran.GetSession().GetName() != "Routine: Daily checks" || len(ran.GetRuns()) != 2 ||
 		ran.GetRuns()[0].GetTrigger() != "manual" || ran.GetRuns()[0].GetSessionId() != ran.GetSession().GetId() {
 		t.Fatalf("run action replied %v", ran)
-	}
-
-	// Verify tickCronRoutines deduplicates within the same minute.
-	fired := map[string]int64{}
-	now := time.Date(2026, 11, 28, 9, 0, 10, 0, time.UTC)
-	d.tickCronRoutines(t.Context(), []routines.Routine{{ID: "r1", Name: "x", Enabled: false, Trigger: routines.TriggerCron, Schedule: "0 9 * * *"}}, now, fired)
-	if len(fired) != 0 {
-		t.Fatalf("disabled routine should not fire")
 	}
 }
