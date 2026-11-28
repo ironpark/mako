@@ -97,6 +97,17 @@ func launchTabFace(m *model, id string, selected, focused bool) ggui.Widget {
 		OnClose(func() { m.closeLaunch(id) }).CloseName(T("Close New session"))
 }
 
+// setAgent picks the new session's agent. Agents picked to compare with
+// another go with it: a race of the new one is picked again.
+func (l *launchState) setAgent(target string) {
+	l.Form.Update(func(f newSession) newSession {
+		if f.Agent != target {
+			f.Agent, f.RaceTargets = target, nil
+		}
+		return f
+	})
+}
+
 // closeLaunch closes new session's tab id, forgetting what it held.
 func (m *model) closeLaunch(id string) {
 	m.closeTab(id)
@@ -129,7 +140,7 @@ func launchView(m *model, id string) ggui.Widget {
 func launchBox(m *model, id string, l *launchState) ggui.Widget {
 	start := func() { m.submitLaunch(id) }
 	prompt := l.Form.Field(func(f *newSession) *string { return &f.Prompt })
-	agent := l.Form.Field(func(f *newSession) *string { return &f.Agent })
+	agent := ggui.Bind(l.Form.Field(func(f *newSession) *string { return &f.Agent }).Get, l.setAgent)
 	worktree := l.Form.Field(func(f *newSession) *bool { return &f.Worktree })
 	branch := l.Form.Field(func(f *newSession) *string { return &f.Branch })
 	where := ggui.Derived(func() launchWhere {
@@ -141,6 +152,9 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 	targets := ggui.Derived(func() []string {
 		return sessionAgentTargets(nodeTargets(m.Nodes.Get(), where.Get().NodeID, m.Agents.Get()))
 	}).WithEqual(slices.Equal)
+	// The agents picked to compare with, followed apart from the prompt.
+	picked := ggui.Derived(func() []string { return l.Form.Get().RaceTargets }).WithEqual(slices.Equal)
+	comparing := ggui.Map(picked, func(t []string) bool { return len(t) > 0 })
 	// The accounts' quotas are read as the tab opens, and again once the
 	// window connects, so the warning below needs no visit to Account usage.
 	connected := ggui.Map(m.Conn, func(c connState) bool { return c.OK })
@@ -157,7 +171,10 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 	}), func() { worktree.Set(!ggui.Peek(worktree)) }).Ghost().Pad(4, 8).Radius(8).Name(T("Work in a new worktree")),
 		T("A worktree of the folder's repository, beside it, on a new branch: agents in one repository then keep out of each other's files."))
 	top := widget.Row(folderMenu(m, l, where), nodeMenu(m, l, where), widget.Spacer(), gitToggle).Gap(4).Align(widget.AlignCenter)
-	branchRow := ggui.If(worktree, func() ggui.Widget {
+	// A race names each agent's branch itself, so it asks for none.
+	branchRow := ggui.If(comparing, func() ggui.Widget {
+		return widget.Box(muted(widget.Text(T("Each compared agent works in a new worktree, on a branch of its own named after it.")).Size(12))).Pad(0, 6)
+	}).ElseIf(worktree, func() ggui.Widget {
 		return widget.Box(ui.TextField(branch).Placeholder(T("Branch, such as agent/fix-login. Empty names one after the repository")).Name(T("Branch")).
 			OnSubmit(func(string) { start() })).Pad(0, 4)
 	})
@@ -179,7 +196,7 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 		}
 		if fallback != "" {
 			items = append(items, ui.Button(Tf("Switch to %s", targetLabel(fallback)), func() {
-				l.Form.Update(func(cur newSession) newSession { cur.Agent = fallback; return cur })
+				l.setAgent(fallback)
 			}).Ghost().Pad(2, 8).Radius(6))
 		}
 		return widget.Box(widget.Row(items...).Gap(6).Align(widget.AlignCenter)).Pad(2, 6)
@@ -189,7 +206,7 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 		field,
 		branchRow,
 		quotaWarn,
-		widget.Row(agents, launchCompareMenu(m, l, where), launchTeamMenu(m, l, where), widget.Spacer(),
+		widget.Row(agents, launchCompareMenu(l, where, targets, picked), launchTeamMenu(m, l, where, comparing), widget.Spacer(),
 			roundButton("arrow-up", T("Start session"), start, l.Starting)).Gap(6).Align(widget.AlignCenter),
 		errLine,
 	).Gap(6).Stretch()
@@ -230,7 +247,8 @@ func nodeMenu(m *model, l *launchState, where ggui.Readable[launchWhere]) ggui.W
 		selectNode := func(id string) {
 			l.Form.Update(func(f newSession) newSession {
 				if f.NodeID != id {
-					f.NodeID, f.Project = id, m.launchProject(id)
+					// Agents picked to compare with are of the node left.
+					f.NodeID, f.Project, f.RaceTargets = id, m.launchProject(id), nil
 					if isShellTarget(f.Agent) {
 						f.Agent = m.defaultSessionAgent(id)
 					}
@@ -352,11 +370,12 @@ func launchField(prompt ggui.Binding[string], shell bool, start func()) *ui.Text
 }
 
 // launchTeamMenu picks a team for the new session's agent to lead, started
-// with it; nothing without a team to pick.
-func launchTeamMenu(m *model, l *launchState, where ggui.Readable[launchWhere]) ggui.Widget {
+// with it; nothing without a team to pick, or while agents are compared,
+// as a race's agents lead none.
+func launchTeamMenu(m *model, l *launchState, where ggui.Readable[launchWhere], comparing ggui.Readable[bool]) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		teams, f := startable(m.Prefs.Get().Teams), where.Get()
-		if len(teams) == 0 || f.Agent == "shell" {
+		if len(teams) == 0 || f.Agent == "shell" || comparing.Get() {
 			return widget.Box()
 		}
 		set := func(team string) func() {

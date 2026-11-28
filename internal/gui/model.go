@@ -42,7 +42,8 @@ type newSession struct {
 	// for none.
 	Team string
 	// RaceTargets are extra agent targets run in parallel isolated worktrees
-	// alongside Agent for A/B comparison.
+	// alongside Agent for A/B comparison. Picking another Agent or node
+	// drops them.
 	RaceTargets []string
 }
 
@@ -843,7 +844,7 @@ func (m *model) submitLaunch(id string) {
 		return
 	}
 	f := ggui.Peek(l.Form)
-	if len(f.RaceTargets) > 0 {
+	if len(raceTargetSet(f.Agent, f.RaceTargets)) >= 2 {
 		m.startRace(id, f)
 		return
 	}
@@ -901,38 +902,7 @@ func (m *model) startSession(tab string, f newSession) {
 		}
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
-		inMain := slices.Contains(ggui.Peek(m.Tabs), tab)
-		otherKey := ""
-		if tab != "" && !inMain {
-			otherKey = m.findLayoutOfTab(tab)
-		}
-		if otherKey != "" {
-			// Launched from a secondary Space window or detached pane:
-			// replace the launch tab in-place without hijacking the main window.
-			m.editLayoutForKey(otherKey, func(root *layoutNode) int {
-				g := root.groupOf(tab)
-				if g == nil {
-					return 0
-				}
-				i := slices.Index(g.Tabs, tab)
-				g.Tabs[i] = info.GetId()
-				g.Active = info.GetId()
-				return g.ID
-			})
-			delete(m.launches, tab)
-			m.attach(info.GetId())
-		} else {
-			targetKey := layoutKey(m.spacesNow().spaceID(m.spacesNow().Space), projectContext(sectionID(m.projectsNow(), info)))
-			if inMain {
-				if m.ws.layoutKey == targetKey {
-					m.replaceTab(tab, info.GetId())
-				} else {
-					m.closeTab(tab)
-				}
-			}
-			delete(m.launches, tab)
-			m.selectSession(info.GetId())
-		}
+		m.showStarted(tab, info)
 		if len(team.Members) > 0 {
 			m.startTeam(info.GetId(), team, prompt)
 		}
@@ -940,6 +910,43 @@ func (m *model) startSession(tab string, f newSession) {
 			m.setChatMode(info.GetId(), true)
 		}
 	})
+}
+
+// showStarted shows session info, just started from new session's tab
+// tab, in the tab's place: in a secondary Space window or a detached pane
+// the tab is replaced where it is, without taking over the main window;
+// in the main window, or with no tab, the session is selected.
+func (m *model) showStarted(tab string, info *protocol.SessionInfo) {
+	inMain := slices.Contains(ggui.Peek(m.Tabs), tab)
+	otherKey := ""
+	if tab != "" && !inMain {
+		otherKey = m.findLayoutOfTab(tab)
+	}
+	if otherKey != "" {
+		m.editLayoutForKey(otherKey, func(root *layoutNode) int {
+			g := root.groupOf(tab)
+			if g == nil {
+				return 0
+			}
+			i := slices.Index(g.Tabs, tab)
+			g.Tabs[i] = info.GetId()
+			g.Active = info.GetId()
+			return g.ID
+		})
+		delete(m.launches, tab)
+		m.attach(info.GetId())
+		return
+	}
+	targetKey := layoutKey(m.spacesNow().spaceID(m.spacesNow().Space), projectContext(sectionID(m.projectsNow(), info)))
+	if inMain {
+		if m.ws.layoutKey == targetKey {
+			m.replaceTab(tab, info.GetId())
+		} else {
+			m.closeTab(tab)
+		}
+	}
+	delete(m.launches, tab)
+	m.selectSession(info.GetId())
 }
 
 // syncTitles publishes the titles programs set on their terminals.

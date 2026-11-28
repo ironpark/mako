@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"math/rand/v2"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -63,8 +65,14 @@ func newRaceState() *raceState {
 	}
 }
 
-// raceTargetSet deduplicates primary + extra targets while preserving order.
+// raceTargetSet is who races: primary first, then the extras, each once.
+// A shell is no contestant, and a shell or no agent at all as the primary
+// is no race: nil.
 func raceTargetSet(primary string, extras []string) []string {
+	primary = strings.TrimSpace(primary)
+	if primary == "" || isShellTarget(primary) {
+		return nil
+	}
 	var out []string
 	seen := map[string]bool{}
 	add := func(t string) {
@@ -98,6 +106,52 @@ func partitionRaceEntries(entries []raceEntry, winnerSessionID string) (raceEntr
 	return winner, losers, found
 }
 
+// removeRaceGroup is list without race id.
+func removeRaceGroup(list []raceGroup, id string) []raceGroup {
+	return slices.DeleteFunc(slices.Clone(list), func(g raceGroup) bool { return g.ID == id })
+}
+
+// nonRaceBranch is a run of what a race's branch does not take of an agent
+// target: anything but a lowercase letter, a digit or _. What is left is
+// valid in a git ref and a folder name on every file system, told apart
+// even where case is not.
+var nonRaceBranch = regexp.MustCompile(`[^a-z0-9_]+`)
+
+// raceHintLen is the most of an agent target a race's branch keeps.
+const raceHintLen = 32
+
+// raceHint is target as a race's branch names it: lowercase, each run of
+// what nonRaceBranch matches one -, and "agent" when nothing is left.
+func raceHint(target string) string {
+	hint := strings.Trim(nonRaceBranch.ReplaceAllString(strings.ToLower(target), "-"), "-")
+	if len(hint) > raceHintLen {
+		hint = strings.TrimRight(hint[:raceHintLen], "-")
+	}
+	return cmp.Or(hint, "agent")
+}
+
+// raceSuffixAlphabet and raceSuffixLen make the random part of a race's
+// branches: 36^4 races started in the same second do not meet.
+const (
+	raceSuffixAlphabet = "0123456789abcdefghijklmnopqrstuvwxyz"
+	raceSuffixLen      = 4
+)
+
+// raceSuffix is a random ID a race's branches share.
+func raceSuffix() string {
+	b := make([]byte, raceSuffixLen)
+	for i := range b {
+		b[i] = raceSuffixAlphabet[rand.IntN(len(raceSuffixAlphabet))]
+	}
+	return string(b)
+}
+
+// raceBranchName is the branch contestant idx, running target, works on in
+// the race started at stamp with the random suffix: race/<agent>-<stamp>-<suffix>-<n>.
+func raceBranchName(target, stamp, suffix string, idx int) string {
+	return fmt.Sprintf("race/%s-%s-%s-%d", raceHint(target), stamp, suffix, idx+1)
+}
+
 // raceCommitSubjectLen is the most of a race's prompt a commit's subject
 // keeps.
 const raceCommitSubjectLen = 60
@@ -124,34 +178,34 @@ func (m *model) startRace(tab string, f newSession) {
 		m.startSession(tab, f)
 		return
 	}
-	l := m.launchOf(tab)
-	l.Err.Set("")
-	l.Starting.Set(true)
+	if tab != "" {
+		l := m.launchOf(tab)
+		l.Err.Set("")
+		l.Starting.Set(true)
+	}
 
 	m.Races.seq++
 	raceID := "race-" + strconv.Itoa(m.Races.seq)
 	prompt := strings.TrimSpace(f.Prompt)
 	nodeID := m.remoteID(f.NodeID)
+	now := time.Now()
 	group := raceGroup{
 		ID:        raceID,
 		Prompt:    prompt,
 		Project:   f.Project,
 		NodeID:    f.NodeID,
-		CreatedAt: time.Now(),
+		CreatedAt: now,
 	}
 	m.Races.Groups.Update(func(list []raceGroup) []raceGroup {
 		return append([]raceGroup{group}, list...)
 	})
 	m.Races.Active.Set(raceID)
 
-	stamp := time.Now().Format("150405")
+	stamp, suffix := now.Format("20060102-150405"), raceSuffix()
 	remaining := len(targets)
 	started := 0
-	for idx, target := range targets {
-		tgt := target
+	for idx, tgt := range targets {
 		agentName, profile := agentspec.SplitTarget(tgt)
-		branchHint := strings.ReplaceAll(strings.ReplaceAll(tgt, ":", "-"), " ", "-")
-		branch := fmt.Sprintf("race/%s-%s-%d", branchHint, stamp, idx+1)
 		req := &protocol.OpenSession{
 			NodeId:   nodeID,
 			Agent:    agentName,
@@ -159,7 +213,7 @@ func (m *model) startRace(tab string, f newSession) {
 			Project:  f.Project,
 			Name:     Tf("Race · %s", targetLabel(tgt)),
 			Prompt:   prompt,
-			Worktree: &protocol.Worktree{Branch: branch, Base: f.Base, Start: f.Start},
+			Worktree: &protocol.Worktree{Branch: raceBranchName(tgt, stamp, suffix, idx), Base: f.Base, Start: f.Start},
 			Cols:     120,
 			Rows:     36,
 		}
@@ -191,19 +245,35 @@ func (m *model) startRace(tab string, f newSession) {
 					}
 					return next
 				})
-				if started == 1 && tab != "" {
-					m.closeLaunch(tab)
-					m.selectSession(info.GetId())
+				if started == 1 {
+					// The first to start takes the tab's place, in whichever
+					// window the tab is.
+					m.showStarted(tab, info)
 				}
 			}
-			if remaining == 0 {
-				if started == 0 && l != nil {
-					l.Starting.Set(false)
-					l.Err.Set(T("Could not start any race session"))
-				} else if started > 0 {
-					m.toaster.Push(ui.Toast(Tf("Started %d-agent comparison race", started), T("Open Compare Races to inspect diffs side by side")))
-				}
+			if remaining > 0 {
+				return
 			}
+			if started > 0 {
+				m.toaster.Push(ui.Toast(Tf("Started %d-agent comparison race", started), T("Open Compare Races to inspect diffs side by side")))
+				return
+			}
+			// Nothing started: the race goes, and the tab, opened again if
+			// it was closed meanwhile, says why.
+			m.Races.Groups.Update(func(list []raceGroup) []raceGroup { return removeRaceGroup(list, raceID) })
+			if ggui.Peek(m.Races.Active) == raceID {
+				next := ""
+				if left := ggui.Peek(m.Races.Groups); len(left) > 0 {
+					next = left[0].ID
+				}
+				m.Races.Active.Set(next)
+			}
+			if tab == "" || m.launches[tab] == nil {
+				tab, _ = m.newLaunch(f)
+			}
+			l := m.launchOf(tab)
+			l.Starting.Set(false)
+			l.Err.Set(T("Could not start any race session"))
 		})
 	}
 }
@@ -467,25 +537,20 @@ func (m *model) cleanUpRaceLosers(losers []raceLoser) {
 }
 
 // launchCompareMenu lets the user pick additional agents/profiles in the Launch
-// tab to run the same prompt side by side in isolated worktrees.
-func launchCompareMenu(m *model, l *launchState, where ggui.Readable[launchWhere]) ggui.Widget {
+// tab to run the same prompt side by side in isolated worktrees. It reads
+// only what the tab picks besides its prompt, so typing does not rebuild it.
+func launchCompareMenu(l *launchState, where ggui.Readable[launchWhere], targets, picked ggui.Readable[[]string]) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
-		f := l.Form.Get()
-		if isShellTarget(f.Agent) {
+		w, all, chosen := where.Get(), targets.Get(), picked.Get()
+		if isShellTarget(w.Agent) {
 			return widget.Box()
 		}
-		all := sessionAgentTargets(nodeTargets(m.Nodes.Get(), where.Get().NodeID, m.Agents.Get()))
-		var candidates []string
-		for _, t := range all {
-			if t != f.Agent {
-				candidates = append(candidates, t)
-			}
-		}
+		candidates := slices.DeleteFunc(slices.Clone(all), func(t string) bool { return t == w.Agent })
 		if len(candidates) == 0 {
 			return widget.Box()
 		}
 		items := make([]ggui.Widget, 0, len(candidates)+2)
-		if len(f.RaceTargets) > 0 {
+		if len(chosen) > 0 {
 			items = append(items,
 				ui.MenuItem(T("Clear comparison"), func() {
 					l.Form.Update(func(cur newSession) newSession { cur.RaceTargets = nil; return cur })
@@ -493,24 +558,25 @@ func launchCompareMenu(m *model, l *launchState, where ggui.Readable[launchWhere
 				ui.MenuDivider(),
 			)
 		}
-		for _, cand := range candidates {
-			c := cand
-			on := slices.Contains(f.RaceTargets, c)
-			items = append(items, ui.MenuItem(checked(targetLabel(c), on), func() {
+		for _, c := range candidates {
+			items = append(items, ui.MenuItem(checked(targetLabel(c), slices.Contains(chosen, c)), func() {
 				l.Form.Update(func(cur newSession) newSession {
 					cur.RaceTargets = toggled(cur.RaceTargets, c)
 					if len(cur.RaceTargets) > 0 {
-						cur.Worktree = true
+						// A race runs each agent in a worktree of its own,
+						// leading no team.
+						cur.Worktree, cur.Team = true, ""
 					}
 					return cur
 				})
 			}))
 		}
 		label := T("Compare")
-		if len(f.RaceTargets) > 0 {
-			label = Tf("Compare (%d)", len(f.RaceTargets)+1)
+		n := len(raceTargetSet(w.Agent, chosen))
+		if n >= 2 {
+			label = Tf("Compare (%d)", n)
 		}
-		return dropMenu("columns-2", label, len(f.RaceTargets) > 0, 240, T("Compare agents side by side"), items...)
+		return dropMenu("columns-2", label, n >= 2, 240, T("Compare agents side by side"), items...)
 	})
 }
 

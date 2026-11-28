@@ -2092,4 +2092,7 @@ var catalogKo = map[string]string{
 
 	// Usage analytics refresh
 	"Loading usage: %d of %d sessions…": "사용량 불러오는 중: 세션 %[2]d개 중 %[1]d개…",
+
+	// Race launch in compare mode
+	"Each compared agent works in a new worktree, on a branch of its own named after it.": "비교하는 각 에이전트는 새 워크트리에서 자기 이름을 딴 브랜치로 작업합니다.",
 }
