@@ -10,6 +10,7 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/lifecycle"
+	"github.com/ironpark/mako/internal/repotrust"
 	"github.com/ironpark/mako/internal/session"
 )
 
@@ -99,6 +100,10 @@ func (d *Daemon) runLifecycle(ctx context.Context, ev lifecycle.Event) {
 	}
 	// The repository's file is read from its main work tree, for a session
 	// in a folder of it or in another worktree of it too, and trusted there.
+	// gitstat.Repo takes a linked worktree for its repository's only while
+	// the repository lists it, both ways: a folder whose .git names a
+	// trusted repository it is no worktree of is a repository of its own,
+	// and runs none of that one's hooks in it.
 	if repo := gitstat.Repo(ev.Project); repo != "" {
 		p, err := lifecycle.LoadProject(repo, d.repoTrust.Trusted)
 		switch {
@@ -106,7 +111,7 @@ func (d *Daemon) runLifecycle(ctx context.Context, ev lifecycle.Event) {
 			d.log.Warn("lifecycle hooks: not read", "file", p.File, "err", err)
 		case p.File != "" && !p.Trusted:
 			d.log.Warn("lifecycle hooks: the repository's did not run, as the user has not trusted the file as it reads",
-				"file", p.File, "event", ev.Name, "session", ev.SessionID, "trust", "mako repo-trust allow "+p.File)
+				"file", p.File, "event", ev.Name, "session", ev.SessionID, "trust", repotrust.AllowCommand("", p.File))
 		default:
 			hooks = append(hooks, p.Hooks...)
 		}

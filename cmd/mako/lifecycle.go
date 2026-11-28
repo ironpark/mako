@@ -8,6 +8,7 @@ import (
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/lifecycle"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/repotrust"
 )
 
 // repoHooksNotice says, for an agent's session in a repository whose
@@ -26,11 +27,6 @@ func repoHooksNotice(ctx context.Context, ask repoTrustAsker, nodeID string, inf
 	if err != nil || len(shown.GetFiles()) != 1 || shown.GetFiles()[0].GetTrusted() {
 		return ""
 	}
-	f := protocol.Printable(file)
-	node := ""
-	if nodeID != "" {
-		node = "-node " + nodeID + " "
-	}
 	return fmt.Sprintf("[mako] the hooks of %s do not run: the file is not trusted as it reads\r\n"+
-		"[mako] review it and trust it with: mako %srepo-trust allow %s\r\n", f, node, f)
+		"[mako] review it and trust it with: %s\r\n", protocol.Printable(file), protocol.Printable(repotrust.AllowCommand(nodeID, file)))
 }

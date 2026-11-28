@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -46,5 +47,13 @@ func TestRepoHooksNotice(t *testing.T) {
 	}
 	if got := repoHooksNotice(t.Context(), answer(untrusted, nil), "", &protocol.SessionInfo{Agent: "shell", Repo: "/src/app", Project: "/src/app"}); got != "" || len(asked) != n {
 		t.Fatalf("a shell's session, which runs no hooks: %q, asked %d", got, len(asked)-n)
+	}
+
+	// A path with a space is quoted, to be typed as it is printed.
+	if runtime.GOOS != "windows" {
+		spaced := &protocol.SessionInfo{Agent: "claude", Repo: "/src/my app", Project: "/src/my app"}
+		if got := repoHooksNotice(t.Context(), answer(untrusted, nil), "", spaced); !strings.Contains(got, "mako repo-trust allow '/src/my app/.mako/hooks.toml'") {
+			t.Fatalf("notice = %q", got)
+		}
 	}
 }

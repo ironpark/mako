@@ -386,11 +386,32 @@ func TestRepositoryHooksRunOnlyWhileTrusted(t *testing.T) {
 		t.Fatalf("a worktree's session ran its repository's hook in %q, want %q", got, wt)
 	}
 
-	// Changed, by a commit pulled or an agent, it runs nothing again.
-	if err := os.WriteFile(file, []byte(content+"[[hook]]\nevent = \"on_turn_done\"\ncommand = '''touch \""+marker+".2\"'''\n"), 0o600); err != nil {
+	// A folder whose .git file names the trusted repository, its git
+	// directory or a worktree's of it, without the repository listing the
+	// folder as its worktree, is a repository of its own: the trusted
+	// repository's hooks do not run in it, where its own ./scripts or
+	// Makefile would run in their place.
+	if err := os.Remove(marker); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(marker); err != nil {
+	gitDir := filepath.Join(repo, ".git")
+	for name, target := range map[string]string{
+		"the repository's git directory": gitDir,
+		"a worktree's git directory":     filepath.Join(gitDir, "worktrees", filepath.Base(wt)),
+	} {
+		evil := t.TempDir()
+		if err := os.WriteFile(filepath.Join(evil, ".git"), []byte("gitdir: "+target+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		d.runLifecycle(t.Context(), lifecycle.Event{Name: lifecycle.TurnDone, SessionID: "evil", Agent: "claude", Project: evil})
+		if got := ranIn(); got != "" {
+			t.Fatalf("a .git naming %s ran the trusted repository's hook in %q", name, got)
+		}
+	}
+
+	// Changed, by a commit pulled or an agent, it runs nothing again, and
+	// trusting it as it was shown before is refused.
+	if err := os.WriteFile(file, []byte(content+"[[hook]]\nevent = \"on_turn_done\"\ncommand = '''touch \""+marker+".2\"'''\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	d.runLifecycle(t.Context(), ev)
@@ -399,6 +420,9 @@ func TestRepositoryHooksRunOnlyWhileTrusted(t *testing.T) {
 	}
 	if _, err := os.Stat(marker + ".2"); err == nil {
 		t.Fatal("a hook added after the trust ran")
+	}
+	if _, err := d.repoTrustLocal(&protocol.RepoTrust{Op: protocol.RepoTrustAllow, Path: file, Sha256: repotrust.Hash([]byte(content))}); !protocol.HasCode(err, protocol.CodeChanged) {
+		t.Fatalf("trusting a changed file as shown before: %v, want code %q", err, protocol.CodeChanged)
 	}
 }
 

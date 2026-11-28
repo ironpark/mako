@@ -566,7 +566,10 @@ A repository's hooks run with your permissions, so mako runs them only
 after you trust `.mako/hooks.toml` as it reads (see
 [Repository commands](#repository-commands)). Mako reads the file from
 the main work tree of the repository, also for a session in a folder of
-it or in another worktree of it, so one trust covers them all. Until you
+it or in another worktree of it, so one trust covers them all. A folder
+whose `.git` points into a repository that does not list it as one of
+its worktrees is a repository of its own, and does not run that
+repository's hooks. Until you
 trust it, and again after it changes, mako runs your own hooks but none
 of the file's. The app and `mako run` then tell you so, with the command
 that trusts it. Set `MAKO_NO_LIFECYCLE_HOOKS=1` in the daemon's
