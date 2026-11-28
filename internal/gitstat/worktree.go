@@ -121,6 +121,13 @@ func AddWorktree(ctx context.Context, dir string, w NewWorktree) (MadeWorktree, 
 		return MadeWorktree{}, err
 	}
 	repo := filepath.Dir(strings.TrimSpace(string(common)))
+	// git follows a .git file wherever it points, but a folder whose .git
+	// points into a repository that does not list it as a worktree is a
+	// repository of its own (Repo), not that one: its worktree would run
+	// that repository's trusted setup_cmd for whoever wrote the .git file.
+	if !samePath(Repo(dir), repo) {
+		return MadeWorktree{}, fmt.Errorf("%s is not in the main work tree of %s or a worktree it lists, so no worktree of it is made from there", dir, repo)
+	}
 	unlock, err := lockRepo(ctx, repo)
 	if err != nil {
 		return MadeWorktree{}, err

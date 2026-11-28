@@ -238,3 +238,52 @@ func TestWorktreeBootstrapRollsBackAfterTheContextEnds(t *testing.T) {
 		t.Fatal("branch left behind")
 	}
 }
+
+// A folder whose .git points into a trusted repository that does not list
+// it as a worktree is not of that repository: no worktree of it is made
+// from there, so its trusted setup_cmd does not run, and the repository's
+// config is not read for the folder. From a worktree the repository lists,
+// it runs.
+func TestSpoofedFolderRunsNoTrustedSetup(t *testing.T) {
+	root, _ := bootstrapRepo(t, "setup_cmd = \"touch \\\"$MAKO_WORKTREE_REPO/setup-$MAKO_WORKTREE_BRANCH\\\"\"\n", "setup-*\n")
+	ctx := context.Background()
+	real, err := AddWorktree(ctx, root, NewWorktree{Branch: "real", Start: "main", Trusted: trustAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(filepath.Dir(real.Path)) })
+	gitDir := strings.TrimSpace(string(must(gitOut(ctx, real.Path, nil, "rev-parse", "--path-format=absolute", "--git-dir"))))
+
+	spoof := t.TempDir()
+	write(t, spoof, ".git", "gitdir: "+gitDir+"\n")
+	if _, err := AddWorktree(ctx, spoof, NewWorktree{Branch: "spoofed", Trusted: trustAll}); err == nil || !strings.Contains(err.Error(), "no worktree of it is made") {
+		t.Fatalf("a worktree made from a spoofed folder: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "setup-spoofed")); err == nil {
+		t.Fatal("the trusted setup_cmd ran for a spoofed folder")
+	}
+	if _, err := gitOut(ctx, root, nil, "show-ref", "--verify", "--quiet", "refs/heads/spoofed"); err == nil {
+		t.Fatal("a branch was made for a spoofed folder")
+	}
+	if cfg, err := LoadWorktreeConfig(spoof); err != nil || cfg.SetupCmd != "" {
+		t.Fatalf("the repository's config read for a spoofed folder: %+v, %v", cfg, err)
+	}
+
+	from, err := AddWorktree(ctx, real.Path, NewWorktree{Branch: "listed", Trusted: trustAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !samePath(from.Repo, root) {
+		t.Fatalf("repo %s, want %s", from.Repo, root)
+	}
+	if _, err := os.Stat(filepath.Join(root, "setup-listed")); err != nil {
+		t.Fatal("the trusted setup_cmd did not run for a worktree the repository lists")
+	}
+}
+
+func must[T any](v T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return v
+}

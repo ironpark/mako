@@ -113,3 +113,79 @@ func TestRemoveWorktreeRequestForce(t *testing.T) {
 		t.Fatal("worktree left")
 	}
 }
+
+// The file a worktree's skipped setup_cmd names can be trusted from inside
+// the worktree, which stands for the main work tree's, and the worktrees
+// made after run it. A trust of a file that changed since it was shown is
+// refused with code changed, and runs nothing.
+func TestWorktreeSetupTrustedFromAWorktree(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	repo := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", repo, "-c", "user.name=T", "-c", "user.email=t@example.com"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q", "-b", "main")
+	config := "setup_cmd = \"touch \\\"$MAKO_WORKTREE_REPO/setup-$MAKO_WORKTREE_BRANCH\\\"\"\n"
+	if err := os.MkdirAll(filepath.Join(repo, ".mako"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(repo, ".mako", "worktree.toml")
+	if err := os.WriteFile(file, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte("setup-*\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "-A")
+	git("commit", "-q", "-m", "init")
+	t.Cleanup(func() { os.RemoveAll(repo + ".worktrees") })
+
+	d := New(nil, nil)
+	d.repoTrust = repotrust.Open(t.TempDir())
+	add := func(branch string) gitstat.MadeWorktree {
+		t.Helper()
+		made, err := gitstat.AddWorktree(t.Context(), repo, gitstat.NewWorktree{Branch: branch, Trusted: d.repoTrust.Trusted})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return made
+	}
+	ran := func(branch string) bool {
+		_, err := os.Stat(filepath.Join(repo, "setup-"+branch))
+		return err == nil
+	}
+	one := add("one")
+	if one.SkippedHooks == "" || ran("one") {
+		t.Fatalf("an untrusted setup_cmd ran: %+v", one)
+	}
+	inWorktree := filepath.Join(one.Path, ".mako", "worktree.toml")
+	show := func() *protocol.TrustedFile {
+		t.Helper()
+		info, err := d.repoTrustLocal(&protocol.RepoTrust{Path: inWorktree})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return info.GetFiles()[0]
+	}
+	shown := show()
+	if err := os.WriteFile(file, []byte(config+"# changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.repoTrustLocal(&protocol.RepoTrust{Op: protocol.RepoTrustAllow, Path: inWorktree, Sha256: shown.GetSha256()}); !protocol.HasCode(err, protocol.CodeChanged) {
+		t.Fatalf("a file changed since it was shown: %v, want code %q", err, protocol.CodeChanged)
+	}
+	if two := add("two"); two.SkippedHooks == "" || ran("two") {
+		t.Fatalf("a refused trust ran the setup_cmd: %+v", two)
+	}
+	if _, err := d.repoTrustLocal(&protocol.RepoTrust{Op: protocol.RepoTrustAllow, Path: inWorktree, Sha256: show().GetSha256()}); err != nil {
+		t.Fatal(err)
+	}
+	if three := add("three"); three.SkippedHooks != "" || !ran("three") {
+		t.Fatalf("a setup_cmd trusted from a worktree did not run: %+v", three)
+	}
+}
