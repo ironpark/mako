@@ -70,6 +70,7 @@ func window(m *model) ggui.Widget {
 		goalDialog(m),
 		projectDialogs(m),
 		fileDialogs(m),
+		sshHostDialog(m),
 		tunnelDialog(m),
 		forgeDialogs(m),
 		confirmDialog(m),
@@ -732,7 +733,9 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 	rows := make([]ggui.Widget, 0, len(nodes))
 	for _, n := range nodes {
 		kind := "laptop"
-		if n.GetSource() != "self" {
+		if n.GetSource() == "ssh" {
+			kind = "server"
+		} else if n.GetSource() != "self" {
 			kind = "monitor"
 		}
 		var ask ggui.Widget = widget.Box()
@@ -770,6 +773,15 @@ func nodeList(m *model, nodes []*protocol.Node) ggui.Widget {
 // trustBadge says how this node and n stand: whether each lets the other
 // in, or which of nodes this one reaches n through.
 func trustBadge(n *protocol.Node, nodes []*protocol.Node) ggui.Widget {
+	if n.GetSource() == "ssh" {
+		label := T("SSH")
+		if n.HasFeature("ssh:daemon") {
+			label = T("SSH · makod")
+		} else if n.HasFeature("ssh:direct") {
+			label = T("SSH · direct")
+		}
+		return widget.Box(widget.Text(label).Size(11).Color(skin.Muted)).Pad(1, 6).Radius(4).Border(1, skin.Border)
+	}
 	if linkDown(n) && n.Standing() == protocol.StandingNone {
 		return widget.Box() // unknown until it is linked
 	}

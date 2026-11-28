@@ -186,6 +186,10 @@ func (m *model) commands() []command {
 			Run: func() { m.openSettings("skills") }},
 		command{ID: "Account usage & quotas", Category: "App", Keys: []string{"usage", "quota", "limits", "claude", "codex", "agy", "credits"},
 			Run: m.openAccountUsage},
+		command{ID: "Add SSH host…", Category: "Remote", Keys: []string{"ssh", "remote", "server", "host", "connect"},
+			Run: func() { m.openAddSSHHost(nil) }},
+		command{ID: "Remote SSH hosts", Category: "Remote", Keys: []string{"ssh", "remote", "nodes", "servers", "hosts"},
+			Run: func() { m.openSettings("nodes") }},
 		command{ID: "Settings", Category: "App", Keys: []string{"preferences"}, Shortcut: m.shortcutChord("open_settings"), Run: func() { m.openSettings("") }},
 	)
 	cmds = append(cmds,

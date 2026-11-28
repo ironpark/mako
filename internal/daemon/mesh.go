@@ -135,6 +135,9 @@ func (d *Daemon) nodes() []*protocol.Node {
 		d.linkState(node)
 		out = append(out, node)
 	}
+	if d.ssh != nil {
+		out = append(out, d.ssh.nodes()...)
+	}
 	return out
 }
 

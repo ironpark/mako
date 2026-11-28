@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"image/color"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -579,18 +580,29 @@ func agentRow(m *model, s *protocol.SessionInfo, selected bool, title string, ta
 
 // agentMeta is a detailed row's second line, from its left edge: where
 // its session is, its machine and ID, and at the end its branch and its
-// tasks.
+// tasks. The machine and ID show whole or not at all: on a line too
+// narrow for both only the machine shows, and on one too narrow for that
+// neither does, rather than crowd into what is left.
 func agentMeta(s *protocol.SessionInfo, tag agentTag) ggui.Widget {
-	quiet := func(t string) ggui.Widget { return widget.Text(t).Size(12).Color(skin.ExtraMuted).NoWrap() }
+	quiet := func(t string) *widget.TextWidget { return widget.Text(t).Size(12).Color(skin.ExtraMuted).NoWrap() }
 	var where []ggui.Widget
 	if tag.Where != "" {
-		where = append(where, quiet(tag.Where+" ·"))
+		where = append(where, quiet(tag.Where).Ellipsis())
 	}
+	// after is what follows where it is: a dot first when there is one.
+	after := func(parts ...ggui.Widget) ggui.Widget {
+		if tag.Where != "" {
+			parts = append([]ggui.Widget{quiet("·")}, parts...)
+		}
+		return widget.Row(parts...).Gap(4).Align(widget.AlignCenter)
+	}
+	id := short(s.GetId())
+	fits := []ggui.Widget{after(quiet(id))}
 	if tag.Host != "" {
-		where = append(where, icon(osIcon(tag.OS)).Size(11).Color(skin.ExtraMuted),
-			widget.Flexible(widget.Text(tag.Host+" ·").Size(12).Color(skin.ExtraMuted).NoWrap().Ellipsis()))
+		osGlyph := func() ggui.Widget { return icon(osIcon(tag.OS)).Size(11).Color(skin.ExtraMuted) }
+		fits = []ggui.Widget{after(osGlyph(), quiet(tag.Host+" ·"), quiet(id)), after(osGlyph(), quiet(tag.Host))}
 	}
-	where = append(where, quiet(short(s.GetId())))
+	where = append(where, &firstFit{options: fits})
 	line := []ggui.Widget{widget.Expanded(widget.Row(where...).Gap(4).Align(widget.AlignCenter))}
 	if s.GetBranch() != "" {
 		line = append(line, widget.Row(
@@ -602,6 +614,40 @@ func agentMeta(s *protocol.SessionInfo, tag agentTag) ggui.Widget {
 		line = append(line, badge)
 	}
 	return widget.Row(line...).Gap(8).Align(widget.AlignCenter)
+}
+
+// firstFit shows the first of its options that fits at its full width.
+// When none does it shows nothing and is vacant, so a row leaves out the
+// gap beside it.
+type firstFit struct {
+	options []ggui.Widget
+	shown   ggui.Widget
+}
+
+func (f *firstFit) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	f.shown = nil
+	for _, o := range f.options {
+		if o.Layout(ggui.Constraints{MaxW: math.Inf(1), MaxH: c.MaxH}, env).W <= c.MaxW {
+			f.shown = o
+			return o.Layout(c, env)
+		}
+	}
+	return c.Constrain(ggui.Size{})
+}
+
+func (f *firstFit) Vacant() bool { return f.shown == nil }
+
+func (f *firstFit) Baseline() (float64, bool) {
+	if f.shown == nil {
+		return 0, false
+	}
+	return ggui.BaselineOf(f.shown)
+}
+
+func (f *firstFit) Paint(dst *ggui.Canvas, r ggui.Rect) {
+	if f.shown != nil {
+		dst.Paint(f.shown, r)
+	}
 }
 
 // bottomFade paints its child faded out over its last width pixels, so

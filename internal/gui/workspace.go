@@ -822,6 +822,7 @@ func (m *model) reloadSyncedConfig() {
 	m.PluginSync.Set(cfg.Workspace.PluginsEnabled())
 	m.AgentSync.Set(cfg.Workspace.AgentsEnabled())
 	m.ProjectDirs.Set(config.NormalizeProjectDirs(cfg.ProjectDirs))
+	m.SSHHosts.Set(config.NormalizeSSHHosts(cfg.SSHHosts))
 	if !hostDirty {
 		m.Host.Set(draftFrom(cfg))
 	}

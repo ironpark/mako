@@ -28,6 +28,9 @@ func (d *Daemon) handleTunnel(ctx context.Context, stream *transport.Stream, env
 	if p := req.GetPort(); p <= 0 || p > 65535 {
 		return fmt.Errorf("%d is not a TCP port", p)
 	}
+	if d.isDirectSSH(req.GetNodeId()) {
+		return d.handleDirectSSHTunnel(ctx, stream, env, req)
+	}
 	if !d.local(req.GetNodeId()) {
 		return d.relayToPeer(ctx, protocol.TypeTunnel, req, stream)
 	}
