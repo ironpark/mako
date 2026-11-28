@@ -180,13 +180,12 @@ stash@{0}	1700000000	WIP on main
 // TestDirectOpsViaFakeSSH uses a tiny fake `ssh` script that executes the
 // remote command locally via `/bin/sh -c`, exercising the real Probe, ListDir,
 // ReadFile, WriteFile, FileOp, StageFile, Search, and Git* code paths end to end.
-func TestDirectOpsViaFakeSSH(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("POSIX fake ssh test")
-	}
+// useFakeSSH has the test's ssh run the remote command on this machine:
+// it skips all flags until "--", skips the target argument, and runs the
+// remote command string through /bin/sh -c.
+func useFakeSSH(t *testing.T) {
+	t.Helper()
 	fakeBin := filepath.Join(t.TempDir(), "fake-ssh")
-	// Fake ssh skips all flags until "--", skips the target argument, and runs
-	// the remote command string through /bin/sh -c.
 	script := `#!/bin/sh
 while [ $# -gt 0 ]; do
   if [ "$1" = "--" ]; then
@@ -204,6 +203,13 @@ exec /bin/sh -c "$*"
 	oldBin := SSHBinary
 	SSHBinary = fakeBin
 	t.Cleanup(func() { SSHBinary = oldBin })
+}
+
+func TestDirectOpsViaFakeSSH(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX fake ssh test")
+	}
+	useFakeSSH(t)
 
 	ctx := context.Background()
 	host := config.SSHHost{ID: "test1", Name: "TestHost", Host: "fake.local"}
