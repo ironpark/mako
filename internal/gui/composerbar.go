@@ -31,7 +31,7 @@ import (
 const composerRadius = 20
 
 // composerBar is the bar of session id's composer.
-func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[bool]) ggui.Widget {
+func composerBar(m *model, id string, state *chatState, input *widget.TextInputWidget, disabled ggui.Readable[bool]) ggui.Widget {
 	attach := ui.Tooltip(ui.ButtonOf(icon("plus").Size(17).Color(skin.Muted), func() { m.attachFiles(id) }).
 		Ghost().Pad(5).Radius(8).Name(T("Attach files")).BindDisabled(disabled), T("Attach files"))
 	usage := ggui.Map(state.result, func(v chatResult) *protocol.Usage { return v.Chat.GetUsage() }).WithEqual(protocol.Same)
@@ -122,7 +122,7 @@ func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[b
 		}
 		return roundButton("arrow-up", T("Send"), func() { m.sendComposer(id) }, disabled)
 	})
-	row := []ggui.Widget{widget.Expanded(leftScroll)}
+	row := []ggui.Widget{widget.Expanded(leftScroll), ghostAcceptChip(m, id, state, input, disabled)}
 	if state.inTerminal != nil {
 		// The agent's terminal, here, for what only it takes: a dialog no
 		// card shows, a key the agent asks for.

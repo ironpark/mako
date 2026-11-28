@@ -80,17 +80,19 @@ type liveHub struct {
 }
 
 type liveChat struct {
-	step       string
-	blocks     []*liveBlock
-	posted     time.Time // when the last post came
-	ended      time.Time // when the step ended, zero while it streams
-	logSize    int64     // the log's size when last looked at
-	looked     time.Time
-	dirty      bool // a post came since the followers last heard
-	subs       map[chan *protocol.ChatLive]struct{}
-	stop       context.CancelFunc // the look-out's, while followed
-	gen        uint64             // bumped on look-out start/stop to fence stale screen pollers
-	screenLive bool               // true while the active look-out uses a screen poller
+	step             string
+	blocks           []*liveBlock
+	suggestion       string    // inline ghost text prompt suggestion, "" when none
+	nativeSuggestion bool      // true once a native push (/suggestion) arrived for this chat
+	posted           time.Time // when the last post came
+	ended            time.Time // when the step ended, zero while it streams
+	logSize          int64     // the log's size when last looked at
+	looked           time.Time
+	dirty            bool // a post came since the followers last heard
+	subs             map[chan *protocol.ChatLive]struct{}
+	stop             context.CancelFunc // the look-out's, while followed
+	gen              uint64             // bumped on look-out start/stop to fence stale screen pollers
+	screenLive       bool               // true while the active look-out uses a ScreenLive poller
 }
 
 type liveBlock struct {
@@ -141,6 +143,10 @@ func (h *liveHub) takeForGen(gen uint64, p livePost) bool {
 func (h *liveHub) applyLocked(c *liveChat, p livePost) {
 	if p.Step != c.step {
 		c.step, c.blocks, c.ended = p.Step, nil, time.Time{}
+		// A step that begins means the agent works again, so what it
+		// suggested is stale. A late post of a step already seen keeps a
+		// suggestion that came after that step.
+		c.suggestion = ""
 	}
 	for _, piece := range p.Pieces {
 		b := c.block(piece.Index, piece.Kind)
@@ -210,9 +216,86 @@ func (c *liveChat) streaming() bool {
 	return len(c.blocks) > 0 || time.Since(c.posted) < liveIdle
 }
 
-// live is what the followers hear: the blocks as they stand.
+// setSuggestion sets the session's inline ghost text prompt suggestion as
+// the agent's live mod pushed it, "" to clear it. From then on the session's
+// suggestions come only this way: the screen-polled fallback stands down.
+func (h *liveHub) setSuggestion(session, text string) {
+	text = strings.TrimSpace(text)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := h.chat(liveKey(session, ""))
+	c.nativeSuggestion = true
+	if c.suggestion == text {
+		return
+	}
+	c.suggestion = text
+	c.dirty = true
+}
+
+// setSuggestionForGen updates the session's screen-polled ghost text only if
+// the chat's look-out generation still matches gen and no native suggestion
+// channel is active for it.
+func (h *liveHub) setSuggestionForGen(gen uint64, session, text string) {
+	text = strings.TrimSpace(text)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := h.chats[liveKey(session, "")]
+	if c == nil || c.gen != gen || c.nativeSuggestion {
+		return
+	}
+	if c.suggestion == text {
+		return
+	}
+	c.suggestion = text
+	c.dirty = true
+}
+
+// hasNativeSuggestion reports whether session has received a native
+// /suggestion push, so screen-polled ghost extraction can skip scanning.
+func (h *liveHub) hasNativeSuggestion(session string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := h.chats[liveKey(session, "")]
+	return c != nil && c.nativeSuggestion
+}
+
+// clearSuggestion clears any active ghost text suggestion for session.
+func (h *liveHub) clearSuggestion(session string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := h.chats[liveKey(session, "")]
+	if c == nil || c.suggestion == "" {
+		return
+	}
+	c.suggestion = ""
+	c.dirty = true
+}
+
+// resetSuggestion forgets session's suggestion and that its live mod pushed
+// one, as its process ends: a crash fires no SessionEnd hook, and a process
+// started again under the same ID may run without the mod.
+func (h *liveHub) resetSuggestion(session string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c := h.chats[liveKey(session, "")]
+	if c == nil {
+		return
+	}
+	c.nativeSuggestion = false
+	if c.suggestion != "" {
+		c.suggestion = ""
+		c.dirty = true
+	}
+}
+
+// live is what the followers hear: any active ghost text suggestion, then
+// the blocks as they stand. The suggestion goes first so a front-end that
+// reads the last block as the reply's thinking line still finds it there.
 func (c *liveChat) live(logged bool) *protocol.ChatLive {
 	out := &protocol.ChatLive{Logged: logged}
+	if c.suggestion != "" {
+		out.Blocks = append(out.Blocks, &protocol.LiveBlock{Index: -1, Kind: protocol.LiveKindSuggestion, Text: c.suggestion})
+	}
 	for _, b := range c.blocks {
 		out.Blocks = append(out.Blocks, &protocol.LiveBlock{Index: b.index, Kind: b.kind, Text: b.text.String(), Tool: b.tool})
 	}
@@ -249,6 +332,15 @@ func (h *liveHub) followWith(
 	size func() int64,
 	makePoll func(gen uint64) func(size func() int64) (checked bool, logSize int64),
 ) (feed <-chan *protocol.ChatLive, stop func()) {
+	return h.followPolled(key, size, makePoll != nil, makePoll)
+}
+
+func (h *liveHub) followPolled(
+	key string,
+	size func() int64,
+	screenLive bool,
+	makePoll func(gen uint64) func(size func() int64) (checked bool, logSize int64),
+) (feed <-chan *protocol.ChatLive, stop func()) {
 	ch := make(chan *protocol.ChatLive, 1)
 	now := size()
 	h.mu.Lock()
@@ -261,7 +353,7 @@ func (h *liveHub) followWith(
 		gen := c.gen
 		var poll func(func() int64) (bool, int64)
 		if makePoll != nil {
-			c.screenLive = true
+			c.screenLive = screenLive
 			poll = makePoll(gen)
 		} else {
 			c.screenLive = false
@@ -283,6 +375,9 @@ func (h *liveHub) followWith(
 				c.step, c.blocks, c.ended = "", nil, time.Time{}
 				c.dirty = false
 				c.screenLive = false
+			}
+			if !c.nativeSuggestion {
+				c.suggestion = ""
 			}
 		}
 	}
@@ -399,6 +494,7 @@ func (d *Daemon) listenLive(ctx context.Context, dir string) {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/live", d.serveLive)
+	mux.HandleFunc("/suggestion", d.serveLiveSuggestion)
 	mux.HandleFunc("/messages/poll", d.serveLiveMessagesPoll)
 	mux.HandleFunc("/messages/ack", d.serveLiveMessagesAck)
 	mux.HandleFunc("/mako/status", d.serveLiveMakoStatus)
@@ -654,6 +750,30 @@ func (d *Daemon) serveLiveMessagesAck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type liveSuggestionReq struct {
+	Session string `json:"session"`
+	Token   string `json:"token"`
+	Text    string `json:"text"`
+}
+
+func (d *Daemon) serveLiveSuggestion(w http.ResponseWriter, r *http.Request) {
+	var req liveSuggestionReq
+	if r.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req) != nil {
+		http.Error(w, "a suggestion request", http.StatusBadRequest)
+		return
+	}
+	if _, ok := d.sessions.get(req.Session); !ok {
+		http.Error(w, "no such session", http.StatusNotFound)
+		return
+	}
+	if !hmac.Equal([]byte(req.Token), []byte(d.liveToken(req.Session))) {
+		http.Error(w, "not this session's", http.StatusForbidden)
+		return
+	}
+	d.live.setSuggestion(req.Session, req.Text)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (d *Daemon) serveLive(w http.ResponseWriter, r *http.Request) {
 	var p livePost
 	if r.Method != http.MethodPost || json.NewDecoder(http.MaxBytesReader(w, r.Body, livePostLimit)).Decode(&p) != nil {
@@ -747,10 +867,11 @@ func (d *Daemon) handleWatchChat(ctx context.Context, stream *transport.Stream, 
 		return fi.Size()
 	}
 	var makePoll func(uint64) func(func() int64) (bool, int64)
+	var isScreenLive bool
 	if subagent == "" {
-		makePoll = screenLivePollerFactory(&d.live, s)
+		makePoll, isScreenLive = screenPollerFactory(&d.live, s)
 	}
-	feed, stop := d.live.followWith(key, size, makePoll)
+	feed, stop := d.live.followPolled(key, size, isScreenLive, makePoll)
 	defer stop()
 	h := watchStreamHangup(stream, nil)
 	defer func() {

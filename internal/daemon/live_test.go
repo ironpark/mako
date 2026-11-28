@@ -1086,3 +1086,252 @@ done`
 	send("done")
 	waitFor("cleared swarm activity", func(l *protocol.ChatLive) bool { return len(l.GetBlocks()) == 0 })
 }
+
+func suggestionBlock(blocks []*protocol.LiveBlock) string {
+	for _, b := range blocks {
+		if b.GetKind() == protocol.LiveKindSuggestion {
+			return b.GetText()
+		}
+	}
+	return ""
+}
+
+func TestLiveSuggestionEndpointAndScreenGhostFallback(t *testing.T) {
+	d := meshDaemon(t, "claude-ghost")
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	dir := t.TempDir()
+	script := `
+while IFS= read -r cmd; do
+  case "$cmd" in
+    ghost1)
+      printf '\033[2J\033[H'
+      printf 'All checks passed.\n'
+      printf '──────────────────────────────────────────────────\n'
+      printf '❯\302\240\033[2mRun go test and commit\033[0m\n'
+      printf '──────────────────────────────────────────────────\n'
+      printf '  ? for shortcuts\n'
+      ;;
+    clear)
+      printf '\033[2J\033[H'
+      printf '──────────────────────────────────────────────────\n'
+      printf '❯ \n'
+      printf '──────────────────────────────────────────────────\n'
+      printf '  ? for shortcuts\n'
+      ;;
+  esac
+done
+`
+	s, err := session.Start(session.Spec{
+		ID:      "claude-ghost",
+		NodeID:  d.config().NodeID,
+		Agent:   "claude",
+		Project: dir,
+		Command: []string{"/bin/sh", "-c", script},
+		Cols:    100,
+		Rows:    24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	s.SetStatus(protocol.AgentDone)
+	d.sessions.add(s)
+
+	got := make(chan *protocol.ChatLive, 32)
+	go func() {
+		_ = dialDaemon(t, d).WatchChat(ctx, &protocol.WatchChat{SessionId: "claude-ghost"}, func(l *protocol.ChatLive) { got <- l })
+	}()
+
+	waitFor := func(what string, ok func(*protocol.ChatLive) bool) {
+		t.Helper()
+		for {
+			select {
+			case l := <-got:
+				if ok(l) {
+					return
+				}
+			case <-ctx.Done():
+				t.Fatalf("timed out waiting for %s", what)
+			}
+		}
+	}
+
+	waitFor("initial snapshot", func(l *protocol.ChatLive) bool { return len(l.GetBlocks()) == 0 })
+
+	// 1. ScreenGhost fallback extracts dim ghost text from Claude's PTY prompt
+	// box, drawn as Claude Code 2.1 draws it: a no-break space after the
+	// marker, then the suggestion in SGR dim.
+	if _, err := s.Write([]byte("ghost1\n")); err != nil {
+		t.Fatal(err)
+	}
+	waitFor("screen ghost suggestion", func(l *protocol.ChatLive) bool {
+		return suggestionBlock(l.GetBlocks()) == "Run go test and commit"
+	})
+
+	// While the agent asks the user something, the screen offers nothing,
+	// and once it rests at its prompt again the suggestion is read again.
+	s.SetStatus(protocol.AgentWaiting)
+	waitFor("no suggestion while waiting", func(l *protocol.ChatLive) bool { return suggestionBlock(l.GetBlocks()) == "" })
+	s.SetStatus(protocol.AgentDone)
+	waitFor("screen ghost suggestion again", func(l *protocol.ChatLive) bool {
+		return suggestionBlock(l.GetBlocks()) == "Run go test and commit"
+	})
+
+	// 2. Native /suggestion push takes precedence over PTY screen fallback.
+	postSuggestion := func(token, text string) int {
+		t.Helper()
+		body, _ := json.Marshal(liveSuggestionReq{Session: "claude-ghost", Token: token, Text: text})
+		client := &http.Client{Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", d.liveSocket)
+			},
+		}}
+		resp, err := client.Post("http://mako/suggestion", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if code := postSuggestion("wrong-token", "spoofed"); code != http.StatusForbidden {
+		t.Fatalf("wrong token status = %d, want 403", code)
+	}
+	if code := postSuggestion(d.liveToken("claude-ghost"), "Add integration tests"); code != http.StatusNoContent {
+		t.Fatalf("valid token status = %d, want 204", code)
+	}
+	waitFor("native suggestion", func(l *protocol.ChatLive) bool {
+		return suggestionBlock(l.GetBlocks()) == "Add integration tests"
+	})
+
+	// Screen clearing does not clobber native suggestion once native channel is active.
+	if _, err := s.Write([]byte("clear\n")); err != nil {
+		t.Fatal(err)
+	}
+	// Starting a streaming reply automatically clears the active suggestion.
+	d.live.take(livePost{
+		Session: "claude-ghost",
+		Step:    "t1:0",
+		Pieces:  []livePiece{{Kind: "text", Index: 0, Text: "Working on it"}},
+	})
+	waitFor("suggestion cleared on reply stream", func(l *protocol.ChatLive) bool {
+		return suggestionBlock(l.GetBlocks()) == "" && textBlocks(l.GetBlocks()) == "Working on it"
+	})
+}
+
+// The hub keeps one suggestion per session, ahead of the reply's blocks;
+// the mod's pushes outrank the screen; a step that begins clears it, and a
+// late post of a step already seen does not.
+func TestLiveSuggestionLifecycle(t *testing.T) {
+	var h liveHub
+	key := liveKey("s", "")
+	h.take(livePost{Session: "s", Step: "t1:0", Pieces: []livePiece{{Kind: "thinking", Index: 0, Text: "Thinking"}}})
+	h.setSuggestion("s", "  Run the tests\n")
+	blocks := h.blocks(key)
+	if len(blocks) != 2 || blocks[0].GetKind() != protocol.LiveKindSuggestion || blocks[0].GetText() != "Run the tests" {
+		t.Fatalf("blocks = %v, want the trimmed suggestion first", blocks)
+	}
+	if last := blocks[len(blocks)-1]; last.GetKind() != "thinking" {
+		t.Fatalf("last block = %v, want the reply's thinking line", last)
+	}
+
+	h.take(livePost{Session: "s", Step: "t1:0", End: true, Pieces: []livePiece{{Kind: "text", Index: 1, Text: "Done."}}})
+	if got := suggestionBlock(h.blocks(key)); got != "Run the tests" {
+		t.Fatalf("after a late post of the same step, suggestion = %q", got)
+	}
+
+	gen := h.chats[key].gen
+	h.setSuggestionForGen(gen, "s", "read off the screen")
+	if got := suggestionBlock(h.blocks(key)); got != "Run the tests" {
+		t.Fatalf("screen fallback replaced a pushed suggestion: %q", got)
+	}
+
+	h.take(livePost{Session: "s", Step: "t2:0", Pieces: []livePiece{{Kind: "text", Index: 0, Text: "On it"}}})
+	if got := suggestionBlock(h.blocks(key)); got != "" {
+		t.Fatalf("a new step kept the suggestion %q", got)
+	}
+
+	h.setSuggestion("s", "Commit the changes")
+	h.clearSuggestion("s")
+	if got := suggestionBlock(h.blocks(key)); got != "" {
+		t.Fatalf("clearSuggestion kept %q", got)
+	}
+
+	// Without a push, the screen fallback of the current look-out is heard,
+	// and a superseded look-out's is not.
+	h.setSuggestionForGen(0, "other", "nobody follows this chat")
+	if got := suggestionBlock(h.blocks(liveKey("other", ""))); got != "" {
+		t.Fatalf("a chat that does not exist got %q", got)
+	}
+	feed, stop := h.follow(liveKey("screen", ""), func() int64 { return 0 })
+	<-feed
+	c := h.chats[liveKey("screen", "")]
+	h.setSuggestionForGen(c.gen-1, "screen", "stale")
+	if got := suggestionBlock(h.blocks(liveKey("screen", ""))); got != "" {
+		t.Fatalf("a superseded look-out set %q", got)
+	}
+	h.setSuggestionForGen(c.gen, "screen", "Run go vet")
+	if got := suggestionBlock(h.blocks(liveKey("screen", ""))); got != "Run go vet" {
+		t.Fatalf("screen suggestion = %q", got)
+	}
+	stop()
+	if got := suggestionBlock(h.blocks(liveKey("screen", ""))); got != "" {
+		t.Fatalf("the last follower left and the screen suggestion %q stayed", got)
+	}
+}
+
+// A process that ends forgets the suggestion its mod pushed, and that it
+// pushed one, so that the screen is read again for one started under the
+// same ID, which may run without the mod.
+func TestLiveSuggestionResetsWhenTheProcessEnds(t *testing.T) {
+	var h liveHub
+	key := liveKey("s", "")
+	feed, stop := h.follow(key, func() int64 { return 0 })
+	defer stop()
+	<-feed
+	h.setSuggestion("s", "Run the tests")
+	gen := h.chats[key].gen
+	h.resetSuggestion("s")
+	if got := suggestionBlock(h.blocks(key)); got != "" {
+		t.Fatalf("after the process ended, suggestion = %q", got)
+	}
+	h.setSuggestionForGen(gen, "s", "read off the screen")
+	if got := suggestionBlock(h.blocks(key)); got != "read off the screen" {
+		t.Fatalf("the screen fallback stayed off after a reset: %q", got)
+	}
+	h.resetSuggestion("unknown") // a session with no chat is no matter
+}
+
+func TestLiveSuggestionEndpointRejects(t *testing.T) {
+	d := meshDaemon(t, "claude-ghost-rejects")
+	post := func(method string, body []byte) int {
+		t.Helper()
+		client := &http.Client{Transport: &http.Transport{
+			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+				return (&net.Dialer{}).DialContext(ctx, "unix", d.liveSocket)
+			},
+		}}
+		req, err := http.NewRequest(method, "http://mako/suggestion", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode
+	}
+	body, _ := json.Marshal(liveSuggestionReq{Session: "nobody", Token: "x", Text: "hi"})
+	if code := post(http.MethodGet, body); code != http.StatusBadRequest {
+		t.Fatalf("GET status = %d, want 400", code)
+	}
+	if code := post(http.MethodPost, []byte("not json")); code != http.StatusBadRequest {
+		t.Fatalf("bad body status = %d, want 400", code)
+	}
+	if code := post(http.MethodPost, body); code != http.StatusNotFound {
+		t.Fatalf("unknown session status = %d, want 404", code)
+	}
+}

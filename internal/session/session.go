@@ -1011,6 +1011,30 @@ func (s *Session) PlainTextUnwrapped() (string, error) {
 	})
 }
 
+// StyledScreen renders the rows the active screen shows, without the
+// scrollback, with their SGR styles and soft-wrapped rows joined back into
+// logical lines. It costs the screen's size, not the scrollback's, so it
+// can run on every tick of a poller.
+func (s *Session) StyledScreen() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited {
+		return s.finalStyled.GetText(), nil
+	}
+	t := s.term.Terminal()
+	total := t.ActiveScreen().Scrollbar().Total
+	rows := min(uint64(t.Rows()), total)
+	if rows == 0 {
+		return "", nil
+	}
+	var b strings.Builder
+	sel := gostty.Selection{StartY: uint32(total - rows), EndX: t.Cols() - 1, EndY: uint32(total - 1)}
+	if _, err := t.FormatSelection(gostty.FormatOptions{Format: gostty.FormatterFormatVt, Unwrap: true}, sel, &b); err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
 // replayedModes are the DEC private modes a program sets that a terminal
 // fed its screen must have too: how its keys and the mouse are encoded,
 // and what it is told of. A TUI that asked for the mouse otherwise gets

@@ -351,7 +351,8 @@ type ChatLive struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Logged bool                   `protobuf:"varint,1,opt,name=logged,proto3" json:"logged,omitempty"` // the log grew: what a ReadChat finds changed
 	// blocks are the reply the agent is writing, streamed and not yet
-	// logged, in order; none when there is none.
+	// logged, in order; none when there is none. A suggestion block, when
+	// the agent has one, comes first and is no part of the reply.
 	Blocks        []*LiveBlock `protobuf:"bytes,2,rep,name=blocks,proto3" json:"blocks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -402,12 +403,14 @@ func (x *ChatLive) GetBlocks() []*LiveBlock {
 }
 
 // LiveBlock is one block of a reply streaming: text, or a tool call
-// begun.
+// begun; or the agent's prompt suggestion.
 type LiveBlock struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Index int32                  `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"` // the block's, within the model's response
-	// kind is text; thinking, whose words are not sent; or tool, whose text
-	// is its arguments as JSON as far as they have streamed.
+	Index int32                  `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"` // the block's, within the model's response; -1 for a suggestion
+	// kind is text; thinking, whose words are not sent; tool, whose text
+	// is its arguments as JSON as far as they have streamed; or suggestion,
+	// whose text is what the agent suggests the user send next, for the
+	// composer to show while the agent waits.
 	Kind          string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
 	Text          string `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
 	Tool          string `protobuf:"bytes,4,opt,name=tool,proto3" json:"tool,omitempty"` // a tool call's tool

@@ -254,6 +254,16 @@ type ScreenLiveActivity interface {
 	ExtractActivity(screen string) string
 }
 
+// ScreenGhost is optionally implemented by agents that render dimmed inline
+// prompt suggestions ("ghost text") inside their terminal prompt box when
+// idle. Daemons poll it as a fallback when no native push channel (such as a
+// live mod's prompt.suggest hook) is active for the session.
+type ScreenGhost interface {
+	// ExtractGhost reads the styled VT terminal screen (with SGR escape
+	// sequences) and returns the active ghost text suggestion, or "" if none.
+	ExtractGhost(styledScreen string) string
+}
+
 // SubAgentHooks is optionally implemented by Hooks drivers whose subagents
 // fire lifecycle hooks under their own conversation ID rather than an explicit
 // agent_id field. IsSubAgent reports whether childID belongs to a subagent of

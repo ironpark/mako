@@ -537,15 +537,22 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 	// with the lines to a few before it scrolls. ↑ and ↓ over an empty box
 	// bring back what was sent. A draft that begins with a slash lists the
 	// agent's commands over the box, whose keys come first.
-	field := ui.TextField(draft).Lines(2).
-		Placeholder(T("Message the agent. Enter sends, Shift+Enter adds a line")).
+	defaultPlaceholder := T("Message the agent. Enter sends, Shift+Enter adds a line")
+	var field *ui.TextFieldWidget
+	field = ui.TextField(draft).Lines(2).
+		Placeholder(defaultPlaceholder).
 		Name(T("Message")).
 		BindDisabled(disabled).
-		// Tab completes a command or template the menu lists, rather
-		// than moving on.
-		ClaimKeys(func(ev ggui.KeyEvent) bool { return m.menuClaims(id, state, ev) }).
+		// Tab completes a command, template, or ghost text suggestion rather
+		// than moving focus on.
+		ClaimKeys(func(ev ggui.KeyEvent) bool {
+			return m.menuClaims(id, state, ev) || m.ghostClaims(id, state, field.Input(), ev)
+		}).
 		OnKey(func(ev ggui.KeyEvent) bool {
 			if m.menuKey(id, state, ev) {
+				return true
+			}
+			if m.ghostKey(id, state, field.Input(), ev) {
 				return true
 			}
 			plain := !ev.Mods.Shift && !ev.Mods.Alt && !ev.Mods.Ctrl && !ev.Mods.Meta
@@ -566,8 +573,8 @@ func composer(m *model, id string, state *chatState) ggui.Widget {
 	over := ggui.State(false)
 	content := widget.Column(
 		attachmentStrip(m, id, state),
-		composerField(field),
-		composerBar(m, id, state, disabled),
+		ghostComposerField(m, id, state, field, defaultPlaceholder),
+		composerBar(m, id, state, field.Input(), disabled),
 	).Gap(6).Stretch()
 	box := ggui.View(over, func(o bool) ggui.Widget {
 		var border color.Color = skin.Border
@@ -595,8 +602,18 @@ const composerMaxHeight = 220
 // composerMaxHeight and scrolls smoothly beyond that, both with the mouse
 // wheel / scrollbar and as typing or cursor movement moves the caret.
 func composerField(field *ui.TextFieldWidget) ggui.Widget {
-	tracked := &caretFollow{child: field, input: field.Input()}
-	body := widget.Padding(inlineField(tracked), 0, 6, 0, 0)
+	return composerScroll(&caretFollow{child: field, input: field.Input()})
+}
+
+// ghostComposerField is composerField for a session's chat composer: it
+// also paints the agent's inline ghost text suggestion.
+func ghostComposerField(m *model, id string, state *chatState, field *ui.TextFieldWidget, defaultPlaceholder string) ggui.Widget {
+	tracked := &caretFollow{child: state.composerFocus.Attach(field), input: field.Input()}
+	return composerScroll(newGhostField(m, id, state, field, tracked, defaultPlaceholder))
+}
+
+func composerScroll(child ggui.Widget) ggui.Widget {
+	body := widget.Padding(inlineField(child), 0, 6, 0, 0)
 	return widget.Box(widget.Scroll(body).Shrink().Bar(skin.Surface3)).MaxHeight(composerMaxHeight)
 }
 

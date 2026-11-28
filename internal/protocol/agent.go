@@ -585,3 +585,12 @@ const (
 	LayoutAllowSpace  = "space"
 	LayoutAllowAlways = "always"
 )
+
+// LiveBlock.Kind values beyond the core reply stream ("text", "thinking",
+// "tool"). Older front-ends ignore unknown kinds cleanly.
+const (
+	// LiveKindSuggestion carries an agent CLI's inline ghost text prompt
+	// suggestion (e.g. Claude Code's post-turn prompt suggestion) in
+	// LiveBlock.Text for the Chat composer to show as dimmed ghost text.
+	LiveKindSuggestion = "suggestion"
+)

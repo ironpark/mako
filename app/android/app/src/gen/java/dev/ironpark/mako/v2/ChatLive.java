@@ -64,7 +64,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -76,7 +77,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -88,7 +90,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -100,7 +103,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -112,7 +116,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -132,7 +137,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -146,7 +152,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -159,7 +166,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -173,7 +181,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -187,7 +196,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -198,7 +208,8 @@ public  final class ChatLive extends
   /**
    * <pre>
    * blocks are the reply the agent is writing, streamed and not yet
-   * logged, in order; none when there is none.
+   * logged, in order; none when there is none. A suggestion block, when
+   * the agent has one, comes first and is no part of the reply.
    * </pre>
    *
    * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -352,7 +363,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -365,7 +377,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -376,7 +389,8 @@ public  final class ChatLive extends
     }/**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -388,7 +402,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -402,7 +417,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -417,7 +433,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -430,7 +447,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -444,7 +462,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -458,7 +477,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -473,7 +493,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -487,7 +508,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>
@@ -500,7 +522,8 @@ public  final class ChatLive extends
     /**
      * <pre>
      * blocks are the reply the agent is writing, streamed and not yet
-     * logged, in order; none when there is none.
+     * logged, in order; none when there is none. A suggestion block, when
+     * the agent has one, comes first and is no part of the reply.
      * </pre>
      *
      * <code>repeated .mako.v2.LiveBlock blocks = 2 [json_name = "blocks"];</code>

@@ -44,8 +44,11 @@ mako allow <node>             # let in a machine that asked
   port of a node can be forwarded by hand.
 - **Chat.** The conversation as the agent logged it, and a composer that
   types into the live session (Enter sends; Shift-Enter starts a new line;
-  ↑ recalls what you sent). When an agent asks a question, its live input
-  screen opens inside Chat so you can select options or type an answer.
+  ↑ recalls what you sent). When Claude Code suggests what to send next,
+  the suggestion shows dimmed in the composer: Tab or → takes it, Alt-→
+  takes its next word, and Esc hides it. When an agent asks a question,
+  its live input screen opens inside Chat so you can select options or
+  type an answer.
   Click the screen to use the agent's keyboard controls. A rail down the
   left edge has a tick for each prompt: hover one to see the prompt and
   how the reply ended, click it to go there. **Answer the
