@@ -1,7 +1,5 @@
 package detect
 
-import "slices"
-
 import "strings"
 
 // Region is the part of a screen a rule reads.
@@ -16,84 +14,123 @@ func Whole(in Input) string { return in.Screen }
 // Bottom is the screen from its nth last line that has text.
 func Bottom(n int) Region {
 	return func(in Input) string {
-		lines := lines(in.Screen)
-		start, seen := len(lines), 0
-		for i := len(lines) - 1; i >= 0 && seen < n; i-- {
-			if strings.TrimSpace(lines[i]) != "" {
-				start, seen = i, seen+1
-			}
+		s := in.Screen
+		if s == "" || n <= 0 {
+			return ""
 		}
-		return join(lines[start:])
+		start, seen := len(s), 0
+		end := len(s)
+		for seen < n {
+			nl := strings.LastIndexByte(s[:end], '\n')
+			lineStart := nl + 1
+			if strings.TrimSpace(s[lineStart:end]) != "" {
+				start, seen = lineStart, seen+1
+			}
+			if nl < 0 {
+				break
+			}
+			end = nl
+		}
+		return s[start:]
 	}
 }
 
 // Top is the screen up to its nth line that has text.
 func Top(n int) Region {
 	return func(in Input) string {
-		lines := lines(in.Screen)
-		end, seen := 0, 0
-		for i := 0; i < len(lines) && seen < n; i++ {
-			if strings.TrimSpace(lines[i]) != "" {
-				end, seen = i+1, seen+1
-			}
+		s := in.Screen
+		if s == "" || n <= 0 {
+			return ""
 		}
-		return join(lines[:end])
+		end, seen := 0, 0
+		pos := 0
+		for seen < n {
+			nl := strings.IndexByte(s[pos:], '\n')
+			lineEnd := len(s)
+			if nl >= 0 {
+				lineEnd = pos + nl
+			}
+			if strings.TrimSpace(s[pos:lineEnd]) != "" {
+				end, seen = lineEnd, seen+1
+			}
+			if nl < 0 {
+				break
+			}
+			pos = lineEnd + 1
+		}
+		return s[:end]
 	}
 }
 
 // AfterRule is the screen below its last horizontal rule, as a dialog
 // under a divider is.
 func AfterRule(in Input) string {
-	lines := lines(in.Screen)
-	for i, line := range slices.Backward(lines) {
-		if horizontalRule(line) {
-			return join(lines[i+1:])
-		}
+	s := in.Screen
+	if s == "" {
+		return ""
 	}
-	return in.Screen
+	end := len(s)
+	for {
+		nl := strings.LastIndexByte(s[:end], '\n')
+		lineStart := nl + 1
+		if horizontalRule(s[lineStart:end]) {
+			if end >= len(s) {
+				return ""
+			}
+			return s[end+1:]
+		}
+		if nl < 0 {
+			break
+		}
+		end = nl
+	}
+	return s
 }
 
 // PromptBox is what is inside the prompt box, a composer between two
 // rules, the last such on the screen; "" when there is none.
 func PromptBox(in Input) string {
-	lines := lines(in.Screen)
-	top, ok := promptBoxTop(lines)
+	s := in.Screen
+	_, topEnd, botStart, ok := promptBoxBounds(s)
 	if !ok {
 		return ""
 	}
-	end := len(lines)
-	for i := top + 1; i < len(lines); i++ {
-		if horizontalRule(lines[i]) {
-			end = i
-			break
-		}
+	// The box lies strictly between top's trailing '\n' and bot's leading '\n'.
+	contentStart := topEnd + 1
+	contentEnd := botStart - 1
+	if contentStart >= contentEnd {
+		return ""
 	}
-	return join(lines[top+1 : end])
+	return s[contentStart:contentEnd]
 }
 
 // LastAbovePromptBox is the last line with text above the prompt box, as a
 // status line over a composer is.
 func LastAbovePromptBox(in Input) string {
-	lines := lines(in.Screen)
-	if top, ok := promptBoxTop(lines); ok {
-		lines = lines[:top]
+	s := in.Screen
+	if s == "" {
+		return ""
 	}
-	for _, line := range slices.Backward(lines) {
-		if strings.TrimSpace(line) != "" {
+	end := len(s)
+	if topStart, _, _, ok := promptBoxBounds(s); ok {
+		if topStart == 0 {
+			return ""
+		}
+		end = topStart - 1
+	}
+	for {
+		nl := strings.LastIndexByte(s[:end], '\n')
+		lineStart := nl + 1
+		if line := s[lineStart:end]; strings.TrimSpace(line) != "" {
 			return line
 		}
+		if nl < 0 {
+			break
+		}
+		end = nl
 	}
 	return ""
 }
-
-func lines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	return strings.Split(s, "\n")
-}
-
-func join(lines []string) string { return strings.Join(lines, "\n") }
 
 // horizontalRule is a line of box drawing, "────", alone or titled after
 // three or more.
@@ -104,16 +141,29 @@ func horizontalRule(line string) bool {
 	return n > 0 && (strings.TrimSpace(rest) == "" || n >= 3)
 }
 
-// promptBoxTop is the line of the second last rule, the top of a box
-// whose bottom is the last.
-func promptBoxTop(lines []string) (int, bool) {
+// promptBoxBounds returns byte offsets of the second-to-last horizontal rule
+// [topStart:topEnd] and the last horizontal rule's start botStart.
+func promptBoxBounds(s string) (topStart, topEnd, botStart int, ok bool) {
+	if s == "" {
+		return 0, 0, 0, false
+	}
 	seen := 0
-	for i, line := range slices.Backward(lines) {
-		if horizontalRule(line) {
-			if seen++; seen == 2 {
-				return i, true
+	end := len(s)
+	for {
+		nl := strings.LastIndexByte(s[:end], '\n')
+		lineStart := nl + 1
+		if horizontalRule(s[lineStart:end]) {
+			seen++
+			if seen == 1 {
+				botStart = lineStart
+			} else {
+				return lineStart, end, botStart, true
 			}
 		}
+		if nl < 0 {
+			break
+		}
+		end = nl
 	}
-	return 0, false
+	return 0, 0, 0, false
 }
