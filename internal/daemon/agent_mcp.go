@@ -556,5 +556,21 @@ func (d *Daemon) inProject(scope string, info *protocol.SessionInfo) bool {
 // summarizeAgent is a session as list_agents lists it; messaging says
 // whether its agent takes messages.
 func summarizeAgent(info *protocol.SessionInfo, parent string, messaging bool) agentSummary {
-	return agentSummary{ID: info.GetId(), Agent: info.GetAgent(), Profile: info.GetProfile(), Name: info.GetName(), State: info.GetState(), Status: info.GetStatus(), ParentID: parent, Messaging: messaging, Folder: info.GetProject()}
+	branch := info.GetBranch()
+	if wb := info.GetWorktree().GetBranch(); wb != "" {
+		branch = wb
+	}
+	return agentSummary{
+		ID:        info.GetId(),
+		Agent:     info.GetAgent(),
+		Profile:   info.GetProfile(),
+		Name:      info.GetName(),
+		State:     info.GetState(),
+		Status:    info.GetStatus(),
+		ParentID:  parent,
+		Messaging: messaging,
+		Folder:    info.GetProject(),
+		Worktree:  info.GetWorktree().GetPath(),
+		Branch:    branch,
+	}
 }

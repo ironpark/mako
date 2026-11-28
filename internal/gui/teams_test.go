@@ -27,4 +27,8 @@ func TestTeamPrompts(t *testing.T) {
 	if s := teamShape([]agentTeam{team, {}}); len(s) != 2 || s[0] != 2 || s[1] != 0 {
 		t.Fatalf("shape = %v", s)
 	}
+	team.IsolateWorktrees = true
+	if iso := teamBrief(team); !strings.Contains(iso, "isolated git worktree") {
+		t.Fatalf("isolated brief should mention worktrees:\n%s", iso)
+	}
 }

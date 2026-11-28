@@ -38,6 +38,13 @@ func AddWorktree(ctx context.Context, dir, branch, base string) (repo, path, mad
 		return "", "", "", err
 	}
 	repo = filepath.Dir(strings.TrimSpace(string(common)))
+	cfg, err := LoadWorktreeConfig(repo)
+	if err != nil {
+		return "", "", "", err
+	}
+	if base == "" && strings.TrimSpace(cfg.BaseRef) != "" {
+		base = strings.TrimSpace(cfg.BaseRef)
+	}
 	parent := filepath.Join(filepath.Dir(repo), filepath.Base(repo)+".worktrees")
 	if branch == "" {
 		if branch, err = freeBranch(ctx, repo, parent); err != nil {
@@ -53,6 +60,13 @@ func AddWorktree(ctx context.Context, dir, branch, base string) (repo, path, mad
 		args = append(args, base)
 	}
 	if _, err := run(ctx, repo, nil, args...); err != nil {
+		return "", "", "", err
+	}
+	if err := applyWorktreeBootstrap(ctx, repo, path, branch, base, cfg); err != nil {
+		// Roll back the newly created worktree and branch so failed setup
+		// hooks do not leave orphaned broken worktrees behind.
+		_, _ = run(ctx, repo, nil, "worktree", "remove", "--force", path)
+		_, _ = run(ctx, repo, nil, "branch", "-D", branch)
 		return "", "", "", err
 	}
 	return repo, path, branch, nil
@@ -118,6 +132,9 @@ func checkBranch(ctx context.Context, dir, branch string) error {
 func RemoveWorktree(ctx context.Context, w *protocol.Worktree) (string, error) {
 	if w.GetPath() == "" || w.GetRepo() == "" {
 		return "", errors.New("no worktree to remove")
+	}
+	if err := cleanupWorktreeBeforeRemove(ctx, w.GetRepo(), w.GetPath(), w.GetBranch(), w.GetBase()); err != nil {
+		return "", err
 	}
 	out, err := run(ctx, w.GetRepo(), nil, "worktree", "remove", w.GetPath())
 	if err != nil {

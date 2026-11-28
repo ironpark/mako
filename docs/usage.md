@@ -8,6 +8,8 @@
 mako nodes                    # the machines on the mesh
 mako agents                   # the agents and profiles this machine can start
 mako run claude               # start Claude in the current folder, and attach
+mako -worktree run claude     # ...in a new isolated git worktree
+mako -branch feat/x run claude # ...in a new git worktree on branch feat/x
 mako run claude:opus          # ...with its "opus" profile
 mako -node <id> run codex     # ...on another machine
 mako ls                       # every session on the mesh
@@ -268,6 +270,24 @@ their inboxes.
 `config.json`, in OpenSSH's format: other machines' own keys, which
 `mako access` prints, and SSH keys. Edit it by hand or with `mako access`,
 `allow`, `deny`, `trust` and `revoke`; a change holds at once.
+
+**Worktree bootstrap (`.mako/worktree.toml`).** A Git repository can include
+`.mako/worktree.toml` at its root so every new worktree (from the Launch tab,
+`-worktree`, `spawn_agent`, or an isolated team) automatically links shared
+directories, copies local env files, and runs setup/teardown hooks:
+
+```toml
+base_ref = "origin/main"
+shared_paths = ["node_modules", ".cache"]
+copy_paths = [".env", ".env.local"]
+setup_cmd = "npm ci --prefer-offline"
+teardown_cmd = ""
+```
+
+If `.mako/worktree.toml` is absent and `orca.yaml` defines
+`worktree.sharedDirectories`, Mako honors those shared directories
+automatically. Set `MAKO_NO_WORKTREE_HOOKS=1` to skip `setup_cmd` and
+`teardown_cmd`.
 
 **Networking.** The CLI and the app talk to their daemon on a Unix socket
 in the configuration folder, and daemons talk to each other on port 4243

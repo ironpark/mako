@@ -27,8 +27,9 @@ import (
 
 // agentTeam is a team as gui.json keeps it.
 type agentTeam struct {
-	Name    string       `json:"name"`
-	Members []teamMember `json:"members,omitempty"`
+	Name             string       `json:"name"`
+	IsolateWorktrees bool         `json:"isolate_worktrees,omitempty"`
+	Members          []teamMember `json:"members,omitempty"`
 }
 
 // teamMember is one agent of a team: its name, the target it runs (an
@@ -43,7 +44,11 @@ type teamMember struct {
 // what it is asked.
 func teamBrief(team agentTeam) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "[Mako team %s: you lead these agents, started as ones you spawned. They report to you with send_message; message them the same way.]\n", team.Name)
+	if team.IsolateWorktrees {
+		fmt.Fprintf(&b, "[Mako team %s: you lead these agents, started as ones you spawned, each in its own isolated git worktree and branch. They report to you with send_message; message them the same way.]\n", team.Name)
+	} else {
+		fmt.Fprintf(&b, "[Mako team %s: you lead these agents, started as ones you spawned. They report to you with send_message; message them the same way.]\n", team.Name)
+	}
 	for _, mb := range team.Members {
 		fmt.Fprintf(&b, "- %s (%s)", mb.Name, targetLabel(mb.Agent))
 		if role := strings.TrimSpace(mb.Role); role != "" {
@@ -87,7 +92,13 @@ func (m *model) startTeam(parent string, team agentTeam, task string) {
 	node := m.remoteID(s.GetNodeId())
 	for _, mb := range team.Members {
 		agent, profile := agentspec.SplitTarget(mb.Agent)
-		req := &protocol.OpenSession{NodeId: node, Agent: agent, Profile: profile, Project: s.GetProject(), Worktree: s.GetWorktree(),
+		project := s.GetProject()
+		wt := s.GetWorktree()
+		if team.IsolateWorktrees {
+			project = cmp.Or(s.GetWorktree().GetRepo(), s.GetProject())
+			wt = &protocol.Worktree{Base: cmp.Or(s.GetWorktree().GetBase(), s.GetBranch())}
+		}
+		req := &protocol.OpenSession{NodeId: node, Agent: agent, Profile: profile, Project: project, Worktree: wt,
 			Cols: 120, Rows: 36, ParentSessionId: parent, Name: mb.Name, Prompt: memberPrompt(mb, task)}
 		fetch(m, 20*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
 			return c.Open(ctx, req)
@@ -202,10 +213,20 @@ func teamCard(m *model, i, n int, targets ggui.Readable[[]string]) ggui.Widget {
 		})
 	}
 	name := ui.TextField(team(func(t *agentTeam) *string { return &t.Name })).Placeholder(T("Team name")).Name(T("Team name"))
+	isolate := m.Prefs.Field(func(p *prefs) *bool { return &p.Teams[i].IsolateWorktrees })
 	remove := ui.Button(T("Delete team"), func() {
 		m.Prefs.Update(func(p prefs) prefs { p.Teams = slices.Delete(slices.Clone(p.Teams), i, i+1); return p })
 	}).Outline()
-	rows := []ggui.Widget{widget.Box(widget.Row(widget.Expanded(name), remove).Gap(12).Align(widget.AlignCenter)).Pad(12, 16)}
+	isolateRow := widget.Column(
+		ui.Switch(isolate, T("Isolate each member in its own worktree")),
+		muted(widget.Text(T("Gives every teammate a fresh git worktree and branch so parallel edits never collide.")).Size(12)),
+	).Gap(4).Stretch()
+	rows := []ggui.Widget{
+		widget.Box(widget.Column(
+			widget.Row(widget.Expanded(name), remove).Gap(12).Align(widget.AlignCenter),
+			isolateRow,
+		).Gap(10).Stretch()).Pad(12, 16),
+	}
 	for j := range n {
 		agent := ui.Select(member(j, func(mb *teamMember) *string { return &mb.Agent })).BindOptions(targets).Format(targetLabel).Name(T("Agent"))
 		who := ui.TextField(member(j, func(mb *teamMember) *string { return &mb.Name })).Placeholder(T("Name")).Name(T("Name"))

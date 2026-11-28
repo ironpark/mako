@@ -114,6 +114,8 @@ Flags:
   -daemon <path>   the daemon's socket (default: the configuration directory's)
   -node <id>       run on / target this node instead of the local one
   -project <dir>   working directory for a new session (default: cwd)
+  -worktree        with run, start the session in a new git worktree
+  -branch <name>   with run, branch name for the new worktree (implies -worktree)
   -device <dev>    with run, borrow a device for the session (repeatable,
                     or comma-separated)
 `
@@ -122,6 +124,8 @@ func main() {
 	daemonAddr := flag.String("daemon", "", "the daemon's socket")
 	nodeID := flag.String("node", "", "target node ID")
 	project := flag.String("project", "", "project directory")
+	worktree := flag.Bool("worktree", false, "start run session in a new git worktree")
+	branch := flag.String("branch", "", "branch name for the new worktree (implies -worktree)")
 	var devices deviceFlag
 	flag.Var(&devices, "device", "a device to borrow for the session")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
@@ -133,13 +137,13 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(args, *daemonAddr, *nodeID, *project, devices); err != nil {
+	if err := run(args, *daemonAddr, *nodeID, *project, *worktree || strings.TrimSpace(*branch) != "", strings.TrimSpace(*branch), devices); err != nil {
 		fmt.Fprintln(os.Stderr, "mako:", protocol.Printable(err.Error()))
 		os.Exit(1)
 	}
 }
 
-func run(args []string, daemonAddr, nodeID, project string, devices []string) error {
+func run(args []string, daemonAddr, nodeID, project string, useWorktree bool, branch string, devices []string) error {
 	if args[0] == "plugins" && len(args) > 1 && publishOps[args[1]] {
 		return publish(args[1], args[2:])
 	}
@@ -183,7 +187,7 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 		if len(args) < 2 {
 			return fmt.Errorf("run needs an agent name")
 		}
-		return runAgent(ctx, c, nodeID, project, args[1], args[2:], devices)
+		return runAgent(ctx, c, nodeID, project, useWorktree, branch, args[1], args[2:], devices)
 	case "attach":
 		if len(args) < 2 {
 			return fmt.Errorf("attach needs a session ID")
@@ -476,7 +480,7 @@ func listSessions(ctx context.Context, c *client.Client) error {
 	return nil
 }
 
-func runAgent(ctx context.Context, c *client.Client, nodeID, project, target string, extra, devices []string) error {
+func runAgent(ctx context.Context, c *client.Client, nodeID, project string, useWorktree bool, branch, target string, extra, devices []string) error {
 	agent, profile := agentspec.SplitTarget(target)
 	// "mako run <agent> -- args" separates agent arguments; the separator
 	// itself is not one of them.
@@ -496,7 +500,7 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project, target str
 	}
 	cols, rows := client.WindowSize()
 
-	info, err := c.Open(ctx, &protocol.OpenSession{
+	req := &protocol.OpenSession{
 		Devices: devices,
 		NodeId:  nodeID,
 		Agent:   agent,
@@ -505,7 +509,11 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project, target str
 		Args:    extra,
 		Cols:    uint32(cols),
 		Rows:    uint32(rows),
-	})
+	}
+	if useWorktree {
+		req.Worktree = &protocol.Worktree{Branch: branch}
+	}
+	info, err := c.Open(ctx, req)
 	if err != nil {
 		return err
 	}

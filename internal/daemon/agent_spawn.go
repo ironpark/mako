@@ -308,6 +308,7 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 
 	projectDir := info.GetProject()
 	worktree := info.GetWorktree()
+	explicitFolder := false
 	if folder := strings.TrimSpace(in.Folder); folder != "" {
 		if !filepath.IsAbs(folder) || !dirExists(folder) {
 			return agentSummary{}, fmt.Errorf("folder %q does not exist", folder)
@@ -316,9 +317,19 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 		if d.projectScope(&protocol.SessionInfo{Project: folder}) != scope {
 			return agentSummary{}, errors.New("folder is not in this project")
 		}
+		explicitFolder = true
 		if cleanPath(folder) != cleanPath(projectDir) {
 			projectDir = folder
 			worktree = nil
+		}
+	}
+	if in.Worktree || strings.TrimSpace(in.Branch) != "" {
+		if !explicitFolder && info.GetWorktree().GetRepo() != "" {
+			projectDir = info.GetWorktree().GetRepo()
+		}
+		worktree = &protocol.Worktree{
+			Branch: strings.TrimSpace(in.Branch),
+			Start:  strings.TrimSpace(in.Base),
 		}
 	}
 
@@ -380,6 +391,9 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 }
 
 func (d *Daemon) spawnRemoteProjectAgent(ctx context.Context, peer *agentPeer, caller *session.Session, scope string, pn projectNode, rawNode *protocol.Node, in spawnAgentArgs) (agentSummary, error) {
+	if in.Worktree || strings.TrimSpace(in.Branch) != "" {
+		return agentSummary{}, errors.New("isolated worktree spawning is currently supported on the local node only")
+	}
 	if !shared(scope) {
 		return agentSummary{}, errors.New("this project is local to this node; remote spawning requires a shared project or repository")
 	}

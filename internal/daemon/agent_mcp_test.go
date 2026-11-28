@@ -948,3 +948,47 @@ func TestProfileAllowAgentSwitch(t *testing.T) {
 		t.Fatalf("expected error spawning disallowed profile, got isError=%v content=%s", res.IsError, rawRes)
 	}
 }
+
+func TestSpawnAgentWithWorktreeIsolation(t *testing.T) {
+	d, _ := projectMCPDaemon(t)
+	repo := filepath.Join(t.TempDir(), "demo")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=test", "GIT_AUTHOR_EMAIL=test@example.com", "GIT_COMMITTER_NAME=test", "GIT_COMMITTER_EMAIL=test@example.com")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit("add", "-A")
+	runGit("commit", "-q", "-m", "init")
+
+	parent, err := d.openSession(t.Context(), &protocol.OpenSession{Agent: "claude", Project: repo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := projectMCPClient(t, d, parent)
+	child := callProjectTool[agentSummary](t, client, "spawn_agent", spawnAgentArgs{
+		Prompt:   "Implement feature in isolation",
+		Name:     "Worker",
+		Worktree: true,
+		Branch:   "feat/isolated-worker",
+	})
+	if child.Branch != "feat/isolated-worker" {
+		t.Fatalf("child.Branch = %q, want feat/isolated-worker", child.Branch)
+	}
+	if child.Worktree == "" || child.Worktree == repo {
+		t.Fatalf("child.Worktree = %q, expected separate worktree path", child.Worktree)
+	}
+	t.Cleanup(func() { os.RemoveAll(filepath.Dir(child.Worktree)) })
+	if got := gitstat.Branch(child.Worktree); got != "feat/isolated-worker" {
+		t.Fatalf("worktree branch = %q, want feat/isolated-worker", got)
+	}
+}

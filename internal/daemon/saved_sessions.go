@@ -420,11 +420,15 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	// A session of its own worktree gets it made once, when it first
 	// starts; the saved request then names it.
 	if w := req.GetWorktree(); w != nil && w.GetPath() == "" {
+		start := w.GetStart()
 		if w.GetBase() == "" {
+			if cfg, err := gitstat.LoadWorktreeConfig(project); err == nil && strings.TrimSpace(cfg.BaseRef) != "" && start == "" {
+				start = strings.TrimSpace(cfg.BaseRef)
+			}
 			w.Base = gitstat.Branch(project)
 		}
-		wtCtx, cancel := context.WithTimeout(ctx, time.Minute)
-		repo, path, branch, err := gitstat.AddWorktree(wtCtx, project, w.GetBranch(), cmp.Or(w.GetStart(), w.GetBase()))
+		wtCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		repo, path, branch, err := gitstat.AddWorktree(wtCtx, project, w.GetBranch(), cmp.Or(start, w.GetBase()))
 		cancel()
 		if err != nil {
 			return nil, err
