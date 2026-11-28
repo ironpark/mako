@@ -126,6 +126,20 @@ sleep 30
 	if code, resp, stderr := runCLI(parentPeer, "profiles"); code != 0 || !resp.OK || resp.Profiles == nil || len(resp.Profiles.Presets) == 0 {
 		t.Fatalf("profiles failed: code=%d resp=%+v stderr=%q", code, resp, stderr)
 	}
+	// inspect reads a project agent; flags may follow the session ID.
+	if code, resp, stderr := runCLI(parentPeer, "inspect", child.ID(), "--turns", "0"); code != 0 || !resp.OK || resp.Inspected == nil ||
+		resp.Inspected.Session.ID != child.ID() || resp.Inspected.Session.ParentID != parent.ID() || len(resp.Inspected.Turns) != 0 || resp.Inspected.ChatUnavailable != "" {
+		t.Fatalf("inspect failed: code=%d resp=%+v stderr=%q", code, resp, stderr)
+	}
+	if code, resp, _ := runCLI(parentPeer, "inspect", child.ID()); code != 0 || resp.Inspected == nil || len(resp.Inspected.Turns) != 0 {
+		t.Fatalf("inspect of an agent that has written nothing: code=%d resp=%+v", code, resp)
+	}
+	if code, _, _ := runCLI(parentPeer, "inspect", "no-such-session"); code == 0 {
+		t.Fatal("inspect of a session outside the project succeeded")
+	}
+	if code, _, _ := runCLI(parentPeer, "inspect"); code != 2 {
+		t.Fatal("inspect without a session ID was not a usage error")
+	}
 
 	// 2. Concurrent `mako-msg wait` blocks until child sends a message, then returns and auto-acks it.
 	waitDone := make(chan struct {
