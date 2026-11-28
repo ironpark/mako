@@ -134,7 +134,7 @@ type stopAgentResult struct {
 const agentMCPSigDisabled = "disabled"
 
 var agentMCPToolNames = []string{
-	"list_agents", "list_agent_profiles", "spawn_agent", "send_message", "read_messages", "watch_agent", "stop_agent",
+	"list_agents", "list_agent_profiles", "spawn_agent", "send_message", "read_messages", "watch_agent", "read_agent", "stop_agent",
 	toolListBlocks, toolGetLayout, toolSetLayout, toolPatchLayout, toolUndoLayout,
 	toolShowUI, toolUpdateUI, toolCloseUI, toolSaveTemplate,
 }
@@ -367,6 +367,10 @@ func (d *Daemon) registerProjectAgentTools(server *sdk.Server, peer *agentPeer, 
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: "watch_agent", Description: "Register a non-blocking one-shot notification for another agent in this project: Mako pushes a note into your session when its current turn ends (until=turn, default) or when its terminal prints matching text (until=output, this node only), or early if it waits on the user or exits. Returns immediately—continue other work or end your turn to receive the notification."}, func(ctx context.Context, _ *sdk.CallToolRequest, in watchAgentArgs) (*sdk.CallToolResult, watchAgentResult, error) {
 		out, err := d.watchProjectAgent(peer, in)
+		return nil, out, err
+	})
+	sdk.AddTool(server, &sdk.Tool{Name: "read_agent", Description: "Read another agent of this project, on this node or another: its session (status, what it waits on, branch, background tasks, subagents, context usage) and its latest conversation turns (each the user's message and the reply's text and tool calls, clipped). Instant and read-only: the agent is not disturbed. To learn when its turn ends, use watch_agent instead of reading it repeatedly.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in readAgentArgs) (*sdk.CallToolResult, readAgentResult, error) {
+		out, err := d.readProjectAgent(ctx, peer, in)
 		return nil, out, err
 	})
 	sdk.AddTool(server, &sdk.Tool{Name: "stop_agent", Description: "Terminate and remove an agent session spawned directly by you, on this node or another node of this project. Other project sessions cannot be stopped with this tool."}, func(ctx context.Context, _ *sdk.CallToolRequest, in stopAgentArgs) (*sdk.CallToolResult, stopAgentResult, error) {
