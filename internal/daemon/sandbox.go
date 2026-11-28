@@ -97,7 +97,8 @@ func (d *Daemon) sandboxSpec(id, agentName, mode string, roots []string, home st
 	}
 	// What the session runs from Mako's folders: the helpers its hooks
 	// and tools run (mako-msg, mako-plugin, the clipboard tools), Claude's
-	// live-replies mod, its own MCP configuration, the hook extensions of
+	// live-replies mod, its own MCP configuration and hook token, the hook
+	// extensions of
 	// pi, omp, omo and OpenCode, and the MCP servers of the Zed extensions
 	// installed. Not the agy sidecar's token, with which a sandboxed
 	// sidecar would take the messages of every agy session.
@@ -108,6 +109,10 @@ func (d *Daemon) sandboxSpec(id, agentName, mode string, roots []string, home st
 		filepath.Join(run, "pi-mcp-"+id+".js"),
 		filepath.Join(makoDir, "extensions"),
 		filepath.Join(makoDir, "extension-work"),
+		// Its own hook token, with which its hooks, status line and
+		// clipboard tools, and those its codex app-server runs, report
+		// to the hook socket for it; not another session's.
+		hookTokenFile(cmp.Or(d.hookRun, run), id),
 	}
 	for _, pattern := range []string{"opencode-mako-*.js", "*-hooks-*.js"} {
 		matches, _ := filepath.Glob(filepath.Join(run, pattern))

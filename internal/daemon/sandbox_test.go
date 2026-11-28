@@ -357,3 +357,57 @@ func TestARestartedCodexTUIStaysInTheSandbox(t *testing.T) {
 		t.Fatalf("a restarted sandboxed TUI = %q, %v", got, err)
 	}
 }
+
+func TestASandboxedSessionReadsItsOwnHookTokenOnly(t *testing.T) {
+	makoHome := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("MAKO_HOME", makoHome)
+	d := New(&config.Config{NodeID: "node"}, slog.New(slog.DiscardHandler))
+	d.dir = makoHome
+	run, err := config.RunDir(makoHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.hookRun = run
+	if err := os.MkdirAll(filepath.Join(run, hookTokenDir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	d.hookSecret = []byte("secret")
+	for _, id := range []string{"s1", "s2"} {
+		if err := d.giveHookToken(id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	own, other := hookTokenFile(run, "s1"), hookTokenFile(run, "s2")
+	project := t.TempDir()
+	spec, err := d.sandboxSpec("s1", "claude", agentspec.SandboxWorkspace, []string{project}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(spec.Readable, own) || slices.Contains(spec.Readable, other) || slices.Contains(spec.Readable, filepath.Join(run, hookTokenDir)) {
+		t.Fatalf("Readable = %q, want its own token file %s alone", spec.Readable, own)
+	}
+	if sandbox.Supported() != nil || exec.Command("/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)", "/usr/bin/true").Run() != nil {
+		return
+	}
+	spec.Temp = t.TempDir()
+	read := func(path string) error {
+		argv, err := sandbox.Command(*spec, []string{"/bin/cat", path})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return exec.Command(argv[0], argv[1:]...).Run()
+	}
+	if err := read(own); err != nil {
+		t.Errorf("the session cannot read its own hook token: %v", err)
+	}
+	if err := read(other); err == nil {
+		t.Error("the session read another session's hook token")
+	}
+	if err := os.WriteFile(filepath.Join(run, "state.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := read(filepath.Join(run, "state.json")); err == nil {
+		t.Error("the session read the run folder")
+	}
+}
