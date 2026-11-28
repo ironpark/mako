@@ -8,8 +8,10 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -133,95 +135,92 @@ func validateWorktreeConfig(cfg WorktreeConfig) error {
 	return nil
 }
 
+// cleanWorktreeRelPath is raw, a path a repository's config names from
+// its root, made clean and native; it refuses one that leaves the root, is
+// the root, or goes through a .git.
 func cleanWorktreeRelPath(raw string) (string, error) {
 	p := strings.TrimSpace(strings.ReplaceAll(raw, `\`, "/"))
 	if p == "" {
 		return "", errors.New("path must not be empty")
 	}
-	if strings.HasPrefix(p, "/") || filepath.IsAbs(raw) {
+	if strings.HasPrefix(p, "/") || filepath.IsAbs(raw) || filepath.VolumeName(filepath.FromSlash(p)) != "" {
 		return "", fmt.Errorf("path %q must be relative to the repository root", raw)
 	}
-	clean := filepath.Clean(filepath.FromSlash(p))
-	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	clean := path.Clean(p)
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
 		return "", fmt.Errorf("path %q escapes the repository root", raw)
 	}
-	first := strings.Split(filepath.ToSlash(clean), "/")[0]
-	if first == ".git" {
+	if dotGitPath(clean) {
 		return "", fmt.Errorf("path %q must not target .git", raw)
 	}
-	return clean, nil
+	return filepath.FromSlash(clean), nil
 }
 
-func pathWithin(root, target string) bool {
-	realRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		realRoot = filepath.Clean(root)
+// dotGitPath reports whether the slash-separated path p goes through a
+// .git, as a case-insensitive file system reads it, or Windows, which
+// drops a name's trailing dots and spaces.
+func dotGitPath(p string) bool {
+	return slices.ContainsFunc(strings.Split(p, "/"), func(seg string) bool {
+		return strings.EqualFold(strings.TrimRight(seg, ". "), ".git")
+	})
+}
+
+// repoSource is what is at rel in the repository whose root, symlinks
+// resolved, is realRepo, without following a last symlink; ok is false
+// when nothing is there. It refuses a path that resolves outside the
+// repository, to its root, or into a .git, and one through a symlink that
+// leads nowhere, which could lead anywhere later.
+func repoSource(realRepo, rel string) (info fs.FileInfo, ok bool, err error) {
+	src := filepath.Join(realRepo, rel)
+	info, err = os.Lstat(src)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, false, nil
+	} else if err != nil {
+		return nil, false, err
 	}
-	realTarget, err := filepath.EvalSymlinks(target)
+	real, err := filepath.EvalSymlinks(src)
 	if err != nil {
-		realTarget = filepath.Clean(target)
+		return nil, false, fmt.Errorf("%s does not resolve: %w", rel, err)
 	}
-	rel, err := filepath.Rel(realRoot, realTarget)
-	if err != nil {
-		return false
+	r, err := filepath.Rel(realRepo, real)
+	if err != nil || r == "." || r == ".." || strings.HasPrefix(r, ".."+string(filepath.Separator)) || dotGitPath(filepath.ToSlash(r)) {
+		return nil, false, fmt.Errorf("%s resolves outside the repository's files", rel)
 	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return info, true, nil
+}
+
+// worktreeDest checks that rel can be made in the worktree open at wt,
+// with no symlink on the way to it that could lead what is written there
+// out of the worktree; exists says something is there already, to be left
+// as it is.
+func worktreeDest(wt *os.Root, rel, raw string) (exists bool, err error) {
+	if err := checkNoIntermediateSymlink(wt, filepath.ToSlash(rel), raw); err != nil {
+		return false, err
+	}
+	if _, err := wt.Lstat(rel); err == nil {
+		return true, nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return false, err
+	}
+	if dir := filepath.Dir(rel); dir != "." {
+		if err := wt.MkdirAll(dir, 0o755); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 // applyWorktreeBootstrap links and copies cfg's paths into the new
 // worktree at wtPath, and runs its setup_cmd there if trusted. skipped
 // says the setup_cmd did not run, untrusted.
+//
+// What is linked or copied must be the repository's own files, and is
+// written only inside the worktree: os.Root keeps every write in it, and
+// a symlink the checkout has on the way to a path is refused.
 func applyWorktreeBootstrap(ctx context.Context, repo, wtPath, branch, base string, cfg WorktreeConfig, trusted HookTrust) (skipped bool, err error) {
-	for _, raw := range cfg.SharedPaths {
-		rel, err := cleanWorktreeRelPath(raw)
-		if err != nil {
-			return false, err
-		}
-		src := filepath.Join(repo, rel)
-		if _, err := os.Lstat(src); errors.Is(err, os.ErrNotExist) {
-			continue
-		} else if err != nil {
-			return false, fmt.Errorf("stat shared path %s: %w", rel, err)
-		}
-		if !pathWithin(repo, src) {
-			return false, fmt.Errorf("shared path %s resolves outside repository", rel)
-		}
-		dst := filepath.Join(wtPath, rel)
-		if _, err := os.Lstat(dst); err == nil {
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return false, fmt.Errorf("mkdir for shared path %s: %w", rel, err)
-		}
-		if err := os.Symlink(src, dst); err != nil {
-			return false, fmt.Errorf("symlink shared path %s: %w", rel, err)
-		}
+	if err := bootstrapPaths(repo, wtPath, cfg); err != nil {
+		return false, err
 	}
-
-	for _, raw := range cfg.CopyPaths {
-		rel, err := cleanWorktreeRelPath(raw)
-		if err != nil {
-			return false, err
-		}
-		src := filepath.Join(repo, rel)
-		info, err := os.Lstat(src)
-		if errors.Is(err, os.ErrNotExist) {
-			continue
-		} else if err != nil {
-			return false, fmt.Errorf("stat copy path %s: %w", rel, err)
-		}
-		if !pathWithin(repo, src) {
-			return false, fmt.Errorf("copy path %s resolves outside repository", rel)
-		}
-		dst := filepath.Join(wtPath, rel)
-		if _, err := os.Lstat(dst); err == nil {
-			continue
-		}
-		if err := copyWorktreePath(repo, src, dst, info); err != nil {
-			return false, fmt.Errorf("copy path %s: %w", rel, err)
-		}
-	}
-
 	cmdStr := strings.TrimSpace(cfg.SetupCmd)
 	if cmdStr == "" {
 		return false, nil
@@ -283,63 +282,148 @@ func cleanupWorktreeBeforeRemove(ctx context.Context, repo, wtPath, branch, base
 	return notice, nil
 }
 
-func copyWorktreePath(repo, src, dst string, info os.FileInfo) error {
-	if info.Mode()&os.ModeSymlink != 0 {
-		if !pathWithin(repo, src) {
-			return fmt.Errorf("symlink %s escapes repository", src)
-		}
-		target, err := os.Readlink(src)
+// bootstrapPaths links cfg's shared_paths and copies its copy_paths from
+// the repository at repo into the worktree at wtPath, leaving alone any
+// already there. It can run again over what it made.
+func bootstrapPaths(repo, wtPath string, cfg WorktreeConfig) error {
+	if len(cfg.SharedPaths) == 0 && len(cfg.CopyPaths) == 0 {
+		return nil
+	}
+	realRepo, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		return err
+	}
+	wt, err := os.OpenRoot(wtPath)
+	if err != nil {
+		return err
+	}
+	defer wt.Close()
+	for _, raw := range cfg.SharedPaths {
+		rel, err := cleanWorktreeRelPath(raw)
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		if _, ok, err := repoSource(realRepo, rel); err != nil {
+			return fmt.Errorf("shared path %s: %w", rel, err)
+		} else if !ok {
+			continue
+		}
+		if exists, err := worktreeDest(wt, rel, raw); err != nil {
+			return fmt.Errorf("shared path %s: %w", rel, err)
+		} else if exists {
+			continue
+		}
+		if err := wt.Symlink(filepath.Join(repo, rel), rel); err != nil {
+			return fmt.Errorf("symlink shared path %s: %w", rel, err)
+		}
+	}
+	if len(cfg.CopyPaths) == 0 {
+		return nil
+	}
+	src, err := os.OpenRoot(realRepo)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	for _, raw := range cfg.CopyPaths {
+		rel, err := cleanWorktreeRelPath(raw)
+		if err != nil {
 			return err
 		}
-		return os.Symlink(target, dst)
+		info, ok, err := repoSource(realRepo, rel)
+		if err != nil {
+			return fmt.Errorf("copy path %s: %w", rel, err)
+		} else if !ok {
+			continue
+		}
+		if exists, err := worktreeDest(wt, rel, raw); err != nil {
+			return fmt.Errorf("copy path %s: %w", rel, err)
+		} else if exists {
+			continue
+		}
+		if err := copyWorktreePath(src, wt, filepath.ToSlash(rel), info); err != nil {
+			return fmt.Errorf("copy path %s: %w", rel, err)
+		}
 	}
+	return nil
+}
+
+// copyWorktreePath copies name, a slash-separated path, from the
+// repository open at src to the worktree open at wt, where nothing is at
+// it yet: a directory with all in it. Only directories, regular files and
+// symlinks that stay among the repository's files are copied; a FIFO, a
+// socket or a device is left out.
+func copyWorktreePath(src, wt *os.Root, name string, info fs.FileInfo) error {
 	if !info.IsDir() {
-		return copyRegularFile(src, dst, info.Mode().Perm())
+		return copyWorktreeEntry(src, wt, name, info.Mode())
 	}
-	return filepath.WalkDir(src, func(p string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(src, p)
+	return fs.WalkDir(src.FS(), name, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		outPath := filepath.Join(dst, rel)
-		fi, err := os.Lstat(p)
-		if err != nil {
-			return err
-		}
-		if fi.IsDir() {
-			return os.MkdirAll(outPath, fi.Mode().Perm())
-		}
-		if fi.Mode()&os.ModeSymlink != 0 {
-			if !pathWithin(repo, p) {
-				return fmt.Errorf("symlink %s escapes repository", p)
-			}
-			target, err := os.Readlink(p)
+		if d.IsDir() {
+			fi, err := d.Info()
 			if err != nil {
 				return err
 			}
-			return os.Symlink(target, outPath)
+			if err := wt.Mkdir(filepath.FromSlash(p), fi.Mode().Perm()|0o700); err != nil && !errors.Is(err, fs.ErrExist) {
+				return err
+			}
+			return nil
 		}
-		return copyRegularFile(p, outPath, fi.Mode().Perm())
+		return copyWorktreeEntry(src, wt, p, d.Type())
 	})
 }
 
-func copyRegularFile(src, dst string, perm os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+// copyWorktreeEntry copies the file or symlink at name, of the type mode
+// gives, as copyWorktreePath does.
+func copyWorktreeEntry(src, wt *os.Root, name string, mode fs.FileMode) error {
+	native := filepath.FromSlash(name)
+	switch {
+	case mode&fs.ModeSymlink != 0:
+		target, err := src.Readlink(native)
+		if err != nil {
+			return err
+		}
+		// The link is read again from the worktree, so where it leads is
+		// what its words say from there: it must stay among the files
+		// both have, and not be the root or a .git.
+		t := filepath.ToSlash(target)
+		to := path.Join(path.Dir(name), t)
+		if filepath.IsAbs(target) || path.IsAbs(t) || filepath.VolumeName(target) != "" ||
+			to == "." || to == ".." || strings.HasPrefix(to, "../") || dotGitPath(to) {
+			return fmt.Errorf("symlink %s leads outside the repository's files, to %s", name, target)
+		}
+		return wt.Symlink(target, native)
+	case mode.IsRegular():
+		return copyRegularFile(src, wt, native)
+	}
+	return nil
+}
+
+// copyRegularFile copies the regular file at name in the repository open
+// at src to the worktree open at wt, where nothing is at it yet.
+func copyRegularFile(src, wt *os.Root, name string) error {
+	before, err := src.Lstat(name)
+	if err != nil {
 		return err
 	}
-	in, err := os.Open(src)
+	if !before.Mode().IsRegular() {
+		return nil
+	}
+	in, err := src.Open(name)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	info, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || !os.SameFile(before, info) {
+		return fmt.Errorf("%s changed while it was copied", name)
+	}
+	out, err := wt.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
 	if err != nil {
 		return err
 	}
