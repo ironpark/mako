@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 52
+const Revision = 53
+
+// RevisionRoutines adds a node's routines, read and changed through its
+// daemon (ListRoutines, Routines and RoutineAction, Envelope 167 to 169),
+// ForgeList.order, and ForgeItem.fork and ForgeItem.association.
+const RevisionRoutines = 53
 
 // RevisionCodexFastMode adds session-scoped Codex Fast Mode state and control:
 // SessionInfo.fast_mode (field 44), AgentControls.fast_mode (field 4),

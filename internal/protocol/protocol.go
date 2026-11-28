@@ -143,6 +143,9 @@ const (
 	TypeAccountUsage          Type = "account_usage"
 	TypeRewindSession         Type = "rewind_session"
 	TypeGoalAction            Type = "goal_action"
+	TypeListRoutines          Type = "list_routines"
+	TypeRoutines              Type = "routines"
+	TypeRoutineAction         Type = "routine_action"
 )
 
 // Newer reports whether the edit made at version v on node is newer than
@@ -536,6 +539,10 @@ const (
 	ForgeIssue = "issue"
 	ForgeRuns  = "run" // a workflow run of the forge's Actions
 )
+
+// ForgeOrderCreated is the ForgeList.order that lists the newest opened
+// pull requests or issues first.
+const ForgeOrderCreated = "created"
 
 // Operations of a ForgeRun.
 const (
