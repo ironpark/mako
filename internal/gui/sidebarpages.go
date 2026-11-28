@@ -114,9 +114,12 @@ func (m *model) clearSidebarPage() {
 }
 
 // sidebarPluginMenu renders the left-sidebar navigation menu items contributed
-// by active "sidebar"-slotted plugin blocks. Renders nothing when no plugin
-// contributes one so the default sidebar stays untouched.
+// by active "sidebar"-slotted plugin blocks and the built-in Needs You inbox.
 func sidebarPluginMenu(m *model, active *ggui.StateValue[string]) ggui.Widget {
+	return sidebarPluginMenuIn(m, active, nil)
+}
+
+func sidebarPluginMenuIn(m *model, active *ggui.StateValue[string], sw *spaceWindowState) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		pages := sidebarPluginBlocks(m.plugins.List.Get())
 		cur := ""
@@ -129,7 +132,7 @@ func sidebarPluginMenu(m *model, active *ggui.StateValue[string]) ggui.Widget {
 			}
 		}
 		rows := make([]ggui.Widget, 0, len(pages)+1)
-		rows = append(rows, inboxSidebarRow(m, active))
+		rows = append(rows, inboxSidebarRow(m, sw))
 		for _, pg := range pages {
 			p := pg
 			selected := cur == p.Block
@@ -146,7 +149,7 @@ func sidebarPluginMenu(m *model, active *ggui.StateValue[string]) ggui.Widget {
 				if ggui.Peek(active) == p.Block {
 					active.Set("")
 				} else {
-					if m.Page != nil && ggui.Peek(m.Page) != "workspace" {
+					if sw == nil && m.Page != nil && ggui.Peek(m.Page) != "workspace" {
 						m.Page.Set("workspace")
 					}
 					active.Set(p.Block)
@@ -159,7 +162,7 @@ func sidebarPluginMenu(m *model, active *ggui.StateValue[string]) ggui.Widget {
 			rows = append(rows, row)
 		}
 		list := ggui.Widget(widget.Column(rows...).Gap(2).Stretch())
-		if len(pages) > 5 {
+		if len(rows) > 5 {
 			list = widget.Box(widget.Scroll(list).Bar(skin.Surface3)).MaxHeight(180)
 		}
 		return looseHeight{widget.Column(
@@ -178,7 +181,7 @@ func workspaceCenterView(m *model) ggui.Widget {
 			return layoutView(m)
 		}
 		if blockName == sidebarPageInbox {
-			return inboxView(m)
+			return inboxView(m, nil)
 		}
 		pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
 		if !ok {

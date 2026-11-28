@@ -198,20 +198,29 @@ func contains(list []string, s string) bool {
 }
 
 // settingScopeApplies reports whether a setting changed at settingScope can
-// affect a block instance running at instScope, including folder-scoped blocks
-// whose resolved project or space matches a project/space override.
+// affect a block instance running at instScope, including narrower scopes
+// (folder, session, project) whose resolved project or space matches a
+// project/space override.
 func (p *plugin) settingScopeApplies(settingScope, instScope string) bool {
 	if settingScope == "" || instScope == settingScope {
 		return true
 	}
-	if !strings.HasPrefix(instScope, protocol.ScopeFolder+":") {
+	if instScope == "" {
 		return false
 	}
 	if id, ok := strings.CutPrefix(settingScope, protocol.ScopeProject+":"); ok {
-		return id != "" && p.m.resolveScope(instScope).ProjectID == id
+		if id == "" || (!strings.HasPrefix(instScope, protocol.ScopeFolder+":") && !strings.HasPrefix(instScope, protocol.ScopeSession+":")) {
+			return false
+		}
+		return p.m.resolveScope(instScope).ProjectID == id
 	}
 	if id, ok := strings.CutPrefix(settingScope, protocol.ScopeSpace+":"); ok {
-		return id != "" && p.m.resolveScope(instScope).SpaceID == id
+		if id == "" || (!strings.HasPrefix(instScope, protocol.ScopeFolder+":") &&
+			!strings.HasPrefix(instScope, protocol.ScopeProject+":") &&
+			!strings.HasPrefix(instScope, protocol.ScopeSession+":")) {
+			return false
+		}
+		return p.m.resolveScope(instScope).SpaceID == id
 	}
 	return false
 }

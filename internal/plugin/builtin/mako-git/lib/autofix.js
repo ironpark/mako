@@ -314,7 +314,7 @@ export async function loadAutoFixState(s, ctx, mako, prNumber, opts = {}) {
   views.get(key).set(vk, Date.now());
   s.autofix = rec;
   await syncSessionSubscription(mako);
-  if (shouldWake && mako && mako.blocks) mako.blocks.reload("panel", vk);
+  if (shouldWake) wakeViews(mako, rec);
   return rec;
 }
 

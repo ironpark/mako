@@ -2,12 +2,14 @@ package gui
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"image/color"
 	"maps"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ironpark/ggui"
 	"github.com/ironpark/ggui/ui"
@@ -180,37 +182,278 @@ func (m *model) markAllUnreadSeen() {
 	}
 }
 
+// inboxDenyKey uniquely keys a pending approval's deny-reason draft.
+func inboxDenyKey(sessionID, approvalID string) string {
+	return sessionID + "\x00" + approvalID
+}
+
+// inboxDenyState returns the persistent deny-reason input state for a session's
+// pending approval so background session polls do not wipe in-progress text.
+func (m *model) inboxDenyState(sessionID, approvalID string) *ggui.StateValue[string] {
+	if m.inboxDeny == nil {
+		m.inboxDeny = map[string]*ggui.StateValue[string]{}
+	}
+	k := inboxDenyKey(sessionID, approvalID)
+	st, ok := m.inboxDeny[k]
+	if !ok {
+		st = ggui.State("")
+		m.inboxDeny[k] = st
+	}
+	return st
+}
+
+func (m *model) clearInboxDeny(sessionID, approvalID string) {
+	if m.inboxDeny == nil {
+		return
+	}
+	k := inboxDenyKey(sessionID, approvalID)
+	if st, ok := m.inboxDeny[k]; ok {
+		st.Set("")
+		delete(m.inboxDeny, k)
+	}
+}
+
+// inboxReplyState returns the persistent quick-reply input state for sessionID
+// so background session polls do not wipe in-progress replies.
+func (m *model) inboxReplyState(sessionID string) *ggui.StateValue[string] {
+	if m.inboxReply == nil {
+		m.inboxReply = map[string]*ggui.StateValue[string]{}
+	}
+	st, ok := m.inboxReply[sessionID]
+	if !ok {
+		st = ggui.State("")
+		m.inboxReply[sessionID] = st
+	}
+	return st
+}
+
+func (m *model) clearInboxReply(sessionID string) {
+	if m.inboxReply == nil {
+		return
+	}
+	if st, ok := m.inboxReply[sessionID]; ok {
+		st.Set("")
+		delete(m.inboxReply, sessionID)
+	}
+}
+
+// pruneInboxDrafts drops inbox input states for sessions or approvals that are
+// no longer present in sessions.
+func (m *model) pruneInboxDrafts(sessions []*protocol.SessionInfo) {
+	if len(m.inboxDeny) == 0 && len(m.inboxReply) == 0 {
+		return
+	}
+	liveSessions := make(map[string]bool, len(sessions))
+	liveApprovals := make(map[string]bool)
+	for _, s := range sessions {
+		if s == nil {
+			continue
+		}
+		liveSessions[s.GetId()] = true
+		if a := s.GetApproval(); a != nil {
+			liveApprovals[inboxDenyKey(s.GetId(), a.GetId())] = true
+		}
+	}
+	for k := range m.inboxDeny {
+		if !liveApprovals[k] {
+			delete(m.inboxDeny, k)
+		}
+	}
+	for id := range m.inboxReply {
+		if !liveSessions[id] {
+			delete(m.inboxReply, id)
+		}
+	}
+}
+
+// sendInboxQuickReply sends txt directly to session id via daemon RPC without
+// touching the session's composer draft or attached files, working even for
+// unattached sessions. Falls back to conn.sendText only when unlinked.
+func (m *model) sendInboxQuickReply(id, txt string) {
+	txt = strings.TrimSpace(txt)
+	if txt == "" {
+		return
+	}
+	s, ok := m.session(id)
+	if !ok {
+		return
+	}
+	conn := m.conns[id]
+	var enter []byte
+	if conn != nil {
+		enter = conn.enter()
+	}
+	if len(enter) == 0 {
+		enter = []byte{'\r'}
+	}
+	m.notePending(id, txt)
+	if !m.link.isLinked() {
+		if conn != nil {
+			conn.sendText(txt)
+		}
+		return
+	}
+	nodeID := m.remoteID(s.GetNodeId())
+	prev, done := submitAfter(id)
+	run := func() (struct{}, error) {
+		defer submitDone(id, done)
+		<-prev
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		c, err := m.link.client(ctx)
+		if err != nil {
+			return struct{}{}, err
+		}
+		_, err = c.Send(ctx, &protocol.Send{
+			NodeId:    nodeID,
+			SessionId: id,
+			Text:      txt,
+			Keys:      enter,
+		})
+		return struct{}{}, err
+	}
+	finish := func(_ struct{}, err error) {
+		if err != nil {
+			if conn != nil {
+				conn.sendText(txt)
+				return
+			}
+			m.connErr(err)
+			return
+		}
+		m.link.pollNow()
+	}
+	if post := m.post; post != nil {
+		go func() {
+			res, err := run()
+			post(func() { finish(res, err) })
+		}()
+		return
+	}
+	ggui.Async(run, finish)
+}
+
+// openInboxSession navigates from Needs You to session id (optionally switching
+// to Chat mode). Inside a Space window it clears sw.sidebarPage and selects the
+// session in sw if it belongs to sw's space, or opens it in its own Space
+// window / main window otherwise without leaving sw stuck on builtin:inbox.
+func (m *model) openInboxSession(sw *spaceWindowState, id string, chat bool) {
+	if sw == nil {
+		m.clearSidebarPage()
+		m.selectSession(id)
+		if chat {
+			m.setChatMode(id, true)
+		}
+		return
+	}
+	if sw.sidebarPage != nil && ggui.Peek(sw.sidebarPage) != "" {
+		sw.sidebarPage.Set("")
+	}
+	s, hasSess := m.session(id)
+	inThisSpace := sw.spaceID == "" || sw.spaceID == allSpaceID
+	var targetSpaceID string
+	var targetSpaceIdx int
+	if hasSess {
+		set := m.spacesNow()
+		sec := sectionID(set.Projects, s)
+		var owners []string
+		if o := s.GetOwner(); o != "" {
+			owners = append(owners, o)
+		}
+		for _, other := range ggui.Peek(m.Sessions) {
+			if o := other.GetOwner(); o != "" && sectionID(set.Projects, other) == sec && !slices.Contains(owners, o) {
+				owners = append(owners, o)
+			}
+		}
+		if !inThisSpace {
+			if idx, _, ok := spaceIndexInSet(set, sw.spaceID); ok && set.showsSection(idx, sec, owners) {
+				inThisSpace = true
+			} else {
+				targetSpaceIdx, _ = set.placeOf(sec, owners)
+				targetSpaceID = set.spaceID(targetSpaceIdx)
+			}
+		}
+	}
+	if inThisSpace {
+		m.spaceWindowSelectSession(sw, id)
+	} else if other := m.spaceWindows[targetSpaceID]; other != nil && other != sw {
+		m.spaceWindowSelectSession(other, id)
+		if other.win != nil {
+			other.win.Focus()
+		}
+	} else {
+		m.clearSidebarPage()
+		if targetSpaceIdx > 0 {
+			set := m.spacesNow()
+			if set.Space != allSpace && set.Space != targetSpaceIdx {
+				m.setSpace(targetSpaceIdx)
+			}
+		}
+		m.selectSession(id)
+		if m.window != nil {
+			m.window.Focus()
+		}
+	}
+	if chat {
+		m.setChatMode(id, true)
+	}
+}
+
 // askBatchApproveAll confirms and approves every standard tool approval in items.
-func (m *model) askBatchApproveAll(items []inboxItem) {
+func (m *model) askBatchApproveAll(items []inboxItem, sw *spaceWindowState) {
 	targets := batchApprovableItems(items)
 	if len(targets) == 0 {
 		return
 	}
+	type batchTarget struct {
+		sessionID  string
+		approvalID string
+	}
+	snapshots := make([]batchTarget, 0, len(targets))
 	titles := ggui.Peek(m.Titles)
 	var lines []string
-	for _, it := range targets[:min(len(targets), 12)] {
+	for i, it := range targets {
 		a := it.Session.GetApproval()
-		detail := strings.TrimSpace(a.GetTool() + " " + firstLine(a.GetDetail()))
-		lines = append(lines, "• "+sessionTitle(it.Session, titles[it.Session.GetId()])+" — "+detail)
+		if a == nil {
+			continue
+		}
+		snapshots = append(snapshots, batchTarget{sessionID: it.Session.GetId(), approvalID: a.GetId()})
+		if i < 12 {
+			detail := strings.TrimSpace(a.GetTool() + " " + firstLine(a.GetDetail()))
+			lines = append(lines, "• "+sessionTitle(it.Session, titles[it.Session.GetId()])+" — "+detail)
+		}
 	}
-	if len(targets) > 12 {
-		lines = append(lines, Tf("and %d more", len(targets)-12))
+	if len(snapshots) == 0 {
+		return
+	}
+	if len(snapshots) > 12 {
+		lines = append(lines, Tf("and %d more", len(snapshots)-12))
+	}
+	owner := ""
+	if sw != nil {
+		owner = sw.spaceID
 	}
 	m.askConfirm(confirmation{
-		Title:  Tf("Allow %d pending tool approvals?", len(targets)),
+		Title:  Tf("Allow %d pending tool approvals?", len(snapshots)),
 		Body:   strings.Join(lines, "\n"),
 		Action: T("Allow all"),
-		Safe:   true,
+		Safe:   false,
+		Owner:  owner,
 		Run: func() {
-			for _, it := range targets {
-				a := it.Session.GetApproval()
-				if a == nil {
+			for _, tgt := range snapshots {
+				s, ok := m.session(tgt.sessionID)
+				if !ok || s.GetState() != protocol.StateRunning {
 					continue
 				}
-				m.answerApproval(it.Session.GetId(), &protocol.AnswerApproval{
-					ApprovalId: a.GetId(),
+				cur := s.GetApproval()
+				if cur == nil || cur.GetId() != tgt.approvalID || !isBatchSafeApproval(cur) {
+					continue
+				}
+				m.answerApproval(tgt.sessionID, &protocol.AnswerApproval{
+					ApprovalId: cur.GetId(),
 					Decision:   protocol.DecisionAllow,
 				})
+				m.clearInboxDeny(tgt.sessionID, cur.GetId())
 			}
 		},
 	})
@@ -218,7 +461,11 @@ func (m *model) askBatchApproveAll(items []inboxItem) {
 
 // inboxSidebarRow is the always-available Needs You entry above Projects in
 // the left sidebar, showing live urgent/unread counts across every space.
-func inboxSidebarRow(m *model, active *ggui.StateValue[string]) ggui.Widget {
+func inboxSidebarRow(m *model, sw *spaceWindowState) ggui.Widget {
+	active := m.SidebarPage
+	if sw != nil {
+		active = sw.sidebarPage
+	}
 	return ggui.Reactive(func() ggui.Widget {
 		items := collectInboxItems(m.Sessions.Get(), m.Unread.Get())
 		urgent := 0
@@ -251,7 +498,7 @@ func inboxSidebarRow(m *model, active *ggui.StateValue[string]) ggui.Widget {
 			if ggui.Peek(active) == sidebarPageInbox {
 				active.Set("")
 			} else {
-				if m.Page != nil && ggui.Peek(m.Page) != "workspace" {
+				if sw == nil && m.Page != nil && ggui.Peek(m.Page) != "workspace" {
 					m.Page.Set("workspace")
 				}
 				active.Set(sidebarPageInbox)
@@ -286,7 +533,7 @@ func inboxHeaderBar(m *model, onClose func()) ggui.Widget {
 	})
 }
 
-func inboxView(m *model) ggui.Widget {
+func inboxView(m *model, sw *spaceWindowState) ggui.Widget {
 	filter := ggui.State(inboxFilterAll)
 	return ggui.Reactive(func() ggui.Widget {
 		allItems := collectInboxItems(m.Sessions.Get(), m.Unread.Get())
@@ -329,7 +576,7 @@ func inboxView(m *model) ggui.Widget {
 		var actions []ggui.Widget
 		if len(batchable) > 0 {
 			actions = append(actions, ui.Button(Tf("Allow all approvals (%d)", len(batchable)), func() {
-				m.askBatchApproveAll(allItems)
+				m.askBatchApproveAll(allItems, sw)
 			}).Pad(4, 10).Radius(8))
 		}
 		if nUnread > 0 {
@@ -357,7 +604,7 @@ func inboxView(m *model) ggui.Widget {
 			titles := m.Titles.Get()
 			cards := make([]ggui.Widget, 0, len(shown))
 			for _, it := range shown {
-				cards = append(cards, inboxCard(m, it, nodes, titles))
+				cards = append(cards, inboxCard(m, sw, it, nodes, titles))
 			}
 			body = widget.Scroll(widget.Box(widget.Column(cards...).Gap(12).Stretch()).Pad(16, 20)).Bar(skin.Surface3)
 		}
@@ -365,7 +612,7 @@ func inboxView(m *model) ggui.Widget {
 	})
 }
 
-func inboxCard(m *model, it inboxItem, nodes []*protocol.Node, titles map[string]string) ggui.Widget {
+func inboxCard(m *model, sw *spaceWindowState, it inboxItem, nodes []*protocol.Node, titles map[string]string) ggui.Widget {
 	s := it.Session
 	id := s.GetId()
 	title := sessionTitle(s, titles[id])
@@ -391,15 +638,8 @@ func inboxCard(m *model, it inboxItem, nodes []*protocol.Node, titles map[string
 		badgeCol = skin.DotWaiting
 	}
 
-	openSession := func() {
-		m.clearSidebarPage()
-		m.selectSession(id)
-	}
-	openChat := func() {
-		m.clearSidebarPage()
-		m.selectSession(id)
-		m.setChatMode(id, true)
-	}
+	openSession := func() { m.openInboxSession(sw, id, false) }
+	openChat := func() { m.openInboxSession(sw, id, true) }
 
 	metaParts := []string{proj, host, target}
 	if br := cmp.Or(s.GetWorktree().GetBranch(), s.GetBranch()); br != "" {
@@ -409,10 +649,9 @@ func inboxCard(m *model, it inboxItem, nodes []*protocol.Node, titles map[string
 
 	header := widget.Row(
 		agentGlyph(s.GetAgent(), skin.Muted).Size(15),
-		widget.Text(title).Size(14).Weight(ggui.WeightSemibold).NoWrap().Ellipsis(),
+		widget.Expanded(widget.Text(title).Size(14).Weight(ggui.WeightSemibold).NoWrap().Ellipsis()),
 		widget.Box(widget.Text(badgeText).Size(11).Weight(ggui.WeightMedium).Color(badgeCol).NoWrap()).
 			Fill(badgeCol.Alpha(0.14)).Radius(6).Pad(2, 7),
-		widget.Spacer(),
 		ui.Button(T("Open session"), openSession).Ghost().Pad(4, 8).Radius(6),
 	).Gap(8).Align(widget.AlignCenter)
 
@@ -462,22 +701,30 @@ func inboxCard(m *model, it inboxItem, nodes []*protocol.Node, titles map[string
 			} else if a.GetDetail() != "" {
 				rows = append(rows, toolBlock(a.GetDetail(), false))
 			}
-			why := ggui.State("")
+			why := m.inboxDenyState(id, a.GetId())
 			allow := func(option string) func() {
 				return func() {
 					m.answerApproval(id, &protocol.AnswerApproval{ApprovalId: a.GetId(), Decision: protocol.DecisionAllow, Option: option})
+					m.clearInboxDeny(id, a.GetId())
 				}
 			}
-			deny := func() { denyWith(m, id, a, ggui.Peek(why)) }
+			deny := func() {
+				denyWith(m, id, a, ggui.Peek(why))
+				m.clearInboxDeny(id, a.GetId())
+			}
+			inTerm := func() {
+				m.decide(id, a, protocol.DecisionTerminal)()
+				m.clearInboxDeny(id, a.GetId())
+			}
 			btns := []ggui.Widget{ui.Button(T("Allow"), allow(""))}
 			for _, o := range a.GetOptions() {
 				btns = append(btns, ui.Button(optionLabel(o), allow(o.GetId())).Outline())
 			}
-			btns = append(btns, inTerminalButton(m.decide(id, a, protocol.DecisionTerminal)))
+			btns = append(btns, inTerminalButton(inTerm))
 			rows = append(rows,
 				widget.Wrap(btns...).Gap(8).RunGap(8),
 				widget.Row(
-					widget.Expanded(ui.TextField(why).Placeholder(T("Tell the agent what to do instead")).Name(T("Why not")).OnSubmit(func(string) { deny() })),
+					widget.Expanded(ui.TextField(why).Key("inbox-deny:"+id+":"+a.GetId()).Placeholder(T("Tell the agent what to do instead")).Name(T("Why not")).OnSubmit(func(string) { deny() })),
 					ui.Button(T("Deny"), deny).Outline(),
 				).Gap(8).Align(widget.AlignCenter),
 			)
@@ -488,22 +735,54 @@ func inboxCard(m *model, it inboxItem, nodes []*protocol.Node, titles map[string
 		if g := strings.TrimSpace(ae.GetGuidance()); g != "" {
 			rows = append(rows, muted(widget.Text(g).Size(12).Selectable()))
 		}
+		if cmd := strings.TrimSpace(ae.GetCommand()); cmd != "" {
+			pill := widget.Box(widget.Text(cmd).Font(ggui.DefaultMonoFont()).Size(12.5).Selectable()).
+				Fill(skin.Surface2).Radius(6).Pad(5, 9)
+			rows = append(rows, widget.Wrap(
+				pill,
+				ui.Button(T("Copy command"), func() {
+					ggui.CurrentClipboard().Write(cmd)
+					if m.toaster != nil {
+						m.toaster.Push(ui.Toast(T("Command copied"), cmd))
+					}
+				}).Outline(),
+			).Gap(8).RunGap(8).Align(widget.AlignCenter))
+		}
 	case inboxWaiting:
-		rows = append(rows, muted(widget.Text(T("Waiting for your answer")).Size(13)))
-		if m.conns[id] != nil {
-			reply := ggui.State("")
+		if d := s.GetDialog(); d != nil {
+			rows = append(rows, muted(widget.Text(T("The agent waits in its terminal")).Size(13)))
+			if d.GetText() != "" {
+				rows = append(rows, widget.Box(scrolled(toolBlock(d.GetText(), false))).MaxHeight(200))
+			}
+			var options []ggui.Widget
+			for i, o := range d.GetOptions() {
+				idx := i
+				label := o
+				if idx == int(d.GetSelected()) {
+					label = "❯ " + label
+				}
+				options = append(options, ui.Button(label, func() {
+					m.answerDialog(id, d.GetId(), idx)
+					m.markSessionSeen(id)
+				}).Outline())
+			}
+			if len(options) > 0 {
+				rows = append(rows, widget.Wrap(options...).Gap(8).RunGap(8))
+			}
+		} else {
+			rows = append(rows, muted(widget.Text(T("Waiting for your answer")).Size(13)))
+			reply := m.inboxReplyState(id)
 			send := func() {
 				txt := strings.TrimSpace(ggui.Peek(reply))
 				if txt == "" {
 					return
 				}
-				state := m.chatState(id)
-				m.sendPrompt(id, state, m.composerDraft(id), txt)
-				reply.Set("")
+				m.sendInboxQuickReply(id, txt)
+				m.clearInboxReply(id)
 				m.markSessionSeen(id)
 			}
 			rows = append(rows, widget.Row(
-				widget.Expanded(ui.TextField(reply).Placeholder(T("Send a quick reply…")).Name(T("Quick reply")).OnSubmit(func(string) { send() })),
+				widget.Expanded(ui.TextField(reply).Key("inbox-reply:"+id).Placeholder(T("Send a quick reply…")).Name(T("Quick reply")).OnSubmit(func(string) { send() })),
 				ui.Button(T("Send"), send),
 			).Gap(8).Align(widget.AlignCenter))
 		}
