@@ -32,7 +32,8 @@ func (n *Node) DialAddrs() []string {
 const Revision = 55
 
 // RevisionRepoTrust adds the user's trust in repositories' command files:
-// RepoTrust and RepoTrustInfo (Envelope 178 and 179).
+// RepoTrust and RepoTrustInfo (Envelope 178 and 179), whose trust of a
+// file that changed since it was shown is refused with CodeChanged.
 const RevisionRepoTrust = 55
 
 // RevisionRoutines adds a node's routines, read and changed through its

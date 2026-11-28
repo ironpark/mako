@@ -461,8 +461,8 @@ func WriteError(w io.Writer, id string, err error) error {
 
 // Codes of an Error.
 const (
-	// CodeChanged is a WriteFile refused because the file changed since it
-	// was read.
+	// CodeChanged is a WriteFile, or a RepoTrust that trusts a file,
+	// refused because the file changed since it was read.
 	CodeChanged = "changed"
 	// CodeUnsupported is a request its daemon does not know, being older
 	// than the requester.

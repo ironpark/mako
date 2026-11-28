@@ -54,7 +54,8 @@ func (d *Daemon) repoTrustLocal(r *protocol.RepoTrust) (*protocol.RepoTrustInfo,
 				return nil, errors.New("trusting a file needs the SHA-256 of the content shown")
 			}
 			if !strings.EqualFold(r.GetSha256(), sum) {
-				return nil, fmt.Errorf("%s changed since it was shown; read it again before trusting it", r.GetPath())
+				return nil, &protocol.CodedError{Code: protocol.CodeChanged,
+					Message: fmt.Sprintf("%s changed since it was shown; read it again before trusting it", r.GetPath())}
 			}
 			rec, err := store.Trust(root, rel, sum)
 			if err != nil {

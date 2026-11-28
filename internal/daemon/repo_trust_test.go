@@ -93,8 +93,8 @@ func TestRepoTrustThroughTheDaemon(t *testing.T) {
 	if show().GetTrusted() {
 		t.Fatal("a changed file is still trusted")
 	}
-	if _, err := c.RepoTrust(ctx, &protocol.RepoTrust{Op: protocol.RepoTrustAllow, Path: file, Sha256: f.GetSha256()}); err == nil {
-		t.Fatal("a file that changed since it was shown was trusted")
+	if _, err := c.RepoTrust(ctx, &protocol.RepoTrust{Op: protocol.RepoTrustAllow, Path: file, Sha256: f.GetSha256()}); !protocol.HasCode(err, protocol.CodeChanged) {
+		t.Fatalf("a file that changed since it was shown: %v, want code %q", err, protocol.CodeChanged)
 	}
 
 	list, err := c.RepoTrust(ctx, &protocol.RepoTrust{Op: protocol.RepoTrustList})

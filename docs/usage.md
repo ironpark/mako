@@ -534,5 +534,7 @@ you typed it. A file of a linked worktree stands for the same file of the
 repository's main work tree, which is the one mako reads and trusts.
 
 The desktop app shows the whole file in a dialog with a Trust button when
-mako skips its commands. The trust is kept on the machine of the
+mako skips its commands, in the window you are in. If the file changes
+before you trust it, mako refuses the trust, and the dialog offers Reload
+to show the file as it reads now. The trust is kept on the machine of the
 repository, in `repo-trust.json` in its configuration folder.

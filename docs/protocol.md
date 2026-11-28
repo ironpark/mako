@@ -255,7 +255,7 @@ error { message: "unknown session \"7f3a…\"", code: "" }
 
 | Code | Meaning |
 |---|---|
-| `changed` | A `write_file` was refused because the file changed since the writer read it. |
+| `changed` | A `write_file` was refused because the file changed since the writer read it, or a `repo_trust` `trust` because the file changed since it was shown (revision 55). |
 | `unsupported` | The daemon does not know the request's type; it predates the caller. |
 | `no_plugin` | A `watch_block` or `block_event` of a plugin the node does not have, or a node that runs no plugins: asking again changes nothing until the plugin is installed (revision 31). |
 
@@ -869,7 +869,7 @@ link stays inside the repository. These requests need revision 55.
 | `op` | |
 |---|---|
 | `""` | Show the file at `path` (absolute). Its repository is the main work tree of the git work tree it is in. A file of a linked worktree stands for the same file of the main work tree, which is the one shown and trusted: features read a repository's command files from its main work tree, for a session in any worktree of it. A folder whose `.git` points into a repository that does not list it as a worktree, both ways, is a repository of its own. The reply gives its `root`, `path`, `sha256` and `content` as it reads now, and `trusted` if the user trusts it as it reads now. |
-| `trust` | Trust the file at `path` as it reads now. Its content must hash to `sha256`, the content the user saw. If the file changed, the node refuses. |
+| `trust` | Trust the file at `path` as it reads now. Its content must hash to `sha256`, the content the user saw. If the file changed, the node refuses with code `changed`, and the front-end shows the file again before it asks again. |
 | `revoke` | Forget the file at `path`, or every file of the repository whose root is `path`, also when the repository is gone. A path in a linked worktree stands for the same path of the main work tree. |
 | `list` | List every file trusted, with the hash it is trusted at. |
 
