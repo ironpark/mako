@@ -1,9 +1,9 @@
 # Mako 경쟁 제품 분석 및 제품 개선 로드맵 (Claude Code · Herdr · Orca 대비)
 
-작성 기준일: 2026년 11월 28일.
+작성 기준일: 2026년 11월 28일 (분석 기준 커밋: `main` @ `9228da7`, P0/P1 반영 이전 베이스라인).
 상태: **P0 (#8, #9, #10)** 및 **P1 (#11, #12, #14)** 구현 PR 제출 완료 · **P2** 기획 대기.
 
-본 문서는 멀티 에이전트 코딩 워크스페이스/오케스트레이터 시장의 주요 제품인 **Claude Code (CLI/Desktop)**, **Herdr**, **Orca (Stably AI)** 와 현재 Mako 코드베이스를 기획·아키텍처 관점에서 비교 분석하고, Mako의 고유 강점을 살려 경쟁 우위를 확보하기 위한 우선순위별(P0 / P1 / P2) 개선 로드맵을 정리한다.
+본 문서는 멀티 에이전트 코딩 워크스페이스/오케스트레이터 시장의 주요 제품인 **Claude Code (CLI/Desktop)**, **Herdr**, **Orca (Stably AI)** 와 P0/P1 반영 이전의 Mako 코드베이스(`9228da7`)를 기획·아키텍처 관점에서 비교 분석하고, Mako의 고유 강점을 살려 경쟁 우위를 확보하기 위한 우선순위별(P0 / P1 / P2) 개선 로드맵을 정리한다.
 
 ---
 
@@ -18,7 +18,7 @@
 
 ### 경쟁 제품별 핵심 포지셔닝 비교
 
-| 항목 | Mako (기준 시점) | Claude Code (CLI/Desktop) | Herdr (`herdr.dev`) | Orca (`stablyai/orca`) |
+| 항목 | Mako (`9228da7` · P0/P1 이전) | Claude Code (CLI/Desktop) | Herdr (`herdr.dev`) | Orca (`stablyai/orca`) |
 | :--- | :--- | :--- | :--- | :--- |
 | **핵심 컨셉** | 분산 P2P 메시 + 멀티 하네스 워크스페이스 | 단일 벤더 딥 인티그레이션 코딩 에이전트 | AI 에이전트 전용 tmux / 터미널 멀티플렉서 | Worktree-First Agent Development Environment |
 | **멀티 머신 / 원격** | P2P 메시 + Direct SSH + 원클릭 `makod` 설치 | Remote Control (모바일 연동) / Cloud Sandbox | SSH 기반 멀티 머신 집계 | 로컬 중심 + iOS/Android 알림 |
@@ -32,7 +32,9 @@
 
 ---
 
-## 2. 영역별 갭 분석 (Gap Analysis)
+## 2. 영역별 갭 분석 (Gap Analysis · `9228da7` P0/P1 이전 베이스라인)
+
+> 아래 2.1~2.5절은 P0/P1 PR(#8~#12, #14)이 머지되기 전 `main` (`9228da7`) 기준의 초기 진단 기록이다. 각 갭 중 P0/P1으로 구현·제출된 항목의 최신 반영 내역은 [§3 로드맵](#3-우선순위별-개선-로드맵-p0--p1--p2)의 해당 PR을 참고한다.
 
 ### 2.1 워크트리 격리 및 병렬 실행 *(vs. Orca, Claude Code)*
 * **워크트리 부트스트랩 / 공유 디렉토리 부재**: `internal/gitstat/worktree.go`의 `AddWorktree`가 순수 `git worktree add -b`만 수행하므로, 모노레포·프론트엔드 프로젝트에서 워크트리 생성마다 `node_modules`·`.cache`·`.env` 및 초기화 명령을 수동으로 처리해야 하는 마찰이 큼.
@@ -68,7 +70,7 @@
 | # | 과제 | 핵심 구현 내용 | PR |
 |---|---|---|---|
 | **P0-1** | **Worktree-First 병렬 실행 & 부트스트랩** | `.mako/worktree.toml`(`base_ref`, `shared_paths`, `copy_paths`, `setup_cmd`, `teardown_cmd`) 및 `orca.yaml` 호환 폴백, 실패 시 자동 롤백, MCP `spawn_agent`의 `worktree`/`branch`/`base` 격리, **Settings ▸ Teams** 팀원별 워크트리 격리, CLI `mako -worktree / -branch run` | [#8](https://github.com/ironpark/mako/pull/8) |
-| **P0-2** | **데스크톱 "Needs You" Inbox / 트리아지 뷰** | 좌측 사이드바 상단·Command Palette·단축키(`Cmd+Shift+I`) 통합 트리아지 뷰(`builtin:inbox`), 우선순위 정렬(Approvals → Auth Errors → Waiting → Unread), 필터, 카드 내 즉시 승인/거부/빠른 답장/Dismiss, 안전한 도구 승인 일괄 허용(`Allow all approvals`) | [#9](https://github.com/ironpark/mako/pull/9) |
+| **P0-2** | **데스크톱 "Needs You" Inbox / 트리아지 뷰** | 좌측 사이드바 상단·Command Palette·단축키(`⌘⇧I`) 통합 트리아지 뷰(`builtin:inbox`), 우선순위 정렬(Approvals → Auth Errors → Waiting → Unread), 필터, 카드 내 즉시 승인/거부/빠른 답장/Dismiss, 안전한 도구 승인 일괄 허용(`Allow all approvals`) | [#9](https://github.com/ironpark/mako/pull/9) |
 | **P0-3** | **멀티 파일 Draft Review · Hunk Stage/Unstage · 파일 포함 Rewind** | Diff 라인 선택의 **Add to review** 누적 큐 및 구조화 배치 전송·해결 추적, `git apply --cached` 기반 Hunk Stage/Unstage, 임시 인덱스(`GIT_INDEX_FILE`) 기반 Shadow Git Checkpoint 자동 캡처(`refs/mako/checkpoints/...`) + **대화+코드 / 대화만 / 코드만** 선택 Rewind 모달 | [#10](https://github.com/ironpark/mako/pull/10) |
 
 ### P1 — Mako만의 차별화 무기화 *(PR 제출 완료)*
