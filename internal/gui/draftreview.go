@@ -27,9 +27,17 @@ type draftReviewComment struct {
 	Note      string
 	Resolved  bool
 	CreatedAt time.Time
+	// SentTo is the session whose composer the comment was put in, until
+	// that composer sends; Heading is the comment's heading there, which
+	// the message sent must hold for the comment to be resolved.
+	SentTo  string
+	Heading string
 }
 
 func (m *model) addDraftReviewComment(root fileRoot, path string, lines []*protocol.DiffLine, note string) {
+	if len(lines) == 0 {
+		return
+	}
 	m.draftReviewSeq++
 	id := "rc-" + strconv.Itoa(m.draftReviewSeq)
 	item := draftReviewComment{
@@ -100,8 +108,8 @@ func formatDiffBlock(lines []*protocol.DiffLine) string {
 }
 
 // formatDraftReviewBatch builds a structured multi-file review prompt from all
-// unresolved comments in comments.
-func formatDraftReviewBatch(comments []draftReviewComment) string {
+// unresolved comments in comments, and the heading each has in it, by ID.
+func formatDraftReviewBatch(comments []draftReviewComment) (string, map[string]string) {
 	var active []draftReviewComment
 	for _, c := range comments {
 		if !c.Resolved {
@@ -109,33 +117,75 @@ func formatDraftReviewBatch(comments []draftReviewComment) string {
 		}
 	}
 	if len(active) == 0 {
-		return ""
+		return "", nil
 	}
 	files := map[string]bool{}
 	for _, c := range active {
 		files[c.Path] = true
 	}
+	headings := make(map[string]string, len(active))
 	var b strings.Builder
 	fmt.Fprintf(&b, "Please address the following %d code review comments across %d file(s):\n", len(active), len(files))
 	for i, c := range active {
-		fmt.Fprintf(&b, "\n### %d. %s\n", i+1, c.LineRef)
+		headings[c.ID] = fmt.Sprintf("### %d. %s", i+1, c.LineRef)
+		b.WriteString("\n" + headings[c.ID] + "\n")
 		if c.DiffBlock != "" {
-			b.WriteString("```diff\n")
+			fence := codeFence(c.DiffBlock)
+			b.WriteString(fence + "diff\n")
 			b.WriteString(c.DiffBlock)
-			b.WriteString("\n```\n")
+			b.WriteString("\n" + fence + "\n")
 		}
 		if c.Note != "" {
 			b.WriteString(c.Note)
 			b.WriteByte('\n')
 		}
 	}
-	return strings.TrimSpace(b.String())
+	return strings.TrimSpace(b.String()), headings
+}
+
+// codeFence is a Markdown fence that body, put inside it, cannot close:
+// longer than any run of backticks in it, and three at least.
+func codeFence(body string) string {
+	longest, run := 0, 0
+	for _, r := range body {
+		if r == '`' {
+			run++
+			longest = max(longest, run)
+		} else {
+			run = 0
+		}
+	}
+	return strings.Repeat("`", max(3, longest+1))
+}
+
+// draftReviewSent resolves the comments put in session id's composer whose
+// headings the message it sends, text, still has as lines of their own,
+// once it sends it; the others are open again.
+func (m *model) draftReviewSent(id, text string) {
+	if !slices.ContainsFunc(ggui.Peek(m.DraftReview), func(c draftReviewComment) bool { return c.SentTo == id }) {
+		return
+	}
+	m.DraftReview.Update(func(list []draftReviewComment) []draftReviewComment {
+		next := slices.Clone(list)
+		for i := range next {
+			if next[i].SentTo != id {
+				continue
+			}
+			if strings.Contains("\n"+text+"\n", "\n"+next[i].Heading+"\n") {
+				next[i].Resolved = true
+			}
+			next[i].SentTo, next[i].Heading = "", ""
+		}
+		return next
+	})
 }
 
 // draftReviewBar shows queued multi-file review comments at the bottom of a
 // diff tab and lets the user inspect, resolve, or batch-send them to an agent.
 func draftReviewBar(m *model, root fileRoot) ggui.Widget {
-	expanded := ggui.State(false)
+	// The drawer's state is the model's: the diff tab builds the bar again
+	// whenever its lines change or are picked.
+	expanded := m.DraftReviewOpen
 	return ggui.Reactive(func() ggui.Widget {
 		comments := draftReviewForRoot(m.DraftReview.Get(), root)
 		if len(comments) == 0 {
@@ -150,20 +200,25 @@ func draftReviewBar(m *model, root fileRoot) ggui.Widget {
 			}
 		}
 		open := expanded.Get()
+		// The agents to send to come and go with the sessions, named by
+		// their titles.
+		m.Sessions.Get()
+		titles := m.Titles.Get()
 		agents := m.agentsFor(root)
 		sendBatch := func(sessionID string) func() {
 			return func() {
-				text := formatDraftReviewBatch(comments)
+				text, headings := formatDraftReviewBatch(comments)
 				if text == "" {
 					return
 				}
 				m.askAgent(sessionID, text)
-				// Mark sent comments resolved so the user can track follow-up.
+				// Only the composer's sending resolves them: the draft may
+				// be edited, or cleared, first.
 				m.DraftReview.Update(func(list []draftReviewComment) []draftReviewComment {
 					next := slices.Clone(list)
 					for i := range next {
-						if next[i].Root == root && !next[i].Resolved {
-							next[i].Resolved = true
+						if h, ok := headings[next[i].ID]; ok {
+							next[i].SentTo, next[i].Heading = sessionID, h
 						}
 					}
 					return next
@@ -178,11 +233,11 @@ func draftReviewBar(m *model, root fileRoot) ggui.Widget {
 		case len(agents) == 0:
 			sendBtn = ui.Button(T("Send review"), func() {}).Disabled(true).Name(T("No agent runs in this project"))
 		case len(agents) == 1:
-			sendBtn = ui.Button(Tf("Send review (%d) to %s", unresolved, sessionTitle(agents[0], ggui.Peek(m.Titles)[agents[0].GetId()])), sendBatch(agents[0].GetId()))
+			sendBtn = ui.Button(Tf("Send review (%d) to %s", unresolved, sessionTitle(agents[0], titles[agents[0].GetId()])), sendBatch(agents[0].GetId()))
 		default:
 			items := make([]ggui.Widget, len(agents))
 			for i, s := range agents {
-				items[i] = ui.MenuItem(sessionTitle(s, ggui.Peek(m.Titles)[s.GetId()]), sendBatch(s.GetId()))
+				items[i] = ui.MenuItem(sessionTitle(s, titles[s.GetId()]), sendBatch(s.GetId()))
 			}
 			sendBtn = ui.MenuOf(widget.Text(Tf("Send review (%d)", unresolved)), items...).Width(240).Name(T("Send review"))
 		}
@@ -195,7 +250,7 @@ func draftReviewBar(m *model, root fileRoot) ggui.Widget {
 			icon(pick(open, "chevron-down", "chevron-up")).Size(13).Color(skin.Muted),
 			icon("message-square").Size(13).Color(skin.AccentBright),
 			widget.Text(summary).Size(12.5).Weight(ggui.WeightMedium).NoWrap(),
-		).Gap(6).Align(widget.AlignCenter), func() { expanded.Set(!ggui.Peek(expanded)) }).Ghost().Pad(4, 8).Radius(6)
+		).Gap(6).Align(widget.AlignCenter), func() { expanded.Set(!ggui.Peek(expanded)) }).Ghost().Pad(4, 8).Radius(6).Name(summary)
 
 		head := widget.Box(widget.Row(
 			toggleBtn,

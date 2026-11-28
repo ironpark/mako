@@ -419,6 +419,9 @@ func selectionBar(m *model, root fileRoot, path string, lines []*protocol.DiffLi
 	}
 	addToReview := func() {
 		s := ggui.Peek(sel)
+		if s.empty() || s.From < 0 || s.To >= len(lines) {
+			return // the diff was read again, shorter, meanwhile
+		}
 		m.addDraftReviewComment(root, path, lines[s.From:s.To+1], ggui.Peek(note))
 		note.Set("")
 		sel.Set(noSel)
