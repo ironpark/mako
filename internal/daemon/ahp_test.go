@@ -123,7 +123,7 @@ func TestAHPMirrorsASession(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	h := d.host(t.Context(), s)
+	h := heldHost(t, d, s)
 	waitFor(t, "the client's prompt typed", func() bool {
 		h.mu.Lock()
 		defer h.mu.Unlock()

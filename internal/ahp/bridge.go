@@ -8,6 +8,8 @@ package ahp
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,11 +27,18 @@ import (
 )
 
 // ClientID names the bridge to the session hosts it follows: its actions
-// carry it, and front-ends show it as ClientName.
-const (
-	ClientID   = "ahp"
-	ClientName = "AHP"
-)
+// carry it, and front-ends show it as ClientName. It is this process's
+// own: a host binds a client_id to where its requests come from, which
+// for the bridge of each node is another place.
+var ClientID = "ahp-" + randomID()
+
+const ClientName = "AHP"
+
+func randomID() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
 
 // listEvery is how often the bridge lists the sessions, to add the new
 // and remove the ended.
@@ -304,12 +313,12 @@ func (b *Bridge) mirrorOf(uri string) *mirror {
 	return b.sessions[uri]
 }
 
-// act sends a session_action for session m, as the bridge's next.
+// act sends a session_action for session m, as the bridge's next, until
+// the host answers: a try that fails on the way, which the host may have
+// taken, is made again, the same action, which the host takes once. What
+// the host refused (protocol.CodeNotTaken), or a daemon does not know, is
+// not tried again.
 func (b *Bridge) act(ctx context.Context, m *mirror, req *protocol.SessionAction) error {
-	c, err := b.client(ctx)
-	if err != nil {
-		return err
-	}
 	b.mu.Lock()
 	b.seq++
 	req.ClientId, req.ClientSeq = ClientID, b.seq
@@ -317,14 +326,27 @@ func (b *Bridge) act(ctx context.Context, m *mirror, req *protocol.SessionAction
 	req.NodeId, req.SessionId = m.node, m.id
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	_, err = c.SessionAction(ctx, req)
-	var coded *protocol.CodedError
-	if err != nil && !errors.As(err, &coded) && ctx.Err() == nil {
-		// No answer: the same action again, which the session's host
-		// takes once.
-		_, err = c.SessionAction(ctx, req)
+	wait := 250 * time.Millisecond
+	for {
+		c, err := b.client(ctx)
+		if err == nil {
+			if _, err = c.SessionAction(ctx, req); err == nil {
+				return nil
+			}
+			if protocol.HasCode(err, protocol.CodeNotTaken) || protocol.HasCode(err, protocol.CodeUnsupported) {
+				return err
+			}
+			if _, answered := errors.AsType[*protocol.CodedError](err); !answered {
+				b.dropClient(c) // no answer of the daemon's: dial again
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(wait):
+		}
+		wait = min(2*wait, 4*time.Second)
 	}
-	return err
 }
 
 // backend takes what AHP clients do on the mirrored sessions to them.
