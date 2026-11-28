@@ -190,11 +190,22 @@ func raceCommitMessage(target, prompt string) string {
 const raceStartTimeout = 90 * time.Second
 
 // startRace launches every contestant in its own isolated git worktree with the
-// same prompt and registers a raceGroup for side-by-side comparison.
+// same prompt and registers a raceGroup for side-by-side comparison. On an
+// SSH host without makod it starts nothing: the daemon cannot merge a
+// winner or delete the other worktrees there, so the race could not end.
 func (m *model) startRace(tab string, f newSession) {
 	targets := raceTargetSet(f.Agent, f.RaceTargets)
 	if len(targets) < 2 {
 		m.startSession(tab, f)
+		return
+	}
+	if m.directSSH(f.NodeID) {
+		if tab == "" || m.launches[tab] == nil {
+			tab, _ = m.newLaunch(f)
+		}
+		l := m.launchOf(tab)
+		l.Starting.Set(false)
+		l.Err.Set(T("Comparing agents needs makod on this SSH host. Install it there, or start one agent."))
 		return
 	}
 	if tab != "" {
@@ -507,6 +518,9 @@ func raceChanged(groups []raceGroup, ask raceAsk) string {
 // raceWinnerReady is the worktree winner runs in, once nothing stops it
 // from being merged now; else what stops it, as a title and why.
 func (m *model) raceWinnerReady(winner raceEntry) (wt *protocol.Worktree, title, why string) {
+	if m.directSSH(winner.NodeID) {
+		return nil, T("Could not merge winner"), T("Merging a race's winner needs makod on this SSH host.")
+	}
 	if wt = m.raceWorktree(winner); wt == nil {
 		return nil, T("Could not merge winner"), T("Winning session has no worktree")
 	}
@@ -768,7 +782,8 @@ func (m *model) cleanUpRaceLosers(groupID string, losers []raceLoser) {
 // launchCompareMenu lets the user pick additional agents/profiles in the Launch
 // tab to run the same prompt side by side in isolated worktrees. It reads
 // only what the tab picks besides its prompt, so typing does not rebuild it.
-func launchCompareMenu(l *launchState, where ggui.Readable[launchWhere], targets, picked ggui.Readable[[]string]) ggui.Widget {
+// On an SSH host without makod it says why no race runs there.
+func launchCompareMenu(m *model, l *launchState, where ggui.Readable[launchWhere], targets, picked ggui.Readable[[]string]) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		w, all, chosen := where.Get(), targets.Get(), picked.Get()
 		if isShellTarget(w.Agent) {
@@ -777,6 +792,12 @@ func launchCompareMenu(l *launchState, where ggui.Readable[launchWhere], targets
 		candidates := slices.DeleteFunc(slices.Clone(all), func(t string) bool { return t == w.Agent })
 		if len(candidates) == 0 {
 			return widget.Box()
+		}
+		m.Nodes.Get() // a host's makod, coming or going, changes what it can do
+		if m.directSSH(w.NodeID) {
+			chip := widget.Row(icon("columns-2").Size(14).Color(skin.ExtraMuted),
+				widget.Text(T("Compare")).Size(13).Color(skin.ExtraMuted).NoWrap()).Gap(6).Align(widget.AlignCenter)
+			return ui.Tooltip(widget.Box(chip).Pad(2, 4), T("Comparing agents needs makod on this SSH host: without it, a race's winner could not be merged, nor the other worktrees deleted."))
 		}
 		items := make([]ggui.Widget, 0, len(candidates)+2)
 		if len(chosen) > 0 {

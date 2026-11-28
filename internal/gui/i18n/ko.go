@@ -2093,8 +2093,11 @@ var catalogKo = map[string]string{
 	"%s: its session did not stop, so its worktree was kept":               "%s: 세션이 종료되지 않아 워크트리를 유지했습니다",
 
 	// Race checks, cleanup and dismissal
-	"A %s is under way in its worktree. Finish or abort it in its session first.": "워크트리에서 %s 작업이 진행 중입니다. 먼저 해당 세션에서 완료하거나 중단하세요.",
-	"Its worktree has files in conflict. Resolve them in its session first.":      "워크트리에 충돌한 파일이 있습니다. 먼저 해당 세션에서 해결하세요.",
+	"Comparing agents needs makod on this SSH host. Install it there, or start one agent.":                                             "에이전트 비교에는 이 SSH 호스트의 makod가 필요합니다. 호스트에 설치하거나 에이전트 하나만 시작하세요.",
+	"Comparing agents needs makod on this SSH host: without it, a race's winner could not be merged, nor the other worktrees deleted.": "에이전트 비교에는 이 SSH 호스트의 makod가 필요합니다. makod 없이는 선택한 결과를 병합하거나 나머지 워크트리를 삭제할 수 없습니다.",
+	"Merging a race's winner needs makod on this SSH host.":                                                                            "선택한 결과를 병합하려면 이 SSH 호스트에 makod가 필요합니다.",
+	"A %s is under way in its worktree. Finish or abort it in its session first.":                                                      "워크트리에서 %s 작업이 진행 중입니다. 먼저 해당 세션에서 완료하거나 중단하세요.",
+	"Its worktree has files in conflict. Resolve them in its session first.":                                                           "워크트리에 충돌한 파일이 있습니다. 먼저 해당 세션에서 해결하세요.",
 	"The race was dismissed.":                        "비교가 목록에서 제거되었습니다.",
 	"Its winner was already merged.":                 "이미 결과가 병합되었습니다.",
 	"Some of its agents are still starting.":         "아직 시작 중인 에이전트가 있습니다.",

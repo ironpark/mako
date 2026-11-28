@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/sshremote"
 )
 
 func TestRaceTargetSetAndPartition(t *testing.T) {
@@ -232,5 +233,27 @@ func TestDismissRaceForgetsOnlyTheComparison(t *testing.T) {
 	}
 	if len(ggui.Peek(m.Sessions)) != 3 {
 		t.Fatal("dismissing a race stopped its sessions")
+	}
+}
+
+func TestNoRaceStartsOnAnSSHHostWithoutMakod(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	useEnglish(t)
+	m := newModel(config.Default(), "")
+	m.Nodes.Set([]*protocol.Node{{Id: "ssh:box", Name: "box", Features: []string{sshremote.FeatureSSH, sshremote.FeatureSSHDirect}}})
+	f := newSession{NodeID: "ssh:box", Project: "~/repo", Agent: "claude", RaceTargets: []string{"codex"}, Prompt: "Fix it", Worktree: true}
+	tab, l := m.newLaunch(f)
+	m.startRace(tab, f)
+	if len(ggui.Peek(m.Races.Groups)) != 0 {
+		t.Fatal("a race was started on an SSH host without makod")
+	}
+	if err := ggui.Peek(l.Err); !strings.Contains(err, "makod") || ggui.Peek(l.Starting) {
+		t.Fatalf("launch tab err=%q starting=%v", err, ggui.Peek(l.Starting))
+	}
+
+	// With makod on the host, the same race is let start.
+	m.Nodes.Set([]*protocol.Node{{Id: "ssh:box", Name: "box", Features: []string{sshremote.FeatureSSH, sshremote.FeatureSSHDaemon}}})
+	if m.directSSH("ssh:box") {
+		t.Fatal("a host with makod taken for one without")
 	}
 }

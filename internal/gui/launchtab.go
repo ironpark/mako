@@ -206,7 +206,7 @@ func launchBox(m *model, id string, l *launchState) ggui.Widget {
 		field,
 		branchRow,
 		quotaWarn,
-		widget.Row(agents, launchCompareMenu(l, where, targets, picked), launchTeamMenu(m, l, where, comparing), widget.Spacer(),
+		widget.Row(agents, launchCompareMenu(m, l, where, targets, picked), launchTeamMenu(m, l, where, comparing), widget.Spacer(),
 			roundButton("arrow-up", T("Start session"), start, l.Starting)).Gap(6).Align(widget.AlignCenter),
 		errLine,
 	).Gap(6).Stretch()
