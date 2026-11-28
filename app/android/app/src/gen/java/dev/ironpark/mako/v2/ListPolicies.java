@@ -9,7 +9,7 @@ package dev.ironpark.mako.v2;
  * <pre>
  * ListPolicies asks this node's daemon for its cross-agent permission
  * policy rules and the approvals they decided. Local front-ends only. The
- * reply is Policies (revision 54).
+ * reply is Policies (revision 56).
  * </pre>
  *
  * Protobuf type {@code mako.v2.ListPolicies}
@@ -109,7 +109,7 @@ public  final class ListPolicies extends
    * <pre>
    * ListPolicies asks this node's daemon for its cross-agent permission
    * policy rules and the approvals they decided. Local front-ends only. The
-   * reply is Policies (revision 54).
+   * reply is Policies (revision 56).
    * </pre>
    *
    * Protobuf type {@code mako.v2.ListPolicies}

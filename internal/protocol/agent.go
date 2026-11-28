@@ -29,7 +29,7 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 54
+const Revision = 56
 
 // RevisionRoutines adds a node's routines, read and changed through its
 // daemon (ListRoutines, Routines and RoutineAction, Envelope 167 to 169),
@@ -43,7 +43,7 @@ const RevisionCodeCheckpoints = 53
 // RevisionPolicies adds the cross-agent permission policies' requests:
 // list_policies and set_policies, answered with policies (ListPolicies,
 // SetPolicies and Policies, Envelope 175 to 177).
-const RevisionPolicies = 54
+const RevisionPolicies = 56
 
 // RevisionCodexFastMode adds session-scoped Codex Fast Mode state and control:
 // SessionInfo.fast_mode (field 44), AgentControls.fast_mode (field 4),

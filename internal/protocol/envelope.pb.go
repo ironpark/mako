@@ -1976,7 +1976,7 @@ type Envelope_RoutineAction struct {
 
 type Envelope_ListPolicies struct {
 	// Cross-agent permission policies and the approvals they decided
-	// (revision 54).
+	// (revision 56).
 	ListPolicies *ListPolicies `protobuf:"bytes,175,opt,name=list_policies,json=listPolicies,proto3,oneof"`
 }
 

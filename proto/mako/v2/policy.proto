@@ -8,12 +8,12 @@ option go_package = "github.com/ironpark/mako/internal/protocol";
 
 // ListPolicies asks this node's daemon for its cross-agent permission
 // policy rules and the approvals they decided. Local front-ends only. The
-// reply is Policies (revision 54).
+// reply is Policies (revision 56).
 message ListPolicies {}
 
 // SetPolicies replaces this node's daemon's global permission policy
 // rules, each checked before any is saved. Local front-ends only. The reply
-// is Policies (revision 54).
+// is Policies (revision 56).
 message SetPolicies {
   repeated PolicyRule rules = 1;
 }

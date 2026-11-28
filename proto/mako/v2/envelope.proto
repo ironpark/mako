@@ -215,7 +215,7 @@ message Envelope {
     RoutineAction routine_action = 169;
 
     // Cross-agent permission policies and the approvals they decided
-    // (revision 54).
+    // (revision 56).
     ListPolicies list_policies = 175;
     SetPolicies set_policies = 176;
     Policies policies = 177;

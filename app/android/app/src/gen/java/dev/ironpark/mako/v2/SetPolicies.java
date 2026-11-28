@@ -9,7 +9,7 @@ package dev.ironpark.mako.v2;
  * <pre>
  * SetPolicies replaces this node's daemon's global permission policy
  * rules, each checked before any is saved. Local front-ends only. The reply
- * is Policies (revision 54).
+ * is Policies (revision 56).
  * </pre>
  *
  * Protobuf type {@code mako.v2.SetPolicies}
@@ -204,7 +204,7 @@ public  final class SetPolicies extends
    * <pre>
    * SetPolicies replaces this node's daemon's global permission policy
    * rules, each checked before any is saved. Local front-ends only. The reply
-   * is Policies (revision 54).
+   * is Policies (revision 56).
    * </pre>
    *
    * Protobuf type {@code mako.v2.SetPolicies}
