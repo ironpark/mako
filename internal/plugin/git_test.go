@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -133,7 +135,9 @@ func (f *fakeGitHost) fire(t GitTarget) {
 }
 
 type fakeForgeHost struct {
-	fn func(ctx context.Context, t GitTarget, branch string) (*ForgeBranch, error)
+	fn       func(ctx context.Context, t GitTarget, branch string) (*ForgeBranch, error)
+	detailFn func(ctx context.Context, t GitTarget, number int32) (*ForgePRDetail, error)
+	logsFn   func(ctx context.Context, t GitTarget, runID int64, maxLines int32) (*ForgeFailedLogs, error)
 }
 
 func (f *fakeForgeHost) BranchStatus(ctx context.Context, t GitTarget, branch string) (*ForgeBranch, error) {
@@ -149,9 +153,29 @@ func (f *fakeForgeHost) BranchStatus(ctx context.Context, t GitTarget, branch st
 		PRChecks:  "pass",
 		Runs:      3,
 		RunsState: "pass",
-		RunNumber: 101,
+		RunID:     101,
 		RunHead:   "abc1234",
 	}, nil
+}
+
+func (f *fakeForgeHost) PullRequestDetail(ctx context.Context, t GitTarget, number int32) (*ForgePRDetail, error) {
+	if f.detailFn != nil {
+		return f.detailFn(ctx, t, number)
+	}
+	return &ForgePRDetail{
+		Forge:   "github",
+		Number:  number,
+		Title:   "Add git plugin",
+		State:   "OPEN",
+		HeadOID: "abc1234",
+	}, nil
+}
+
+func (f *fakeForgeHost) FailedLogs(ctx context.Context, t GitTarget, runID int64, maxLines int32) (*ForgeFailedLogs, error) {
+	if f.logsFn != nil {
+		return f.logsFn(ctx, t, runID, maxLines)
+	}
+	return &ForgeFailedLogs{Logs: "test failed"}, nil
 }
 
 func TestGitReadForgeAndAsyncRun(t *testing.T) {
@@ -601,6 +625,12 @@ func TestGitUnavailableAndLimits(t *testing.T) {
 	if _, err := h.ForgeBranchStatus(context.Background(), nil); !errors.Is(err, ErrForgeUnavailable) {
 		t.Fatalf("ForgeBranchStatus err = %v; want ErrForgeUnavailable", err)
 	}
+	if _, err := h.ForgePullRequestDetail(context.Background(), nil); !errors.Is(err, ErrForgeUnavailable) {
+		t.Fatalf("ForgePullRequestDetail err = %v; want ErrForgeUnavailable", err)
+	}
+	if _, err := h.ForgeFailedLogs(context.Background(), nil); !errors.Is(err, ErrForgeUnavailable) {
+		t.Fatalf("ForgeFailedLogs err = %v; want ErrForgeUnavailable", err)
+	}
 
 	// Max 16 watches enforced; 17th fails; Unwatch frees a slot.
 	fg := newFakeGitHost()
@@ -676,4 +706,166 @@ func TestGitUnavailableAndLimits(t *testing.T) {
 		t.Fatal("31st git run unexpectedly succeeded")
 	}
 	p3.cancelPending("done")
+
+	// PullRequestDetail & FailedLogs happy path and argument validation.
+	p4 := newPlugin(m2, "test-forge-autofix")
+	h4 := &host{p: p4}
+	if _, err := h4.ForgePullRequestDetail(context.Background(), &hostapi.ForgeServicePullRequestDetailRequest{
+		Target: reqTarget, Number: -1,
+	}); err == nil {
+		t.Fatal("negative PR number should fail")
+	}
+	for _, id := range []float64{0, -1, 1.5, math.NaN(), math.Inf(1), 1<<53 + 2} {
+		if _, err := h4.ForgeFailedLogs(context.Background(), &hostapi.ForgeServiceFailedLogsRequest{
+			Target: reqTarget, RunId: id,
+		}); err == nil {
+			t.Fatalf("run_id %v should fail", id)
+		}
+	}
+	det, err := h4.ForgePullRequestDetail(context.Background(), &hostapi.ForgeServicePullRequestDetailRequest{
+		Target: reqTarget, Number: 42,
+	})
+	if err != nil || det.GetNumber() != 42 || det.GetHeadOid() != "abc1234" {
+		t.Fatalf("ForgePullRequestDetail = (%+v, %v)", det, err)
+	}
+	logs, err := h4.ForgeFailedLogs(context.Background(), &hostapi.ForgeServiceFailedLogsRequest{
+		Target: reqTarget, RunId: 101, MaxLines: 100,
+	})
+	if err != nil || logs.GetLogs() != "test failed" {
+		t.Fatalf("ForgeFailedLogs = (%+v, %v)", logs, err)
+	}
+}
+
+// TestForgeRunIDsPast32Bits keeps a GitHub run ID, past 2^31, exact from
+// BranchStatus to FailedLogs, and FailedLogs keeps the end of a long log,
+// where the failure is.
+func TestForgeRunIDsPast32Bits(t *testing.T) {
+	const runID = int64(46100334498)
+	var gotID int64
+	failure := "--- FAIL: TestThing (0.01s)\n    thing_test.go:12: want 2, got 3"
+	long := strings.Repeat("ok  noise line\n", (maxGitOutput/15)+100) + failure
+	ff := &fakeForgeHost{
+		fn: func(context.Context, GitTarget, string) (*ForgeBranch, error) {
+			return &ForgeBranch{Forge: "github", Runs: 1, RunsState: "failure", RunID: runID, RunHead: "abc1234"}, nil
+		},
+		logsFn: func(_ context.Context, _ GitTarget, id int64, _ int32) (*ForgeFailedLogs, error) {
+			gotID = id
+			return &ForgeFailedLogs{Logs: long}, nil
+		},
+	}
+	fg := newFakeGitHost()
+	fg.allowed[GitTarget{Path: "/repo"}] = true
+	m := New(Config{DataDir: t.TempDir(), Git: fg, Forge: ff})
+	defer m.shutdown()
+	p := newPlugin(m, "test-forge-runid")
+	h := &host{p: p}
+	target := &hostapi.GitTarget{Path: "/repo"}
+
+	bs, err := h.ForgeBranchStatus(context.Background(), &hostapi.ForgeServiceBranchStatusRequest{Target: target, Branch: "main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bs.GetRunId() != float64(runID) || int64(bs.GetRunId()) != runID {
+		t.Fatalf("run_id = %v; want %d", bs.GetRunId(), runID)
+	}
+	if bs.GetRunNumber() != 0 {
+		t.Fatalf("run_number = %d; want 0 for an ID past 32 bits", bs.GetRunNumber())
+	}
+
+	logs, err := h.ForgeFailedLogs(context.Background(), &hostapi.ForgeServiceFailedLogsRequest{Target: target, RunId: bs.GetRunId()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotID != runID {
+		t.Fatalf("FailedLogs got run %d; want %d", gotID, runID)
+	}
+	if !logs.GetTruncated() || len(logs.GetLogs()) > maxGitOutput {
+		t.Fatalf("logs: truncated %v, %d bytes; want truncated within %d", logs.GetTruncated(), len(logs.GetLogs()), maxGitOutput)
+	}
+	if !strings.HasSuffix(logs.GetLogs(), failure) {
+		t.Fatalf("logs lost their end: %q", logs.GetLogs()[len(logs.GetLogs())-80:])
+	}
+	if !strings.HasPrefix(logs.GetLogs(), "ok  noise line\n") {
+		t.Fatalf("logs start mid-line: %q", logs.GetLogs()[:40])
+	}
+}
+
+func TestCutTail(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		n    int
+		want string
+		cut  bool
+	}{
+		{"short", 10, "short", false},
+		{"one\ntwo\nthree", 9, "three", true},
+		{"one\ntwo\nthree", 5, "three", true},
+		// Whole runes only: "한" is 3 bytes.
+		{"ab한글", 5, "글", true},
+		// No line break to start at: whole runes from the end.
+		{"abcdef", 3, "def", true},
+	} {
+		got, cut := cutTail(tc.in, tc.n)
+		if got != tc.want || cut != tc.cut {
+			t.Errorf("cutTail(%q, %d) = (%q, %v); want (%q, %v)", tc.in, tc.n, got, cut, tc.want, tc.cut)
+		}
+		if !utf8.ValidString(got) {
+			t.Errorf("cutTail(%q, %d) = %q, not UTF-8", tc.in, tc.n, got)
+		}
+	}
+}
+
+// TestForgePullRequestDetailComments passes each comment's author's tie to
+// the repository, bots, and the viewer through, and answers with the latest
+// comments when there are more than it holds.
+func TestForgePullRequestDetailComments(t *testing.T) {
+	var comments []ForgeComment
+	for i := range maxForgeComments + 20 {
+		comments = append(comments, ForgeComment{Author: "alice", Body: fmt.Sprintf("comment %d", i), Association: "MEMBER"})
+	}
+	comments = append(comments, ForgeComment{Author: "renovate", Body: "bump", Bot: true, Association: "NONE"})
+	ff := &fakeForgeHost{detailFn: func(_ context.Context, _ GitTarget, n int32) (*ForgePRDetail, error) {
+		return &ForgePRDetail{Forge: "github", Number: n, State: "OPEN", Viewer: "me", Comments: comments}, nil
+	}}
+	fg := newFakeGitHost()
+	fg.allowed[GitTarget{Path: "/repo"}] = true
+	m := New(Config{DataDir: t.TempDir(), Git: fg, Forge: ff})
+	defer m.shutdown()
+	h := &host{p: newPlugin(m, "test-forge-comments")}
+	det, err := h.ForgePullRequestDetail(context.Background(), &hostapi.ForgeServicePullRequestDetailRequest{
+		Target: &hostapi.GitTarget{Path: "/repo"}, Number: 7,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs := det.GetComments()
+	if det.GetViewer() != "me" || len(cs) != maxForgeComments {
+		t.Fatalf("viewer %q, %d comments; want me, %d", det.GetViewer(), len(cs), maxForgeComments)
+	}
+	if first := cs[0].GetBody(); first != "comment 21" {
+		t.Fatalf("first comment %q; want the oldest of the latest, comment 21", first)
+	}
+	last := cs[len(cs)-1]
+	if last.GetAuthor() != "renovate" || !last.GetBot() || last.GetAssociation() != "NONE" {
+		t.Fatalf("last comment = %+v; want renovate's, a bot's", last)
+	}
+	if cs[0].GetAssociation() != "MEMBER" || cs[0].GetBot() {
+		t.Fatalf("first comment = %+v; want a member's", cs[0])
+	}
+
+	// Long bodies stop at the byte budget, the latest kept.
+	big := strings.Repeat("x", maxForgeComment)
+	comments = nil
+	for range 100 {
+		comments = append(comments, ForgeComment{Author: "alice", Body: big})
+	}
+	det, err = h.ForgePullRequestDetail(context.Background(), &hostapi.ForgeServicePullRequestDetailRequest{
+		Target: &hostapi.GitTarget{Path: "/repo"}, Number: 7,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := maxForgeCommentBytes / maxForgeComment; len(det.GetComments()) != want {
+		t.Fatalf("%d comments; want %d within the byte budget", len(det.GetComments()), want)
+	}
 }

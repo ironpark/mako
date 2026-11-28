@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
@@ -58,7 +60,13 @@ func (a pluginAgents) Start(ctx context.Context, id string, req plugin.AgentStar
 	if parent == "" {
 		parent = plugin.ParentOf(id)
 	}
-	child, err := d.startSessionAs(ctx, newSessionID(), &protocol.OpenSession{Agent: req.Agent, Profile: req.Profile, Project: req.Root, Args: prompter.PromptArgs(prompt)}, parent)
+	open := &protocol.OpenSession{Agent: req.Agent, Profile: req.Profile, Project: req.Root, Args: prompter.PromptArgs(prompt)}
+	if req.NoYolo {
+		// The plugin asked for an agent that asks before it acts; it can
+		// never ask for one that does not.
+		open.Yolo = proto.Bool(false)
+	}
+	child, err := d.startSessionAs(ctx, newSessionID(), open, parent)
 	if err != nil {
 		return "", err
 	}

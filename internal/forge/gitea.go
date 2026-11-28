@@ -405,6 +405,9 @@ func (g *gitea) view(ctx context.Context, r *protocol.ForgeView) (*protocol.Forg
 		func() error { return g.api(ctx, http.MethodGet, fmt.Sprintf("/issues/%d/comments", n), nil, &comments) },
 		func() error { return g.api(ctx, http.MethodGet, fmt.Sprintf("/pulls/%d/reviews", n), nil, &reviews) },
 		func() error {
+			if r.GetNoFiles() {
+				return nil
+			}
 			return g.api(ctx, http.MethodGet, fmt.Sprintf("/pulls/%d/files?limit=300", n), nil, &files)
 		},
 	)

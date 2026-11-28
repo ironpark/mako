@@ -203,12 +203,21 @@ message GitServiceRunResponse {
   string job = 1;
 }
 
-// ForgeService reads pull request and CI status for a repository's branch.
+// ForgeService reads pull request, review, and CI status/logs for a repository.
 // Rate limit: 30/min.
 service ForgeService {
   // BranchStatus returns the pull request and CI runs of a branch, as the
   // Git panel's forge line shows them.
   rpc BranchStatus(ForgeServiceBranchStatusRequest) returns (ForgeServiceBranchStatusResponse) {
+    option (permission) = "forge:read";
+  }
+  // PullRequestDetail reads a pull request's checks, reviews, and inline
+  // review comments. Number 0 reads the currently checked-out branch's PR.
+  rpc PullRequestDetail(ForgeServicePullRequestDetailRequest) returns (ForgeServicePullRequestDetailResponse) {
+    option (permission) = "forge:read";
+  }
+  // FailedLogs reads the tail of a failed CI run's failed step logs.
+  rpc FailedLogs(ForgeServiceFailedLogsRequest) returns (ForgeServiceFailedLogsResponse) {
     option (permission) = "forge:read";
   }
 }
@@ -230,6 +239,87 @@ message ForgeServiceBranchStatusResponse {
   string pr_checks = 6;
   int32 runs = 7;
   string runs_state = 8;
+  // run_number is the run's ID when it fits in 32 bits, else 0: read
+  // run_id.
   int32 run_number = 9;
   string run_head = 10;
+  // run_id is the run's ID, exact past 32 bits (GitHub's are).
+  double run_id = 11;
+}
+
+// ForgeServicePullRequestDetailRequest asks for a pull request's checks and
+// review comments.
+message ForgeServicePullRequestDetailRequest {
+  GitTarget target = 1;
+  // number is the pull request number; 0 selects the current branch's PR.
+  int32 number = 2;
+}
+
+// ForgeServicePullRequestDetailResponse holds a pull request's metadata,
+// checks, and review/conversation comments.
+message ForgeServicePullRequestDetailResponse {
+  string forge = 1;
+  int32 number = 2;
+  string title = 3;
+  string state = 4;
+  string url = 5;
+  string head = 6;
+  string base = 7;
+  string head_oid = 8;
+  string checks = 9;
+  string body = 10;
+  repeated ForgeCheckEntry check_items = 11;
+  // comments are oldest first, the latest 300 at most.
+  repeated ForgeCommentEntry comments = 12;
+  // viewer is the forge account the node reads it as, which the user's
+  // own comments carry; "" when the forge does not tell.
+  string viewer = 13;
+}
+
+// ForgeCheckEntry is one CI check run or commit status on a pull request.
+message ForgeCheckEntry {
+  string name = 1;
+  string workflow = 2;
+  string status = 3;
+  string conclusion = 4;
+  string url = 5;
+}
+
+// ForgeCommentEntry is one comment, review, or inline diff review comment on a
+// pull request.
+message ForgeCommentEntry {
+  string author = 1;
+  string body = 2;
+  // time is RFC 3339 formatted.
+  string time = 3;
+  // review is "APPROVED", "CHANGES_REQUESTED", "COMMENTED", or "" for plain
+  // conversation comments.
+  string review = 4;
+  string path = 5;
+  int32 line = 6;
+  // association is the author's tie to the repository: "OWNER",
+  // "MEMBER", "COLLABORATOR", "CONTRIBUTOR", "NONE" and the like, or ""
+  // when the forge does not tell (Forgejo and Gitea do not).
+  string association = 7;
+  // bot says the author is a bot or an app.
+  bool bot = 8;
+}
+
+// ForgeServiceFailedLogsRequest asks for the tail of a failed CI run's logs.
+message ForgeServiceFailedLogsRequest {
+  GitTarget target = 1;
+  // run_id is the run's ID, as BranchStatus gives it.
+  double run_id = 2;
+  // max_lines bounds the number of trailing log lines returned (default 250,
+  // max 400).
+  int32 max_lines = 3;
+}
+
+// ForgeServiceFailedLogsResponse holds a failed CI run's trailing error logs.
+message ForgeServiceFailedLogsResponse {
+  string logs = 1;
+  bool truncated = 2;
+  string workflow = 3;
+  string head = 4;
+  string url = 5;
 }

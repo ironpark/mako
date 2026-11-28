@@ -14,6 +14,8 @@ export function hostApi(call) {
     }),
     forge: Object.freeze({
       branchStatus: (req) => call("forge.branchStatus", req),
+      pullRequestDetail: (req) => call("forge.pullRequestDetail", req),
+      failedLogs: (req) => call("forge.failedLogs", req),
     }),
     log: Object.freeze({
       write: (req) => call("log.write", req),

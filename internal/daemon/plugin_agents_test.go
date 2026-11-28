@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -57,5 +58,35 @@ func TestPluginAgentsGoThroughTheAgentsPaths(t *testing.T) {
 	}
 	if _, err := a.Start(t.Context(), "ci", plugin.AgentStart{Agent: "nope", Root: t.TempDir(), Prompt: "x"}); err == nil {
 		t.Fatal("an unknown agent started")
+	}
+}
+
+// An agent a plugin starts with NoYolo asks before it acts, whatever its
+// agent's settings say; one started without it keeps them.
+func TestPluginAgentsStartWithoutYolo(t *testing.T) {
+	d, _ := projectMCPDaemon(t)
+	d.agentFile.mu.Lock()
+	claude := d.agentFile.agents["claude"]
+	claude.Yolo = true
+	d.agentFile.agents["claude"] = claude
+	d.agentFile.mu.Unlock()
+	a := pluginAgents{d}
+	yolo := func(noYolo bool) bool {
+		t.Helper()
+		id, err := a.Start(t.Context(), "ci", plugin.AgentStart{Agent: "claude", Root: t.TempDir(), Prompt: "x", NoYolo: noYolo})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, ok := d.sessions.get(id)
+		if !ok {
+			t.Fatalf("no session %s", id)
+		}
+		return slices.Contains(s.Command(), "--dangerously-skip-permissions")
+	}
+	if !yolo(false) {
+		t.Fatal("an agent set to YOLO started without it")
+	}
+	if yolo(true) {
+		t.Fatal("an agent started with NoYolo runs in YOLO mode")
 	}
 }

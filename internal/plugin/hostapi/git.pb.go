@@ -1281,17 +1281,21 @@ func (x *ForgeServiceBranchStatusRequest) GetBranch() string {
 // ForgeServiceBranchStatusResponse holds the pull request and CI summary for a
 // branch on its forge.
 type ForgeServiceBranchStatusResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Forge         string                 `protobuf:"bytes,1,opt,name=forge,proto3" json:"forge,omitempty"`
-	HasPr         bool                   `protobuf:"varint,2,opt,name=has_pr,json=hasPr,proto3" json:"has_pr,omitempty"`
-	PrNumber      int32                  `protobuf:"varint,3,opt,name=pr_number,json=prNumber,proto3" json:"pr_number,omitempty"`
-	PrTitle       string                 `protobuf:"bytes,4,opt,name=pr_title,json=prTitle,proto3" json:"pr_title,omitempty"`
-	PrState       string                 `protobuf:"bytes,5,opt,name=pr_state,json=prState,proto3" json:"pr_state,omitempty"`
-	PrChecks      string                 `protobuf:"bytes,6,opt,name=pr_checks,json=prChecks,proto3" json:"pr_checks,omitempty"`
-	Runs          int32                  `protobuf:"varint,7,opt,name=runs,proto3" json:"runs,omitempty"`
-	RunsState     string                 `protobuf:"bytes,8,opt,name=runs_state,json=runsState,proto3" json:"runs_state,omitempty"`
-	RunNumber     int32                  `protobuf:"varint,9,opt,name=run_number,json=runNumber,proto3" json:"run_number,omitempty"`
-	RunHead       string                 `protobuf:"bytes,10,opt,name=run_head,json=runHead,proto3" json:"run_head,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Forge     string                 `protobuf:"bytes,1,opt,name=forge,proto3" json:"forge,omitempty"`
+	HasPr     bool                   `protobuf:"varint,2,opt,name=has_pr,json=hasPr,proto3" json:"has_pr,omitempty"`
+	PrNumber  int32                  `protobuf:"varint,3,opt,name=pr_number,json=prNumber,proto3" json:"pr_number,omitempty"`
+	PrTitle   string                 `protobuf:"bytes,4,opt,name=pr_title,json=prTitle,proto3" json:"pr_title,omitempty"`
+	PrState   string                 `protobuf:"bytes,5,opt,name=pr_state,json=prState,proto3" json:"pr_state,omitempty"`
+	PrChecks  string                 `protobuf:"bytes,6,opt,name=pr_checks,json=prChecks,proto3" json:"pr_checks,omitempty"`
+	Runs      int32                  `protobuf:"varint,7,opt,name=runs,proto3" json:"runs,omitempty"`
+	RunsState string                 `protobuf:"bytes,8,opt,name=runs_state,json=runsState,proto3" json:"runs_state,omitempty"`
+	// run_number is the run's ID when it fits in 32 bits, else 0: read
+	// run_id.
+	RunNumber int32  `protobuf:"varint,9,opt,name=run_number,json=runNumber,proto3" json:"run_number,omitempty"`
+	RunHead   string `protobuf:"bytes,10,opt,name=run_head,json=runHead,proto3" json:"run_head,omitempty"`
+	// run_id is the run's ID, exact past 32 bits (GitHub's are).
+	RunId         float64 `protobuf:"fixed64,11,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1396,6 +1400,540 @@ func (x *ForgeServiceBranchStatusResponse) GetRunHead() string {
 	return ""
 }
 
+func (x *ForgeServiceBranchStatusResponse) GetRunId() float64 {
+	if x != nil {
+		return x.RunId
+	}
+	return 0
+}
+
+// ForgeServicePullRequestDetailRequest asks for a pull request's checks and
+// review comments.
+type ForgeServicePullRequestDetailRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Target *GitTarget             `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// number is the pull request number; 0 selects the current branch's PR.
+	Number        int32 `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForgeServicePullRequestDetailRequest) Reset() {
+	*x = ForgeServicePullRequestDetailRequest{}
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForgeServicePullRequestDetailRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForgeServicePullRequestDetailRequest) ProtoMessage() {}
+
+func (x *ForgeServicePullRequestDetailRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForgeServicePullRequestDetailRequest.ProtoReflect.Descriptor instead.
+func (*ForgeServicePullRequestDetailRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_git_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ForgeServicePullRequestDetailRequest) GetTarget() *GitTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *ForgeServicePullRequestDetailRequest) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+// ForgeServicePullRequestDetailResponse holds a pull request's metadata,
+// checks, and review/conversation comments.
+type ForgeServicePullRequestDetailResponse struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Forge      string                 `protobuf:"bytes,1,opt,name=forge,proto3" json:"forge,omitempty"`
+	Number     int32                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
+	Title      string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	State      string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	Url        string                 `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
+	Head       string                 `protobuf:"bytes,6,opt,name=head,proto3" json:"head,omitempty"`
+	Base       string                 `protobuf:"bytes,7,opt,name=base,proto3" json:"base,omitempty"`
+	HeadOid    string                 `protobuf:"bytes,8,opt,name=head_oid,json=headOid,proto3" json:"head_oid,omitempty"`
+	Checks     string                 `protobuf:"bytes,9,opt,name=checks,proto3" json:"checks,omitempty"`
+	Body       string                 `protobuf:"bytes,10,opt,name=body,proto3" json:"body,omitempty"`
+	CheckItems []*ForgeCheckEntry     `protobuf:"bytes,11,rep,name=check_items,json=checkItems,proto3" json:"check_items,omitempty"`
+	// comments are oldest first, the latest 300 at most.
+	Comments []*ForgeCommentEntry `protobuf:"bytes,12,rep,name=comments,proto3" json:"comments,omitempty"`
+	// viewer is the forge account the node reads it as, which the user's
+	// own comments carry; "" when the forge does not tell.
+	Viewer        string `protobuf:"bytes,13,opt,name=viewer,proto3" json:"viewer,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForgeServicePullRequestDetailResponse) Reset() {
+	*x = ForgeServicePullRequestDetailResponse{}
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForgeServicePullRequestDetailResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForgeServicePullRequestDetailResponse) ProtoMessage() {}
+
+func (x *ForgeServicePullRequestDetailResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForgeServicePullRequestDetailResponse.ProtoReflect.Descriptor instead.
+func (*ForgeServicePullRequestDetailResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_git_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetForge() string {
+	if x != nil {
+		return x.Forge
+	}
+	return ""
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetHead() string {
+	if x != nil {
+		return x.Head
+	}
+	return ""
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetBase() string {
+	if x != nil {
+		return x.Base
+	}
+	return ""
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetHeadOid() string {
+	if x != nil {
+		return x.HeadOid
+	}
+	return ""
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetChecks() string {
+	if x != nil {
+		return x.Checks
+	}
+	return ""
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetCheckItems() []*ForgeCheckEntry {
+	if x != nil {
+		return x.CheckItems
+	}
+	return nil
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetComments() []*ForgeCommentEntry {
+	if x != nil {
+		return x.Comments
+	}
+	return nil
+}
+
+func (x *ForgeServicePullRequestDetailResponse) GetViewer() string {
+	if x != nil {
+		return x.Viewer
+	}
+	return ""
+}
+
+// ForgeCheckEntry is one CI check run or commit status on a pull request.
+type ForgeCheckEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Workflow      string                 `protobuf:"bytes,2,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Conclusion    string                 `protobuf:"bytes,4,opt,name=conclusion,proto3" json:"conclusion,omitempty"`
+	Url           string                 `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForgeCheckEntry) Reset() {
+	*x = ForgeCheckEntry{}
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForgeCheckEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForgeCheckEntry) ProtoMessage() {}
+
+func (x *ForgeCheckEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForgeCheckEntry.ProtoReflect.Descriptor instead.
+func (*ForgeCheckEntry) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_git_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ForgeCheckEntry) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ForgeCheckEntry) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *ForgeCheckEntry) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ForgeCheckEntry) GetConclusion() string {
+	if x != nil {
+		return x.Conclusion
+	}
+	return ""
+}
+
+func (x *ForgeCheckEntry) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+// ForgeCommentEntry is one comment, review, or inline diff review comment on a
+// pull request.
+type ForgeCommentEntry struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Author string                 `protobuf:"bytes,1,opt,name=author,proto3" json:"author,omitempty"`
+	Body   string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
+	// time is RFC 3339 formatted.
+	Time string `protobuf:"bytes,3,opt,name=time,proto3" json:"time,omitempty"`
+	// review is "APPROVED", "CHANGES_REQUESTED", "COMMENTED", or "" for plain
+	// conversation comments.
+	Review string `protobuf:"bytes,4,opt,name=review,proto3" json:"review,omitempty"`
+	Path   string `protobuf:"bytes,5,opt,name=path,proto3" json:"path,omitempty"`
+	Line   int32  `protobuf:"varint,6,opt,name=line,proto3" json:"line,omitempty"`
+	// association is the author's tie to the repository: "OWNER",
+	// "MEMBER", "COLLABORATOR", "CONTRIBUTOR", "NONE" and the like, or ""
+	// when the forge does not tell (Forgejo and Gitea do not).
+	Association string `protobuf:"bytes,7,opt,name=association,proto3" json:"association,omitempty"`
+	// bot says the author is a bot or an app.
+	Bot           bool `protobuf:"varint,8,opt,name=bot,proto3" json:"bot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForgeCommentEntry) Reset() {
+	*x = ForgeCommentEntry{}
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForgeCommentEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForgeCommentEntry) ProtoMessage() {}
+
+func (x *ForgeCommentEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForgeCommentEntry.ProtoReflect.Descriptor instead.
+func (*ForgeCommentEntry) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_git_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ForgeCommentEntry) GetAuthor() string {
+	if x != nil {
+		return x.Author
+	}
+	return ""
+}
+
+func (x *ForgeCommentEntry) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+func (x *ForgeCommentEntry) GetTime() string {
+	if x != nil {
+		return x.Time
+	}
+	return ""
+}
+
+func (x *ForgeCommentEntry) GetReview() string {
+	if x != nil {
+		return x.Review
+	}
+	return ""
+}
+
+func (x *ForgeCommentEntry) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *ForgeCommentEntry) GetLine() int32 {
+	if x != nil {
+		return x.Line
+	}
+	return 0
+}
+
+func (x *ForgeCommentEntry) GetAssociation() string {
+	if x != nil {
+		return x.Association
+	}
+	return ""
+}
+
+func (x *ForgeCommentEntry) GetBot() bool {
+	if x != nil {
+		return x.Bot
+	}
+	return false
+}
+
+// ForgeServiceFailedLogsRequest asks for the tail of a failed CI run's logs.
+type ForgeServiceFailedLogsRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Target *GitTarget             `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// run_id is the run's ID, as BranchStatus gives it.
+	RunId float64 `protobuf:"fixed64,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
+	// max_lines bounds the number of trailing log lines returned (default 250,
+	// max 400).
+	MaxLines      int32 `protobuf:"varint,3,opt,name=max_lines,json=maxLines,proto3" json:"max_lines,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForgeServiceFailedLogsRequest) Reset() {
+	*x = ForgeServiceFailedLogsRequest{}
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForgeServiceFailedLogsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForgeServiceFailedLogsRequest) ProtoMessage() {}
+
+func (x *ForgeServiceFailedLogsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForgeServiceFailedLogsRequest.ProtoReflect.Descriptor instead.
+func (*ForgeServiceFailedLogsRequest) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_git_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ForgeServiceFailedLogsRequest) GetTarget() *GitTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *ForgeServiceFailedLogsRequest) GetRunId() float64 {
+	if x != nil {
+		return x.RunId
+	}
+	return 0
+}
+
+func (x *ForgeServiceFailedLogsRequest) GetMaxLines() int32 {
+	if x != nil {
+		return x.MaxLines
+	}
+	return 0
+}
+
+// ForgeServiceFailedLogsResponse holds a failed CI run's trailing error logs.
+type ForgeServiceFailedLogsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Logs          string                 `protobuf:"bytes,1,opt,name=logs,proto3" json:"logs,omitempty"`
+	Truncated     bool                   `protobuf:"varint,2,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	Workflow      string                 `protobuf:"bytes,3,opt,name=workflow,proto3" json:"workflow,omitempty"`
+	Head          string                 `protobuf:"bytes,4,opt,name=head,proto3" json:"head,omitempty"`
+	Url           string                 `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForgeServiceFailedLogsResponse) Reset() {
+	*x = ForgeServiceFailedLogsResponse{}
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForgeServiceFailedLogsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForgeServiceFailedLogsResponse) ProtoMessage() {}
+
+func (x *ForgeServiceFailedLogsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_mako_plugin_v1_git_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForgeServiceFailedLogsResponse.ProtoReflect.Descriptor instead.
+func (*ForgeServiceFailedLogsResponse) Descriptor() ([]byte, []int) {
+	return file_mako_plugin_v1_git_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *ForgeServiceFailedLogsResponse) GetLogs() string {
+	if x != nil {
+		return x.Logs
+	}
+	return ""
+}
+
+func (x *ForgeServiceFailedLogsResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
+func (x *ForgeServiceFailedLogsResponse) GetWorkflow() string {
+	if x != nil {
+		return x.Workflow
+	}
+	return ""
+}
+
+func (x *ForgeServiceFailedLogsResponse) GetHead() string {
+	if x != nil {
+		return x.Head
+	}
+	return ""
+}
+
+func (x *ForgeServiceFailedLogsResponse) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
 var File_mako_plugin_v1_git_proto protoreflect.FileDescriptor
 
 const file_mako_plugin_v1_git_proto_rawDesc = "" +
@@ -1491,7 +2029,7 @@ const file_mako_plugin_v1_git_proto_rawDesc = "" +
 	"\x03job\x18\x01 \x01(\tR\x03job\"l\n" +
 	"\x1fForgeServiceBranchStatusRequest\x121\n" +
 	"\x06target\x18\x01 \x01(\v2\x19.mako.plugin.v1.GitTargetR\x06target\x12\x16\n" +
-	"\x06branch\x18\x02 \x01(\tR\x06branch\"\xac\x02\n" +
+	"\x06branch\x18\x02 \x01(\tR\x06branch\"\xc3\x02\n" +
 	" ForgeServiceBranchStatusResponse\x12\x14\n" +
 	"\x05forge\x18\x01 \x01(\tR\x05forge\x12\x15\n" +
 	"\x06has_pr\x18\x02 \x01(\bR\x05hasPr\x12\x1b\n" +
@@ -1505,7 +2043,54 @@ const file_mako_plugin_v1_git_proto_rawDesc = "" +
 	"\n" +
 	"run_number\x18\t \x01(\x05R\trunNumber\x12\x19\n" +
 	"\brun_head\x18\n" +
-	" \x01(\tR\arunHead2\x95\x05\n" +
+	" \x01(\tR\arunHead\x12\x15\n" +
+	"\x06run_id\x18\v \x01(\x01R\x05runId\"q\n" +
+	"$ForgeServicePullRequestDetailRequest\x121\n" +
+	"\x06target\x18\x01 \x01(\v2\x19.mako.plugin.v1.GitTargetR\x06target\x12\x16\n" +
+	"\x06number\x18\x02 \x01(\x05R\x06number\"\x9b\x03\n" +
+	"%ForgeServicePullRequestDetailResponse\x12\x14\n" +
+	"\x05forge\x18\x01 \x01(\tR\x05forge\x12\x16\n" +
+	"\x06number\x18\x02 \x01(\x05R\x06number\x12\x14\n" +
+	"\x05title\x18\x03 \x01(\tR\x05title\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\x12\x10\n" +
+	"\x03url\x18\x05 \x01(\tR\x03url\x12\x12\n" +
+	"\x04head\x18\x06 \x01(\tR\x04head\x12\x12\n" +
+	"\x04base\x18\a \x01(\tR\x04base\x12\x19\n" +
+	"\bhead_oid\x18\b \x01(\tR\aheadOid\x12\x16\n" +
+	"\x06checks\x18\t \x01(\tR\x06checks\x12\x12\n" +
+	"\x04body\x18\n" +
+	" \x01(\tR\x04body\x12@\n" +
+	"\vcheck_items\x18\v \x03(\v2\x1f.mako.plugin.v1.ForgeCheckEntryR\n" +
+	"checkItems\x12=\n" +
+	"\bcomments\x18\f \x03(\v2!.mako.plugin.v1.ForgeCommentEntryR\bcomments\x12\x16\n" +
+	"\x06viewer\x18\r \x01(\tR\x06viewer\"\x8b\x01\n" +
+	"\x0fForgeCheckEntry\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
+	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x1e\n" +
+	"\n" +
+	"conclusion\x18\x04 \x01(\tR\n" +
+	"conclusion\x12\x10\n" +
+	"\x03url\x18\x05 \x01(\tR\x03url\"\xc7\x01\n" +
+	"\x11ForgeCommentEntry\x12\x16\n" +
+	"\x06author\x18\x01 \x01(\tR\x06author\x12\x12\n" +
+	"\x04body\x18\x02 \x01(\tR\x04body\x12\x12\n" +
+	"\x04time\x18\x03 \x01(\tR\x04time\x12\x16\n" +
+	"\x06review\x18\x04 \x01(\tR\x06review\x12\x12\n" +
+	"\x04path\x18\x05 \x01(\tR\x04path\x12\x12\n" +
+	"\x04line\x18\x06 \x01(\x05R\x04line\x12 \n" +
+	"\vassociation\x18\a \x01(\tR\vassociation\x12\x10\n" +
+	"\x03bot\x18\b \x01(\bR\x03bot\"\x86\x01\n" +
+	"\x1dForgeServiceFailedLogsRequest\x121\n" +
+	"\x06target\x18\x01 \x01(\v2\x19.mako.plugin.v1.GitTargetR\x06target\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\x01R\x05runId\x12\x1b\n" +
+	"\tmax_lines\x18\x03 \x01(\x05R\bmaxLines\"\x94\x01\n" +
+	"\x1eForgeServiceFailedLogsResponse\x12\x12\n" +
+	"\x04logs\x18\x01 \x01(\tR\x04logs\x12\x1c\n" +
+	"\ttruncated\x18\x02 \x01(\bR\ttruncated\x12\x1a\n" +
+	"\bworkflow\x18\x03 \x01(\tR\bworkflow\x12\x12\n" +
+	"\x04head\x18\x04 \x01(\tR\x04head\x12\x10\n" +
+	"\x03url\x18\x05 \x01(\tR\x03url2\x95\x05\n" +
 	"\n" +
 	"GitService\x12i\n" +
 	"\x06Status\x12'.mako.plugin.v1.GitServiceStatusRequest\x1a(.mako.plugin.v1.GitServiceStatusResponse\"\f\xca\xf3\x18\bgit:read\x12l\n" +
@@ -1514,9 +2099,14 @@ const file_mako_plugin_v1_git_proto_rawDesc = "" +
 	"ShowCommit\x12+.mako.plugin.v1.GitServiceShowCommitRequest\x1a,.mako.plugin.v1.GitServiceShowCommitResponse\"\f\xca\xf3\x18\bgit:read\x12f\n" +
 	"\x05Watch\x12&.mako.plugin.v1.GitServiceWatchRequest\x1a'.mako.plugin.v1.GitServiceWatchResponse\"\f\xca\xf3\x18\bgit:read\x12l\n" +
 	"\aUnwatch\x12(.mako.plugin.v1.GitServiceUnwatchRequest\x1a).mako.plugin.v1.GitServiceUnwatchResponse\"\f\xca\xf3\x18\bgit:read\x12a\n" +
-	"\x03Run\x12$.mako.plugin.v1.GitServiceRunRequest\x1a%.mako.plugin.v1.GitServiceRunResponse\"\r\xca\xf3\x18\tgit:write2\x92\x01\n" +
+	"\x03Run\x12$.mako.plugin.v1.GitServiceRunRequest\x1a%.mako.plugin.v1.GitServiceRunResponse\"\r\xca\xf3\x18\tgit:write2\xa2\x03\n" +
 	"\fForgeService\x12\x81\x01\n" +
 	"\fBranchStatus\x12/.mako.plugin.v1.ForgeServiceBranchStatusRequest\x1a0.mako.plugin.v1.ForgeServiceBranchStatusResponse\"\x0e\xca\xf3\x18\n" +
+	"forge:read\x12\x90\x01\n" +
+	"\x11PullRequestDetail\x124.mako.plugin.v1.ForgeServicePullRequestDetailRequest\x1a5.mako.plugin.v1.ForgeServicePullRequestDetailResponse\"\x0e\xca\xf3\x18\n" +
+	"forge:read\x12{\n" +
+	"\n" +
+	"FailedLogs\x12-.mako.plugin.v1.ForgeServiceFailedLogsRequest\x1a..mako.plugin.v1.ForgeServiceFailedLogsResponse\"\x0e\xca\xf3\x18\n" +
 	"forge:readB2Z0github.com/ironpark/mako/internal/plugin/hostapib\x06proto3"
 
 var (
@@ -1531,27 +2121,33 @@ func file_mako_plugin_v1_git_proto_rawDescGZIP() []byte {
 	return file_mako_plugin_v1_git_proto_rawDescData
 }
 
-var file_mako_plugin_v1_git_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_mako_plugin_v1_git_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_mako_plugin_v1_git_proto_goTypes = []any{
-	(*GitTarget)(nil),                        // 0: mako.plugin.v1.GitTarget
-	(*GitServiceStatusRequest)(nil),          // 1: mako.plugin.v1.GitServiceStatusRequest
-	(*GitServiceStatusResponse)(nil),         // 2: mako.plugin.v1.GitServiceStatusResponse
-	(*GitFileEntry)(nil),                     // 3: mako.plugin.v1.GitFileEntry
-	(*GitStashEntry)(nil),                    // 4: mako.plugin.v1.GitStashEntry
-	(*GitWorktreeInfo)(nil),                  // 5: mako.plugin.v1.GitWorktreeInfo
-	(*GitServiceHistoryRequest)(nil),         // 6: mako.plugin.v1.GitServiceHistoryRequest
-	(*GitServiceHistoryResponse)(nil),        // 7: mako.plugin.v1.GitServiceHistoryResponse
-	(*GitCommitEntry)(nil),                   // 8: mako.plugin.v1.GitCommitEntry
-	(*GitServiceShowCommitRequest)(nil),      // 9: mako.plugin.v1.GitServiceShowCommitRequest
-	(*GitServiceShowCommitResponse)(nil),     // 10: mako.plugin.v1.GitServiceShowCommitResponse
-	(*GitServiceWatchRequest)(nil),           // 11: mako.plugin.v1.GitServiceWatchRequest
-	(*GitServiceWatchResponse)(nil),          // 12: mako.plugin.v1.GitServiceWatchResponse
-	(*GitServiceUnwatchRequest)(nil),         // 13: mako.plugin.v1.GitServiceUnwatchRequest
-	(*GitServiceUnwatchResponse)(nil),        // 14: mako.plugin.v1.GitServiceUnwatchResponse
-	(*GitServiceRunRequest)(nil),             // 15: mako.plugin.v1.GitServiceRunRequest
-	(*GitServiceRunResponse)(nil),            // 16: mako.plugin.v1.GitServiceRunResponse
-	(*ForgeServiceBranchStatusRequest)(nil),  // 17: mako.plugin.v1.ForgeServiceBranchStatusRequest
-	(*ForgeServiceBranchStatusResponse)(nil), // 18: mako.plugin.v1.ForgeServiceBranchStatusResponse
+	(*GitTarget)(nil),                             // 0: mako.plugin.v1.GitTarget
+	(*GitServiceStatusRequest)(nil),               // 1: mako.plugin.v1.GitServiceStatusRequest
+	(*GitServiceStatusResponse)(nil),              // 2: mako.plugin.v1.GitServiceStatusResponse
+	(*GitFileEntry)(nil),                          // 3: mako.plugin.v1.GitFileEntry
+	(*GitStashEntry)(nil),                         // 4: mako.plugin.v1.GitStashEntry
+	(*GitWorktreeInfo)(nil),                       // 5: mako.plugin.v1.GitWorktreeInfo
+	(*GitServiceHistoryRequest)(nil),              // 6: mako.plugin.v1.GitServiceHistoryRequest
+	(*GitServiceHistoryResponse)(nil),             // 7: mako.plugin.v1.GitServiceHistoryResponse
+	(*GitCommitEntry)(nil),                        // 8: mako.plugin.v1.GitCommitEntry
+	(*GitServiceShowCommitRequest)(nil),           // 9: mako.plugin.v1.GitServiceShowCommitRequest
+	(*GitServiceShowCommitResponse)(nil),          // 10: mako.plugin.v1.GitServiceShowCommitResponse
+	(*GitServiceWatchRequest)(nil),                // 11: mako.plugin.v1.GitServiceWatchRequest
+	(*GitServiceWatchResponse)(nil),               // 12: mako.plugin.v1.GitServiceWatchResponse
+	(*GitServiceUnwatchRequest)(nil),              // 13: mako.plugin.v1.GitServiceUnwatchRequest
+	(*GitServiceUnwatchResponse)(nil),             // 14: mako.plugin.v1.GitServiceUnwatchResponse
+	(*GitServiceRunRequest)(nil),                  // 15: mako.plugin.v1.GitServiceRunRequest
+	(*GitServiceRunResponse)(nil),                 // 16: mako.plugin.v1.GitServiceRunResponse
+	(*ForgeServiceBranchStatusRequest)(nil),       // 17: mako.plugin.v1.ForgeServiceBranchStatusRequest
+	(*ForgeServiceBranchStatusResponse)(nil),      // 18: mako.plugin.v1.ForgeServiceBranchStatusResponse
+	(*ForgeServicePullRequestDetailRequest)(nil),  // 19: mako.plugin.v1.ForgeServicePullRequestDetailRequest
+	(*ForgeServicePullRequestDetailResponse)(nil), // 20: mako.plugin.v1.ForgeServicePullRequestDetailResponse
+	(*ForgeCheckEntry)(nil),                       // 21: mako.plugin.v1.ForgeCheckEntry
+	(*ForgeCommentEntry)(nil),                     // 22: mako.plugin.v1.ForgeCommentEntry
+	(*ForgeServiceFailedLogsRequest)(nil),         // 23: mako.plugin.v1.ForgeServiceFailedLogsRequest
+	(*ForgeServiceFailedLogsResponse)(nil),        // 24: mako.plugin.v1.ForgeServiceFailedLogsResponse
 }
 var file_mako_plugin_v1_git_proto_depIdxs = []int32{
 	0,  // 0: mako.plugin.v1.GitServiceStatusRequest.target:type_name -> mako.plugin.v1.GitTarget
@@ -1567,25 +2163,33 @@ var file_mako_plugin_v1_git_proto_depIdxs = []int32{
 	0,  // 10: mako.plugin.v1.GitServiceUnwatchRequest.target:type_name -> mako.plugin.v1.GitTarget
 	0,  // 11: mako.plugin.v1.GitServiceRunRequest.target:type_name -> mako.plugin.v1.GitTarget
 	0,  // 12: mako.plugin.v1.ForgeServiceBranchStatusRequest.target:type_name -> mako.plugin.v1.GitTarget
-	1,  // 13: mako.plugin.v1.GitService.Status:input_type -> mako.plugin.v1.GitServiceStatusRequest
-	6,  // 14: mako.plugin.v1.GitService.History:input_type -> mako.plugin.v1.GitServiceHistoryRequest
-	9,  // 15: mako.plugin.v1.GitService.ShowCommit:input_type -> mako.plugin.v1.GitServiceShowCommitRequest
-	11, // 16: mako.plugin.v1.GitService.Watch:input_type -> mako.plugin.v1.GitServiceWatchRequest
-	13, // 17: mako.plugin.v1.GitService.Unwatch:input_type -> mako.plugin.v1.GitServiceUnwatchRequest
-	15, // 18: mako.plugin.v1.GitService.Run:input_type -> mako.plugin.v1.GitServiceRunRequest
-	17, // 19: mako.plugin.v1.ForgeService.BranchStatus:input_type -> mako.plugin.v1.ForgeServiceBranchStatusRequest
-	2,  // 20: mako.plugin.v1.GitService.Status:output_type -> mako.plugin.v1.GitServiceStatusResponse
-	7,  // 21: mako.plugin.v1.GitService.History:output_type -> mako.plugin.v1.GitServiceHistoryResponse
-	10, // 22: mako.plugin.v1.GitService.ShowCommit:output_type -> mako.plugin.v1.GitServiceShowCommitResponse
-	12, // 23: mako.plugin.v1.GitService.Watch:output_type -> mako.plugin.v1.GitServiceWatchResponse
-	14, // 24: mako.plugin.v1.GitService.Unwatch:output_type -> mako.plugin.v1.GitServiceUnwatchResponse
-	16, // 25: mako.plugin.v1.GitService.Run:output_type -> mako.plugin.v1.GitServiceRunResponse
-	18, // 26: mako.plugin.v1.ForgeService.BranchStatus:output_type -> mako.plugin.v1.ForgeServiceBranchStatusResponse
-	20, // [20:27] is the sub-list for method output_type
-	13, // [13:20] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	0,  // 13: mako.plugin.v1.ForgeServicePullRequestDetailRequest.target:type_name -> mako.plugin.v1.GitTarget
+	21, // 14: mako.plugin.v1.ForgeServicePullRequestDetailResponse.check_items:type_name -> mako.plugin.v1.ForgeCheckEntry
+	22, // 15: mako.plugin.v1.ForgeServicePullRequestDetailResponse.comments:type_name -> mako.plugin.v1.ForgeCommentEntry
+	0,  // 16: mako.plugin.v1.ForgeServiceFailedLogsRequest.target:type_name -> mako.plugin.v1.GitTarget
+	1,  // 17: mako.plugin.v1.GitService.Status:input_type -> mako.plugin.v1.GitServiceStatusRequest
+	6,  // 18: mako.plugin.v1.GitService.History:input_type -> mako.plugin.v1.GitServiceHistoryRequest
+	9,  // 19: mako.plugin.v1.GitService.ShowCommit:input_type -> mako.plugin.v1.GitServiceShowCommitRequest
+	11, // 20: mako.plugin.v1.GitService.Watch:input_type -> mako.plugin.v1.GitServiceWatchRequest
+	13, // 21: mako.plugin.v1.GitService.Unwatch:input_type -> mako.plugin.v1.GitServiceUnwatchRequest
+	15, // 22: mako.plugin.v1.GitService.Run:input_type -> mako.plugin.v1.GitServiceRunRequest
+	17, // 23: mako.plugin.v1.ForgeService.BranchStatus:input_type -> mako.plugin.v1.ForgeServiceBranchStatusRequest
+	19, // 24: mako.plugin.v1.ForgeService.PullRequestDetail:input_type -> mako.plugin.v1.ForgeServicePullRequestDetailRequest
+	23, // 25: mako.plugin.v1.ForgeService.FailedLogs:input_type -> mako.plugin.v1.ForgeServiceFailedLogsRequest
+	2,  // 26: mako.plugin.v1.GitService.Status:output_type -> mako.plugin.v1.GitServiceStatusResponse
+	7,  // 27: mako.plugin.v1.GitService.History:output_type -> mako.plugin.v1.GitServiceHistoryResponse
+	10, // 28: mako.plugin.v1.GitService.ShowCommit:output_type -> mako.plugin.v1.GitServiceShowCommitResponse
+	12, // 29: mako.plugin.v1.GitService.Watch:output_type -> mako.plugin.v1.GitServiceWatchResponse
+	14, // 30: mako.plugin.v1.GitService.Unwatch:output_type -> mako.plugin.v1.GitServiceUnwatchResponse
+	16, // 31: mako.plugin.v1.GitService.Run:output_type -> mako.plugin.v1.GitServiceRunResponse
+	18, // 32: mako.plugin.v1.ForgeService.BranchStatus:output_type -> mako.plugin.v1.ForgeServiceBranchStatusResponse
+	20, // 33: mako.plugin.v1.ForgeService.PullRequestDetail:output_type -> mako.plugin.v1.ForgeServicePullRequestDetailResponse
+	24, // 34: mako.plugin.v1.ForgeService.FailedLogs:output_type -> mako.plugin.v1.ForgeServiceFailedLogsResponse
+	26, // [26:35] is the sub-list for method output_type
+	17, // [17:26] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_mako_plugin_v1_git_proto_init() }
@@ -1600,7 +2204,7 @@ func file_mako_plugin_v1_git_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_mako_plugin_v1_git_proto_rawDesc), len(file_mako_plugin_v1_git_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   19,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

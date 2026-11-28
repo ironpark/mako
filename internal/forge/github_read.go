@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ironpark/mako/internal/gitstat"
@@ -20,7 +21,14 @@ import (
 
 type user struct {
 	Login string `json:"login"`
+	// Typename is the kind of account as the GraphQL API names it (User,
+	// Bot, Mannequin and the like), Type as the REST API does.
+	Typename string `json:"__typename"`
+	Type     string `json:"type"`
 }
+
+// bot says the account is a bot or an app's.
+func (u user) bot() bool { return u.Typename == "Bot" || u.Type == "Bot" }
 
 type label struct {
 	Name string `json:"name"`
@@ -64,13 +72,15 @@ type checkNode struct {
 }
 
 type comment struct {
-	Author    user      `json:"author"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"createdAt"`
+	Author      user      `json:"author"`
+	Association string    `json:"authorAssociation"`
+	Body        string    `json:"body"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type review struct {
 	Author      user      `json:"author"`
+	Association string    `json:"authorAssociation"`
 	Body        string    `json:"body"`
 	State       string    `json:"state"`
 	SubmittedAt time.Time `json:"submittedAt"`
@@ -138,9 +148,11 @@ const (
 			... on StatusContext { context state targetUrl }
 			... on CheckRun { name status conclusion detailsUrl checkSuite { workflowRun { workflow { name } } } }
 		} } } } } }`
-	commentFields = `body comments(last: 100) { nodes { author { login } body createdAt } }`
-	prViewFields  = prFields + ` ` + commentFields + `
-		reviews(last: 100) { nodes { author { login } body state submittedAt } }
+	commentFields = `body comments(last: 100) { nodes { author { __typename login } authorAssociation body createdAt } }`
+	// prTalkFields are what a pull request's view adds but its files.
+	prTalkFields = prFields + ` ` + commentFields + `
+		reviews(last: 100) { nodes { author { __typename login } authorAssociation body state submittedAt } }`
+	prViewFields = prTalkFields + `
 		files(first: 100) { nodes { path additions deletions changeType } pageInfo { hasNextPage endCursor } }`
 	fileFields = `files(first: 100, after: $after) { nodes { path additions deletions changeType } pageInfo { hasNextPage endCursor } }`
 )
@@ -247,29 +259,40 @@ func (g *github) view(ctx context.Context, r *protocol.ForgeView) (*protocol.For
 		n = pr.Number
 	}
 
-	// A pull request's comments on lines are only in the REST API's.
+	// A pull request's comments on lines are only in the REST API's, and
+	// the account it is read as is asked on its own, as not every token
+	// may ask for it.
 	var lines []*protocol.ForgeComment
 	var linesErr error
+	var viewer string
 	done := make(chan struct{})
 	if kind == protocol.ForgePR {
-		go func() { defer close(done); lines, linesErr = g.lineComments(ctx, n) }()
+		go func() {
+			defer close(done)
+			all(
+				func() error { lines, linesErr = g.lineComments(ctx, n); return nil },
+				func() error { viewer = g.viewer(ctx); return nil },
+			)
+		}()
 	} else {
 		close(done)
 	}
-	it, err := g.item(ctx, kind, n)
+	it, err := g.item(ctx, kind, n, r.GetNoFiles())
 	<-done
 	if err != nil {
 		return nil, err
 	}
-	d := &protocol.ForgeDetail{Item: it.proto(kind), Body: it.Body}
+	d := &protocol.ForgeDetail{Item: it.proto(kind), Body: it.Body, Viewer: viewer}
 	for _, c := range it.Comments.Nodes {
-		d.Comments = append(d.Comments, &protocol.ForgeComment{Author: c.Author.Login, Body: c.Body, Time: protocol.Time(c.CreatedAt)})
+		d.Comments = append(d.Comments, &protocol.ForgeComment{Author: c.Author.Login, Body: c.Body, Time: protocol.Time(c.CreatedAt),
+			Association: c.Association, Bot: c.Author.bot()})
 	}
 	for _, rv := range it.Reviews.Nodes {
 		if rv.Body == "" && rv.State == "COMMENTED" {
 			continue // only the line comments it carried, listed on their own
 		}
-		d.Comments = append(d.Comments, &protocol.ForgeComment{Author: rv.Author.Login, Body: rv.Body, Time: protocol.Time(rv.SubmittedAt), Review: rv.State})
+		d.Comments = append(d.Comments, &protocol.ForgeComment{Author: rv.Author.Login, Body: rv.Body, Time: protocol.Time(rv.SubmittedAt), Review: rv.State,
+			Association: rv.Association, Bot: rv.Author.bot()})
 	}
 	if linesErr == nil {
 		d.Comments = append(d.Comments, lines...)
@@ -287,11 +310,14 @@ func (g *github) view(ctx context.Context, r *protocol.ForgeView) (*protocol.For
 }
 
 // item reads pull request or issue n in full: a pull request's files all,
-// a page at a time.
-func (g *github) item(ctx context.Context, kind string, n int64) (item, error) {
+// a page at a time, unless noFiles leaves them out.
+func (g *github) item(ctx context.Context, kind string, n int64, noFiles bool) (item, error) {
 	field, fields := "issue", issueFields+" "+commentFields
 	if kind == protocol.ForgePR {
 		field, fields = "pullRequest", prViewFields
+		if noFiles {
+			fields = prTalkFields
+		}
 	}
 	var data struct {
 		Repository struct {
@@ -352,7 +378,7 @@ func (g *github) branchPR(ctx context.Context, root string) (*item, error) {
 	head, owner := branch, ""
 	merge := gitstat.Config(root, "branch", branch, "merge")
 	if n, ok := pullRef(merge); ok {
-		it, err := g.item(ctx, protocol.ForgePR, n)
+		it, err := g.item(ctx, protocol.ForgePR, n, true)
 		return &it, err
 	}
 	if b, ok := strings.CutPrefix(merge, "refs/heads/"); ok {
@@ -418,23 +444,55 @@ func pullRef(ref string) (int64, bool) {
 }
 
 // lineComments are a pull request's review comments on lines of its
-// change, as many as one page of the API's holds.
+// change, the latest that one page of the API's holds.
 func (g *github) lineComments(ctx context.Context, n int64) ([]*protocol.ForgeComment, error) {
 	var list []struct {
-		User      user      `json:"user"`
-		Body      string    `json:"body"`
-		Path      string    `json:"path"`
-		Line      int64     `json:"line"`
-		CreatedAt time.Time `json:"created_at"`
+		User        user      `json:"user"`
+		Association string    `json:"author_association"`
+		Body        string    `json:"body"`
+		Path        string    `json:"path"`
+		Line        int64     `json:"line"`
+		CreatedAt   time.Time `json:"created_at"`
 	}
-	if err := g.rest(ctx, http.MethodGet, g.path(fmt.Sprintf("/pulls/%d/comments?per_page=100", n)), nil, &list); err != nil {
+	if err := g.rest(ctx, http.MethodGet, g.path(fmt.Sprintf("/pulls/%d/comments?sort=created&direction=desc&per_page=100", n)), nil, &list); err != nil {
 		return nil, err
 	}
 	var cs []*protocol.ForgeComment
-	for _, c := range list {
-		cs = append(cs, &protocol.ForgeComment{Author: c.User.Login, Body: c.Body, Time: protocol.Time(c.CreatedAt), Path: c.Path, Line: c.Line})
+	for _, c := range slices.Backward(list) {
+		cs = append(cs, &protocol.ForgeComment{Author: c.User.Login, Body: c.Body, Time: protocol.Time(c.CreatedAt), Path: c.Path, Line: c.Line,
+			Association: c.Association, Bot: c.User.bot()})
 	}
 	return cs, nil
+}
+
+// viewerFor is how long the account a token reads as is kept.
+const viewerFor = 10 * time.Minute
+
+var viewers struct {
+	sync.Mutex
+	login string
+	at    time.Time
+}
+
+// viewer is the GitHub account the node reads as, "" when GitHub does not
+// tell, kept viewerFor.
+func (g *github) viewer(ctx context.Context) string {
+	viewers.Lock()
+	login, at := viewers.login, viewers.at
+	viewers.Unlock()
+	if login != "" && time.Since(at) < viewerFor {
+		return login
+	}
+	var data struct {
+		Viewer user `json:"viewer"`
+	}
+	if err := g.graphql(ctx, `query { viewer { login } }`, nil, &data); err != nil || data.Viewer.Login == "" {
+		return ""
+	}
+	viewers.Lock()
+	viewers.login, viewers.at = data.Viewer.Login, time.Now()
+	viewers.Unlock()
+	return data.Viewer.Login
 }
 
 // proto is a pull request or an issue as a list shows it.

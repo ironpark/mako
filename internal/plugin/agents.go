@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/ironpark/mako/internal/pathscope"
 	"github.com/ironpark/mako/internal/plugin/hostapi"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/uiblock"
@@ -52,9 +55,11 @@ const (
 )
 
 // AgentStart is an agent a plugin starts: the agent and profile, in a
-// folder of a project of this node's, with a prompt and a name.
+// folder of a project of this node's, with a prompt and a name. NoYolo
+// starts it with YOLO off, whatever its profile says.
 type AgentStart struct {
 	Agent, Profile, Project, Root, Prompt, Name, ParentSessionID string
+	NoYolo                                                       bool
 }
 
 // AgentHost is the daemon's side of sessions:write.
@@ -160,6 +165,14 @@ func (h *host) MessagesStartAgent(_ context.Context, req *hostapi.StartAgentRequ
 		return nil, errors.New("name the agent to start, and its profile if any")
 	}
 	project, ok := p.m.project(req.GetProject(), req.GetRoot())
+	if !ok && p.bundled && p.m.cfg.Git != nil && p.showsLocalFolderHolding(req.GetRoot()) &&
+		p.m.cfg.Git.Allowed(GitTarget{Path: req.GetRoot()}) {
+		// A bundled plugin (mako-git) may start an agent in a folder of a
+		// project's that it shows, such as an agent's worktree, which is
+		// not a root of the project's itself.
+		project = ProjectRoots{ID: req.GetProject(), Name: req.GetProject(), Roots: []string{req.GetRoot()}}
+		ok = true
+	}
 	if !ok {
 		return nil, fmt.Errorf("this node knows no project %q with the folder %q: see files.listProjects", req.GetProject(), req.GetRoot())
 	}
@@ -199,7 +212,8 @@ func (h *host) MessagesStartAgent(_ context.Context, req *hostapi.StartAgentRequ
 		}
 	}
 	ask := &agentAsk{id: "a" + nonce(), name: project.Name, since: time.Now(),
-		req: AgentStart{Agent: req.GetAgent(), Profile: req.GetProfile(), Project: req.GetProject(), Root: req.GetRoot(), Prompt: prompt, Name: name, ParentSessionID: parentID}}
+		req: AgentStart{Agent: req.GetAgent(), Profile: req.GetProfile(), Project: req.GetProject(), Root: req.GetRoot(), Prompt: prompt, Name: name,
+			ParentSessionID: parentID, NoYolo: req.GetNoYolo()}}
 	if p.m.grant.get(p.id).AgentsAllowed {
 		go p.startAgent(ask)
 		return &hostapi.StartAgentResponse{RequestId: ask.id}, nil
@@ -221,6 +235,40 @@ func (h *host) MessagesStopAgent(_ context.Context, req *hostapi.StopAgentReques
 		return nil, err
 	}
 	return &hostapi.StopAgentResponse{}, nil
+}
+
+// showsLocalFolderHolding says root is a folder of this node's within a
+// folder one of the plugin's shown blocks is of, both read through their
+// symbolic links, so that a link inside a shown repository that points out
+// of it does not pass.
+func (p *plugin) showsLocalFolderHolding(root string) bool {
+	if root == "" || !utf8.ValidString(root) || strings.ContainsRune(root, 0) || !filepath.IsAbs(root) {
+		return false
+	}
+	real, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	if fi, err := os.Stat(real); err != nil || !fi.IsDir() {
+		return false
+	}
+	var folders []string
+	p.mu.Lock()
+	for _, in := range p.inst {
+		if in.subs <= 0 {
+			continue
+		}
+		if n, f, ok := protocol.ParseFolderScope(in.scopeKey); ok && sameGitNode(n, protocol.LocalScopeNode) {
+			folders = append(folders, f)
+		}
+	}
+	p.mu.Unlock()
+	for _, f := range folders {
+		if rf, err := filepath.EvalSymlinks(f); err == nil && pathscope.Within(real, rf) {
+			return true
+		}
+	}
+	return false
 }
 
 // project is the project of the ID if it has the folder root.

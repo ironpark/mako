@@ -355,6 +355,12 @@ function makeContext(ctxJson) {
     branchStatus: (req) => host.forge.branchStatus(
       typeof req === "string" ? { target: defaultTarget(), branch: req } : withTarget(req),
     ),
+    pullRequestDetail: (req) => host.forge.pullRequestDetail(
+      typeof req === "number" ? { target: defaultTarget(), number: req } : withTarget(req),
+    ),
+    failedLogs: (req) => host.forge.failedLogs(
+      typeof req === "number" ? { target: defaultTarget(), runNumber: req } : withTarget(req),
+    ),
   });
   const withFolder = (o) => {
     const r = { ...(o || {}) };

@@ -541,9 +541,158 @@ func (h *host) ForgeBranchStatus(ctx context.Context, req *hostapi.ForgeServiceB
 		PrChecks:  fb.PRChecks,
 		Runs:      fb.Runs,
 		RunsState: fb.RunsState,
-		RunNumber: fb.RunNumber,
+		RunNumber: runNumber32(fb.RunID),
 		RunHead:   fb.RunHead,
+		RunId:     float64(fb.RunID),
 	}, nil
+}
+
+// runNumber32 is a run's ID as the 32-bit run_number carries it: 0 when it
+// does not fit, as GitHub's do not.
+func runNumber32(id int64) int32 {
+	if id <= 0 || id > math.MaxInt32 {
+		return 0
+	}
+	return int32(id)
+}
+
+// What of a pull request's comments PullRequestDetail answers with: the
+// latest maxForgeComments, each body at most maxForgeComment bytes, and
+// their bodies maxForgeCommentBytes in all.
+const (
+	maxForgeComments     = 300
+	maxForgeComment      = 8 << 10
+	maxForgeCommentBytes = 256 << 10
+)
+
+// maxRunID is the largest run ID a JavaScript number holds exactly.
+const maxRunID = 1 << 53
+
+func (h *host) ForgePullRequestDetail(ctx context.Context, req *hostapi.ForgeServicePullRequestDetailRequest) (*hostapi.ForgeServicePullRequestDetailResponse, error) {
+	fh := h.p.m.cfg.Forge
+	if fh == nil {
+		return nil, ErrForgeUnavailable
+	}
+	if !h.p.forgeReadRate.take() {
+		return nil, fmt.Errorf("the plugin called forge more than %d times a minute", forgeReadsPerMin)
+	}
+	t, _, err := h.resolveGitTarget(req.GetTarget(), h.p.m.cfg.Git)
+	if err != nil {
+		return nil, err
+	}
+	if req.GetNumber() < 0 {
+		return nil, errors.New("pull request number must be >= 0")
+	}
+	detail, err := fh.PullRequestDetail(ctx, t, req.GetNumber())
+	if err != nil {
+		return nil, err
+	}
+	if detail == nil {
+		return &hostapi.ForgeServicePullRequestDetailResponse{}, nil
+	}
+	body, _ := cut(detail.Body, maxGitOutput)
+	resp := &hostapi.ForgeServicePullRequestDetailResponse{
+		Forge:   detail.Forge,
+		Number:  detail.Number,
+		Title:   detail.Title,
+		State:   detail.State,
+		Url:     detail.URL,
+		Head:    detail.Head,
+		Base:    detail.Base,
+		HeadOid: detail.HeadOID,
+		Checks:  detail.Checks,
+		Body:    body,
+		Viewer:  detail.Viewer,
+	}
+	for _, c := range detail.CheckItems {
+		resp.CheckItems = append(resp.CheckItems, &hostapi.ForgeCheckEntry{
+			Name:       c.Name,
+			Workflow:   c.Workflow,
+			Status:     c.Status,
+			Conclusion: c.Conclusion,
+			Url:        c.URL,
+		})
+	}
+	// The latest comments, as many as the bounds hold, oldest first.
+	budget := maxForgeCommentBytes
+	var latest []*hostapi.ForgeCommentEntry
+	for _, c := range slices.Backward(detail.Comments) {
+		cBody, _ := cut(c.Body, maxForgeComment)
+		if len(latest) == maxForgeComments || len(cBody) > budget {
+			break
+		}
+		budget -= len(cBody)
+		latest = append(latest, &hostapi.ForgeCommentEntry{
+			Author:      c.Author,
+			Body:        cBody,
+			Time:        c.Time,
+			Review:      c.Review,
+			Path:        c.Path,
+			Line:        c.Line,
+			Association: c.Association,
+			Bot:         c.Bot,
+		})
+	}
+	slices.Reverse(latest)
+	resp.Comments = latest
+	return resp, nil
+}
+
+func (h *host) ForgeFailedLogs(ctx context.Context, req *hostapi.ForgeServiceFailedLogsRequest) (*hostapi.ForgeServiceFailedLogsResponse, error) {
+	fh := h.p.m.cfg.Forge
+	if fh == nil {
+		return nil, ErrForgeUnavailable
+	}
+	if !h.p.forgeReadRate.take() {
+		return nil, fmt.Errorf("the plugin called forge more than %d times a minute", forgeReadsPerMin)
+	}
+	t, _, err := h.resolveGitTarget(req.GetTarget(), h.p.m.cfg.Git)
+	if err != nil {
+		return nil, err
+	}
+	runID := req.GetRunId()
+	if !(runID > 0 && runID <= maxRunID && runID == math.Trunc(runID)) {
+		return nil, errors.New("run_id must be a whole number above 0")
+	}
+	maxLines := req.GetMaxLines()
+	if maxLines <= 0 {
+		maxLines = 250
+	}
+	if maxLines > 400 {
+		maxLines = 400
+	}
+	fl, err := fh.FailedLogs(ctx, t, int64(runID), maxLines)
+	if err != nil {
+		return nil, err
+	}
+	if fl == nil {
+		return &hostapi.ForgeServiceFailedLogsResponse{}, nil
+	}
+	// A failure says why at the end of its log: keep that.
+	trimmed, cutTrunc := cutTail(fl.Logs, maxGitOutput)
+	return &hostapi.ForgeServiceFailedLogsResponse{
+		Logs:      trimmed,
+		Truncated: fl.Truncated || cutTrunc,
+		Workflow:  fl.Workflow,
+		Head:      fl.Head,
+		Url:       fl.URL,
+	}, nil
+}
+
+// cutTail is the end of s, at most n bytes of whole runes and, when it is
+// cut, whole lines, and whether it was cut.
+func cutTail(s string, n int) (string, bool) {
+	if len(s) <= n {
+		return s, false
+	}
+	start := len(s) - max(n, 0)
+	for start < len(s) && !utf8.RuneStart(s[start]) {
+		start++
+	}
+	if i := strings.IndexByte(s[start:], '\n'); i >= 0 && i+1 < len(s)-start {
+		start += i + 1
+	}
+	return s[start:], true
 }
 
 func (p *plugin) delGitJob(id string) {

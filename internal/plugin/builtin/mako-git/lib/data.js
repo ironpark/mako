@@ -2,6 +2,7 @@
 // history (fingerprint-deduplicated), forge branch status, and selected commit
 // details in parallel while preserving previous view data on transient errors.
 
+import { POLL_SECONDS, autoFixAvailable, evaluateAutoFix, loadAutoFixState } from "./autofix.js";
 import { resetForNewRepo } from "./state.js";
 
 function callGit(ctx, mako, method, req) {
@@ -95,6 +96,7 @@ export async function loadPanel(s, ctx, mako) {
 
   // Fetch forge PR/CI status (throttled) and selected commit details in parallel.
   const followups = [];
+  let forcedForge = false;
   if (s.status && !s.status.notRepo && s.status.root && s.status.branch) {
     const branch = s.status.branch;
     const headHash = (s.history && s.history.current) || "";
@@ -102,18 +104,23 @@ export async function loadPanel(s, ctx, mako) {
     const runsActive = Boolean(
       s.forge && (s.forge.runsState === "running" || s.forge.runsState === "pending" || s.forge.prChecks === "pending"),
     );
-    const ttl = runsActive ? 10_000 : 60_000;
+    // While Auto-fix polls, each load reads the branch again: the time is
+    // a little shorter than the polling, and taken before the read.
+    const autoFixActive = Boolean(s.autofix && s.autofix.enabled);
+    const ttl = runsActive ? 10_000 : (autoFixActive ? (POLL_SECONDS - 5) * 1000 : 60_000);
     const now = Date.now();
     const force = Boolean(s.forgeForce);
+    forcedForge = force;
     const shouldFetch = force || forgeKey !== s.forgeKey || !s.forgeAt || (now - s.forgeAt) >= ttl;
     if (shouldFetch) {
       s.forgeForce = false;
+      const askedAt = Date.now();
       followups.push(
         callForge(ctx, mako, { branch })
           .then((res) => {
             s.forgeKey = forgeKey;
             s.forgeBranch = branch;
-            s.forgeAt = Date.now();
+            s.forgeAt = askedAt;
             s.forge = res && res.forge ? {
               forge: res.forge || "",
               hasPr: Boolean(res.hasPr),
@@ -124,11 +131,13 @@ export async function loadPanel(s, ctx, mako) {
               runs: Number(res.runs) || 0,
               runsState: res.runsState || "",
               runNumber: Number(res.runNumber) || 0,
+              // runId is exact past 32 bits, as GitHub's run IDs are.
+              runId: Number(res.runId) || Number(res.runNumber) || 0,
               runHead: res.runHead || "",
             } : null;
           })
           .catch(() => {
-            s.forgeAt = Date.now();
+            s.forgeAt = askedAt;
             if (s.forgeBranch !== branch) {
               s.forge = null;
               s.forgeBranch = branch;
@@ -142,6 +151,7 @@ export async function loadPanel(s, ctx, mako) {
     s.forgeBranch = "";
     s.forgeAt = 0;
     s.forgeForce = false;
+    s.autofix = null;
   }
 
   if (s.commit && s.commit.hash && !s.commit.info && !s.commit.err) {
@@ -150,6 +160,18 @@ export async function loadPanel(s, ctx, mako) {
 
   if (followups.length > 0) {
     await Promise.all(followups);
+  }
+
+  // Link the pull request's Auto-fix record, and send a fix when it is on and
+  // a check failed or a review comment came. A forced refresh reads the pull
+  // request's checks and comments again too.
+  if (s.forge && s.forge.hasPr && s.forge.prNumber > 0 && autoFixAvailable(ctx)) {
+    const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber);
+    if (af && af.enabled) {
+      await evaluateAutoFix(s, ctx, mako, { manual: false, fresh: forcedForge });
+    }
+  } else {
+    s.autofix = null;
   }
 }
 

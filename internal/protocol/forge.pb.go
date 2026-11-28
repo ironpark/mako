@@ -343,11 +343,14 @@ func (x *ForgeItem) GetEvent() string {
 // ForgeView asks for one pull request, issue or run in full. A pull
 // request numbered 0 is the one of the branch checked out.
 type ForgeView struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Root          string                 `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
-	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	Number        int64                  `protobuf:"varint,4,opt,name=number,proto3" json:"number,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	NodeId string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Root   string                 `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
+	Kind   string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Number int64                  `protobuf:"varint,4,opt,name=number,proto3" json:"number,omitempty"`
+	// no_files leaves a pull request's files out, for a reader that wants
+	// its checks and comments alone.
+	NoFiles       bool `protobuf:"varint,5,opt,name=no_files,json=noFiles,proto3" json:"no_files,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -410,17 +413,27 @@ func (x *ForgeView) GetNumber() int64 {
 	return 0
 }
 
+func (x *ForgeView) GetNoFiles() bool {
+	if x != nil {
+		return x.NoFiles
+	}
+	return false
+}
+
 // ForgeDetail answers ForgeView.
 type ForgeDetail struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Item          *ForgeItem             `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
-	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
-	Comments      []*ForgeComment        `protobuf:"bytes,3,rep,name=comments,proto3" json:"comments,omitempty"` // oldest first
-	Files         []*GitFile             `protobuf:"bytes,4,rep,name=files,proto3" json:"files,omitempty"`       // a pull request's
-	Checks        []*ForgeCheck          `protobuf:"bytes,5,rep,name=checks,proto3" json:"checks,omitempty"`     // a pull request's checks, or a run's jobs
-	None          bool                   `protobuf:"varint,6,opt,name=none,proto3" json:"none,omitempty"`        // the branch checked out has no pull request
-	Forge         string                 `protobuf:"bytes,7,opt,name=forge,proto3" json:"forge,omitempty"`       // which answered: github, forgejo or gitea
-	Ops           []string               `protobuf:"bytes,8,rep,name=ops,proto3" json:"ops,omitempty"`           // the forge_run operations it can do
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Item     *ForgeItem             `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	Body     string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
+	Comments []*ForgeComment        `protobuf:"bytes,3,rep,name=comments,proto3" json:"comments,omitempty"` // oldest first
+	Files    []*GitFile             `protobuf:"bytes,4,rep,name=files,proto3" json:"files,omitempty"`       // a pull request's
+	Checks   []*ForgeCheck          `protobuf:"bytes,5,rep,name=checks,proto3" json:"checks,omitempty"`     // a pull request's checks, or a run's jobs
+	None     bool                   `protobuf:"varint,6,opt,name=none,proto3" json:"none,omitempty"`        // the branch checked out has no pull request
+	Forge    string                 `protobuf:"bytes,7,opt,name=forge,proto3" json:"forge,omitempty"`       // which answered: github, forgejo or gitea
+	Ops      []string               `protobuf:"bytes,8,rep,name=ops,proto3" json:"ops,omitempty"`           // the forge_run operations it can do
+	// viewer is the account the forge answered for, as a pull request's
+	// comments name it; "" when the forge does not tell.
+	Viewer        string `protobuf:"bytes,9,opt,name=viewer,proto3" json:"viewer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -511,16 +524,28 @@ func (x *ForgeDetail) GetOps() []string {
 	return nil
 }
 
+func (x *ForgeDetail) GetViewer() string {
+	if x != nil {
+		return x.Viewer
+	}
+	return ""
+}
+
 // ForgeComment is a comment of an issue or pull request, a review, or a
 // review's comment on a line.
 type ForgeComment struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Author        string                 `protobuf:"bytes,1,opt,name=author,proto3" json:"author,omitempty"`
-	Body          string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
-	Time          *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=time,proto3" json:"time,omitempty"`
-	Review        string                 `protobuf:"bytes,4,opt,name=review,proto3" json:"review,omitempty"` // a review's APPROVED, CHANGES_REQUESTED or COMMENTED
-	Path          string                 `protobuf:"bytes,5,opt,name=path,proto3" json:"path,omitempty"`     // a line comment's file
-	Line          int64                  `protobuf:"varint,6,opt,name=line,proto3" json:"line,omitempty"`    // and its line, 0 for an outdated one
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Author string                 `protobuf:"bytes,1,opt,name=author,proto3" json:"author,omitempty"`
+	Body   string                 `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
+	Time   *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=time,proto3" json:"time,omitempty"`
+	Review string                 `protobuf:"bytes,4,opt,name=review,proto3" json:"review,omitempty"` // a review's APPROVED, CHANGES_REQUESTED or COMMENTED
+	Path   string                 `protobuf:"bytes,5,opt,name=path,proto3" json:"path,omitempty"`     // a line comment's file
+	Line   int64                  `protobuf:"varint,6,opt,name=line,proto3" json:"line,omitempty"`    // and its line, 0 for an outdated one
+	// association is the author's tie to the repository, as GitHub names
+	// it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+	// when the forge does not tell.
+	Association   string `protobuf:"bytes,7,opt,name=association,proto3" json:"association,omitempty"`
+	Bot           bool   `protobuf:"varint,8,opt,name=bot,proto3" json:"bot,omitempty"` // the author is a bot or an app
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -595,6 +620,20 @@ func (x *ForgeComment) GetLine() int64 {
 		return x.Line
 	}
 	return 0
+}
+
+func (x *ForgeComment) GetAssociation() string {
+	if x != nil {
+		return x.Association
+	}
+	return ""
+}
+
+func (x *ForgeComment) GetBot() bool {
+	if x != nil {
+		return x.Bot
+	}
+	return false
 }
 
 // ForgeCheck is one check of a pull request, or one job of a run.
@@ -834,12 +873,13 @@ const file_mako_v2_forge_proto_rawDesc = "" +
 	"\x06checks\x18\f \x01(\tR\x06checks\x12\x16\n" +
 	"\x06labels\x18\x0e \x03(\tR\x06labels\x12\x1a\n" +
 	"\bworkflow\x18\x12 \x01(\tR\bworkflow\x12\x14\n" +
-	"\x05event\x18\x13 \x01(\tR\x05event\"d\n" +
+	"\x05event\x18\x13 \x01(\tR\x05event\"\x7f\n" +
 	"\tForgeView\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x12\n" +
 	"\x04root\x18\x02 \x01(\tR\x04root\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x16\n" +
-	"\x06number\x18\x04 \x01(\x03R\x06number\"\x8d\x02\n" +
+	"\x06number\x18\x04 \x01(\x03R\x06number\x12\x19\n" +
+	"\bno_files\x18\x05 \x01(\bR\anoFiles\"\xa5\x02\n" +
 	"\vForgeDetail\x12&\n" +
 	"\x04item\x18\x01 \x01(\v2\x12.mako.v2.ForgeItemR\x04item\x12\x12\n" +
 	"\x04body\x18\x02 \x01(\tR\x04body\x121\n" +
@@ -848,14 +888,17 @@ const file_mako_v2_forge_proto_rawDesc = "" +
 	"\x06checks\x18\x05 \x03(\v2\x13.mako.v2.ForgeCheckR\x06checks\x12\x12\n" +
 	"\x04none\x18\x06 \x01(\bR\x04none\x12\x14\n" +
 	"\x05forge\x18\a \x01(\tR\x05forge\x12\x10\n" +
-	"\x03ops\x18\b \x03(\tR\x03ops\"\xaa\x01\n" +
+	"\x03ops\x18\b \x03(\tR\x03ops\x12\x16\n" +
+	"\x06viewer\x18\t \x01(\tR\x06viewer\"\xde\x01\n" +
 	"\fForgeComment\x12\x16\n" +
 	"\x06author\x18\x01 \x01(\tR\x06author\x12\x12\n" +
 	"\x04body\x18\x02 \x01(\tR\x04body\x12.\n" +
 	"\x04time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x04time\x12\x16\n" +
 	"\x06review\x18\x04 \x01(\tR\x06review\x12\x12\n" +
 	"\x04path\x18\x05 \x01(\tR\x04path\x12\x12\n" +
-	"\x04line\x18\x06 \x01(\x03R\x04line\"\x86\x01\n" +
+	"\x04line\x18\x06 \x01(\x03R\x04line\x12 \n" +
+	"\vassociation\x18\a \x01(\tR\vassociation\x12\x10\n" +
+	"\x03bot\x18\b \x01(\bR\x03bot\"\x86\x01\n" +
 	"\n" +
 	"ForgeCheck\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +

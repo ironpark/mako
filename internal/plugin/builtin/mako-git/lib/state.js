@@ -14,6 +14,9 @@ export function initialState() {
     forgeBranch: "",
     forgeAt: 0,
     forgeForce: false,
+    // autofix is the pull request's Auto-fix record, shared with the other
+    // panels of the folder (autofix.js).
+    autofix: null,
     commit: { hash: "", info: null, loading: false, err: "" },
     skip: {},
     message: "",
@@ -85,6 +88,7 @@ export function resetForNewRepo(s, nextRoot) {
   s.forgeBranch = "";
   s.forgeAt = 0;
   s.forgeForce = false;
+  s.autofix = null;
   s.commit = { hash: "", info: null, loading: false, err: "" };
   s.dialog = null;
 }

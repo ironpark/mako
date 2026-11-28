@@ -62,6 +62,9 @@ message ForgeView {
   string root = 2;
   string kind = 3;
   int64 number = 4;
+  // no_files leaves a pull request's files out, for a reader that wants
+  // its checks and comments alone.
+  bool no_files = 5;
 }
 
 // ForgeDetail answers ForgeView.
@@ -74,6 +77,9 @@ message ForgeDetail {
   bool none = 6; // the branch checked out has no pull request
   string forge = 7; // which answered: github, forgejo or gitea
   repeated string ops = 8; // the forge_run operations it can do
+  // viewer is the account the forge answered for, as a pull request's
+  // comments name it; "" when the forge does not tell.
+  string viewer = 9;
 }
 
 // ForgeComment is a comment of an issue or pull request, a review, or a
@@ -85,6 +91,11 @@ message ForgeComment {
   string review = 4; // a review's APPROVED, CHANGES_REQUESTED or COMMENTED
   string path = 5; // a line comment's file
   int64 line = 6; // and its line, 0 for an outdated one
+  // association is the author's tie to the repository, as GitHub names
+  // it: OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE and the like; ""
+  // when the forge does not tell.
+  string association = 7;
+  bool bot = 8; // the author is a bot or an app
 }
 
 // ForgeCheck is one check of a pull request, or one job of a run.
