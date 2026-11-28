@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,12 +69,15 @@ type Spec struct {
 // ProtectedDirs are the folders, at any depth of a project, whose files
 // make code run when another program opens the project, or a folder of
 // it, outside the sandbox: a repository's git folder, Mako's project
-// folder, and the agents' project settings, which can name hooks, MCP
-// servers and plugins.
-var ProtectedDirs = []string{".git", ".mako", ".claude", ".codex", ".gemini", ".opencode", ".pi", ".cursor"}
+// folder, the agents' project settings, which can name hooks, MCP
+// servers and plugins, and direnv's folder, which .envrc layouts source.
+var ProtectedDirs = []string{".git", ".mako", ".claude", ".codex", ".gemini", ".opencode", ".pi", ".cursor", ".direnv"}
 
-// ProtectedFiles are the files, at any depth of a project, that do so.
-var ProtectedFiles = []string{".mcp.json", "opencode.json", "opencode.jsonc"}
+// ProtectedFiles are the files, at any depth of a project, that do so:
+// the agents' MCP servers, direnv's .envrc, which the shell runs on cd,
+// npm's .npmrc and Cargo's config, which name the programs they run, and
+// .gitmodules, whose submodules git clones and checks out.
+var ProtectedFiles = []string{".mcp.json", "opencode.json", "opencode.jsonc", ".envrc", ".npmrc", ".cargo/config.toml", ".cargo/config", ".gitmodules"}
 
 // ProtectedTopDirs are the folders that do so only at the top of a
 // project, where editors read their tasks and git hook managers keep
@@ -130,7 +134,8 @@ func Supported() error {
 // Profile is the Seatbelt profile spec makes. Later rules win over
 // earlier ones, so each layer narrows or widens the one before it.
 func Profile(spec Spec) (string, error) {
-	if err := check(spec); err != nil {
+	repos, err := check(spec)
+	if err != nil {
 		return "", err
 	}
 	var p profile
@@ -145,16 +150,16 @@ func Profile(spec Spec) (string, error) {
 		`(literal "/dev/ptmx")`, `(literal "/dev/dtracehelper")`,
 		`(regex #"^/dev/ttys[0-9]+$")`, `(regex #"^/dev/fd/[0-9]+$")`,
 	})
-	p.rule("allow file-write*", subpaths(spec.Roots...), nil)
+	p.rule("allow file-write*", p.subpaths(spec.Roots...), nil)
 
 	// The project's control files, wherever in it they are.
 	var controls []string
 	for _, root := range spec.Roots {
 		for _, r := range forms(root) {
 			controls = append(controls,
-				`(regex #"^`+quoteRegex(r)+`/(.*/)?(`+alternatives(ProtectedDirs)+`)(/.*)?$")`,
-				`(regex #"^`+quoteRegex(r)+`/(.*/)?(`+alternatives(ProtectedFiles)+`)$")`,
-				`(regex #"^`+quoteRegex(r)+`/(`+alternatives(ProtectedTopDirs)+`)(/.*)?$")`)
+				p.regex(r, `/(.*/)?(`+p.alternatives(ProtectedDirs)+`)(/.*)?$`),
+				p.regex(r, `/(.*/)?(`+p.alternatives(ProtectedFiles)+`)$`),
+				p.regex(r, `/(`+p.alternatives(ProtectedTopDirs)+`)(/.*)?$`))
 		}
 	}
 	p.rule("deny file-write*", nil, controls)
@@ -163,8 +168,7 @@ func Profile(spec Spec) (string, error) {
 	// wherever their git folders are, but none of the files git runs.
 	var gitDirs, gitDeny []string
 	var gitRegex []string
-	for _, root := range spec.Roots {
-		repo := findRepo(root)
+	for _, repo := range repos {
 		for _, dir := range repo.dirs() {
 			if !slices.Contains(gitDirs, dir) {
 				gitDirs = append(gitDirs, dir)
@@ -181,43 +185,69 @@ func Profile(spec Spec) (string, error) {
 		for _, d := range forms(dir) {
 			// The folder itself, which moved away would make room for
 			// another with a config of the agent's.
-			gitRegex = append(gitRegex, `(literal "`+d+`")`,
-				`(regex #"^`+quoteRegex(d)+`/worktrees/[^/]+/(`+alternatives(gitControl)+`)(/.*)?$")`)
+			gitRegex = append(gitRegex, p.literal(d),
+				p.regex(d, `/worktrees/[^/]+/(`+p.alternatives(gitControl)+`)(/.*)?$`))
 		}
 	}
-	p.rule("allow file-write*", subpaths(gitDirs...), nil)
-	p.rule("deny file-write*", subpaths(gitDeny...), gitRegex)
+	p.rule("allow file-write*", p.subpaths(gitDirs...), nil)
+	p.rule("deny file-write*", p.subpaths(gitDeny...), gitRegex)
 
 	// Mako's own folders: never written, and the hidden ones not read but
 	// for what the session runs from them.
-	p.rule("deny file-read* file-write*", subpaths(spec.Hidden...), nil)
-	p.rule("deny file-write*", subpaths(spec.ReadOnly...), nil)
-	p.rule("allow file-read*", subpaths(spec.Readable...), nil)
+	p.rule("deny file-read* file-write*", p.subpaths(spec.Hidden...), nil)
+	p.rule("deny file-write*", p.subpaths(spec.ReadOnly...), nil)
+	p.rule("allow file-read*", p.subpaths(spec.Readable...), nil)
 
 	// The session's own folders.
 	own := slices.DeleteFunc([]string{spec.Home, spec.Temp}, func(s string) bool { return s == "" })
-	p.rule("allow file-read* file-write*", subpaths(append(own, spec.Writable...)...), nil)
+	p.rule("allow file-read* file-write*", p.subpaths(append(own, spec.Writable...)...), nil)
+
+	// The folders themselves, which replaced by a symbolic link would
+	// widen the next session's profile to wherever the link points.
+	var folders []string
+	for _, dir := range append(slices.Clone(spec.Roots), own...) {
+		for _, f := range forms(dir) {
+			folders = append(folders, p.literal(f))
+		}
+	}
+	p.rule("deny file-write*", nil, folders)
 
 	// Sockets: those the session needs, and those it makes itself.
 	p.line("(deny network-outbound (remote unix-socket))")
 	sockets := append([]string{"/private/var/run/mDNSResponder"}, spec.Sockets...)
 	sockets = append(sockets, own...)
 	sockets = append(sockets, spec.Roots...)
-	p.rule("allow network-outbound", nil, prefixed("remote unix-socket ", subpaths(sockets...)))
+	p.rule("allow network-outbound", nil, prefixed("remote unix-socket ", p.subpaths(sockets...)))
 
 	// The ways one program asks another, outside the sandbox, to run
 	// something: opening a file or app, an Apple event, a launchd job.
 	p.line("(deny lsopen)")
 	p.line("(deny appleevent-send)")
 	p.line("(deny job-creation)")
+	if p.err != nil {
+		return "", p.err
+	}
 	return p.String(), nil
 }
 
+// Check reports, as an error, why spec would leave the sandbox open or
+// cannot be said in a profile; nil when Profile can make one. The daemon
+// asks before it makes anything for a session it would refuse.
+func Check(spec Spec) error {
+	_, err := check(spec)
+	return err
+}
+
+// unsafeChars are what a path in a profile cannot hold: they end or
+// escape its string, or its line.
+const unsafeChars = "\"\\\x00\n\r"
+
 // check refuses a spec that would leave the sandbox open, or that a
-// profile cannot say.
-func check(spec Spec) error {
+// profile cannot say, and returns the repositories of its roots, whose
+// git folders the profile opens.
+func check(spec Spec) ([]repo, error) {
 	if len(spec.Roots) == 0 {
-		return errors.New("workspace sandbox: no project folder")
+		return nil, errors.New("workspace sandbox: no project folder")
 	}
 	home := spec.UserHome
 	if home == "" {
@@ -229,40 +259,193 @@ func check(spec Spec) error {
 			continue
 		}
 		if !filepath.IsAbs(path) {
-			return fmt.Errorf("workspace sandbox: %q is not an absolute path", path)
+			return nil, fmt.Errorf("workspace sandbox: %q is not an absolute path", path)
 		}
-		if strings.ContainsAny(path, "\"\\\x00\n\r") {
-			return fmt.Errorf("workspace sandbox: %q has a character a sandbox profile cannot hold", path)
+		// Each as it resolves, too: the profile has both.
+		for _, f := range forms(path) {
+			if strings.ContainsAny(f, unsafeChars) {
+				return nil, fmt.Errorf("workspace sandbox: %q has a character a sandbox profile cannot hold", f)
+			}
 		}
 	}
 	for _, root := range spec.Roots {
 		info, err := os.Stat(root)
 		if err != nil {
-			return fmt.Errorf("workspace sandbox: project folder: %w", err)
+			return nil, fmt.Errorf("workspace sandbox: project folder: %w", err)
 		}
 		if !info.IsDir() {
-			return fmt.Errorf("workspace sandbox: project folder %s is not a folder", root)
+			return nil, fmt.Errorf("workspace sandbox: project folder %s is not a folder", root)
 		}
-		for _, r := range forms(root) {
-			if r == "/" {
-				return errors.New("workspace sandbox: the project folder cannot be the root folder")
-			}
-			if home != "" && slices.ContainsFunc(forms(home), func(h string) bool { return pathscope.Within(h, r) }) {
-				return fmt.Errorf("workspace sandbox: the project folder %s is or holds your home folder, whose settings and start-up files the sandbox must keep; open a project folder instead", root)
-			}
-			if dir := settingsFolder(home, r); dir != "" {
-				return fmt.Errorf("workspace sandbox: the project folder %s is in %s, where programs outside the sandbox keep settings they run code from; open a project folder instead", root, dir)
-			}
-			for _, hidden := range spec.Hidden {
-				for _, h := range forms(hidden) {
-					if pathscope.Within(h, r) || pathscope.Within(r, h) {
-						return fmt.Errorf("workspace sandbox: the project folder %s overlaps Mako's folder %s", root, hidden)
-					}
+		if err := checkWritable("the project folder", root, home, spec.Hidden); err != nil {
+			return nil, err
+		}
+	}
+	// The session's own folders: Mako makes them, in its folders or the
+	// system's temporary one, but one replaced by a symbolic link would
+	// open wherever it points.
+	for _, own := range slices.Concat([]string{spec.Home, spec.Temp}, spec.Writable) {
+		if own == "" {
+			continue
+		}
+		if err := checkOwn(own, home, spec.Hidden); err != nil {
+			return nil, err
+		}
+	}
+	var repos []repo
+	for _, root := range spec.Roots {
+		r := findRepo(root)
+		if err := checkRepo(r, root, spec.Roots, home, spec.Hidden); err != nil {
+			return nil, err
+		}
+		repos = append(repos, r)
+	}
+	return repos, nil
+}
+
+// checkWritable refuses path, which the profile lets the session write,
+// in every form, when it is the root folder, is or holds the user's home
+// or Mako's folders, or is in a folder of the home where programs keep
+// settings they run code from.
+func checkWritable(what, path, home string, hidden []string) error {
+	for _, r := range forms(path) {
+		if r == "/" {
+			return fmt.Errorf("workspace sandbox: %s cannot be the root folder", what)
+		}
+		if home != "" && slices.ContainsFunc(forms(home), func(h string) bool { return within(h, r) }) {
+			return fmt.Errorf("workspace sandbox: %s %s is or holds your home folder, whose settings and start-up files the sandbox must keep; open a project folder instead", what, path)
+		}
+		if dir := settingsFolder(home, r); dir != "" {
+			return fmt.Errorf("workspace sandbox: %s %s is in %s, where programs outside the sandbox keep settings they run code from; open a project folder instead", what, path, dir)
+		}
+		for _, hide := range hidden {
+			for _, h := range forms(hide) {
+				if within(h, r) || within(r, h) {
+					return fmt.Errorf("workspace sandbox: %s %s overlaps Mako's folder %s", what, path, hide)
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// checkOwn refuses one of the session's own folders, which may be in
+// Mako's folders but not hold them, when it is the root folder or holds
+// the user's home, or when it is a symbolic link out of the folder that
+// holds it.
+func checkOwn(path, home string, hidden []string) error {
+	parent := resolve(filepath.Dir(filepath.Clean(path)))
+	for _, r := range forms(path) {
+		if r == "/" || filepath.Dir(r) == r {
+			return fmt.Errorf("workspace sandbox: the session's folder %s cannot be the root folder", path)
+		}
+		if home != "" && slices.ContainsFunc(forms(home), func(h string) bool { return within(h, r) }) {
+			return fmt.Errorf("workspace sandbox: the session's folder %s is or holds your home folder", path)
+		}
+		for _, hide := range hidden {
+			for _, h := range forms(hide) {
+				if within(h, r) && !samePath(h, r) {
+					return fmt.Errorf("workspace sandbox: the session's folder %s holds Mako's folder %s", path, hide)
+				}
+			}
+		}
+		if !within(r, parent) && !within(r, filepath.Dir(filepath.Clean(path))) {
+			return fmt.Errorf("workspace sandbox: the session's folder %s is a link to %s, outside the folder that holds it", path, r)
+		}
+	}
+	return nil
+}
+
+// checkRepo refuses the git folders of root's repository, which the
+// profile lets the session write, when they are where it must not write,
+// or not where git keeps the git folders of a repository whose work tree
+// holds root: in a project folder, the .git folder of root or of a folder
+// that holds it, or a folder that names root's work tree back, as a
+// worktree's or a submodule's does. A .git file can name any folder; the
+// folder it names cannot be made to name root back but by who could write
+// it already.
+func checkRepo(r repo, root string, roots []string, home string, hidden []string) error {
+	dirs := r.dirs()
+	if len(dirs) == 0 {
+		return nil
+	}
+	for _, path := range append(slices.Clone(dirs), r.hooks) {
+		for _, f := range forms(path) {
+			if path != "" && strings.ContainsAny(f, unsafeChars) {
+				return fmt.Errorf("workspace sandbox: the git folder %q of %s has a character a sandbox profile cannot hold", f, root)
+			}
+		}
+	}
+	for _, dir := range dirs {
+		if err := checkWritable("the git folder", dir, home, hidden); err != nil {
+			return fmt.Errorf("%w (of the repository of %s)", err, root)
+		}
+		for _, d := range forms(dir) {
+			for _, other := range roots {
+				if slices.ContainsFunc(forms(other), func(o string) bool { return within(o, d) }) {
+					return fmt.Errorf("workspace sandbox: the git folder %s of %s holds the project folder %s, which would open the folders beside it", dir, root, other)
+				}
+			}
+		}
+	}
+	linked := linksBack(r, root)
+	for _, dir := range dirs {
+		for _, d := range forms(dir) {
+			inRoot := slices.ContainsFunc(roots, func(other string) bool {
+				return slices.ContainsFunc(forms(other), func(o string) bool { return within(d, o) })
+			})
+			ofRoot := strings.EqualFold(filepath.Base(d), ".git") && slices.ContainsFunc(forms(root), func(o string) bool { return within(o, filepath.Dir(d)) })
+			if !inRoot && !ofRoot && !linked {
+				return fmt.Errorf("workspace sandbox: the git folder %s of %s is outside the project and does not name it as its work tree; open the repository's own folder, or set its core.worktree", dir, root)
+			}
+		}
+	}
+	return nil
+}
+
+// linksBack reports whether the git folders of r name a work tree that
+// holds root: a worktree's admin folder, in its repository's worktrees
+// folder, names the worktree's .git in its gitdir file, and a submodule's
+// git folder names its work tree in core.worktree.
+func linksBack(r repo, root string) bool {
+	holdsRoot := func(tree string) bool {
+		return slices.ContainsFunc(forms(tree), func(t string) bool {
+			return slices.ContainsFunc(forms(root), func(o string) bool { return within(o, t) })
+		})
+	}
+	relative := func(p string) string {
+		p = strings.TrimSpace(p)
+		if p == "" || strings.ContainsAny(p, "\x00\n\r") {
+			return ""
+		}
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(r.gitDir, p)
+		}
+		return filepath.Clean(p)
+	}
+	if !samePath(r.gitDir, r.commonDir) {
+		admin := filepath.Dir(r.gitDir)
+		if !strings.EqualFold(filepath.Base(admin), "worktrees") || !samePath(resolve(filepath.Dir(admin)), resolve(r.commonDir)) {
+			return false
+		}
+		b, err := readSmall(filepath.Join(r.gitDir, "gitdir"))
+		if err != nil {
+			return false
+		}
+		dotGit := relative(string(b))
+		return dotGit != "" && strings.EqualFold(filepath.Base(dotGit), ".git") && holdsRoot(filepath.Dir(dotGit))
+	}
+	tree := relative(gitConfig(r.gitDir, "core.worktree"))
+	return tree != "" && holdsRoot(tree)
+}
+
+// readSmall reads a file of a git folder, which git keeps to a line.
+func readSmall(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return io.ReadAll(io.LimitReader(f, 4096))
 }
 
 // settingsFolder is the folder of home that path is in where programs
@@ -272,17 +455,41 @@ func settingsFolder(home, path string) string {
 	if home == "" {
 		return ""
 	}
+	parts := strings.Split(filepath.ToSlash(filepath.Clean(path)), "/")
 	for _, h := range forms(home) {
-		rel, err := filepath.Rel(h, path)
-		if err != nil || !filepath.IsLocal(rel) {
+		hp := strings.Split(strings.TrimSuffix(filepath.ToSlash(h), "/"), "/")
+		if len(parts) <= len(hp) || !within(path, h) {
 			continue
 		}
-		top, _, _ := strings.Cut(filepath.ToSlash(rel), "/")
-		if strings.HasPrefix(top, ".") || top == "Library" {
+		top := parts[len(hp)]
+		if strings.HasPrefix(top, ".") || strings.EqualFold(top, "Library") {
 			return filepath.Join(h, top)
 		}
 	}
 	return ""
+}
+
+// caseFolds reports whether paths name a file in any case, as they do on
+// APFS and HFS+, macOS's file systems: there /users/me/library is
+// ~/Library, and every comparison of paths here must take it to be.
+var caseFolds = runtime.GOOS == "darwin"
+
+// fold is path as it compares.
+func fold(path string) string {
+	if caseFolds {
+		return strings.ToLower(path)
+	}
+	return path
+}
+
+// within reports whether dir is root or a folder inside it.
+func within(dir, root string) bool {
+	return pathscope.Within(fold(filepath.Clean(dir)), fold(filepath.Clean(root)))
+}
+
+// samePath reports whether a and b are one path.
+func samePath(a, b string) bool {
+	return fold(filepath.Clean(a)) == fold(filepath.Clean(b))
 }
 
 // repo is the git repository that holds a project folder.
@@ -302,6 +509,15 @@ func (r repo) dirs() []string {
 	return out
 }
 
+// gitEnv is the daemon's environment without what would point git at
+// another repository.
+func gitEnv() []string {
+	return slices.DeleteFunc(os.Environ(), func(kv string) bool {
+		name, _, _ := strings.Cut(kv, "=")
+		return slices.Contains([]string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS", "GIT_CONFIG_COUNT"}, name)
+	})
+}
+
 // findRepo asks git where the repository holding dir keeps its git
 // folder, the folder its worktrees share, and its hooks: a worktree's
 // .git is a file naming a folder in its main repository's. It is the zero
@@ -310,12 +526,7 @@ func findRepo(dir string) repo {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir", "--git-path", "hooks")
-	// The daemon's own environment must not point git at another
-	// repository.
-	cmd.Env = slices.DeleteFunc(os.Environ(), func(kv string) bool {
-		name, _, _ := strings.Cut(kv, "=")
-		return slices.Contains([]string{"GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY"}, name)
-	})
+	cmd.Env = gitEnv()
 	out, err := safeexec.Output(cmd)
 	if err != nil {
 		return repo{}
@@ -337,8 +548,25 @@ func findRepo(dir string) repo {
 	return repo{gitDir: abs(lines[0]), commonDir: abs(lines[1]), hooks: abs(lines[2])}
 }
 
-// profile builds a Seatbelt profile a line at a time.
-type profile struct{ b strings.Builder }
+// gitConfig is key in the config file of gitDir alone, "" unset.
+func gitConfig(gitDir, key string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "config", "--file", filepath.Join(gitDir, "config"), "--get", key)
+	cmd.Env = gitEnv()
+	out, err := safeexec.Output(cmd)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// profile builds a Seatbelt profile a line at a time. It keeps the first
+// path it was given that a profile cannot hold, which Profile returns.
+type profile struct {
+	b   strings.Builder
+	err error
+}
 
 func (p *profile) line(s string) { p.b.WriteString(s + "\n") }
 
@@ -359,15 +587,35 @@ func (p *profile) rule(verb string, paths, filters []string) {
 
 func (p *profile) String() string { return p.b.String() }
 
+// safe is path, which a filter is to hold; one it cannot is kept as the
+// profile's error.
+func (p *profile) safe(path string) string {
+	if strings.ContainsAny(path, unsafeChars) && p.err == nil {
+		p.err = fmt.Errorf("workspace sandbox: %q has a character a sandbox profile cannot hold", path)
+	}
+	return path
+}
+
+// literal is a (literal ...) filter for path as it is.
+func (p *profile) literal(path string) string {
+	return `(literal "` + p.safe(path) + `")`
+}
+
+// regex is a (regex ...) filter for what starts with path and goes on as
+// pattern, which the code here writes, does.
+func (p *profile) regex(path, pattern string) string {
+	return `(regex #"^` + quoteRegex(p.safe(path)) + pattern + `")`
+}
+
 // subpaths are (subpath ...) filters for paths, in both their forms.
-func subpaths(paths ...string) []string {
+func (p *profile) subpaths(paths ...string) []string {
 	var out []string
 	for _, path := range paths {
 		if path == "" {
 			continue
 		}
 		for _, f := range forms(path) {
-			filter := `(subpath "` + f + `")`
+			filter := `(subpath "` + p.safe(f) + `")`
 			if !slices.Contains(out, filter) {
 				out = append(out, filter)
 			}
@@ -389,17 +637,41 @@ func prefixed(prefix string, filters []string) []string {
 func forms(path string) []string {
 	clean := filepath.Clean(path)
 	out := []string{clean}
-	if real, err := filepath.EvalSymlinks(clean); err == nil && real != clean {
+	if real := resolve(clean); real != clean {
 		out = append(out, real)
-	} else if err != nil {
-		// A path not made yet resolves through the folder that holds it.
-		if parent, err := filepath.EvalSymlinks(filepath.Dir(clean)); err == nil {
-			if real := filepath.Join(parent, filepath.Base(clean)); real != clean {
-				out = append(out, real)
-			}
-		}
 	}
 	return out
+}
+
+// resolve is path with its symbolic links resolved as far as it exists:
+// what is not made yet is joined to the deepest folder of it that is, and
+// a link to what is not made yet is followed to it.
+func resolve(path string) string {
+	return resolveDepth(filepath.Clean(path), 0)
+}
+
+func resolveDepth(path string, depth int) string {
+	rest := ""
+	for p := path; ; {
+		if real, err := filepath.EvalSymlinks(p); err == nil {
+			return filepath.Join(real, rest)
+		}
+		// A link whose target is not made yet resolves to that target.
+		if info, err := os.Lstat(p); err == nil && info.Mode()&os.ModeSymlink != 0 && depth < 40 {
+			if target, err := os.Readlink(p); err == nil {
+				if !filepath.IsAbs(target) {
+					target = filepath.Join(filepath.Dir(p), target)
+				}
+				return filepath.Join(resolveDepth(filepath.Clean(target), depth+1), rest)
+			}
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return path
+		}
+		rest = filepath.Join(filepath.Base(p), rest)
+		p = parent
+	}
 }
 
 // quoteRegex escapes what a Seatbelt regex reads as an operator.
@@ -414,10 +686,11 @@ func quoteRegex(s string) string {
 	return b.String()
 }
 
-func alternatives(names []string) string {
+// alternatives is a regex of any of names.
+func (p *profile) alternatives(names []string) string {
 	quoted := make([]string, len(names))
 	for i, n := range names {
-		quoted[i] = quoteRegex(n)
+		quoted[i] = quoteRegex(p.safe(n))
 	}
 	return strings.Join(quoted, "|")
 }

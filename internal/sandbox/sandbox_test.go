@@ -111,8 +111,8 @@ func TestProfileKeepsControlFilesOutOfReach(t *testing.T) {
 		"(allow default)",
 		"(deny file-write*)",
 		`(subpath "` + f.worktree + `")`,
-		`(regex #"^` + quoteRegex(f.worktree) + `/(.*/)?(\.git|\.mako|\.claude|\.codex|\.gemini|\.opencode|\.pi|\.cursor)(/.*)?$")`,
-		`(regex #"^` + quoteRegex(f.worktree) + `/(.*/)?(\.mcp\.json|opencode\.json|opencode\.jsonc)$")`,
+		`(regex #"^` + quoteRegex(f.worktree) + `/(.*/)?(\.git|\.mako|\.claude|\.codex|\.gemini|\.opencode|\.pi|\.cursor|\.direnv)(/.*)?$")`,
+		`(regex #"^` + quoteRegex(f.worktree) + `/(.*/)?(\.mcp\.json|opencode\.json|opencode\.jsonc|\.envrc|\.npmrc|\.cargo/config\.toml|\.cargo/config|\.gitmodules)$")`,
 		`(regex #"^` + quoteRegex(f.worktree) + `/(\.vscode|\.zed|\.idea|\.husky|\.githooks)(/.*)?$")`,
 		`(subpath "` + admin + `")`,
 		`(subpath "` + common + `")`,
@@ -284,6 +284,15 @@ func TestSandboxedSessionWritesOnlyItsWorkspace(t *testing.T) {
 		"cat " + filepath.Join(f.mako, "peer.key"),
 		"echo x > " + filepath.Join(f.run, "clip", "pbcopy"),
 		"ln " + filepath.Join(f.outside, "..", "mako", "peer.key") + " hl",
+		"echo 'eval x' > .envrc",
+		"mkdir -p sub && echo x > sub/.npmrc",
+		"mkdir -p .cargo && echo x > .cargo/config.toml",
+		"echo x > .gitmodules",
+		// The session's folders themselves, which a link in their place
+		// would widen the next profile through.
+		"mv " + f.repo + " " + f.repo + "-old",
+		"rm -rf " + f.home + " && ln -s " + f.outside + " " + f.home,
+		"rmdir " + f.temp + " && ln -s " + f.outside + " " + f.temp,
 	} {
 		if err := run(t, spec, f.repo, script); err == nil {
 			t.Errorf("sandbox let %q through", script)
@@ -364,5 +373,182 @@ func TestSandboxedSessionReachesOnlyItsSockets(t *testing.T) {
 		if err := dial(p); err == nil {
 			t.Errorf("sandbox reached the socket %s", p)
 		}
+	}
+}
+
+func TestProfileRefusesWhatItsPathsResolveTo(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	base := shortTemp(t)
+	user := filepath.Join(base, "user")
+	mustMkdir(t, user)
+	spec := func(root string) Spec { return Spec{Roots: []string{root}, UserHome: user} }
+
+	// A project that is a link to a folder whose name has a quote, which
+	// would end the profile's string and start a rule of its own.
+	quoted := filepath.Join(base, `q"(allow file-write* (subpath "/"))`)
+	mustMkdir(t, quoted)
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(quoted, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Profile(spec(link)); err == nil || !strings.Contains(err.Error(), "cannot hold") {
+		t.Fatalf("Profile took a project that resolves to a quote: %v", err)
+	}
+
+	// A worktree of a repository whose folder has a quote.
+	qrepo := filepath.Join(base, `r"q`)
+	mustMkdir(t, qrepo)
+	git(t, qrepo, "init")
+	git(t, qrepo, "commit", "--allow-empty", "-m", "first")
+	qwt := filepath.Join(base, "qwt")
+	git(t, qrepo, "worktree", "add", "-b", "side", qwt)
+	if _, err := Profile(spec(qwt)); err == nil || !strings.Contains(err.Error(), "cannot hold") {
+		t.Fatalf("Profile took a git folder with a quote: %v", err)
+	}
+
+	// A worktree whose commondir names the user's home, made to look like
+	// a git folder, which would open the home to writes.
+	repo := filepath.Join(base, "repo")
+	mustMkdir(t, repo)
+	git(t, repo, "init")
+	git(t, repo, "commit", "--allow-empty", "-m", "first")
+	wt := filepath.Join(base, "wt")
+	git(t, repo, "worktree", "add", "-b", "side", wt)
+	if _, err := Profile(spec(wt)); err != nil {
+		t.Fatalf("a worktree: %v", err)
+	}
+	admin := filepath.Join(repo, ".git", "worktrees", "wt")
+	for _, d := range []string{"objects", "refs"} {
+		mustMkdir(t, filepath.Join(user, d))
+	}
+	writeFile(t, filepath.Join(admin, "commondir"), user+"\n")
+	if r := findRepo(wt); r.commonDir != user {
+		t.Fatalf("git took commondir %q, want %q", r.commonDir, user)
+	}
+	if _, err := Profile(spec(wt)); err == nil || !strings.Contains(err.Error(), "home folder") {
+		t.Fatalf("Profile took a commondir that is the home folder: %v", err)
+	}
+
+	// One that names another folder that looks like a git folder, which
+	// does not name the worktree back.
+	other := filepath.Join(base, "other")
+	for _, d := range []string{"objects", "refs"} {
+		mustMkdir(t, filepath.Join(other, d))
+	}
+	writeFile(t, filepath.Join(admin, "commondir"), other+"\n")
+	if _, err := Profile(spec(wt)); err == nil || !strings.Contains(err.Error(), "does not name it") {
+		t.Fatalf("Profile took a commondir outside the repository: %v", err)
+	}
+	writeFile(t, filepath.Join(admin, "commondir"), "../..\n")
+
+	// A .git file naming another repository's git folder.
+	stray := filepath.Join(base, "stray")
+	writeFile(t, filepath.Join(stray, ".git"), "gitdir: "+filepath.Join(repo, ".git")+"\n")
+	if _, err := Profile(spec(stray)); err == nil || !strings.Contains(err.Error(), "does not name it") {
+		t.Fatalf("Profile took a .git file naming another repository: %v", err)
+	}
+
+	// What git keeps legitimately: a folder of a repository, and a
+	// submodule, whose git folder names it back.
+	sub := filepath.Join(repo, "pkg", "x")
+	mustMkdir(t, sub)
+	if _, err := Profile(spec(sub)); err != nil {
+		t.Fatalf("a folder of a repository: %v", err)
+	}
+	super := filepath.Join(base, "super")
+	mustMkdir(t, super)
+	git(t, super, "init")
+	git(t, super, "-c", "protocol.file.allow=always", "submodule", "add", repo, "sub")
+	if _, err := Profile(spec(filepath.Join(super, "sub"))); err != nil {
+		t.Fatalf("a submodule: %v", err)
+	}
+}
+
+func TestOwnFoldersStayWhereMakoMadeThem(t *testing.T) {
+	base := shortTemp(t)
+	user := filepath.Join(base, "user")
+	project := filepath.Join(base, "project")
+	sandboxes := filepath.Join(base, "sandbox")
+	mustMkdir(t, user, project, sandboxes, filepath.Join(base, "elsewhere"))
+	for name, target := range map[string]string{"the home folder": user, "a folder elsewhere": filepath.Join(base, "elsewhere")} {
+		home := filepath.Join(sandboxes, "claude")
+		_ = os.Remove(home)
+		if err := os.Symlink(target, home); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Profile(Spec{Roots: []string{project}, Home: home, UserHome: user}); err == nil {
+			t.Errorf("Profile took an agent home that links to %s", name)
+		}
+	}
+}
+
+func TestPathsCompareInAnyCaseOnMacOS(t *testing.T) {
+	prev := caseFolds
+	caseFolds = true
+	t.Cleanup(func() { caseFolds = prev })
+	home := "/Users/me"
+	for _, c := range []struct{ path, want string }{
+		{"/users/me/library/application support/mako", "/Users/me/library"},
+		{"/Users/me/LIBRARY/LaunchAgents", "/Users/me/LIBRARY"},
+		{"/Users/me/.Config/x", "/Users/me/.Config"},
+		{"/Users/me/src/x", ""},
+	} {
+		if got := settingsFolder(home, c.path); got != c.want {
+			t.Errorf("settingsFolder(%q) = %q, want %q", c.path, got, c.want)
+		}
+	}
+	if !within("/users/ME/src", "/Users/me") || within("/Users/men", "/users/me") {
+		t.Fatal("within does not fold case")
+	}
+
+	if runtime.GOOS != "darwin" {
+		return
+	}
+	// On the file system, too: a project typed in another case is the
+	// folder it names.
+	base := shortTemp(t)
+	user := filepath.Join(base, "User")
+	mako := filepath.Join(user, "Library", "Application Support", "mako")
+	mustMkdir(t, filepath.Join(user, "src"), mako)
+	probe := strings.ToLower(user)
+	if _, err := os.Stat(probe); err != nil {
+		t.Skipf("this volume tells case apart: %v", err)
+	}
+	for _, root := range []string{
+		strings.ToLower(user),
+		filepath.Join(user, "library"),
+		strings.ToLower(mako),
+	} {
+		if _, err := Profile(Spec{Roots: []string{root}, Hidden: []string{mako}, UserHome: user}); err == nil {
+			t.Errorf("Profile took %s", root)
+		}
+	}
+	if _, err := Profile(Spec{Roots: []string{filepath.Join(user, "src")}, Hidden: []string{mako}, UserHome: user}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFormsResolveThroughTheDeepestFolderMade(t *testing.T) {
+	base := shortTemp(t)
+	real := filepath.Join(base, "real")
+	mustMkdir(t, real)
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	got := forms(filepath.Join(link, "a", "b", "c"))
+	if want := filepath.Join(real, "a", "b", "c"); len(got) != 2 || got[1] != want {
+		t.Fatalf("forms = %q, want the second %q", got, want)
+	}
+	// A link to what is not made yet resolves to it.
+	dangling := filepath.Join(base, "dangling")
+	if err := os.Symlink(filepath.Join(real, "later"), dangling); err != nil {
+		t.Fatal(err)
+	}
+	got = forms(filepath.Join(dangling, "x"))
+	if want := filepath.Join(real, "later", "x"); len(got) != 2 || got[1] != want {
+		t.Fatalf("forms = %q, want the second %q", got, want)
 	}
 }
