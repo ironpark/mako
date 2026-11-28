@@ -2111,5 +2111,8 @@ var catalogKo = map[string]string{
 	"The event's title, branch and author are given to the agent after the prompt, marked as untrusted.": "이벤트의 제목, 브랜치, 작성자는 프롬프트 뒤에 신뢰할 수 없는 데이터로 표시되어 에이전트에 전달됩니다.",
 
 	// Revision 54: the session host
-	"Also open on %s": "%s에서도 열려 있음",
+	"Also open on %s":                        "%s에서도 열려 있음",
+	"The draft was not shared: %s":           "초안을 공유하지 못했습니다: %s",
+	"The message was not sent: %s":           "메시지를 보내지 못했습니다: %s",
+	"The message may not have been sent: %s": "메시지가 전송되지 않았을 수 있습니다: %s",
 }

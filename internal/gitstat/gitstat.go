@@ -43,7 +43,7 @@ const contextLines = 3
 func Status(ctx context.Context, dir string) (*protocol.GitChanges, error) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{DetectDotGit: true, EnableDotGitCommonDir: true})
+	repo, err := openRepo(dir, true)
 	if errors.Is(err, git.ErrRepositoryNotExists) {
 		return &protocol.GitChanges{NotRepo: true}, nil
 	}
@@ -404,7 +404,7 @@ func Diff(root, p, from string) (*protocol.Diff, error) {
 	if err := cmp.Or(inWorkTree(p), inWorkTree(from)); err != nil {
 		return nil, err
 	}
-	repo, err := git.PlainOpenWithOptions(root, &git.PlainOpenOptions{EnableDotGitCommonDir: true})
+	repo, err := openRepo(root, false)
 	if err != nil {
 		return nil, err
 	}

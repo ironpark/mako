@@ -259,6 +259,7 @@ error { message: "unknown session \"7f3a…\"", code: "" }
 | `changed` | A `write_file` was refused because the file changed since the writer read it. |
 | `unsupported` | The daemon does not know the request's type; it predates the caller. |
 | `no_plugin` | A `watch_block` or `block_event` of a plugin the node does not have, or a node that runs no plugins: asking again changes nothing until the plugin is installed (revision 31). |
+| `not_taken` | A `session_action` that the session's host refused: it changed nothing, and sending it again changes nothing either (revision 54). Any other error of a `session_action`, as one from a daemon that passed it on, may come after the host took it. |
 
 From revision 34, the plugin store's refusals, and a plugin enabled while
 it is blocked, carry a code and `args`, what its sentence names, in
@@ -1048,9 +1049,17 @@ one session's host. It is routed by `node_id`, and a daemon passes it on to
 the session's node as it passes on `attach`. The request names the
 front-end:
 
-- `client_id` is the front-end's own ID. The host counts the streams of one
-  `client_id` as one client, and the events of its actions carry it.
+- `client_id` is the front-end's own ID, at most 128 bytes, with no
+  control characters. The host counts the streams of one `client_id` as
+  one client, and the events of its actions carry it. The first request
+  with a `client_id` binds it to where the request came from: this
+  daemon's socket, or the peer daemon that passed it on. The host refuses
+  a subscription or an action with that `client_id` from anywhere else,
+  until it forgets the front-end, 10 minutes after its last stream ended
+  and its last action.
 - `client_name` is how the other front-ends show it, as `desktop (laptop)`.
+  The host shows it on one line, with control characters escaped, and cuts
+  it to 64 characters.
 - `last_seen_seq` is the `seq` of the last event that the front-end
   applied, 0 for none.
 - With `approvals`, the front-end shows approvals. While it is subscribed,
@@ -1078,13 +1087,18 @@ the host's own events.
 | `approval_answered` | A front-end answered an approval: `approval_id`, `decision`. It changes no state. |
 
 `protocol.ApplyHostEvent` applies an event to a `HostState`, and
-`client.FollowSession` follows a host and keeps its state.
+`client.FollowSession` follows a host and keeps its state. An event that
+is not after the state's `seq`, or a `chat` patch of another conversation
+or outside the messages held, does not apply: the front-end subscribes
+again from nothing.
 
 Seqs grow across all the hosts of a daemon. The high 32 bits number the
 daemon's run, and `HostSubscribed.epoch` is the first seq of the current
 run. A seq from an earlier run is below it, so the front-end gets the whole
 state. If its queue is empty, a host stops 10 minutes after its last
-subscriber leaves. Its replay starts again with the next host. A host keeps at
+subscriber leaves and its last action ends. It also stops when its session
+closes, and when its daemon stops. Its replay starts again with the next
+host. A host keeps at
 most 2048 events or 4 MiB. In a replay, the host leaves out each event of
 a whole-value body that a later event of the same body replaces.
 
@@ -1102,13 +1116,15 @@ actions of each front-end.
 | Action | What it does |
 |---|---|
 | `set_draft` | Sets the draft. At most 64 KiB. |
-| `send_prompt` | Sends `text`, then `keys`, as `send` does. Empty `keys` are `\r`. With `queue`, the prompt waits in the queue until the agent is at its prompt, as Mako's own messages to it do. With `clear_draft`, the host also empties the draft that this front-end wrote last. The queue holds 32 prompts at most. |
+| `send_prompt` | Sends `text`, then `keys`, as `send` does. `text` is at most 64 KiB and `keys` at most 64 bytes. If `text` is set and `keys` are empty, the keys are `\r`, queued or not. With `queue`, the prompt waits in the queue until the agent is at its prompt, as Mako's own messages to it do. The host refuses a queued prompt that ends a paste (`ESC [201~`), and takes a queued prompt out of the queue after it fails to be typed 5 times. With `clear_draft`, the host also empties the draft that this front-end wrote last. The queue holds 32 prompts at most. |
 | `cancel_queued` | Takes the queued prompt `id` out of the queue. |
-| `answer_approval` | Answers an approval as `answer_approval` does. |
+| `answer_approval` | Answers an approval of this session as `answer_approval` does. The host refuses an approval of another session. |
 
 The result carries `seq`, the seq of the last event that the action made,
 or 0. It sets `queued` for a prompt that went to the queue. A refused action
-gets an error, and the host does not remember it.
+gets an error with code `not_taken`, and the host does not remember it. An
+action that gets another error, or no answer, may have been taken: the
+front-end sends it again with the same `client_seq`.
 
 ## Discovery
 

@@ -103,6 +103,19 @@ func (d *Daemon) answerApproval(s *session.Session, r *protocol.AnswerApproval, 
 	return d.approvals.answer(s.ID(), r)
 }
 
+// approvalSession is the session the approval id waits for, whichever
+// kind it is, and whether one waits as id: a template's and a layout
+// change's say the session whose agent asked, "" for none.
+func (d *Daemon) approvalSession(id string) (string, bool) {
+	if sid, ok := d.templateAsks.sessionOf(id); ok {
+		return sid, true
+	}
+	if sid, ok := d.layouts.sessionOf(id); ok {
+		return sid, true
+	}
+	return d.approvals.sessionOf(id)
+}
+
 func (d *Daemon) handleSend(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.Send) (*protocol.SessionInfo, error) {
 		s, ok := d.sessions.get(r.GetSessionId())

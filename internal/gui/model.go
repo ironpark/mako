@@ -48,6 +48,9 @@ type newSession struct {
 type model struct {
 	cfg  *config.Config
 	post func(func())
+	// hostDial, when set, gives the client session hosts' actions go
+	// through, in place of the link's: a test's.
+	hostDial func(context.Context) (hostActor, error)
 	// host is the app's, or a probe's, which shows the notifications;
 	// notifyFailed says once why one could not be shown.
 	host         ggui.Host

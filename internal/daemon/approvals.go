@@ -98,6 +98,7 @@ func (a *approvals) watching() bool {
 // called, and for grace after.
 func (a *approvals) holdSession(id string, grace time.Duration) (release func()) {
 	a.mu.Lock()
+	a.pruneLocked(time.Now())
 	if a.sessions == nil {
 		a.sessions = map[string]*sessionWatch{}
 	}
@@ -122,20 +123,41 @@ func (a *approvals) holdSession(id string, grace time.Duration) (release func())
 // watchingSession reports whether session id's approvals are shown: by a
 // front-end watching them all, or by one subscribed to its host.
 func (a *approvals) watchingSession(id string) bool {
-	if a.watching() {
-		return true
+	a.mu.Lock()
+	a.pruneLocked(time.Now())
+	_, held := a.sessions[id]
+	a.mu.Unlock()
+	return held || a.watching()
+}
+
+// pruneLocked forgets the sessions no subscriber shows the approvals of
+// any longer, their grace over.
+func (a *approvals) pruneLocked(now time.Time) {
+	for id, w := range a.sessions {
+		if w.held <= 0 && !now.Before(w.until) {
+			delete(a.sessions, id)
+		}
 	}
+}
+
+// forgetSession forgets session id, closed: a subscriber still holding it
+// releases a hold no longer counted.
+func (a *approvals) forgetSession(id string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	w := a.sessions[id]
-	if w == nil {
-		return false
-	}
-	if w.held > 0 || time.Now().Before(w.until) {
-		return true
-	}
 	delete(a.sessions, id)
-	return false
+}
+
+// sessionOf is the session the agent approval id waits for, and whether
+// one does.
+func (a *approvals) sessionOf(id string) (string, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	p, ok := a.pending[id]
+	if !ok || p.session == nil {
+		return "", false
+	}
+	return p.session.ID(), true
 }
 
 // ask holds an approval s's agent, the one called name, asks for until it

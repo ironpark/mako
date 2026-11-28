@@ -120,13 +120,29 @@ func (p *projectStore) projectOf(dir, repo string) (*protocol.ProjectScope, []st
 // repository repo, or of dir's when repo is "", and that project's folders
 // with their links followed; nil for none.
 func (d *Daemon) projectFor(dir, repo string) (*protocol.ProjectScope, []string) {
-	if repo == "" {
+	return d.projectForDir(dir, repo, true)
+}
+
+func (d *Daemon) projectForDir(dir, repo string, lookupHead bool) (*protocol.ProjectScope, []string) {
+	if repo == "" && lookupHead {
 		repo = d.heads.of(dir).repo
 	}
 	if repo != "" {
 		repo = cleanPath(repo)
 	}
 	return d.projects.projectOf(cleanPath(dir), repo)
+}
+
+// projectForSession is the project holding session info, using the repository
+// pinned at session start when known.
+func (d *Daemon) projectForSession(info *protocol.SessionInfo) (*protocol.ProjectScope, []string) {
+	repo, _, pinned := d.pinnedGit(info.GetId())
+	if pinned {
+		repo = cmp.Or(info.GetWorktree().GetRepo(), repo)
+	} else {
+		repo = cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())
+	}
+	return d.projectForDir(info.GetProject(), repo, !pinned)
 }
 
 // projectScope is the project a session is in, as its agent's MCP tools
@@ -140,15 +156,25 @@ func (d *Daemon) projectScope(info *protocol.SessionInfo) string {
 // folder; else, in a clone of a repository with a remote, "repo:" and the
 // remote, which names it the same on every node, so that the agents of
 // its clones anywhere are one project's; "" for neither.
+// For a session whose git metadata was pinned at start, the pinned values are
+// used so mid-session .git/config edits cannot move it into another repo scope.
 func (d *Daemon) sharedScope(info *protocol.SessionInfo) string {
+	repo, remote, pinned := d.pinnedGit(info.GetId())
 	if len(d.projects.get()) > 0 {
-		if s, _ := d.projectFor(info.GetProject(), cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())); s != nil {
+		if pinned {
+			repo = cmp.Or(info.GetWorktree().GetRepo(), repo)
+		} else {
+			repo = cmp.Or(info.GetWorktree().GetRepo(), info.GetRepo())
+		}
+		if s, _ := d.projectForDir(info.GetProject(), repo, !pinned); s != nil {
 			return projectScopePrefix + s.GetId()
 		}
 	}
-	remote := info.GetRemote()
-	if remote == "" && info.GetProject() != "" {
-		remote = d.heads.of(info.GetProject()).remote // a folder asked of, no session's
+	if !pinned {
+		remote = info.GetRemote()
+		if remote == "" && info.GetProject() != "" {
+			remote = d.heads.of(info.GetProject()).remote // a folder asked of, no session's
+		}
 	}
 	if remote != "" {
 		return repoScopePrefix + remote

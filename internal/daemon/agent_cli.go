@@ -416,15 +416,19 @@ func (d *Daemon) cliWait(ctx context.Context, peer *agentPeer, req agentCLIReque
 	}
 	scope := d.projectScope(caller.Info())
 	if req.WatchChildren {
+		var childIDs []string
 		d.sessionMu.Lock()
 		for id, saved := range d.saved {
 			if saved.ParentID == peer.id && saved.ParentNodeID == "" && !slices.Contains(watchIDs, id) {
-				if s, ok := d.sessions.get(id); ok && s.Info().GetState() == protocol.StateRunning && d.inProject(scope, s.Info()) {
-					watchIDs = append(watchIDs, id)
-				}
+				childIDs = append(childIDs, id)
 			}
 		}
 		d.sessionMu.Unlock()
+		for _, id := range childIDs {
+			if s, ok := d.sessions.get(id); ok && s.Info().GetState() == protocol.StateRunning && d.inProject(scope, s.Info()) {
+				watchIDs = append(watchIDs, id)
+			}
+		}
 		selfNodeID := d.config().NodeID
 		for _, remote := range d.remoteAgents(scope) {
 			if remote.GetParentSessionId() == peer.id &&

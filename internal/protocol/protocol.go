@@ -468,6 +468,11 @@ const (
 	// CodeAuthError is a provider authentication failure on the host (e.g.
 	// expired OAuth session), separate from Mako node access.
 	CodeAuthError = "auth_error"
+	// CodeNotTaken is a session action its session's host refused: it
+	// changed nothing, and sending it again changes nothing either. Any
+	// other error of one, as a daemon passing it on fails, may come after
+	// the host took it.
+	CodeNotTaken = "not_taken"
 )
 
 // HasFeature reports whether a node speaks a protocol extension.

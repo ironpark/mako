@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,6 +134,17 @@ func (l *claudeLog) add(role, text string) {
 	}
 }
 
+// heldHost is session s's host, held until the test ends.
+func heldHost(t *testing.T, d *Daemon, s *session.Session) *sessionHost {
+	t.Helper()
+	h, let, err := d.host(t.Context(), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(let)
+	return h
+}
+
 func act(t *testing.T, c *client.Client, req *protocol.SessionAction) *protocol.SessionActionResult {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
@@ -180,7 +194,7 @@ func TestSessionHostIsSharedByItsFrontEnds(t *testing.T) {
 	if !again.GetDuplicate() || again.GetSeq() != res.GetSeq() {
 		t.Fatalf("the action sent again: %v", again)
 	}
-	if h := d.host(t.Context(), s); h.stateLocked().GetDraft().GetText() != "Fix the build" {
+	if h := heldHost(t, d, s); h.snapshot().GetDraft().GetText() != "Fix the build" {
 		t.Fatal("an action sent again was taken again")
 	}
 
@@ -255,12 +269,12 @@ func TestSessionHostDeliversItsQueue(t *testing.T) {
 	c := dialDaemon(t, d)
 	act(t, c, &protocol.SessionAction{SessionId: "agent", ClientId: "phone", ClientSeq: 1, Action: &protocol.SessionAction_SendPrompt{SendPrompt: &protocol.HostSendPrompt{Text: "Then run the tests", Queue: true}}})
 	f.until("the queued prompt", func(st *protocol.HostState) bool { return len(st.GetQueue().GetItems()) == 1 })
-	time.Sleep(1500 * time.Millisecond)
-	if h := d.host(t.Context(), s); len(h.stateLocked().GetQueue().GetItems()) != 1 {
+	h := heldHost(t, d, s)
+	h.deliver(t.Context(), s)
+	if len(h.snapshot().GetQueue().GetItems()) != 1 {
 		t.Fatal("a prompt went to an agent at work")
 	}
 
-	h := d.host(t.Context(), s)
 	h.mu.Lock()
 	sub := &hostSub{client: "probe", cursor: h.state.GetSeq(), wake: make(chan struct{}, 1)}
 	h.subs[sub] = struct{}{}
@@ -309,7 +323,7 @@ func TestSessionHostAcrossNodes(t *testing.T) {
 // ring left behind is sent the state whole.
 func TestSessionHostReplay(t *testing.T) {
 	d := New(&config.Config{NodeID: "n"}, nil)
-	h := &sessionHost{d: d, state: &protocol.HostState{}, subs: map[*hostSub]struct{}{}, clients: map[string]*hostClient{}, done: map[string]*hostDone{}, stopped: make(chan struct{})}
+	h := &sessionHost{d: d, state: &protocol.HostState{}, subs: map[*hostSub]struct{}{}, clients: map[string]*hostClient{}, known: map[string]*hostKnown{}, stopped: make(chan struct{})}
 	h.mu.Lock()
 	start := h.state.GetSeq()
 	for i := range 3 {
@@ -340,7 +354,7 @@ func TestSessionHostReplay(t *testing.T) {
 		h.emitLocked(nil, &protocol.HostEvent{Body: &protocol.HostEvent_Live{Live: &protocol.ChatLive{}}})
 	}
 	h.mu.Unlock()
-	_, first, err := h.subscribe(&protocol.SubscribeSession{ClientId: "c", LastSeenSeq: start + 1})
+	_, first, err := h.subscribe(&protocol.SubscribeSession{ClientId: "c", LastSeenSeq: start + 1}, "")
 	if err != nil || first.GetState() == nil {
 		t.Fatalf("behind the ring: %v %v", first, err)
 	}
@@ -392,13 +406,14 @@ func TestChatPatchApplies(t *testing.T) {
 }
 
 // A session's approvals wait for a window while a subscriber shows them,
-// and for the grace after the last left.
+// and for the grace after the last left; a session closed, or one whose
+// grace is over, is forgotten even while a front-end watches them all.
 func TestApprovalsHeldForASession(t *testing.T) {
 	var a approvals
 	if a.watchingSession("s") {
 		t.Fatal("watching with no one")
 	}
-	release := a.holdSession("s", 50*time.Millisecond)
+	release := a.holdSession("s", time.Hour)
 	if !a.watchingSession("s") || a.watchingSession("other") {
 		t.Fatal("the hold is not the session's")
 	}
@@ -407,8 +422,269 @@ func TestApprovalsHeldForASession(t *testing.T) {
 	if !a.watchingSession("s") {
 		t.Fatal("no grace")
 	}
-	time.Sleep(80 * time.Millisecond)
-	if a.watchingSession("s") {
-		t.Fatal("the grace outlasted itself")
+	a.holdSession("brief", time.Nanosecond)()
+	waitFor(t, "the grace to end", func() bool { return !a.watchingSession("brief") })
+
+	a.watch(true) // a front-end watching them all
+	a.holdSession("gone", time.Nanosecond)()
+	waitFor(t, "the ended grace forgotten", func() bool {
+		a.watchingSession("other")
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		_, ok := a.sessions["gone"]
+		return !ok
+	})
+	a.forgetSession("s")
+	a.mu.Lock()
+	_, kept := a.sessions["s"]
+	a.mu.Unlock()
+	if kept {
+		t.Fatal("a closed session's hold was kept")
 	}
+}
+
+// addScriptSession is a session of agent claude whose program is script.
+func addScriptSession(t *testing.T, d *Daemon, id, script string) *session.Session {
+	t.Helper()
+	s, err := session.Start(session.Spec{
+		ID: id, NodeID: d.config().NodeID, Agent: "claude", Project: t.TempDir(),
+		Command: []string{"sh", "-c", script}, Cols: 40, Rows: 6,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	d.sessions.add(s)
+	return s
+}
+
+// A prompt sent at once with no keys is submitted, as one queued is.
+func TestSessionHostSubmitsAPromptWithNoKeys(t *testing.T) {
+	d := meshDaemon(t, "host-enter")
+	out := filepath.Join(t.TempDir(), "line")
+	addScriptSession(t, d, "agent", `read line; printf '%s' "$line" > `+out+`; sleep 30`)
+	act(t, dialDaemon(t, d), &protocol.SessionAction{SessionId: "agent", ClientId: "phone", ClientSeq: 1, Action: &protocol.SessionAction_SendPrompt{SendPrompt: &protocol.HostSendPrompt{Text: "hello"}}})
+	waitFor(t, "the prompt submitted", func() bool {
+		data, _ := os.ReadFile(out)
+		return string(data) == "hello"
+	})
+}
+
+// A host refuses what it could not take whole or safely: a prompt or keys
+// too long, a queued prompt that would end a paste, a front-end's ID from
+// elsewhere, and an approval of another session.
+func TestSessionHostRefuses(t *testing.T) {
+	d := meshDaemon(t, "host-refuse")
+	addSessionOf(t, d, "agent", "claude")
+	addSessionOf(t, d, "other", "claude")
+	s, _ := d.sessions.get("agent")
+	h := heldHost(t, d, s)
+	ctx := t.Context()
+	prompt := func(p *protocol.HostSendPrompt) error {
+		_, err := h.act(ctx, &protocol.SessionAction{ClientId: "desk", Action: &protocol.SessionAction_SendPrompt{SendPrompt: p}}, false, "")
+		return err
+	}
+	if err := prompt(&protocol.HostSendPrompt{Text: strings.Repeat("a", hostPromptMax+1), Queue: true}); err == nil {
+		t.Fatal("a prompt past the limit was taken")
+	}
+	if err := prompt(&protocol.HostSendPrompt{Text: "hi", Keys: make([]byte, hostKeysMax+1)}); err == nil {
+		t.Fatal("keys past the limit were taken")
+	}
+	if err := prompt(&protocol.HostSendPrompt{Text: "end \x1b[201~ rm -rf", Queue: true}); err == nil {
+		t.Fatal("a queued prompt that ends a paste was taken")
+	}
+	if len(h.snapshot().GetQueue().GetItems()) != 0 {
+		t.Fatal("a refused prompt was queued")
+	}
+	// Refused, it is said so, as no failure on the way would be.
+	_, err := dialDaemon(t, d).SessionAction(ctx, &protocol.SessionAction{SessionId: "agent", ClientId: "desk", ClientSeq: 9, Action: &protocol.SessionAction_SetDraft{SetDraft: &protocol.HostSetDraft{Text: strings.Repeat("a", hostDraftMax+1)}}})
+	if !protocol.HasCode(err, protocol.CodeNotTaken) {
+		t.Fatalf("a refused action: %v", err)
+	}
+
+	draft := func(client, origin, text string) error {
+		_, err := h.act(ctx, &protocol.SessionAction{ClientId: client, Action: &protocol.SessionAction_SetDraft{SetDraft: &protocol.HostSetDraft{Text: text}}}, origin != "", origin)
+		return err
+	}
+	if err := draft("desk", "", "mine"); err != nil {
+		t.Fatal(err)
+	}
+	if err := draft("desk", "peer-x", "hijacked"); err == nil {
+		t.Fatal("another peer acted as the desk")
+	}
+	if _, _, err := h.subscribe(&protocol.SubscribeSession{ClientId: "desk", ClientName: "spoof"}, "peer-x"); err == nil {
+		t.Fatal("another peer subscribed as the desk")
+	}
+	if got := h.snapshot().GetDraft().GetText(); got != "mine" {
+		t.Fatalf("draft %q", got)
+	}
+	if err := draft("desk\x1b[2J", "", "x"); err == nil {
+		t.Fatal("a client_id that is not printable was taken")
+	}
+
+	// The name others see is one printable line.
+	sub, _, err := h.subscribe(&protocol.SubscribeSession{ClientId: "named", ClientName: "evil\n\x1b]0;title\x07" + strings.Repeat("n", 100)}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.unsubscribe(sub, false)
+	for _, c := range h.snapshot().GetClients().GetClients() {
+		if c.GetId() == "named" && (strings.ContainsFunc(c.GetName(), protocol.Spoofing) || len([]rune(c.GetName())) > hostNameMax) {
+			t.Fatalf("name %q", c.GetName())
+		}
+	}
+
+	// An approval of another session is not this one's to answer.
+	other, _ := d.sessions.get("other")
+	d.approvals.mu.Lock()
+	if d.approvals.pending == nil {
+		d.approvals.pending = map[string]*pendingApproval{}
+	}
+	d.approvals.pending["ap"] = &pendingApproval{session: other, reply: make(chan *protocol.AnswerApproval, 1)}
+	d.approvals.mu.Unlock()
+	_, err = h.act(ctx, &protocol.SessionAction{ClientId: "desk", Action: &protocol.SessionAction_AnswerApproval{AnswerApproval: &protocol.AnswerApproval{ApprovalId: "ap", Decision: protocol.DecisionAllow}}}, false, "")
+	if err == nil {
+		t.Fatal("another session's approval was answered")
+	}
+	for _, ev := range h.afterLockedCopy(0) {
+		if ev.GetApprovalAnswered() != nil {
+			t.Fatal("an approval answered for another session was told")
+		}
+	}
+}
+
+// afterLockedCopy is every event the host holds after seq.
+func (h *sessionHost) afterLockedCopy(seq uint64) []*protocol.HostEvent {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return slices.Clone(h.ring[sort.Search(len(h.ring), func(i int) bool { return h.ring[i].GetSeq() > seq }):])
+}
+
+// A host held by a request outlives its linger, a session closed takes
+// its host and draft with it for good, and one waited for gives up with
+// the request.
+func TestSessionHostLifecycle(t *testing.T) {
+	d := meshDaemon(t, "host-life")
+	addSessionOf(t, d, "agent", "claude")
+	s, _ := d.sessions.get("agent")
+
+	h, let, err := d.host(t.Context(), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.lingered() // the linger ends as a request has the host
+	if again, letAgain, err := d.host(t.Context(), s); err != nil || again != h {
+		t.Fatalf("the host held stopped: %v", err)
+	} else {
+		letAgain()
+	}
+	let()
+	h.lingered()
+	next, letNext, err := d.host(t.Context(), s)
+	if err != nil || next == h {
+		t.Fatalf("no new host after the old one's linger: %v", err)
+	}
+
+	// An action under way as the session closes leaves no draft behind.
+	if _, err := next.setDraft(&protocol.HostOrigin{ClientId: "desk"}, "kept"); err != nil {
+		t.Fatal(err)
+	}
+	d.forgetHost("agent")
+	if _, err := next.setDraft(&protocol.HostOrigin{ClientId: "desk"}, "back"); err == nil {
+		t.Fatal("a closed session's host took a draft")
+	}
+	next.mu.Lock()
+	next.shut = false // as if it had looked before the close
+	next.draftLocked(&protocol.HostOrigin{ClientId: "desk"}, "back")
+	next.shut = true
+	next.mu.Unlock()
+	letNext()
+	d.hosts.mu.Lock()
+	_, kept := d.hosts.drafts["agent"]
+	d.hosts.mu.Unlock()
+	if kept {
+		t.Fatal("a closed session's draft came back")
+	}
+	if _, _, err := d.host(t.Context(), s); err == nil {
+		t.Fatal("a host started for a closed session")
+	}
+
+	// A host starting is waited for no longer than the request.
+	addSessionOf(t, d, "slow", "claude")
+	slow, _ := d.sessions.get("slow")
+	d.hosts.mu.Lock()
+	starting := d.newHostLocked(slow)
+	d.hosts.mu.Unlock()
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	if _, _, err := d.host(ctx, slow); err == nil {
+		t.Fatal("a host not ready was taken")
+	}
+	close(starting.ready)
+
+	// The daemon stopping stops its hosts.
+	d.stopHosts()
+	if !starting.isShut() {
+		t.Fatal("a host outlived its daemon")
+	}
+	if _, _, err := d.host(t.Context(), slow); err == nil {
+		t.Fatal("a host started after its daemon stopped")
+	}
+}
+
+func (h *sessionHost) isShut() bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.shut
+}
+
+// A front-end with no stream is forgotten a while after it was last heard
+// of, with its actions, and its ID is free again.
+func TestSessionHostForgetsFrontEnds(t *testing.T) {
+	d := New(&config.Config{NodeID: "n"}, nil)
+	h := &sessionHost{d: d, state: &protocol.HostState{}, subs: map[*hostSub]struct{}{}, clients: map[string]*hostClient{}, known: map[string]*hostKnown{}, stopped: make(chan struct{})}
+	if _, err := h.act(t.Context(), &protocol.SessionAction{ClientId: "old", ClientSeq: 1, Action: &protocol.SessionAction_SetDraft{SetDraft: &protocol.HostSetDraft{Text: "x"}}}, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	sub, _, err := h.subscribe(&protocol.SubscribeSession{ClientId: "here"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.mu.Lock()
+	h.forgetLocked(time.Now().Add(hostForget + time.Minute))
+	_, old := h.known["old"]
+	_, here := h.known["here"]
+	h.mu.Unlock()
+	if old || !here {
+		t.Fatalf("known after a while: old %v, here %v", old, here)
+	}
+	h.unsubscribe(sub, false)
+	h.mu.Lock()
+	h.forgetLocked(time.Now().Add(hostForget + time.Minute))
+	_, here = h.known["here"]
+	h.mu.Unlock()
+	if here {
+		t.Fatal("a front-end gone was kept")
+	}
+	if _, err := h.act(t.Context(), &protocol.SessionAction{ClientId: "old", ClientSeq: 2, Action: &protocol.SessionAction_SetDraft{SetDraft: &protocol.HostSetDraft{Text: "y"}}}, true, "peer-y"); err != nil {
+		t.Fatalf("a forgotten ID is not free: %v", err)
+	}
+}
+
+// A queued prompt that fails each time it is typed is given up, for the
+// prompts after it.
+func TestSessionHostGivesUpAPromptThatFails(t *testing.T) {
+	d := meshDaemon(t, "host-poison")
+	addSessionOf(t, d, "agent", "claude")
+	s, _ := d.sessions.get("agent")
+	h := heldHost(t, d, s)
+	h.mu.Lock()
+	h.queue = append(h.queue, hostQueued{item: &protocol.HostQueued{Id: "bad", Text: "\x1b[201~"}, keys: []byte{'\r'}})
+	h.queueChangedLocked(nil)
+	h.mu.Unlock()
+	s.SetStatus(protocol.AgentIdle)
+	waitForWithin(t, 20*time.Second, "the failing prompt given up", func() bool {
+		h.deliver(t.Context(), s)
+		return len(h.snapshot().GetQueue().GetItems()) == 0
+	})
 }
