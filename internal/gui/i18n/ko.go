@@ -1962,14 +1962,14 @@ var catalogKo = map[string]string{
 	"Goal objective cannot be empty":        "목표 내용을 입력하세요",
 
 	// Revision 52: Codex Fast Mode & Effort Slider
-	"Fast mode":                                                                     "빠른 모드",
-	"Fast mode: on":                                                                 "빠른 모드: 켜짐",
-	"Fast mode: off":                                                                "빠른 모드: 꺼짐",
-	"%s fast mode":                                                                  "%s 빠른 모드",
-	"On":                                                                            "켜짐",
-	"Off":                                                                           "꺼짐",
+	"Fast mode":      "빠른 모드",
+	"Fast mode: on":  "빠른 모드: 켜짐",
+	"Fast mode: off": "빠른 모드: 꺼짐",
+	"%s fast mode":   "%s 빠른 모드",
+	"On":             "켜짐",
+	"Off":            "꺼짐",
 	"Start sessions with fast mode enabled or disabled, over the agent's default.": "에이전트 기본값 대신 빠른 모드를 켜거나 끈 상태로 세션을 시작합니다.",
-	"Reasoning effort":                                                              "추론 강도",
+	"Reasoning effort": "추론 강도",
 
 	// Claude agent/profile settings
 	"Claude settings":     "Claude 설정",
