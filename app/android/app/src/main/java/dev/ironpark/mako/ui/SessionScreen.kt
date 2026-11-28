@@ -307,7 +307,7 @@ internal fun SessionScreen(
                             onCopyCommand = { cmd ->
                                 context.getSystemService(ClipboardManager::class.java)
                                     ?.setPrimaryClip(ClipData.newPlainText("command", cmd))
-                                Toast.makeText(context, context.getString(R.string.command_copied), Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, R.string.command_copied, Toast.LENGTH_SHORT).show()
                             },
                         )
                     }
