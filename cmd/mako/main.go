@@ -519,6 +519,7 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project, target str
 	if err != nil {
 		return err
 	}
+	fmt.Fprint(os.Stderr, repoHooksNotice(ctx, c.RepoTrust, nodeID, info))
 	fmt.Fprintf(os.Stderr, "[mako] session %s on %s\r\n", info.GetId(), short(info.GetNodeId()))
 	return c.Attach(ctx, &protocol.Attach{SessionId: info.GetId(), NodeId: nodeID, Replay: false})
 }

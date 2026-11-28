@@ -213,6 +213,10 @@ type model struct {
 	RepoTrust   *ggui.StateValue[repoTrustAsk]
 	AgentsSplit *ggui.StateValue[float64] // the agents panel's agents over its messages
 
+	// repoHooksNoted are the repositories' hooks files told of as not
+	// trusted, by node and file, when; see repohooks.go. UI goroutine only.
+	repoHooksNoted map[string]time.Time
+
 	SidebarOpen *ggui.StateValue[bool]
 	SidebarPage *ggui.StateValue[string] // "" for Projects/Agents, or "plugin:<id>/<block>" for a sidebar plugin page
 	DetailsOpen *ggui.StateValue[bool]
@@ -889,6 +893,7 @@ func (m *model) startSession(tab string, f newSession) {
 		if !isShellTarget(f.Agent) {
 			m.lastAgent = f.Agent
 		}
+		m.noteRepoHooks(info)
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
 		inMain := slices.Contains(ggui.Peek(m.Tabs), tab)
