@@ -208,7 +208,10 @@ type model struct {
 	openChat ggui.Readable[bool]
 	// An operation that loses work, asking to be sure; see confirm.go.
 	Confirmation *ggui.StateValue[confirmation]
-	AgentsSplit  *ggui.StateValue[float64] // the agents panel's agents over its messages
+	// A repository's command file the user is asked to trust; see
+	// repotrust.go.
+	RepoTrust   *ggui.StateValue[repoTrustAsk]
+	AgentsSplit *ggui.StateValue[float64] // the agents panel's agents over its messages
 
 	SidebarOpen *ggui.StateValue[bool]
 	SidebarPage *ggui.StateValue[string] // "" for Projects/Agents, or "plugin:<id>/<block>" for a sidebar plugin page
@@ -397,6 +400,7 @@ func newModel(cfg *config.Config, addr string) *model {
 		RepoPick:            ggui.State(repoPick{}),
 		// Its functions do not compare: each asking is new.
 		Confirmation:  ggui.State(confirmation{}).WithEqual(func(a, b confirmation) bool { return false }),
+		RepoTrust:     ggui.State(repoTrustAsk{}),
 		AgentsSplit:   ggui.State(0.4),
 		SidebarOpen:   ggui.State(true),
 		SidebarPage:   ggui.State(""),
