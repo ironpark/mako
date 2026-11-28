@@ -51,6 +51,9 @@ func (d *Daemon) handleSetPolicies(stream *transport.Stream, env *protocol.Envel
 	if err != nil {
 		return err
 	}
+	if len(req.GetRules()) > policy.MaxRules {
+		return policy.ErrTooMany
+	}
 	rules := make([]policy.Rule, 0, len(req.GetRules()))
 	for _, r := range req.GetRules() {
 		rules = append(rules, policy.RuleFromProto(r))

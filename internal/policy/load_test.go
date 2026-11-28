@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -122,5 +123,52 @@ func TestAuditLogIsNeverWrittenOver(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(path); string(b) != `[{"time":1,"session":"old"` {
 		t.Fatalf("the audit log now holds %q", b)
+	}
+}
+
+// A rule's agents are trimmed and its blank names dropped; one of blank
+// names alone is refused rather than read as every agent's.
+func TestRuleAgentsAreTrimmed(t *testing.T) {
+	r := Rule{Enabled: true, Action: ActionAllow, Tool: "Bash", Agents: []string{" claude ", "", "  "}}.Normalized()
+	if len(r.Agents) != 1 || r.Agents[0] != "claude" || r.Validate() != nil {
+		t.Fatalf("agents = %q, %v", r.Agents, r.Validate())
+	}
+	blank := Rule{Enabled: true, Action: ActionAllow, Tool: "Bash", Agents: []string{" ", ""}}.Normalized()
+	if err := blank.Validate(); !errors.Is(err, ErrBlankAgent) {
+		t.Fatalf("a rule of blank agents: %q, %v", blank.Agents, err)
+	}
+	if d := EvaluateRules([]Rule{blank}, bash("claude", "ls")); d.Matched {
+		t.Fatalf("a rule of blank agents matched: %+v", d)
+	}
+	star := []Rule{{ID: "s", Enabled: true, Action: ActionAllow, Tool: "Bash", Agents: []string{" * "}}}
+	if d := EvaluateRules(star, bash("codex", "ls")); !d.Matched {
+		t.Fatal(`agents " * " did not hold for codex`)
+	}
+}
+
+// Rules are bounded: in number, and each field in length.
+func TestRulesAreBounded(t *testing.T) {
+	dir := t.TempDir()
+	many := make([]Rule, MaxRules+1)
+	for i := range many {
+		many[i] = Rule{Enabled: true, Action: ActionDeny, Tool: "Bash"}
+	}
+	if err := SaveRules(dir, many); !errors.Is(err, ErrTooMany) {
+		t.Fatalf("SaveRules of %d rules: %v", len(many), err)
+	}
+	if err := SaveRules(dir, many[:MaxRules]); err != nil {
+		t.Fatalf("SaveRules of %d rules: %v", MaxRules, err)
+	}
+	for _, r := range []Rule{
+		{Action: ActionDeny, Tool: "Bash", Pattern: strings.Repeat("x", maxPatternLen+1)},
+		{Action: ActionDeny, Tool: strings.Repeat("x", maxToolLen+1)},
+		{Action: ActionDeny, Tool: "Bash", Message: strings.Repeat("x", maxMessageLen+1)},
+		{Action: ActionDeny, Tool: "Bash", Name: strings.Repeat("x", maxNameLen+1)},
+		{Action: ActionDeny, Tool: "Bash", Agents: []string{strings.Repeat("x", maxAgentLen+1)}},
+		{Action: ActionDeny, Tool: "Bash", Agents: strings.Fields(strings.Repeat("a ", maxAgents+1))},
+	} {
+		if err := r.Normalized().Validate(); err == nil {
+			t.Errorf("Validate accepted %+v", r)
+		}
 	}
 }

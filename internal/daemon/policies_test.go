@@ -54,6 +54,18 @@ func TestPoliciesOverSocket(t *testing.T) {
 	if saved, _ := policy.LoadRules(d.dir); len(saved) != 1 || saved[0].Action != policy.ActionDeny {
 		t.Fatalf("a refused save changed policies.json: %+v", saved)
 	}
+
+	// So is a request past the bound on rules.
+	many := make([]*protocol.PolicyRule, policy.MaxRules+1)
+	for i := range many {
+		many[i] = &protocol.PolicyRule{Enabled: true, Action: "deny", Tool: "Bash"}
+	}
+	if _, err := c.SetPolicies(ctx, &protocol.SetPolicies{Rules: many}); err == nil {
+		t.Fatalf("set_policies saved %d rules", len(many))
+	}
+	if saved, _ := policy.LoadRules(d.dir); len(saved) != 1 {
+		t.Fatalf("a refused save changed policies.json: %d rules", len(saved))
+	}
 }
 
 // An audit log that cannot be read leaves the rules to read and replace,

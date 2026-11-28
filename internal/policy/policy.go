@@ -81,20 +81,67 @@ func NewID(prefix string) string {
 	return prefix + "-" + hex.EncodeToString(b[:])
 }
 
+// What a rule may hold: rules are read for every approval, and a request
+// to save them is a front-end's to make.
+const (
+	MaxRules      = 256  // rules in policies.json
+	maxIDLen      = 100  // bytes of a rule's id
+	maxNameLen    = 200  // of its name
+	maxToolLen    = 200  // of its tool
+	maxPatternLen = 4096 // of its pattern
+	maxMessageLen = 2000 // of its message
+	maxAgents     = 32   // names in its agents
+	maxAgentLen   = 100  // bytes of each
+)
+
+// The ways a rule fails to validate, each wrapped by what Validate says.
+var (
+	ErrAction     = fmt.Errorf("policy action must be %q or %q", ActionAllow, ActionDeny)
+	ErrNoTool     = errors.New("policy tool cannot be empty (use * for any tool)")
+	ErrBlankAgent = errors.New("policy agents cannot hold a blank name")
+	ErrTooLong    = errors.New("policy rule field is too long")
+	ErrTooMany    = fmt.Errorf("a node holds at most %d policy rules", MaxRules)
+)
+
 // Validate checks that r is well-formed.
 func (r Rule) Validate() error {
 	if r.Action != ActionAllow && r.Action != ActionDeny {
-		return fmt.Errorf("policy action must be %q or %q, got %q", ActionAllow, ActionDeny, r.Action)
+		return fmt.Errorf("%w, got %q", ErrAction, r.Action)
 	}
 	if strings.TrimSpace(r.Tool) == "" {
-		return errors.New("policy tool pattern cannot be empty (use '*' for any tool)")
+		return ErrNoTool
+	}
+	for _, f := range []struct {
+		name  string
+		value string
+		max   int
+	}{
+		{"id", r.ID, maxIDLen}, {"name", r.Name, maxNameLen}, {"tool", r.Tool, maxToolLen},
+		{"pattern", r.Pattern, maxPatternLen}, {"message", r.Message, maxMessageLen},
+	} {
+		if len(f.value) > f.max {
+			return fmt.Errorf("%w: its %s holds %d bytes, past %d", ErrTooLong, f.name, len(f.value), f.max)
+		}
+	}
+	if len(r.Agents) > maxAgents {
+		return fmt.Errorf("%w: it names %d agents, past %d", ErrTooLong, len(r.Agents), maxAgents)
+	}
+	for _, a := range r.Agents {
+		if strings.TrimSpace(a) == "" {
+			return ErrBlankAgent
+		}
+		if len(a) > maxAgentLen {
+			return fmt.Errorf("%w: an agent's name holds %d bytes, past %d", ErrTooLong, len(a), maxAgentLen)
+		}
 	}
 	return nil
 }
 
 // Normalized returns r with trimmed fields and a generated ID if missing.
 // An empty Tool stays empty, for Validate to refuse: it never widens to
-// every tool.
+// every tool. Agents are trimmed, the blank among them dropped; a list of
+// blank names alone keeps one, for Validate to refuse, as it never widens
+// to every agent either.
 func (r Rule) Normalized() Rule {
 	r.ID = strings.TrimSpace(r.ID)
 	if r.ID == "" {
@@ -106,6 +153,13 @@ func (r Rule) Normalized() Rule {
 	r.Tool = strings.TrimSpace(r.Tool)
 	r.Pattern = strings.TrimSpace(r.Pattern)
 	r.Message = strings.TrimSpace(r.Message)
+	if len(r.Agents) > 0 {
+		agents := present(r.Agents...)
+		if len(agents) == 0 {
+			agents = []string{""}
+		}
+		r.Agents = agents
+	}
 	return r
 }
 
@@ -132,11 +186,19 @@ func LoadRules(configDir string) ([]Rule, error) {
 	return list, nil
 }
 
+// rulesMu serializes SaveRules, as front-ends save at once.
+var rulesMu sync.Mutex
+
 // SaveRules atomically writes global permission policy rules to configDir/policies.json.
 func SaveRules(configDir string, rules []Rule) error {
 	if strings.TrimSpace(configDir) == "" {
 		return errors.New("policy: no configuration directory to save rules in")
 	}
+	if len(rules) > MaxRules {
+		return ErrTooMany
+	}
+	rulesMu.Lock()
+	defer rulesMu.Unlock()
 	clean := make([]Rule, len(rules))
 	for i, r := range rules {
 		r = r.Normalized()
