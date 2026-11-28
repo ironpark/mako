@@ -1,0 +1,207 @@
+name: Release
+
+# Pushing a v* tag builds mako, makod, and mako-gui for Linux, macOS, and
+# Windows, attaches checksums and a signed build provenance bundle, and
+# publishes a GitHub release. Tags with a hyphen (such as v0.1.0-rc.1) are
+# marked as pre-releases. Pull requests touching this file and manual runs
+# exercise the full build, verification, and note generation without publishing.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  GOFLAGS: -mod=readonly
+
+jobs:
+  build:
+    name: build ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64, goamd64: v2, want_arch: 'GOAMD64=v2' }
+          - { goos: linux, goarch: arm64, goarm64: v8.0, want_arch: 'GOARM64=v8.0' }
+          - { goos: darwin, goarch: amd64, goamd64: v1, want_arch: 'GOAMD64=v1' }
+          - { goos: darwin, goarch: arm64, goarm64: v8.4, want_arch: 'GOARM64=v8.4' }
+          - { goos: windows, goarch: amd64, goamd64: v2, want_arch: 'GOAMD64=v2' }
+          - { goos: windows, goarch: arm64, goarm64: v8.1, want_arch: 'GOARM64=v8.1' }
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      GOAMD64: ${{ matrix.goamd64 }}
+      GOARM64: ${{ matrix.goarm64 }}
+      WANT_ARCH: ${{ matrix.want_arch }}
+      CGO_ENABLED: '0'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - name: Build binaries and package archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${GOOS}-${GOARCH}"
+          version="dryrun"
+          name="mako-dryrun-${target}"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            version="$GITHUB_REF_NAME"
+            name="mako-${GITHUB_REF_NAME}-${target}"
+          fi
+          ext=""
+          [ "$GOOS" = "windows" ] && ext=".exe"
+          ldflags="-s -w -buildid= -X github.com/ironpark/mako/internal/config.Version=${version}"
+
+          mkdir -p "dist/${name}"
+          for bin in mako makod mako-gui; do
+            go build -trimpath -pgo=off -compiler=gc -ldflags "$ldflags" \
+              -o "dist/${name}/${bin}${ext}" "./cmd/${bin}"
+            arch_setting=$(go version -m "dist/${name}/${bin}${ext}" | awk '$1 == "build" && $2 ~ /^GO(AMD64|ARM64)=/ { print $2 }')
+            echo "${bin} arch setting: ${arch_setting}"
+            if [ "$arch_setting" != "$WANT_ARCH" ]; then
+              echo "${bin}: arch setting ${arch_setting} differs from expected ${WANT_ARCH}" >&2
+              exit 1
+            fi
+          done
+
+          if [ "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" = "${GOOS}/${GOARCH}" ]; then
+            ver_out=$("dist/${name}/makod" -version)
+            echo "makod -version: ${ver_out}"
+            if [ "$ver_out" != "makod ${version}" ]; then
+              echo "makod -version returned '${ver_out}', expected 'makod ${version}'" >&2
+              exit 1
+            fi
+          fi
+
+          cp README.md "dist/${name}/"
+          cd dist
+          if [ "$GOOS" = "windows" ]; then
+            zip -qr "${name}.zip" "${name}"
+          else
+            tar -czf "${name}.tar.gz" "${name}"
+          fi
+          rm -r "${name}"
+      - name: Upload archive
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: publish
+    needs: [build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download archives
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Write checksums
+        run: |
+          set -eu
+          cd dist
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+      # Fork pull requests do not receive an OIDC token, so attestation steps
+      # only run when the token is available.
+      - name: Attest build provenance
+        id: attest
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/mako-*
+      - name: Verify provenance and attach bundle
+        if: steps.attest.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -eu
+          prefix="mako-dryrun"
+          [ "$GITHUB_REF_TYPE" = "tag" ] && prefix="mako-${GITHUB_REF_NAME}"
+          for archive in dist/mako-*; do
+            gh attestation verify "$archive" --bundle "$BUNDLE" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
+              --source-ref "$GITHUB_REF" --deny-self-hosted-runners
+          done
+          cp "$BUNDLE" "dist/${prefix}.sigstore.json"
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+        run: |
+          set -eu
+          tag="v0.0.0-dryrun"
+          [ "$GITHUB_REF_TYPE" = "tag" ] && tag="$GITHUB_REF_NAME"
+          prev_tag=$(git tag --list 'v*' --sort=-v:refname | grep -Fxv "$tag" | head -n 1 || true)
+
+          api_args=(-f "tag_name=${tag}" -f "target_commitish=${GITHUB_SHA}")
+          if [ -n "$prev_tag" ]; then
+            api_args+=(-f "previous_tag_name=${prev_tag}")
+          fi
+
+          if ! gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" "${api_args[@]}" --jq '.body' > notes.md 2>/dev/null || [ ! -s notes.md ]; then
+            if [ -n "$prev_tag" ]; then
+              {
+                echo "## What's Changed"
+                echo ""
+                git log --no-merges --pretty=format:'* %s (%h)' "${prev_tag}..HEAD"
+                echo ""
+              } > notes.md
+            else
+              {
+                echo "## What's Changed"
+                echo ""
+                git log -n 20 --no-merges --pretty=format:'* %s (%h)' HEAD
+                echo ""
+              } > notes.md
+            fi
+          fi
+
+          if [ -n "${ATTESTATION_URL:-}" ]; then
+            printf '\nSLSA v1.0 L2 build provenance: [GitHub Attestation](%s)\n' "$ATTESTATION_URL" >> notes.md
+          fi
+          test -s notes.md
+          cat notes.md
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          flags=()
+          case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "mako ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md "${flags[@]}" dist/*

@@ -18,8 +18,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    permissions:
-      contents: write
     env:
       ANDROID_NDK_VERSION: '29.0.14206865'
     steps:
@@ -87,14 +85,14 @@ jobs:
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "dist/mako-${GITHUB_REF_NAME}.apk"
           cd dist
           sha256sum *.apk > SHA256SUMS
-      - name: Publish GitHub Release
+      - name: Upload release package
         if: startsWith(github.ref, 'refs/tags/android-v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag \
-            --title "mako Android ${GITHUB_REF_NAME#android-v}" \
-            --notes-file app/RELEASE.md
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-release-dist
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
       - name: Compute artifact name
         id: artifact
         if: always()
@@ -124,3 +122,59 @@ jobs:
       - name: Remove release key
         if: always()
         run: rm -f "$RUNNER_TEMP/mako-release.p12"
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/android-v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download release package
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: android-release-dist
+          path: dist
+      - name: Attest build provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/mako-*.apk
+      - name: Verify provenance and attach bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -eu
+          for apk in dist/mako-*.apk; do
+            gh attestation verify "$apk" --bundle "$BUNDLE" --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/android.yml" \
+              --source-ref "$GITHUB_REF" --deny-self-hosted-runners
+          done
+          cp "$BUNDLE" "dist/mako-${GITHUB_REF_NAME}.sigstore.json"
+      - name: Prepare release notes
+        env:
+          ATTESTATION_URL: ${{ steps.attest.outputs.attestation-url }}
+        run: |
+          set -eu
+          cp app/RELEASE.md notes.md
+          if [ -n "${ATTESTATION_URL:-}" ]; then
+            printf '\nSLSA v1.0 L2 build provenance: [GitHub Attestation](%s)\n' "$ATTESTATION_URL" >> notes.md
+          fi
+          cat notes.md
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          flags=()
+          case "${GITHUB_REF_NAME#android-v}" in *-*) flags+=(--prerelease) ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag \
+            --title "mako Android ${GITHUB_REF_NAME#android-v}" \
+            --notes-file notes.md "${flags[@]}"
