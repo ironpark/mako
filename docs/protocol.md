@@ -842,6 +842,37 @@ A `git_diff` with `pull` set is a file of that pull request's change, read
 from its forge as the Forges section says; `commit` is then the pull request's
 head as the asker saw it.
 
+### Repository trust
+
+A command file is a file in a repository that names commands for mako to
+run for it on its own, such as a command to run in each new worktree or
+on a session's events. Each feature that reads such a file says which
+file it reads. Anyone who can commit to the repository can write one. An
+agent that works in it can write one too. So a node runs these commands
+only while its user trusts the file as it reads now.
+
+A trust is for one file of one repository. The node keeps it by three
+values: the root of the repository with its links resolved, the path of
+the file from that root (slash-separated), and the SHA-256 of the file's
+content. The node keeps these in `repo-trust.json` in its configuration
+directory. When the file changes, it is not trusted. The user must trust
+it again as it reads then. These requests need revision 55.
+
+| Request | Payload | Reply | |
+|---|---|---|---|
+| `repo_trust` | `RepoTrust` | `repo_trust_info` | Shows, trusts, forgets or lists command files, by `op`. Routed by `node_id`. A direct SSH host keeps no trust. |
+
+| `op` | |
+|---|---|
+| `""` | Show the file at `path` (absolute). Its repository is the git work tree it is in. The reply gives its `root`, `path`, `sha256` and `content` as it reads now, and `trusted` if the user trusts it as it reads now. |
+| `trust` | Trust the file at `path` as it reads now. Its content must hash to `sha256`, the content the user saw. If the file changed, the node refuses. |
+| `revoke` | Forget the file at `path`, or every file of the repository whose root is `path`, also when the repository is gone. |
+| `list` | List every file trusted, with the hash it is trusted at. |
+
+A front-end shows the user the whole file before it asks to trust it,
+with its control characters made visible (`protocol.Printable`). The MCP
+tools of agents cannot trust a file.
+
 ### Forges
 
 The node answers for the forge of the repository at `root`: the host its
@@ -1169,7 +1200,7 @@ Within version 2, the protocol changes by addition, as protobuf allows:
   daemon answers one it does not know with code `unsupported`.
 - **Features** (`Node.features`) name extensions a peer must speak before
   they are used on it. None are defined in version 2 yet.
-- **Revision** (`Node.revision`, `protocol.Revision`, currently 46) counts what
+- **Revision** (`Node.revision`, `protocol.Revision`, currently 55) counts what
   a build's daemon reports. A front-end that finds a daemon on a lower
   revision tells the user it is out of date, rather than leaving the newer
   parts blank. Bump it when a daemon starts reporting something a front-end
