@@ -1029,6 +1029,9 @@ func spaceWindowView(m *model, sw *spaceWindowState) ggui.Widget {
 		if blockName == "" {
 			return keyedLayoutViewIn(m, sw.layoutKey, sw.focusGroup, sw)
 		}
+		if blockName == sidebarPageInbox {
+			return inboxView(m)
+		}
 		pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
 		if !ok {
 			return keyedLayoutViewIn(m, sw.layoutKey, sw.focusGroup, sw)

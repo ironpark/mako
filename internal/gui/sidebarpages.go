@@ -78,6 +78,9 @@ func activeSidebarPageDef(m *model, active *ggui.StateValue[string]) (sidebarPag
 	if cur == "" {
 		return sidebarPageDef{}, false
 	}
+	if cur == sidebarPageInbox {
+		return sidebarPageDef{Block: sidebarPageInbox, Title: T("Needs you"), Icon: "shield-alert"}, true
+	}
 	return findSidebarPage(sidebarPluginBlocks(m.plugins.List.Get()), cur)
 }
 
@@ -116,19 +119,17 @@ func (m *model) clearSidebarPage() {
 func sidebarPluginMenu(m *model, active *ggui.StateValue[string]) ggui.Widget {
 	return ggui.Reactive(func() ggui.Widget {
 		pages := sidebarPluginBlocks(m.plugins.List.Get())
-		if len(pages) == 0 {
-			return widget.Box()
-		}
 		cur := ""
 		if active != nil {
 			cur = active.Get()
 		}
-		if cur != "" {
+		if cur != "" && cur != sidebarPageInbox {
 			if _, ok := findSidebarPage(pages, cur); !ok {
 				cur = ""
 			}
 		}
-		rows := make([]ggui.Widget, 0, len(pages))
+		rows := make([]ggui.Widget, 0, len(pages)+1)
+		rows = append(rows, inboxSidebarRow(m, active))
 		for _, pg := range pages {
 			p := pg
 			selected := cur == p.Block
@@ -176,6 +177,9 @@ func workspaceCenterView(m *model) ggui.Widget {
 		if blockName == "" {
 			return layoutView(m)
 		}
+		if blockName == sidebarPageInbox {
+			return inboxView(m)
+		}
 		pg, ok := findSidebarPage(sidebarPluginBlocks(ggui.Peek(m.plugins.List)), blockName)
 		if !ok {
 			return layoutView(m)
@@ -185,8 +189,11 @@ func workspaceCenterView(m *model) ggui.Widget {
 }
 
 // pluginMainPageHeaderBar renders the central workspace header bar when a
-// sidebar plugin view is active.
+// sidebar plugin view or built-in Needs You inbox is active.
 func pluginMainPageHeaderBar(m *model, pg sidebarPageDef, onClose func()) ggui.Widget {
+	if pg.Block == sidebarPageInbox {
+		return inboxHeaderBar(m, onClose)
+	}
 	var items []ggui.Widget
 	if pg.PluginID != "" {
 		pid := pg.PluginID
