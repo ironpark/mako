@@ -71,3 +71,45 @@ func TestRemoveWorktreeTeardownNeedsTrust(t *testing.T) {
 		t.Fatal("trusted teardown_cmd did not run")
 	}
 }
+
+// remove_worktree passes its force on: unforced, a worktree with changes
+// stays; forced, it goes. And a worktree the request names that git does
+// not have of the repository is refused.
+func TestRemoveWorktreeRequestForce(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	repo := t.TempDir()
+	if out, err := exec.Command("git", "-C", repo, "-c", "user.name=T", "-c", "user.email=t@example.com", "init", "-q", "-b", "main").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", repo, "-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "init").CombinedOutput(); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, out)
+	}
+	t.Cleanup(func() { os.RemoveAll(repo + ".worktrees") })
+	made, err := gitstat.AddWorktree(t.Context(), repo, gitstat.NewWorktree{Branch: "wip"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(made.Path, "notes.txt"), []byte("mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := New(nil, nil)
+	remove := func(w *protocol.Worktree, force bool) error {
+		_, err := d.gitRunLocal(t.Context(), &protocol.GitRun{Root: made.Path, Op: protocol.GitOpRemoveWT, Worktree: w, Force: force})
+		return err
+	}
+	w := &protocol.Worktree{Repo: made.Repo, Path: made.Path, Branch: made.Branch, Base: "main"}
+	if err := remove(&protocol.Worktree{Repo: made.Repo, Path: t.TempDir(), Branch: made.Branch}, true); err == nil || !strings.Contains(err.Error(), "is not a worktree of") {
+		t.Fatalf("a folder git does not have: %v", err)
+	}
+	if err := remove(w, false); err == nil {
+		t.Fatal("removed a worktree with changes unforced")
+	}
+	if err := remove(w, true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(made.Path); !os.IsNotExist(err) {
+		t.Fatal("worktree left")
+	}
+}

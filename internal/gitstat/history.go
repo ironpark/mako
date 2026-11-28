@@ -356,7 +356,7 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 		}
 		// A daemon answers remove_worktree itself, with the user's trust
 		// in the repository's teardown_cmd; without it, none runs.
-		return RemoveWorktree(ctx, r.GetWorktree(), nil)
+		return RemoveWorktree(ctx, r.GetWorktree(), RemoveWorktreeOptions{Force: r.GetForce()})
 	}
 	if out, ok, err := runOp(ctx, r); ok {
 		return out, err

@@ -75,7 +75,7 @@ teardown_cmd = "printf 'torn-down' > \"$MAKO_WORKTREE_REPO/teardown.marker\""
 
 	// The copy of config/local, not ignored, is taken out with the rest.
 	w := &protocol.Worktree{Repo: repo, Path: path, Branch: made, Base: "main"}
-	if _, err := RemoveWorktree(ctx, w, trustAll); err != nil {
+	if _, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{Trusted: trustAll}); err != nil {
 		t.Fatalf("RemoveWorktree failed: %v", err)
 	}
 	if marker, err := os.ReadFile(filepath.Join(root, "teardown.marker")); err != nil || string(marker) != "torn-down" {
@@ -179,7 +179,7 @@ func TestWorktreeHooksRunOnlyWhileTrusted(t *testing.T) {
 
 	untrusted := check("feat/untrusted", false, true)
 	w := &protocol.Worktree{Repo: untrusted.Repo, Path: untrusted.Path, Branch: untrusted.Branch, Base: "main"}
-	out, err := RemoveWorktree(ctx, w, store.Trusted)
+	out, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{Trusted: store.Trusted})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestWorktreeHooksRunOnlyWhileTrusted(t *testing.T) {
 	}
 	trusted := check("feat/trusted", true, false)
 	w = &protocol.Worktree{Repo: trusted.Repo, Path: trusted.Path, Branch: trusted.Branch, Base: "main"}
-	if out, err := RemoveWorktree(ctx, w, store.Trusted); err != nil || strings.Contains(out, "teardown_cmd") {
+	if out, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{Trusted: store.Trusted}); err != nil || strings.Contains(out, "teardown_cmd") {
 		t.Fatalf("trusted removal = %q, %v", out, err)
 	}
 	if _, err := os.Stat(filepath.Join(root, "teardown.marker")); err != nil {

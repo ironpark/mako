@@ -269,12 +269,13 @@ func (d *Daemon) gitRunLocal(ctx context.Context, r *protocol.GitRun) (*protocol
 			}
 		case protocol.GitOpRemoveWT:
 			// The repository's teardown_cmd runs only while the user trusts
-			// its file as it reads.
+			// its file as it reads; the worktree goes with its changes only
+			// when the request forces it.
 			if r.GetWorktree() == nil {
 				return nil, errors.New("no worktree named")
 			}
 			run = func(ctx context.Context, r *protocol.GitRun) (string, error) {
-				return gitstat.RemoveWorktree(ctx, r.GetWorktree(), d.repoTrust.Trusted)
+				return gitstat.RemoveWorktree(ctx, r.GetWorktree(), gitstat.RemoveWorktreeOptions{Force: r.GetForce(), Trusted: d.repoTrust.Trusted})
 			}
 		}
 		out, err := run(ctx, r)

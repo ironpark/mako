@@ -477,6 +477,11 @@ func (h *host) GitRun(_ context.Context, req *hostapi.GitServiceRunRequest) (*ho
 		Force:   req.GetForce(),
 		Tag:     req.GetTag(),
 	}
+	if op == protocol.GitOpRemoveWT {
+		// A plugin removes a worktree only with no changes left: forcing
+		// one, which loses its work, is the user's to ask for.
+		runReq.Force = false
+	}
 	if op == protocol.GitOpAuth {
 		// Restrict plugin-originated auth requests to the target repository's
 		// own HTTPS remote by stripping any caller-supplied URL, and execute

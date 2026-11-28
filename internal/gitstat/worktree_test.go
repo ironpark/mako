@@ -57,7 +57,7 @@ func TestWorktreeLifecycle(t *testing.T) {
 	}
 
 	w := &protocol.Worktree{Repo: repo, Path: path, Branch: "feat/x", Base: "main"}
-	if _, err := RemoveWorktree(ctx, w, nil); err == nil {
+	if _, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{}); err == nil {
 		t.Fatal("removed a worktree with changes")
 	}
 	os.Remove(filepath.Join(path, "b.txt"))
@@ -67,7 +67,7 @@ func TestWorktreeLifecycle(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(root, "a.txt")); string(b) != "one\nTWO\n" {
 		t.Fatalf("merged a.txt %q", b)
 	}
-	if _, err := RemoveWorktree(ctx, w, nil); err != nil {
+	if _, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {

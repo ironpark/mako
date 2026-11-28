@@ -46,7 +46,7 @@ func bootstrapped(t *testing.T, root string, w *protocol.Worktree) {
 func TestRemoveWorktreeTakesOutWhatTheBootstrapMade(t *testing.T) {
 	root, w := removeRepo(t, `""`)
 	bootstrapped(t, root, w)
-	if _, err := RemoveWorktree(context.Background(), w, trustAll); err != nil {
+	if _, err := RemoveWorktree(context.Background(), w, RemoveWorktreeOptions{Trusted: trustAll}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(w.GetPath()); !os.IsNotExist(err) {
@@ -70,7 +70,7 @@ func TestRemoveWorktreeRefusesChangesFirst(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			root, w := removeRepo(t, `"touch \"$MAKO_WORKTREE_REPO/teardown.marker\""`)
 			change(w.GetPath())
-			if _, err := RemoveWorktree(context.Background(), w, trustAll); err == nil || !strings.Contains(err.Error(), "commit or remove them first") {
+			if _, err := RemoveWorktree(context.Background(), w, RemoveWorktreeOptions{Trusted: trustAll}); err == nil || !strings.Contains(err.Error(), "commit or remove them first") {
 				t.Fatalf("removed: %v", err)
 			}
 			if _, err := os.Stat(filepath.Join(root, "teardown.marker")); err == nil {
@@ -87,7 +87,7 @@ func TestRemoveWorktreeRefusesChangesFirst(t *testing.T) {
 // the output says the teardown failed and what it printed.
 func TestRemoveWorktreeAfterAFailingTeardown(t *testing.T) {
 	_, w := removeRepo(t, `"echo cleaning up; exit 3"`)
-	out, err := RemoveWorktree(context.Background(), w, trustAll)
+	out, err := RemoveWorktree(context.Background(), w, RemoveWorktreeOptions{Trusted: trustAll})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,8 +103,78 @@ func TestRemoveWorktreeAfterAFailingTeardown(t *testing.T) {
 // in it, what the bootstrap made is put back.
 func TestRemoveWorktreeRefusedPutsTheBootstrapBack(t *testing.T) {
 	root, w := removeRepo(t, `"touch stray"`)
-	if _, err := RemoveWorktree(context.Background(), w, trustAll); err == nil {
+	if _, err := RemoveWorktree(context.Background(), w, RemoveWorktreeOptions{Trusted: trustAll}); err == nil {
 		t.Fatal("removed a worktree with a stray file")
 	}
 	bootstrapped(t, root, w)
+}
+
+// A removal names its worktree, which must be one git has of the
+// repository it names, beside its main work tree; and its branch a
+// branch's name. Anything else is refused before its teardown_cmd runs or
+// anything is taken out.
+func TestRemoveWorktreeRefusesWhatGitDoesNotHave(t *testing.T) {
+	root, w := removeRepo(t, `"touch \"$MAKO_WORKTREE_REPO/teardown.marker\""`)
+	other, _ := bootstrapRepo(t, "", "")
+	// So that @{-1} reads as a branch: the one checked out before main.
+	for _, args := range [][]string{{"checkout", "-q", "-b", "previous"}, {"checkout", "-q", "main"}} {
+		if _, err := gitOut(context.Background(), root, nil, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, tc := range map[string]struct {
+		w    *protocol.Worktree
+		want string
+	}{
+		"another repository's folder": {&protocol.Worktree{Repo: root, Path: other, Branch: "feat/rm"}, "is not a worktree of"},
+		"the main work tree":          {&protocol.Worktree{Repo: root, Path: root, Branch: "feat/rm"}, "is not a worktree of"},
+		"a folder of the worktree":    {&protocol.Worktree{Repo: root, Path: filepath.Join(w.GetPath(), "conf"), Branch: "feat/rm"}, "is not a worktree of"},
+		"a worktree for repository":   {&protocol.Worktree{Repo: w.GetPath(), Path: w.GetPath(), Branch: "feat/rm"}, "is not the main work tree"},
+		"another repository":          {&protocol.Worktree{Repo: other, Path: w.GetPath(), Branch: "feat/rm"}, "is not a worktree of"},
+		"an option for a branch":      {&protocol.Worktree{Repo: root, Path: w.GetPath(), Branch: "-D"}, "is not a branch name"},
+		"a branch git reads as other": {&protocol.Worktree{Repo: root, Path: w.GetPath(), Branch: "@{-1}"}, "is not a branch name"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := RemoveWorktree(context.Background(), tc.w, RemoveWorktreeOptions{Trusted: trustAll}); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want one saying %q", err, tc.want)
+			}
+			if _, err := os.Stat(filepath.Join(root, "teardown.marker")); err == nil {
+				t.Fatal("teardown_cmd ran")
+			}
+			bootstrapped(t, root, w)
+		})
+	}
+	if _, err := RemoveWorktree(context.Background(), w, RemoveWorktreeOptions{Trusted: trustAll}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Forced, a removal takes the worktree with its changes, and its branch
+// though not merged.
+func TestRemoveWorktreeForced(t *testing.T) {
+	root, w := removeRepo(t, `""`)
+	write(t, w.GetPath(), "a.txt", "changed\n")
+	write(t, w.GetPath(), "notes.txt", "mine\n")
+	run := func(args ...string) {
+		t.Helper()
+		if _, err := gitOut(context.Background(), w.GetPath(), nil, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "not merged")
+	if _, err := RemoveWorktree(context.Background(), w, RemoveWorktreeOptions{Trusted: trustAll}); err == nil {
+		t.Fatal("removed a worktree with changes unforced")
+	}
+	if _, err := RemoveWorktree(context.Background(), w, RemoveWorktreeOptions{Force: true, Trusted: trustAll}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(w.GetPath()); !os.IsNotExist(err) {
+		t.Fatal("worktree left")
+	}
+	if _, err := gitOut(context.Background(), root, nil, "show-ref", "--verify", "--quiet", "refs/heads/feat/rm"); err == nil {
+		t.Fatal("branch left")
+	}
+	if b, err := os.ReadFile(filepath.Join(root, "deps", "cache", "x")); err != nil || string(b) != "x\n" {
+		t.Fatalf("the shared folder's file = %q, %v", b, err)
+	}
 }
