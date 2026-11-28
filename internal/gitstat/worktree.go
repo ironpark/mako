@@ -113,14 +113,22 @@ func checkBranch(ctx context.Context, dir, branch string) error {
 	return nil
 }
 
+// RemoveWorktreeOptions is how RemoveWorktree removes a worktree.
+type RemoveWorktreeOptions struct {
+	// Force removes the worktree with any changes left in it, and deletes
+	// its branch merged or not: what a caller asks only once the user has
+	// said that work may go.
+	Force bool
+}
+
 // RemoveWorktree removes a session's worktree, which must have no changes
-// left, and its branch once merged. With force it removes the worktree with
-// whatever changes it still has, and its branch merged or not: what a
-// caller does only once the user has said that work may go.
-func RemoveWorktree(ctx context.Context, w *protocol.Worktree, force bool) (string, error) {
+// left, and its branch once merged; opts.Force removes them whatever is
+// left in them.
+func RemoveWorktree(ctx context.Context, w *protocol.Worktree, opts RemoveWorktreeOptions) (string, error) {
 	if w.GetPath() == "" || w.GetRepo() == "" {
 		return "", errors.New("no worktree to remove")
 	}
+	force := opts.Force
 	args := []string{"worktree", "remove"}
 	if force {
 		args = append(args, "--force")

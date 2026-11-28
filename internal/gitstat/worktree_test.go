@@ -56,7 +56,7 @@ func TestWorktreeLifecycle(t *testing.T) {
 	}
 
 	w := &protocol.Worktree{Repo: repo, Path: path, Branch: "feat/x", Base: "main"}
-	if _, err := RemoveWorktree(ctx, w, false); err == nil {
+	if _, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{}); err == nil {
 		t.Fatal("removed a worktree with changes")
 	}
 	os.Remove(filepath.Join(path, "b.txt"))
@@ -66,7 +66,7 @@ func TestWorktreeLifecycle(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(root, "a.txt")); string(b) != "one\nTWO\n" {
 		t.Fatalf("merged a.txt %q", b)
 	}
-	if _, err := RemoveWorktree(ctx, w, false); err != nil {
+	if _, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -96,10 +96,10 @@ func TestForcedRemoveTakesChangesAndUnmergedBranch(t *testing.T) {
 	write(t, path, "b.txt", "new\n")
 
 	w := &protocol.Worktree{Repo: repo, Path: path, Branch: made, Base: "main"}
-	if _, err := RemoveWorktree(ctx, w, false); err == nil {
+	if _, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{}); err == nil {
 		t.Fatal("removed a worktree with changes without force")
 	}
-	if _, err := RemoveWorktree(ctx, w, true); err != nil {
+	if _, err := RemoveWorktree(ctx, w, RemoveWorktreeOptions{Force: true}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {

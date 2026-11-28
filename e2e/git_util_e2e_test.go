@@ -124,7 +124,7 @@ func TestGitStatTier1(t *testing.T) {
 		if err != nil || string(got) != "v2\n" {
 			t.Fatalf("merged base.txt = %q, err=%v", string(got), err)
 		}
-		if out, err := gitstat.RemoveWorktree(ctx, wt, false); err != nil {
+		if out, err := gitstat.RemoveWorktree(ctx, wt, gitstat.RemoveWorktreeOptions{}); err != nil {
 			t.Fatalf("RemoveWorktree: %v\n%s", err, out)
 		}
 		if _, err := os.Stat(wtPath); !os.IsNotExist(err) {
