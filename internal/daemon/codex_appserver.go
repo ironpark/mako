@@ -87,6 +87,28 @@ func isCodexNoArchivedRolloutError(err error) bool {
 	return strings.Contains(strings.ToLower(err.Error()), "no archived rollout found")
 }
 
+func isCodexTurnBusyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "busy") ||
+		strings.Contains(msg, "in progress") ||
+		strings.Contains(msg, "active turn") ||
+		strings.Contains(msg, "turn already")
+}
+
+func threadSettingsHasServiceTier(rawParams json.RawMessage) bool {
+	var env struct {
+		ThreadSettings map[string]json.RawMessage `json:"threadSettings"`
+	}
+	if json.Unmarshal(rawParams, &env) != nil || env.ThreadSettings == nil {
+		return false
+	}
+	_, ok := env.ThreadSettings["serviceTier"]
+	return ok
+}
+
 func codexStateDirKey(env map[string]string) string {
 	if h := strings.TrimSpace(env["CODEX_HOME"]); h != "" {
 		return filepath.Clean(h)
@@ -215,6 +237,7 @@ type codexRestartOutcome struct {
 	userAgent     string
 	initUsage     *protocol.Usage
 	initGoal      *protocol.GoalStatus
+	initFastMode  bool
 	threadID      string
 	threadPath    string
 	resumedThread bool
@@ -234,43 +257,47 @@ type codexBridge struct {
 	launchCfg     *codexServerLaunchConfig
 	restartServer func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error)
 
-	mu              sync.Mutex
-	closed          bool
-	epoch           uint64
-	restarting      bool
-	swapped         chan struct{} // closed and replaced on client/restart state changes
-	cmd             *exec.Cmd
-	exited          chan struct{}
-	client          *codex.AppServerClient
-	cleanupFiles    func()
-	serverUserAgent string
-	tid             string
-	pendingPath     string // rollout path reported by app-server, bound once written on disk
-	subscribed      bool
-	bound           bool            // true once ConversationId + verified rollout path are bound
-	ignored         map[string]bool // ephemeral / subagent thread IDs to ignore
-	abandoned       map[string]bool // previous top-level thread IDs switched away from
-	initUsage       *protocol.Usage
-	initGoal        *protocol.GoalStatus
-	goalUnsupported bool
-	lastSeq         int64
-	activeTurn      string          // active liveHub step label
-	activeTurnID    string          // server-assigned turn ID when known
-	turnActive      bool            // true while a turn is in flight
-	turnDone        chan struct{}   // closed when active turn settles
-	completedTurns  map[string]bool // dedup turn/completed and codex/event completions
-	aborting        *inFlightAbort  // non-nil while an abort is in progress
-	itemIndices     map[string]int32
-	nextBlock       int32
-	thinkingSeen    map[string]bool
-	fgItems         map[string]bool
-	fgProcesses     map[string]bool
-	bgUnsupported   bool
-	bgInFlight      bool
-	bgDirty         bool
-	bgTimer         *time.Timer
-	bgStarted       map[string]int64
-	bgHasTasks      bool
+	mu                  sync.Mutex
+	closed              bool
+	epoch               uint64
+	restarting          bool
+	swapped             chan struct{} // closed and replaced on client/restart state changes
+	cmd                 *exec.Cmd
+	exited              chan struct{}
+	client              *codex.AppServerClient
+	cleanupFiles        func()
+	serverUserAgent     string
+	tid                 string
+	pendingPath         string // rollout path reported by app-server, bound once written on disk
+	subscribed          bool
+	bound               bool            // true once ConversationId + verified rollout path are bound
+	ignored             map[string]bool // ephemeral / subagent thread IDs to ignore
+	abandoned           map[string]bool // previous top-level thread IDs switched away from
+	initUsage           *protocol.Usage
+	initGoal            *protocol.GoalStatus
+	goalUnsupported     bool
+	fastMode            bool
+	initFastMode        bool
+	serviceTierOverride string
+	serviceTierDirty    bool
+	lastSeq             int64
+	activeTurn          string          // active liveHub step label
+	activeTurnID        string          // server-assigned turn ID when known
+	turnActive          bool            // true while a turn is in flight
+	turnDone            chan struct{}   // closed when active turn settles
+	completedTurns      map[string]bool // dedup turn/completed and codex/event completions
+	aborting            *inFlightAbort  // non-nil while an abort is in progress
+	itemIndices         map[string]int32
+	nextBlock           int32
+	thinkingSeen        map[string]bool
+	fgItems             map[string]bool
+	fgProcesses         map[string]bool
+	bgUnsupported       bool
+	bgInFlight          bool
+	bgDirty             bool
+	bgTimer             *time.Timer
+	bgStarted           map[string]int64
+	bgHasTasks          bool
 }
 
 func newCodexBridge(parent context.Context, sessionID string, client *codex.AppServerClient, cmd *exec.Cmd, exited chan struct{}, cleanupFiles func()) *codexBridge {
@@ -828,10 +855,79 @@ func (b *codexBridge) clearGoal(ctx context.Context, s *session.Session) error {
 	return nil
 }
 
+// setFastMode toggles session/thread-scoped Codex Fast Mode via thread/resume
+// when idle on a materialized thread, or defers the serviceTier override to the
+// next turn/start when a turn is active, no thread is bound yet, or the thread
+// has no rollout yet (-32600). Global Codex config is never modified.
+func (b *codexBridge) setFastMode(ctx context.Context, s *session.Session, enabled bool) error {
+	if ctx == nil {
+		ctx = b.ctx
+	}
+	tctx, cancel := context.WithTimeout(ctx, codexRPCTimeout)
+	defer cancel()
+
+	if err := b.waitAbort(tctx); err != nil {
+		return err
+	}
+
+	b.mu.Lock()
+	client := b.client
+	epoch := b.epoch
+	tid := b.tid
+	turnActive := b.turnActive
+	closed := b.closed
+	b.mu.Unlock()
+	if closed || client == nil {
+		return errors.New("codex app-server: disconnected")
+	}
+
+	tier := codex.ServiceTierForFastMode(enabled)
+	dirty := true
+	if tid != "" && !turnActive {
+		_, err := resumeCodexThread(tctx, client, codex.ThreadResumeParams{
+			ThreadID:     tid,
+			ExcludeTurns: true,
+			ServiceTier:  tier,
+		})
+		switch {
+		case err == nil:
+			dirty = false
+		case codex.IsInvalidRequest(err):
+			// 0-turn unmaterialized rollout (-32600): defer to the next turn/start.
+			dirty = true
+		default:
+			return err
+		}
+	}
+
+	b.mu.Lock()
+	if b.closed || b.epoch != epoch {
+		b.mu.Unlock()
+		return errors.New("codex app-server: disconnected")
+	}
+	if !dirty && b.tid != tid {
+		// Active thread switched while thread/resume was in flight: keep dirty
+		// so the tier is still applied to the new thread on its next turn.
+		dirty = true
+	}
+	b.fastMode = enabled
+	b.serviceTierOverride = tier
+	b.serviceTierDirty = dirty
+	b.mu.Unlock()
+
+	if s != nil {
+		s.ReportFastMode(enabled)
+		s.Report(&protocol.Usage{FastMode: proto.Bool(enabled)})
+	}
+	return nil
+}
+
 // deliverMessage injects text into the active Codex thread via `thread/queue/add`
 // (which immediately starts a turn if idle and auto-drains FIFO after the current
 // turn if busy), falling back to `turn/start` on `-32600` (e.g. ephemeral thread
-// or server without queue support).
+// or server without queue support). When a deferred serviceTier override is
+// pending and idle, `turn/start` is attempted first so the tier override takes
+// effect for this and subsequent turns.
 func (b *codexBridge) deliverMessage(ctx context.Context, text string) error {
 	if ctx == nil {
 		ctx = b.ctx
@@ -855,7 +951,38 @@ func (b *codexBridge) deliverMessage(ctx context.Context, text string) error {
 		return err
 	}
 
+	b.mu.Lock()
+	dirty := b.serviceTierDirty
+	tier := b.serviceTierOverride
+	turnActive := b.turnActive
+	b.mu.Unlock()
+
 	input := []codex.UserInput{{Type: "text", Text: text}}
+	triedTurnStart := false
+	if dirty && tier != "" && !turnActive {
+		triedTurnStart = true
+		res, startErr := client.TurnStart(tctx, codex.TurnStartParams{
+			ThreadID:    tid,
+			Input:       input,
+			ServiceTier: tier,
+		})
+		if startErr == nil {
+			b.mu.Lock()
+			if b.serviceTierOverride == tier {
+				b.serviceTierDirty = false
+			}
+			if res.Turn.ID != "" {
+				b.noteTurnStartedLocked(res.Turn.ID)
+			}
+			b.mu.Unlock()
+			return nil
+		}
+		if !codex.IsInvalidRequest(startErr) && !isCodexTurnBusyError(startErr) {
+			return startErr
+		}
+		// Busy or -32600: fall back to thread/queue/add keeping serviceTierDirty = true.
+	}
+
 	_, err = client.ThreadQueueAdd(tctx, codex.ThreadQueueAddParams{
 		ThreadID:            tid,
 		ClientUserMessageID: conversationUUID(),
@@ -864,14 +991,23 @@ func (b *codexBridge) deliverMessage(ctx context.Context, text string) error {
 	if err == nil {
 		return nil
 	}
-	if codex.IsInvalidRequest(err) {
-		res, startErr := client.TurnStart(tctx, codex.TurnStartParams{
+	if codex.IsInvalidRequest(err) && !triedTurnStart {
+		params := codex.TurnStartParams{
 			ThreadID: tid,
 			Input:    input,
-		})
-		if startErr == nil && res.Turn.ID != "" {
+		}
+		if dirty && tier != "" {
+			params.ServiceTier = tier
+		}
+		res, startErr := client.TurnStart(tctx, params)
+		if startErr == nil {
 			b.mu.Lock()
-			b.noteTurnStartedLocked(res.Turn.ID)
+			if dirty && b.serviceTierOverride == tier {
+				b.serviceTierDirty = false
+			}
+			if res.Turn.ID != "" {
+				b.noteTurnStartedLocked(res.Turn.ID)
+			}
 			b.mu.Unlock()
 		}
 		return startErr
@@ -1016,7 +1152,7 @@ func buildCodexRemoteTUICommand(
 	return tuiCmd, extraEnv
 }
 
-func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerLaunchConfig, prevThreadID string) (*codexRestartOutcome, error) {
+func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerLaunchConfig, prevThreadID, serviceTier string) (*codexRestartOutcome, error) {
 	started, err := d.startCodexAppServerProcess(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -1028,6 +1164,13 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 	initUsage := &protocol.Usage{}
 	if rl, err := started.client.RateLimitsRead(bootCtx); err == nil {
 		applyRateLimits(initUsage, rl.RateLimits)
+	}
+	var initFastMode bool
+	if cfgRes, err := started.client.ConfigRead(bootCtx); err == nil {
+		initFastMode = codex.IsFastServiceTier(cfgRes.Config.ServiceTier)
+		if cfgRes.Config.ServiceTier != "" {
+			initUsage.FastMode = proto.Bool(initFastMode)
+		}
 	}
 
 	var (
@@ -1043,6 +1186,7 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 			ExcludeTurns:   true,
 			Cwd:            cwd,
 			Model:          cfg.split.Model,
+			ServiceTier:    serviceTier,
 			ApprovalPolicy: cfg.split.ApprovalPolicy,
 			Sandbox:        cfg.split.Sandbox,
 		})
@@ -1054,6 +1198,13 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 			threadPath = res.Thread.Path
 			resumedThread = threadID != ""
 			applyThreadMetadata(initUsage, res.Model, res.ReasoningEffort, res.ApprovalPolicy, res.Sandbox)
+			if res.ServiceTier != "" {
+				initFastMode = codex.IsFastServiceTier(res.ServiceTier)
+				initUsage.FastMode = proto.Bool(initFastMode)
+			} else if serviceTier != "" {
+				initFastMode = codex.IsFastServiceTier(serviceTier)
+				initUsage.FastMode = proto.Bool(initFastMode)
+			}
 			if res.Thread.Goal != nil && threadID != "" {
 				initGoal = codex.MapThreadGoal(res.Thread.Goal, threadID, true, true, time.Now())
 			}
@@ -1084,6 +1235,7 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 		userAgent:     started.initRes.UserAgent,
 		initUsage:     initUsage,
 		initGoal:      initGoal,
+		initFastMode:  initFastMode,
 		threadID:      threadID,
 		threadPath:    threadPath,
 		resumedThread: resumedThread,
@@ -1163,6 +1315,13 @@ func (d *Daemon) prepareCodexAppServer(
 	if rl, err := started.client.RateLimitsRead(bootCtx); err == nil {
 		applyRateLimits(initUsage, rl.RateLimits)
 	}
+	var initFastMode bool
+	if cfgRes, err := started.client.ConfigRead(bootCtx); err == nil {
+		initFastMode = codex.IsFastServiceTier(cfgRes.Config.ServiceTier)
+		if cfgRes.Config.ServiceTier != "" {
+			initUsage.FastMode = proto.Bool(initFastMode)
+		}
+	}
 
 	cwd := cmp.Or(split.Cwd, project)
 	targetID := cmp.Or(*conversationID, split.ResumeID)
@@ -1185,11 +1344,17 @@ func (d *Daemon) prepareCodexAppServer(
 		}
 		threadPath = res.Thread.Path
 		applyThreadMetadata(initUsage, res.Model, res.ReasoningEffort, res.ApprovalPolicy, res.Sandbox)
+		if res.ServiceTier != "" {
+			initFastMode = codex.IsFastServiceTier(res.ServiceTier)
+			initUsage.FastMode = proto.Bool(initFastMode)
+		}
 
 		bridge.mu.Lock()
 		bridge.tid = threadID
 		bridge.pendingPath = threadPath
 		bridge.subscribed = true
+		bridge.initFastMode = initFastMode
+		bridge.fastMode = initFastMode
 		if !initUsage.IsZero() {
 			bridge.initUsage = initUsage
 		}
@@ -1212,6 +1377,8 @@ func (d *Daemon) prepareCodexAppServer(
 		// The bridge receives `thread/started` as soon as the TUI creates the thread
 		// and subscribes via `thread/resume` once the rollout materializes.
 		bridge.mu.Lock()
+		bridge.initFastMode = initFastMode
+		bridge.fastMode = initFastMode
 		if !initUsage.IsZero() {
 			bridge.initUsage = initUsage
 		}
@@ -1239,6 +1406,8 @@ func (d *Daemon) attachCodexBridge(s *session.Session, b *codexBridge) {
 	b.ensureInitLocked()
 	initUsage := b.initUsage
 	initGoal := b.initGoal
+	initFastMode := b.initFastMode || b.fastMode
+	b.fastMode = initFastMode
 	b.mu.Unlock()
 
 	d.codexMu.Lock()
@@ -1248,6 +1417,8 @@ func (d *Daemon) attachCodexBridge(s *session.Session, b *codexBridge) {
 	d.codexBridges[s.ID()] = b
 	d.codexMu.Unlock()
 
+	s.SetFastModeSupported(true)
+	s.ReportFastMode(initFastMode)
 	if initUsage != nil && !initUsage.IsZero() {
 		s.Report(initUsage)
 	}
@@ -1560,6 +1731,10 @@ func (d *Daemon) forceRestartCodexBridge(s *session.Session, b *codexBridge) (bo
 	b.signalSwapLocked()
 	restartFn := b.restartServer
 	launchCfg := b.launchCfg
+	desiredServiceTier := b.serviceTierOverride
+	if desiredServiceTier == "" && b.fastMode {
+		desiredServiceTier = codex.ServiceTierForFastMode(true)
+	}
 	b.mu.Unlock()
 
 	if s != nil {
@@ -1600,7 +1775,7 @@ func (d *Daemon) forceRestartCodexBridge(s *session.Session, b *codexBridge) (bo
 		case restartFn != nil:
 			outcome, err = restartFn(ctx, prevThreadID)
 		case launchCfg != nil:
-			outcome, err = d.restartManagedCodexServer(ctx, *launchCfg, prevThreadID)
+			outcome, err = d.restartManagedCodexServer(ctx, *launchCfg, prevThreadID, desiredServiceTier)
 		default:
 			err = errors.New("codex app-server: restart unavailable")
 		}
@@ -1631,6 +1806,14 @@ func (d *Daemon) forceRestartCodexBridge(s *session.Session, b *codexBridge) (bo
 		b.restarting = false
 		b.ignored = map[string]bool{}
 		b.abandoned = map[string]bool{}
+		b.fastMode = outcome.initFastMode
+		b.initFastMode = outcome.initFastMode
+		if outcome.resumedThread && outcome.threadID != "" {
+			b.serviceTierOverride = codex.ServiceTierForFastMode(outcome.initFastMode)
+		} else {
+			b.serviceTierOverride = ""
+		}
+		b.serviceTierDirty = false
 		if outcome.resumedThread && outcome.threadID != "" {
 			b.tid = outcome.threadID
 			b.subscribed = true
@@ -1653,6 +1836,7 @@ func (d *Daemon) forceRestartCodexBridge(s *session.Session, b *codexBridge) (bo
 			b.watchProcessExit(exited, gen)
 		}
 		if s != nil {
+			s.ReportFastMode(outcome.initFastMode)
 			if outcome.initUsage != nil && !outcome.initUsage.IsZero() {
 				s.Report(outcome.initUsage)
 			}
@@ -2065,6 +2249,40 @@ func (d *Daemon) handleCodexNotification(s *session.Session, b *codexBridge, n c
 			s.Report(u)
 		}
 
+	case "thread/settings/updated":
+		var p codex.ThreadSettingsUpdatedNotification
+		if json.Unmarshal(n.Params, &p) != nil || p.ThreadID == "" {
+			return
+		}
+		hasServiceTier := p.ThreadSettings.ServiceTier != nil || threadSettingsHasServiceTier(n.Params)
+		var fast bool
+		if p.ThreadSettings.ServiceTier != nil {
+			fast = codex.IsFastServiceTier(*p.ThreadSettings.ServiceTier)
+		}
+		b.mu.Lock()
+		sameEpoch := b.epoch == epoch
+		curTID := b.tid
+		if sameEpoch && curTID != "" && p.ThreadID == curTID && hasServiceTier {
+			b.fastMode = fast
+			b.serviceTierOverride = codex.ServiceTierForFastMode(fast)
+			b.serviceTierDirty = false
+		}
+		b.mu.Unlock()
+		if !sameEpoch || curTID == "" || p.ThreadID != curTID {
+			return
+		}
+		if hasServiceTier && b.isCurrentEpoch(epoch) {
+			s.ReportFastMode(fast)
+		}
+		u := &protocol.Usage{}
+		applyThreadMetadata(u, p.ThreadSettings.Model, p.ThreadSettings.Effort, p.ThreadSettings.ApprovalPolicy, p.ThreadSettings.SandboxPolicy)
+		if hasServiceTier {
+			u.FastMode = proto.Bool(fast)
+		}
+		if !u.IsZero() && b.isCurrentEpoch(epoch) {
+			s.Report(u)
+		}
+
 	case "thread/goal/updated":
 		var p codex.ThreadGoalUpdatedNotification
 		if json.Unmarshal(n.Params, &p) != nil {
@@ -2208,6 +2426,10 @@ func (d *Daemon) maybeSwitchCodexThread(s *session.Session, b *codexBridge, thre
 		b.mu.Unlock()
 		return false
 	}
+	var (
+		reportFast  bool
+		fastModeVal bool
+	)
 	b.mu.Lock()
 	if b.epoch != epoch {
 		b.mu.Unlock()
@@ -2225,11 +2447,20 @@ func (d *Daemon) maybeSwitchCodexThread(s *session.Session, b *codexBridge, thre
 	b.pendingPath = res.Thread.Path
 	b.subscribed = false
 	b.bound = false
+	if res.ServiceTier != "" && !b.serviceTierDirty {
+		fastModeVal = codex.IsFastServiceTier(res.ServiceTier)
+		b.fastMode = fastModeVal
+		b.serviceTierOverride = codex.ServiceTierForFastMode(fastModeVal)
+		reportFast = true
+	}
 	b.settleTurnLocked()
 	b.fgItems = map[string]bool{}
 	b.fgProcesses = map[string]bool{}
 	b.mu.Unlock()
 	if b.isCurrentEpoch(epoch) {
+		if reportFast && s != nil {
+			s.ReportFastMode(fastModeVal)
+		}
 		s.ClearGoal()
 		if res.Thread.Goal != nil {
 			canEdit, canClear := b.goalActionCapabilities()
@@ -2256,18 +2487,34 @@ func (d *Daemon) trySubscribeCodexThread(s *session.Session, b *codexBridge, thr
 	if err != nil {
 		return
 	}
+	var (
+		reportFast  bool
+		fastModeVal bool
+	)
 	b.mu.Lock()
 	if b.epoch == epoch && b.tid == threadID {
 		b.subscribed = true
 		if res.Thread.Path != "" {
 			b.pendingPath = res.Thread.Path
 		}
+		if res.ServiceTier != "" && !b.serviceTierDirty {
+			fastModeVal = codex.IsFastServiceTier(res.ServiceTier)
+			b.fastMode = fastModeVal
+			b.serviceTierOverride = codex.ServiceTierForFastMode(fastModeVal)
+			reportFast = true
+		}
 	}
 	b.mu.Unlock()
 	u := &protocol.Usage{}
 	applyThreadMetadata(u, res.Model, res.ReasoningEffort, res.ApprovalPolicy, res.Sandbox)
-	if !u.IsZero() && s != nil {
+	if reportFast {
+		u.FastMode = proto.Bool(fastModeVal)
+	}
+	if !u.IsZero() && s != nil && b.isCurrentEpoch(epoch) {
 		s.Report(u)
+	}
+	if reportFast && s != nil && b.isCurrentEpoch(epoch) {
+		s.ReportFastMode(fastModeVal)
 	}
 	if res.Thread.Goal != nil && s != nil && b.isCurrentEpoch(epoch) && b.threadID() == threadID {
 		canEdit, canClear := b.goalActionCapabilities()

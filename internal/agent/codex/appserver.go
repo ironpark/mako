@@ -53,6 +53,26 @@ func IsMethodNotFound(err error) bool {
 	return errors.As(err, &rpcErr) && rpcErr.Code == -32601
 }
 
+// IsFastServiceTier reports whether a Codex service tier name corresponds to
+// Fast Mode ("fast" or canonical server form "priority").
+func IsFastServiceTier(tier string) bool {
+	switch strings.ToLower(strings.TrimSpace(tier)) {
+	case "fast", "priority":
+		return true
+	default:
+		return false
+	}
+}
+
+// ServiceTierForFastMode returns the Codex app-server serviceTier value for
+// enabling or disabling Fast Mode on a thread or turn.
+func ServiceTierForFastMode(fast bool) string {
+	if fast {
+		return "fast"
+	}
+	return "default"
+}
+
 // NonOriginatingClientName is Codex's reserved non-originating app-server
 // client identity so managed sessions keep Codex's default CLI identity.
 const (
@@ -129,6 +149,7 @@ func (t ThreadInfo) IsSubagent() bool {
 type ThreadStartParams struct {
 	Cwd            string `json:"cwd,omitempty"`
 	Model          string `json:"model,omitempty"`
+	ServiceTier    string `json:"serviceTier,omitempty"`
 	ApprovalPolicy string `json:"approvalPolicy,omitempty"`
 	Sandbox        string `json:"sandbox,omitempty"`
 	Ephemeral      *bool  `json:"ephemeral,omitempty"`
@@ -137,6 +158,7 @@ type ThreadStartParams struct {
 type ThreadStartResult struct {
 	Thread          ThreadInfo      `json:"thread"`
 	Model           string          `json:"model,omitempty"`
+	ServiceTier     string          `json:"serviceTier,omitempty"`
 	ReasoningEffort string          `json:"reasoningEffort,omitempty"`
 	ApprovalPolicy  json.RawMessage `json:"approvalPolicy,omitempty"`
 	Sandbox         json.RawMessage `json:"sandbox,omitempty"`
@@ -147,6 +169,7 @@ type ThreadResumeParams struct {
 	ExcludeTurns   bool   `json:"excludeTurns,omitempty"`
 	Cwd            string `json:"cwd,omitempty"`
 	Model          string `json:"model,omitempty"`
+	ServiceTier    string `json:"serviceTier,omitempty"`
 	ApprovalPolicy string `json:"approvalPolicy,omitempty"`
 	Sandbox        string `json:"sandbox,omitempty"`
 }
@@ -154,6 +177,7 @@ type ThreadResumeParams struct {
 type ThreadResumeResult struct {
 	Thread          ThreadInfo      `json:"thread"`
 	Model           string          `json:"model,omitempty"`
+	ServiceTier     string          `json:"serviceTier,omitempty"`
 	ReasoningEffort string          `json:"reasoningEffort,omitempty"`
 	ApprovalPolicy  json.RawMessage `json:"approvalPolicy,omitempty"`
 	Sandbox         json.RawMessage `json:"sandbox,omitempty"`
@@ -165,7 +189,8 @@ type ThreadReadParams struct {
 }
 
 type ThreadReadResult struct {
-	Thread ThreadInfo `json:"thread"`
+	Thread      ThreadInfo `json:"thread"`
+	ServiceTier string     `json:"serviceTier,omitempty"`
 }
 
 type ThreadLoadedListResult struct {
@@ -179,6 +204,7 @@ type ThreadForkParams struct {
 	BeforeTurnID           string `json:"beforeTurnId,omitempty"`
 	Cwd                    string `json:"cwd,omitempty"`
 	Model                  string `json:"model,omitempty"`
+	ServiceTier            string `json:"serviceTier,omitempty"`
 	ApprovalPolicy         string `json:"approvalPolicy,omitempty"`
 	Sandbox                string `json:"sandbox,omitempty"`
 	ExcludeTurns           bool   `json:"excludeTurns,omitempty"`
@@ -235,8 +261,9 @@ type ThreadQueueAddResult struct {
 }
 
 type TurnStartParams struct {
-	ThreadID string      `json:"threadId"`
-	Input    []UserInput `json:"input"`
+	ThreadID    string      `json:"threadId"`
+	Input       []UserInput `json:"input"`
+	ServiceTier string      `json:"serviceTier,omitempty"`
 }
 
 type TurnInfo struct {
@@ -355,6 +382,27 @@ type AccountRateLimitsUpdatedNotification struct {
 	RateLimits RateLimitSnapshot `json:"rateLimits"`
 }
 
+// ThreadSettings carries the live settings snapshot emitted by thread/settings/updated.
+type ThreadSettings struct {
+	Model          string          `json:"model,omitempty"`
+	Effort         string          `json:"effort,omitempty"`
+	ApprovalPolicy json.RawMessage `json:"approvalPolicy,omitempty"`
+	SandboxPolicy  json.RawMessage `json:"sandboxPolicy,omitempty"`
+	ServiceTier    *string         `json:"serviceTier,omitempty"`
+}
+
+type ThreadSettingsUpdatedNotification struct {
+	ThreadID       string         `json:"threadId"`
+	ThreadSettings ThreadSettings `json:"threadSettings"`
+}
+
+// ConfigReadResult is the subset of config/read used by Mako.
+type ConfigReadResult struct {
+	Config struct {
+		ServiceTier string `json:"service_tier,omitempty"`
+	} `json:"config"`
+}
+
 // ThreadGoal is a Codex thread's tracked long-running goal state.
 type ThreadGoal struct {
 	ThreadID        string `json:"threadId,omitempty"`
@@ -441,6 +489,12 @@ type ReasoningEffortOption struct {
 	Description     string `json:"description,omitempty"`
 }
 
+type ModelServiceTier struct {
+	ID          string `json:"id"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 type ModelListEntry struct {
 	ID                        string                  `json:"id"`
 	Model                     string                  `json:"model"`
@@ -448,6 +502,9 @@ type ModelListEntry struct {
 	Hidden                    bool                    `json:"hidden"`
 	SupportedReasoningEfforts []ReasoningEffortOption `json:"supportedReasoningEfforts"`
 	DefaultReasoningEffort    string                  `json:"defaultReasoningEffort,omitempty"`
+	ServiceTiers              []ModelServiceTier      `json:"serviceTiers,omitempty"`
+	DefaultServiceTier        string                  `json:"defaultServiceTier,omitempty"`
+	AdditionalSpeedTiers      []string                `json:"additionalSpeedTiers,omitempty"`
 	IsDefault                 bool                    `json:"isDefault,omitempty"`
 }
 
@@ -899,6 +956,12 @@ func (c *AppServerClient) TurnInterrupt(ctx context.Context, params TurnInterrup
 func (c *AppServerClient) RateLimitsRead(ctx context.Context) (RateLimitsReadResult, error) {
 	var res RateLimitsReadResult
 	err := c.Call(ctx, "account/rateLimits/read", struct{}{}, &res)
+	return res, err
+}
+
+func (c *AppServerClient) ConfigRead(ctx context.Context) (ConfigReadResult, error) {
+	var res ConfigReadResult
+	err := c.Call(ctx, "config/read", struct{}{}, &res)
 	return res, err
 }
 

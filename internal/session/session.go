@@ -134,6 +134,15 @@ type Session struct {
 	// cannot resurrect a cleared failure; guarded by mu.
 	authError    *protocol.AuthError
 	authErrorSeq int64
+	// fastModeSupported and fastMode track native bridge fast-mode capability
+	// and live state (e.g. Codex app-server priority service tier); guarded by mu.
+	fastModeSupported bool
+	fastMode          bool
+	// dynamicModels and dynamicModelVariants hold runtime-discovered models
+	// (such as agy's ModelCatalog) for agents whose static Models() is empty;
+	// guarded by mu.
+	dynamicModels        []string
+	dynamicModelVariants map[string]bool
 }
 
 // staleWork is how long an agent said to be working may print nothing
@@ -266,9 +275,10 @@ func (s *Session) Info() *protocol.SessionInfo {
 		Notice:         s.notice,
 		Bells:          s.bells,
 		Dialog:         s.dialogLocked(),
-		Controls:       controls(s.spec.Agent),
+		Controls:       s.controlsLocked(),
 		AuthError:      proto.CloneOf(s.pub.authError),
 		Goal:           s.goalLocked(),
+		FastMode:       s.state != protocol.StateExited && s.fastMode,
 	}
 }
 
@@ -1203,6 +1213,10 @@ func (s *Session) pump() {
 			s.state = protocol.StateExited
 			s.clearApprovalLocked()
 			s.goal = nil
+			s.fastModeSupported = false
+			s.fastMode = false
+			s.dynamicModels = nil
+			s.dynamicModelVariants = nil
 			s.exitCode = &exitCode
 			s.progress = activity.Progress{}
 			for id, sub := range s.subs {
@@ -1230,6 +1244,10 @@ func (s *Session) pump() {
 			s.state = protocol.StateExited
 			s.clearApprovalLocked()
 			s.goal = nil
+			s.fastModeSupported = false
+			s.fastMode = false
+			s.dynamicModels = nil
+			s.dynamicModelVariants = nil
 			s.exitCode = &exitCode
 			s.progress = activity.Progress{}
 			for id, sub := range s.subs {

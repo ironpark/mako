@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agent/codex"
@@ -2113,6 +2114,718 @@ func TestCodexAbortRestartPropagatesAndClearsGoal(t *testing.T) {
 		}
 		if got := s.Info().GetGoal(); got != nil {
 			t.Fatalf("stale goal survived failed thread resume: %v", got)
+		}
+	})
+}
+
+func TestCodexBridgeFastModeEndToEnd(t *testing.T) {
+	t.Run("non-codex session rejects fast_mode configure", func(t *testing.T) {
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		s, err := session.Start(session.Spec{
+			ID: "claude-no-fast", NodeID: "test-node", Agent: "claude", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+		d.sessions.add(s)
+
+		if s.Info().GetControls().GetFastMode() {
+			t.Fatalf("claude session should not advertise Controls.FastMode")
+		}
+		_, done := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+			return d.handleConfigureAgent(t.Context(), st, env)
+		}, protocol.TypeConfigureAgent, &protocol.ConfigureAgent{
+			SessionId: s.ID(),
+			FastMode:  proto.Bool(true),
+		})
+		if err := <-done; err == nil || !strings.Contains(err.Error(), "does not support fast mode") {
+			t.Fatalf("expected unsupported fast mode error, got %v", err)
+		}
+	})
+
+	t.Run("idle toggle uses thread/resume and never mutates global config", func(t *testing.T) {
+		var mu sync.Mutex
+		var resumeTiers []string
+		var wroteGlobalConfig bool
+
+		mock := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "config/value/write":
+				mu.Lock()
+				wroteGlobalConfig = true
+				mu.Unlock()
+				reply(map[string]any{"id": id, "result": map[string]any{}})
+			case "thread/resume":
+				var p codex.ThreadResumeParams
+				_ = json.Unmarshal(params, &p)
+				mu.Lock()
+				resumeTiers = append(resumeTiers, p.ServiceTier)
+				mu.Unlock()
+				retTier := "default"
+				if p.ServiceTier == "fast" {
+					retTier = "priority"
+				}
+				reply(map[string]any{
+					"id": id,
+					"result": map[string]any{
+						"thread":      map[string]any{"id": p.ThreadID},
+						"serviceTier": retTier,
+					},
+				})
+			}
+		})
+
+		wsClient, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := session.Start(session.Spec{
+			ID: "codex-fast-idle", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		d.sessions.add(s)
+
+		b := newCodexBridge(t.Context(), s.ID(), wsClient, nil, nil, nil)
+		b.setThread("th-idle", true)
+		b.initFastMode = false
+		d.attachCodexBridge(s, b)
+		defer b.Close()
+
+		if info := s.Info(); !info.GetControls().GetFastMode() || info.GetFastMode() {
+			t.Fatalf("after attach: controls=%v fastMode=%v", info.GetControls(), info.GetFastMode())
+		}
+
+		// Enable Fast Mode via handleConfigureAgent.
+		st, done := ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+			return d.handleConfigureAgent(t.Context(), st, env)
+		}, protocol.TypeConfigureAgent, &protocol.ConfigureAgent{
+			SessionId: s.ID(),
+			FastMode:  proto.Bool(true),
+		})
+		env, err := st.Recv()
+		if err != nil || env.Type() != protocol.TypeSessionInfo {
+			t.Fatalf("enable fast mode reply = %v, %v", env, err)
+		}
+		if err := <-done; err != nil {
+			t.Fatalf("enable handler err: %v", err)
+		}
+		if !env.GetSessionInfo().GetFastMode() || !env.GetSessionInfo().GetControls().GetFastMode() {
+			t.Fatalf("SessionInfo after enable: fast=%v controls=%v", env.GetSessionInfo().GetFastMode(), env.GetSessionInfo().GetControls())
+		}
+		if rep := s.Reported(); rep == nil || rep.FastMode == nil || !rep.GetFastMode() {
+			t.Fatalf("s.Reported() after enable = %v, want FastMode=true", rep)
+		}
+
+		// Disable Fast Mode via handleConfigureAgent.
+		st, done = ask(t, func(st *transport.Stream, env *protocol.Envelope) error {
+			return d.handleConfigureAgent(t.Context(), st, env)
+		}, protocol.TypeConfigureAgent, &protocol.ConfigureAgent{
+			SessionId: s.ID(),
+			FastMode:  proto.Bool(false),
+		})
+		env, err = st.Recv()
+		if err != nil || env.Type() != protocol.TypeSessionInfo {
+			t.Fatalf("disable fast mode reply = %v, %v", env, err)
+		}
+		if err := <-done; err != nil {
+			t.Fatalf("disable handler err: %v", err)
+		}
+		if env.GetSessionInfo().GetFastMode() {
+			t.Fatalf("SessionInfo after disable still has FastMode=true")
+		}
+		if rep := s.Reported(); rep == nil || rep.FastMode == nil || rep.GetFastMode() {
+			t.Fatalf("s.Reported() after disable = %v, want FastMode=false", rep)
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		if wroteGlobalConfig {
+			t.Fatal("fast mode toggle must not write global Codex config")
+		}
+		if !slices.Equal(resumeTiers, []string{"fast", "default"}) {
+			t.Fatalf("resume serviceTiers = %v, want [fast default]", resumeTiers)
+		}
+	})
+
+	t.Run("unmaterialized -32600 defers tier to next turn/start and non-32600 fails cleanly", func(t *testing.T) {
+		var mu sync.Mutex
+		resumeErrCode := -32600
+		var turnStartTiers []string
+		var queueCalls int
+
+		mock := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "thread/resume":
+				mu.Lock()
+				code := resumeErrCode
+				mu.Unlock()
+				reply(map[string]any{
+					"id":    id,
+					"error": map[string]any{"code": code, "message": "no rollout found for thread id th-0"},
+				})
+			case "turn/start":
+				var p codex.TurnStartParams
+				_ = json.Unmarshal(params, &p)
+				mu.Lock()
+				turnStartTiers = append(turnStartTiers, p.ServiceTier)
+				mu.Unlock()
+				reply(map[string]any{
+					"id":     id,
+					"result": map[string]any{"turn": map[string]any{"id": "turn-1", "status": "inProgress"}},
+				})
+			case "thread/queue/add":
+				mu.Lock()
+				queueCalls++
+				mu.Unlock()
+				reply(map[string]any{
+					"id":     id,
+					"result": map[string]any{"queuedSubmission": map[string]any{"id": "q-1"}},
+				})
+			}
+		})
+
+		wsClient, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := session.Start(session.Spec{
+			ID: "codex-fast-0turn", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		d.sessions.add(s)
+		b := newCodexBridge(t.Context(), s.ID(), wsClient, nil, nil, nil)
+		b.setThread("th-0", false)
+		d.attachCodexBridge(s, b)
+		defer b.Close()
+
+		// 1. -32600 from thread/resume succeeds and marks serviceTierDirty=true.
+		if err := b.setFastMode(t.Context(), s, true); err != nil {
+			t.Fatalf("setFastMode on -32600 failed: %v", err)
+		}
+		if !s.Info().GetFastMode() {
+			t.Fatal("expected SessionInfo.FastMode=true after -32600 defer")
+		}
+
+		// 2. Next deliverMessage calls turn/start with serviceTier="fast" and clears dirty.
+		if err := b.deliverMessage(t.Context(), "first turn"); err != nil {
+			t.Fatalf("deliverMessage first turn: %v", err)
+		}
+		mu.Lock()
+		if !slices.Equal(turnStartTiers, []string{"fast"}) || queueCalls != 0 {
+			mu.Unlock()
+			t.Fatalf("first turnStartTiers=%v queueCalls=%d, want [fast] / 0", turnStartTiers, queueCalls)
+		}
+		mu.Unlock()
+
+		// 3. Subsequent deliverMessage uses normal thread/queue/add since dirty was cleared.
+		if err := b.deliverMessage(t.Context(), "second turn"); err != nil {
+			t.Fatalf("deliverMessage second turn: %v", err)
+		}
+		mu.Lock()
+		if queueCalls != 1 {
+			mu.Unlock()
+			t.Fatalf("second turn queueCalls=%d, want 1", queueCalls)
+		}
+		// 4. Non--32600 RPC error does not flip state.
+		resumeErrCode = -32603
+		mu.Unlock()
+
+		b.mu.Lock()
+		b.settleTurnLocked()
+		b.mu.Unlock()
+		if err := b.setFastMode(t.Context(), s, false); err == nil {
+			t.Fatal("expected error for -32603 thread/resume failure")
+		}
+		if !s.Info().GetFastMode() {
+			t.Fatal("fastMode flipped despite non--32600 RPC error")
+		}
+	})
+
+	t.Run("active turn defers tier and busy turn/start falls back to queue keeping dirty", func(t *testing.T) {
+		var mu sync.Mutex
+		var resumeCalls int
+		turnStartBusy := true
+		var turnStartTiers []string
+		var queueCalls int
+
+		mock := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "thread/resume":
+				mu.Lock()
+				resumeCalls++
+				mu.Unlock()
+				reply(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "th-busy"}}})
+			case "turn/start":
+				var p codex.TurnStartParams
+				_ = json.Unmarshal(params, &p)
+				mu.Lock()
+				busy := turnStartBusy
+				turnStartTiers = append(turnStartTiers, p.ServiceTier)
+				mu.Unlock()
+				if busy {
+					reply(map[string]any{
+						"id":    id,
+						"error": map[string]any{"code": -32600, "message": "turn already in progress"},
+					})
+					return
+				}
+				reply(map[string]any{
+					"id":     id,
+					"result": map[string]any{"turn": map[string]any{"id": "turn-applied", "status": "inProgress"}},
+				})
+			case "thread/queue/add":
+				mu.Lock()
+				queueCalls++
+				mu.Unlock()
+				reply(map[string]any{
+					"id":     id,
+					"result": map[string]any{"queuedSubmission": map[string]any{"id": "q-busy"}},
+				})
+			}
+		})
+
+		wsClient, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := session.Start(session.Spec{
+			ID: "codex-fast-busy", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		b := newCodexBridge(t.Context(), s.ID(), wsClient, nil, nil, nil)
+		b.setThread("th-busy", true)
+		b.mu.Lock()
+		b.noteTurnStartedLocked("turn-running")
+		b.mu.Unlock()
+		d.attachCodexBridge(s, b)
+		defer b.Close()
+
+		// Toggle during active turn skips thread/resume and marks dirty.
+		if err := b.setFastMode(t.Context(), s, true); err != nil {
+			t.Fatalf("setFastMode during active turn: %v", err)
+		}
+		mu.Lock()
+		if resumeCalls != 0 {
+			mu.Unlock()
+			t.Fatalf("expected 0 thread/resume calls while turn active, got %d", resumeCalls)
+		}
+		mu.Unlock()
+		if !s.Info().GetFastMode() {
+			t.Fatal("expected FastMode=true")
+		}
+
+		// Simulate bridge thinking turn settled while server still reports busy:
+		// deliverMessage tries turn/start, falls back to queue/add, keeps dirty=true.
+		b.mu.Lock()
+		b.settleTurnLocked()
+		b.mu.Unlock()
+		if err := b.deliverMessage(t.Context(), "queued while busy"); err != nil {
+			t.Fatalf("deliverMessage busy fallback: %v", err)
+		}
+		mu.Lock()
+		if queueCalls != 1 {
+			mu.Unlock()
+			t.Fatalf("queueCalls=%d, want 1", queueCalls)
+		}
+		turnStartBusy = false
+		mu.Unlock()
+
+		// Next turn succeeds via turn/start with serviceTier="fast" and clears dirty.
+		if err := b.deliverMessage(t.Context(), "apply now"); err != nil {
+			t.Fatalf("deliverMessage apply now: %v", err)
+		}
+		mu.Lock()
+		if !slices.Equal(turnStartTiers, []string{"fast", "fast"}) {
+			mu.Unlock()
+			t.Fatalf("turnStartTiers=%v, want [fast fast]", turnStartTiers)
+		}
+		mu.Unlock()
+		b.mu.Lock()
+		stillDirty := b.serviceTierDirty
+		b.mu.Unlock()
+		if stillDirty {
+			t.Fatal("expected serviceTierDirty cleared after turn/start succeeded")
+		}
+	})
+
+	t.Run("thread/settings/updated, trySubscribe, stale epoch guard, and force-restart propagation", func(t *testing.T) {
+		var mu sync.Mutex
+		subscribeTier := "default"
+		srv1 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "thread/resume":
+				mu.Lock()
+				tier := subscribeTier
+				mu.Unlock()
+				reply(map[string]any{
+					"id": id,
+					"result": map[string]any{
+						"thread":      map[string]any{"id": "th-settings"},
+						"serviceTier": tier,
+					},
+				})
+			case "thread/read":
+				reply(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "th-settings"}}})
+			}
+		})
+		srv2 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "thread/read":
+				reply(map[string]any{"id": id, "result": map[string]any{"thread": map[string]any{"id": "th-settings"}}})
+			case "thread/backgroundTerminals/list":
+				reply(map[string]any{"id": id, "result": map[string]any{"data": []any{}}})
+			}
+		})
+
+		c1, err := codex.DialAppServerWS(t.Context(), srv1.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := session.Start(session.Spec{
+			ID: "codex-fast-settings", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		d.sessions.add(s)
+
+		b := newCodexBridge(t.Context(), s.ID(), c1, nil, nil, nil)
+		b.setThread("th-settings", false)
+		b.restartServer = func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error) {
+			c2, err := codex.DialAppServerWS(ctx, srv2.wsURL(), "")
+			if err != nil {
+				return nil, err
+			}
+			return &codexRestartOutcome{
+				client:        c2,
+				threadID:      prevThreadID,
+				resumedThread: true,
+				initFastMode:  true,
+				tuiCmd:        testSleepCommand(),
+			}, nil
+		}
+		d.attachCodexBridge(s, b)
+		defer b.Close()
+
+		// 1. thread/settings/updated sets fastMode=true + model/effort/permissionMode.
+		srv1.sendNotification(t, "thread/settings/updated", map[string]any{
+			"threadId": "th-settings",
+			"threadSettings": map[string]any{
+				"model":          "gpt-5.4",
+				"effort":         "xhigh",
+				"approvalPolicy": "never",
+				"sandboxPolicy":  map[string]any{"type": "dangerFullAccess"},
+				"serviceTier":    "priority",
+			},
+		})
+		waitFor(t, "thread/settings/updated priority not applied", func() bool {
+			rep := s.Reported()
+			return s.Info().GetFastMode() && rep.GetModel() == "gpt-5.4" &&
+				rep.GetEffort() == "xhigh" && rep.GetPermissionMode() == "bypassPermissions" && rep.GetFastMode()
+		})
+
+		// 2. Other thread's settings notification is ignored.
+		srv1.sendNotification(t, "thread/settings/updated", map[string]any{
+			"threadId":       "th-subagent",
+			"threadSettings": map[string]any{"serviceTier": "default"},
+		})
+		// 3. Explicit null serviceTier turns fast mode OFF.
+		srv1.sendNotification(t, "thread/settings/updated", map[string]any{
+			"threadId":       "th-settings",
+			"threadSettings": map[string]any{"serviceTier": nil},
+		})
+		waitFor(t, "thread/settings/updated null did not disable fast mode", func() bool {
+			rep := s.Reported()
+			return !s.Info().GetFastMode() && rep.FastMode != nil && !rep.GetFastMode()
+		})
+
+		// 4. trySubscribeCodexThread respects serviceTierDirty override.
+		b.mu.Lock()
+		b.fastMode = true
+		b.serviceTierOverride = "fast"
+		b.serviceTierDirty = true
+		b.subscribed = false
+		epoch := b.epoch
+		b.mu.Unlock()
+		s.ReportFastMode(true)
+		d.trySubscribeCodexThread(s, b, "th-settings", epoch)
+		if !s.Info().GetFastMode() {
+			t.Fatal("trySubscribeCodexThread clobbered dirty fastMode override")
+		}
+		// When not dirty, trySubscribeCodexThread adopts server serviceTier.
+		b.mu.Lock()
+		b.serviceTierDirty = false
+		b.subscribed = false
+		b.mu.Unlock()
+		d.trySubscribeCodexThread(s, b, "th-settings", epoch)
+		if s.Info().GetFastMode() {
+			t.Fatal("trySubscribeCodexThread did not adopt server default serviceTier")
+		}
+
+		// 5. Force-restart propagates initFastMode=true from codexRestartOutcome.
+		srv1.sendNotification(t, "turn/started", map[string]any{
+			"threadId": "th-settings", "turn": map[string]any{"id": "t-stuck", "status": "inProgress"},
+		})
+		waitFor(t, "turn did not start", func() bool { return s.Info().GetStatus() == protocol.AgentWorking })
+
+		res := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: 40 * time.Millisecond})
+		if !res.ForcedRestart || !res.ResumedThread || res.Err != nil {
+			t.Fatalf("abort result = %+v", res)
+		}
+		if !s.Info().GetFastMode() {
+			t.Fatal("force-restart did not propagate initFastMode=true to SessionInfo")
+		}
+
+		// 6. Stale epoch thread/settings/updated is ignored.
+		raw, _ := json.Marshal(map[string]any{
+			"threadId":       "th-settings",
+			"threadSettings": map[string]any{"serviceTier": "default"},
+		})
+		d.handleCodexNotification(s, b, codex.Notification{Method: "thread/settings/updated", Params: raw}, epoch)
+		if !s.Info().GetFastMode() {
+			t.Fatal("stale epoch thread/settings/updated clobbered post-restart fastMode")
+		}
+	})
+
+	t.Run("serviceTierOverride stays in sync on subscribe, thread switch, and unresumed restart", func(t *testing.T) {
+		var mu sync.Mutex
+		resumeTier := "default"
+		readTier := "default"
+
+		srv1 := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "thread/resume":
+				mu.Lock()
+				tier := resumeTier
+				mu.Unlock()
+				reply(map[string]any{
+					"id": id,
+					"result": map[string]any{
+						"thread":      map[string]any{"id": "th-sync-1"},
+						"serviceTier": tier,
+					},
+				})
+			case "thread/read":
+				var p struct {
+					ThreadID string `json:"threadId"`
+				}
+				_ = json.Unmarshal(params, &p)
+				mu.Lock()
+				tier := readTier
+				mu.Unlock()
+				reply(map[string]any{
+					"id": id,
+					"result": map[string]any{
+						"thread":      map[string]any{"id": p.ThreadID},
+						"serviceTier": tier,
+					},
+				})
+			}
+		})
+		srv2 := startMockCodexWSServer(t, nil)
+
+		c1, err := codex.DialAppServerWS(t.Context(), srv1.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := session.Start(session.Spec{
+			ID: "codex-fast-sync", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		d.sessions.add(s)
+
+		b := newCodexBridge(t.Context(), s.ID(), c1, nil, nil, nil)
+		b.setThread("th-sync-1", false)
+		b.mu.Lock()
+		b.fastMode = true
+		b.serviceTierOverride = "fast"
+		b.serviceTierDirty = false
+		epoch := b.epoch
+		b.mu.Unlock()
+		d.attachCodexBridge(s, b)
+		defer b.Close()
+
+		// 1. trySubscribeCodexThread reporting "default" must sync serviceTierOverride="default".
+		d.trySubscribeCodexThread(s, b, "th-sync-1", epoch)
+		b.mu.Lock()
+		gotOverride, gotFast := b.serviceTierOverride, b.fastMode
+		b.mu.Unlock()
+		if gotFast || gotOverride != "default" {
+			t.Fatalf("after trySubscribeCodexThread(default): fast=%v override=%q, want false / default", gotFast, gotOverride)
+		}
+
+		// 2. maybeSwitchCodexThread reporting "priority" then "default" syncs serviceTierOverride.
+		mu.Lock()
+		readTier = "priority"
+		mu.Unlock()
+		if !d.maybeSwitchCodexThread(s, b, "th-sync-2", "active", epoch) {
+			t.Fatal("maybeSwitchCodexThread to th-sync-2 failed")
+		}
+		b.mu.Lock()
+		gotOverride, gotFast = b.serviceTierOverride, b.fastMode
+		b.mu.Unlock()
+		if !gotFast || gotOverride != "fast" {
+			t.Fatalf("after switch to priority thread: fast=%v override=%q, want true / fast", gotFast, gotOverride)
+		}
+		mu.Lock()
+		readTier = "default"
+		mu.Unlock()
+		if !d.maybeSwitchCodexThread(s, b, "th-sync-3", "active", epoch) {
+			t.Fatal("maybeSwitchCodexThread to th-sync-3 failed")
+		}
+		b.mu.Lock()
+		gotOverride, gotFast = b.serviceTierOverride, b.fastMode
+		b.mu.Unlock()
+		if gotFast || gotOverride != "default" {
+			t.Fatalf("after switch to default thread: fast=%v override=%q, want false / default", gotFast, gotOverride)
+		}
+
+		// 3. Unresumed force-restart (resumedThread=false, initFastMode=false) clears stale "fast" override.
+		b.mu.Lock()
+		b.fastMode = true
+		b.serviceTierOverride = "fast"
+		b.mu.Unlock()
+		b.restartServer = func(ctx context.Context, prevThreadID string) (*codexRestartOutcome, error) {
+			c2, err := codex.DialAppServerWS(ctx, srv2.wsURL(), "")
+			if err != nil {
+				return nil, err
+			}
+			return &codexRestartOutcome{
+				client:        c2,
+				resumedThread: false,
+				initFastMode:  false,
+				tuiCmd:        testSleepCommand(),
+			}, nil
+		}
+		srv1.sendNotification(t, "turn/started", map[string]any{
+			"threadId": "th-sync-3", "turn": map[string]any{"id": "t-unresumed", "status": "inProgress"},
+		})
+		waitFor(t, "turn did not start", func() bool { return s.Info().GetStatus() == protocol.AgentWorking })
+		res := d.abortCodexTurn(t.Context(), s, b, codexAbortOptions{GracePeriod: 40 * time.Millisecond})
+		if !res.ForcedRestart || res.ResumedThread || res.Err != nil {
+			t.Fatalf("abort result = %+v, want forced restart with resumed=false", res)
+		}
+		b.mu.Lock()
+		gotOverride, gotFast = b.serviceTierOverride, b.fastMode
+		b.mu.Unlock()
+		if gotFast || gotOverride != "" {
+			t.Fatalf("after unresumed restart: fast=%v override=%q, want false / empty", gotFast, gotOverride)
+		}
+	})
+
+	t.Run("setFastMode keeps serviceTierDirty when active thread switches mid-resume", func(t *testing.T) {
+		inResume := make(chan struct{})
+		releaseResume := make(chan struct{})
+		var mu sync.Mutex
+		var turnStartThread, turnStartTier string
+
+		mock := startMockCodexWSServer(t, func(id json.RawMessage, method string, params json.RawMessage, reply func(any)) {
+			switch method {
+			case "thread/resume":
+				close(inResume)
+				<-releaseResume
+				reply(map[string]any{
+					"id": id,
+					"result": map[string]any{
+						"thread":      map[string]any{"id": "th-old"},
+						"serviceTier": "priority",
+					},
+				})
+			case "turn/start":
+				var p codex.TurnStartParams
+				_ = json.Unmarshal(params, &p)
+				mu.Lock()
+				turnStartThread = p.ThreadID
+				turnStartTier = p.ServiceTier
+				mu.Unlock()
+				reply(map[string]any{
+					"id":     id,
+					"result": map[string]any{"turn": map[string]any{"id": "turn-new", "status": "inProgress"}},
+				})
+			}
+		})
+
+		wsClient, err := codex.DialAppServerWS(t.Context(), mock.wsURL(), "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		s, err := session.Start(session.Spec{
+			ID: "codex-fast-switch-race", NodeID: "test-node", Agent: "codex", Project: t.TempDir(),
+			Command: testSleepCommand(), Cols: 80, Rows: 24,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+
+		d := New(config.Default(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+		b := newCodexBridge(t.Context(), s.ID(), wsClient, nil, nil, nil)
+		b.setThread("th-old", true)
+		d.attachCodexBridge(s, b)
+		defer b.Close()
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- b.setFastMode(t.Context(), s, true)
+		}()
+
+		<-inResume
+		// Switch active thread while thread/resume for th-old is still in flight.
+		b.mu.Lock()
+		b.tid = "th-new"
+		b.mu.Unlock()
+		close(releaseResume)
+
+		if err := <-errCh; err != nil {
+			t.Fatalf("setFastMode returned error: %v", err)
+		}
+		b.mu.Lock()
+		dirty := b.serviceTierDirty
+		override := b.serviceTierOverride
+		b.mu.Unlock()
+		if !dirty || override != "fast" {
+			t.Fatalf("after thread switch during resume: dirty=%v override=%q, want true / fast", dirty, override)
+		}
+
+		// Delivering a message on th-new applies the deferred serviceTier="fast".
+		if err := b.deliverMessage(t.Context(), "hello new thread"); err != nil {
+			t.Fatalf("deliverMessage on th-new: %v", err)
+		}
+		mu.Lock()
+		gotThread, gotTier := turnStartThread, turnStartTier
+		mu.Unlock()
+		if gotThread != "th-new" || gotTier != "fast" {
+			t.Fatalf("turn/start got thread=%q tier=%q, want th-new / fast", gotThread, gotTier)
 		}
 	})
 }

@@ -584,3 +584,165 @@ func TestAppServerClientTurnInterruptAndPendingSerialization(t *testing.T) {
 		t.Fatalf("unexpected async interrupt ordering: %v", afterRelease)
 	}
 }
+
+func TestServiceTierHelpers(t *testing.T) {
+	for tier, want := range map[string]bool{
+		"fast":       true,
+		"FAST":       true,
+		" priority ": true,
+		"Priority":   true,
+		"default":    false,
+		"standard":   false,
+		"":           false,
+		"   ":        false,
+	} {
+		if got := IsFastServiceTier(tier); got != want {
+			t.Errorf("IsFastServiceTier(%q) = %v, want %v", tier, got, want)
+		}
+	}
+	if got := ServiceTierForFastMode(true); got != "fast" {
+		t.Errorf("ServiceTierForFastMode(true) = %q, want %q", got, "fast")
+	}
+	if got := ServiceTierForFastMode(false); got != "default" {
+		t.Errorf("ServiceTierForFastMode(false) = %q, want %q", got, "default")
+	}
+}
+
+func TestAppServerClientConfigReadAndServiceTierRPCs(t *testing.T) {
+	upgrader := websocket.Upgrader{}
+	var mu sync.Mutex
+	var gotStartTier, gotResumeTier, gotTurnTier string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		for {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			var req struct {
+				ID     json.RawMessage `json:"id"`
+				Method string          `json:"method"`
+				Params json.RawMessage `json:"params"`
+			}
+			if json.Unmarshal(data, &req) != nil {
+				continue
+			}
+			switch req.Method {
+			case "config/read":
+				_ = conn.WriteJSON(map[string]any{
+					"id":     req.ID,
+					"result": map[string]any{"config": map[string]any{"service_tier": "priority"}},
+				})
+			case "thread/start":
+				var p ThreadStartParams
+				_ = json.Unmarshal(req.Params, &p)
+				mu.Lock()
+				gotStartTier = p.ServiceTier
+				mu.Unlock()
+				_ = conn.WriteJSON(map[string]any{
+					"id": req.ID,
+					"result": map[string]any{
+						"thread":      map[string]any{"id": "th-fast"},
+						"serviceTier": "priority",
+					},
+				})
+			case "thread/resume":
+				var p ThreadResumeParams
+				_ = json.Unmarshal(req.Params, &p)
+				mu.Lock()
+				gotResumeTier = p.ServiceTier
+				mu.Unlock()
+				_ = conn.WriteJSON(map[string]any{
+					"id": req.ID,
+					"result": map[string]any{
+						"thread":      map[string]any{"id": p.ThreadID},
+						"serviceTier": "default",
+					},
+				})
+			case "turn/start":
+				var p TurnStartParams
+				_ = json.Unmarshal(req.Params, &p)
+				mu.Lock()
+				gotTurnTier = p.ServiceTier
+				mu.Unlock()
+				_ = conn.WriteJSON(map[string]any{
+					"id":     req.ID,
+					"result": map[string]any{"turn": map[string]any{"id": "turn-fast", "status": "inProgress"}},
+				})
+				_ = conn.WriteJSON(map[string]any{
+					"method": "thread/settings/updated",
+					"params": map[string]any{
+						"threadId": p.ThreadID,
+						"threadSettings": map[string]any{
+							"model":          "gpt-5.4",
+							"effort":         "high",
+							"approvalPolicy": "never",
+							"sandboxPolicy":  map[string]any{"type": "dangerFullAccess"},
+							"serviceTier":    "priority",
+						},
+					},
+				})
+			}
+		}
+	}))
+	defer srv.Close()
+
+	client, err := DialAppServerWS(t.Context(), "ws"+strings.TrimPrefix(srv.URL, "http"), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	cfg, err := client.ConfigRead(t.Context())
+	if err != nil || !IsFastServiceTier(cfg.Config.ServiceTier) {
+		t.Fatalf("ConfigRead = %+v err=%v", cfg, err)
+	}
+
+	ts, err := client.ThreadStart(t.Context(), ThreadStartParams{Cwd: "/work", ServiceTier: ServiceTierForFastMode(true)})
+	if err != nil || !IsFastServiceTier(ts.ServiceTier) {
+		t.Fatalf("ThreadStart = %+v err=%v", ts, err)
+	}
+
+	tr, err := client.ThreadResume(t.Context(), ThreadResumeParams{ThreadID: "th-fast", ExcludeTurns: true, ServiceTier: ServiceTierForFastMode(false)})
+	if err != nil || IsFastServiceTier(tr.ServiceTier) || tr.ServiceTier != "default" {
+		t.Fatalf("ThreadResume = %+v err=%v", tr, err)
+	}
+
+	turnRes, err := client.TurnStart(t.Context(), TurnStartParams{
+		ThreadID:    "th-fast",
+		Input:       []UserInput{{Type: "text", Text: "go fast"}},
+		ServiceTier: ServiceTierForFastMode(true),
+	})
+	if err != nil || turnRes.Turn.ID != "turn-fast" {
+		t.Fatalf("TurnStart = %+v err=%v", turnRes, err)
+	}
+
+	mu.Lock()
+	if gotStartTier != "fast" || gotResumeTier != "default" || gotTurnTier != "fast" {
+		mu.Unlock()
+		t.Fatalf("recorded serviceTiers start=%q resume=%q turn=%q", gotStartTier, gotResumeTier, gotTurnTier)
+	}
+	mu.Unlock()
+
+	select {
+	case n := <-client.Notifications():
+		if n.Method != "thread/settings/updated" {
+			t.Fatalf("notification = %+v", n)
+		}
+		var upd ThreadSettingsUpdatedNotification
+		if err := json.Unmarshal(n.Params, &upd); err != nil {
+			t.Fatalf("unmarshal ThreadSettingsUpdatedNotification: %v", err)
+		}
+		if upd.ThreadID != "th-fast" || upd.ThreadSettings.Model != "gpt-5.4" || upd.ThreadSettings.Effort != "high" ||
+			upd.ThreadSettings.ServiceTier == nil || *upd.ThreadSettings.ServiceTier != "priority" {
+			t.Fatalf("unexpected ThreadSettingsUpdatedNotification: %+v", upd)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for thread/settings/updated notification")
+	}
+}

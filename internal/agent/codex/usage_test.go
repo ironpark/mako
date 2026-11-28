@@ -34,3 +34,38 @@ func TestATurnSaysWhatItRanWith(t *testing.T) {
 		}
 	}
 }
+
+func TestTurnContextParsesServiceTierFastMode(t *testing.T) {
+	var u protocol.Usage
+	count := (&Agent{}).NewUsage()
+
+	// Without service_tier, FastMode stays unset (nil).
+	count.Count([]byte(`{"type":"turn_context","payload":{"model":"gpt-5.4","effort":"high"}}`), &u)
+	if u.FastMode != nil {
+		t.Fatalf("expected FastMode nil when service_tier omitted, got %v", *u.FastMode)
+	}
+
+	// Canonical "priority" sets FastMode=true.
+	count.Count([]byte(`{"type":"turn_context","payload":{"model":"gpt-5.4","service_tier":"priority"}}`), &u)
+	if u.FastMode == nil || !u.GetFastMode() {
+		t.Fatalf("expected FastMode=true for priority, got %v", u.FastMode)
+	}
+
+	// Later turn_context without service_tier preserves prior FastMode.
+	count.Count([]byte(`{"type":"turn_context","payload":{"model":"gpt-5.4","effort":"medium"}}`), &u)
+	if u.FastMode == nil || !u.GetFastMode() {
+		t.Fatalf("expected FastMode=true preserved when omitted, got %v", u.FastMode)
+	}
+
+	// "default" flips FastMode=false.
+	count.Count([]byte(`{"type":"turn_context","payload":{"model":"gpt-5.4","service_tier":"default"}}`), &u)
+	if u.FastMode == nil || u.GetFastMode() {
+		t.Fatalf("expected FastMode=false for default, got %v", u.FastMode)
+	}
+
+	// "fast" flips FastMode=true again.
+	count.Count([]byte(`{"type":"turn_context","payload":{"model":"gpt-5.4","service_tier":"fast"}}`), &u)
+	if u.FastMode == nil || !u.GetFastMode() {
+		t.Fatalf("expected FastMode=true for fast, got %v", u.FastMode)
+	}
+}

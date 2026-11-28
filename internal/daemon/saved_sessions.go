@@ -541,6 +541,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		return nil, fmt.Errorf("save session: %w", err)
 	}
 	d.sessions.add(s)
+	d.seedDynamicModels(s)
 	if codexBridge != nil {
 		d.attachCodexBridge(s, codexBridge)
 	}

@@ -9,8 +9,9 @@ package dev.ironpark.mako.v2;
  * <pre>
  * ConfigureAgent sets what of a session's agent is given: its permission
  * mode, as a key at its prompt moves it on; its model and effort, by its
- * own commands, which the agent may keep as the user's defaults. The reply
- * is its SessionInfo.
+ * own commands, which the agent may keep as the user's defaults; and fast
+ * mode, scoped to the session/thread when offered. The reply is its
+ * SessionInfo.
  * </pre>
  *
  * Protobuf type {@code mako.v2.ConfigureAgent}
@@ -28,6 +29,7 @@ public  final class ConfigureAgent extends
     model_ = "";
     effort_ = "";
   }
+  private int bitField0_;
   public static final int NODE_ID_FIELD_NUMBER = 1;
   private java.lang.String nodeId_;
   /**
@@ -263,6 +265,60 @@ public  final class ConfigureAgent extends
 
   }
 
+  public static final int FAST_MODE_FIELD_NUMBER = 6;
+  private boolean fastMode_;
+  /**
+   * <pre>
+   * fast_mode, when set, turns session-scoped fast mode on or off
+   * (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+   * @return Whether the fastMode field is set.
+   */
+  @java.lang.Override
+  public boolean hasFastMode() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * fast_mode, when set, turns session-scoped fast mode on or off
+   * (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+   * @return The fastMode.
+   */
+  @java.lang.Override
+  public boolean getFastMode() {
+    return fastMode_;
+  }
+  /**
+   * <pre>
+   * fast_mode, when set, turns session-scoped fast mode on or off
+   * (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+   * @param value The fastMode to set.
+   */
+  private void setFastMode(boolean value) {
+    bitField0_ |= 0x00000001;
+    fastMode_ = value;
+  }
+  /**
+   * <pre>
+   * fast_mode, when set, turns session-scoped fast mode on or off
+   * (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+   */
+  private void clearFastMode() {
+    bitField0_ = (bitField0_ & ~0x00000001);
+    fastMode_ = false;
+  }
+
   public static dev.ironpark.mako.v2.ConfigureAgent parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -350,8 +406,9 @@ public  final class ConfigureAgent extends
    * <pre>
    * ConfigureAgent sets what of a session's agent is given: its permission
    * mode, as a key at its prompt moves it on; its model and effort, by its
-   * own commands, which the agent may keep as the user's defaults. The reply
-   * is its SessionInfo.
+   * own commands, which the agent may keep as the user's defaults; and fast
+   * mode, scoped to the session/thread when offered. The reply is its
+   * SessionInfo.
    * </pre>
    *
    * Protobuf type {@code mako.v2.ConfigureAgent}
@@ -612,6 +669,62 @@ public  final class ConfigureAgent extends
       return this;
     }
 
+    /**
+     * <pre>
+     * fast_mode, when set, turns session-scoped fast mode on or off
+     * (revision 52).
+     * </pre>
+     *
+     * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+     * @return Whether the fastMode field is set.
+     */
+    @java.lang.Override
+    public boolean hasFastMode() {
+      return instance.hasFastMode();
+    }
+    /**
+     * <pre>
+     * fast_mode, when set, turns session-scoped fast mode on or off
+     * (revision 52).
+     * </pre>
+     *
+     * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+     * @return The fastMode.
+     */
+    @java.lang.Override
+    public boolean getFastMode() {
+      return instance.getFastMode();
+    }
+    /**
+     * <pre>
+     * fast_mode, when set, turns session-scoped fast mode on or off
+     * (revision 52).
+     * </pre>
+     *
+     * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+     * @param value The fastMode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFastMode(boolean value) {
+      copyOnWrite();
+      instance.setFastMode(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * fast_mode, when set, turns session-scoped fast mode on or off
+     * (revision 52).
+     * </pre>
+     *
+     * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFastMode() {
+      copyOnWrite();
+      instance.clearFastMode();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.ConfigureAgent)
   }
   @java.lang.Override
@@ -628,15 +741,17 @@ public  final class ConfigureAgent extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "nodeId_",
             "sessionId_",
             "mode_",
             "model_",
             "effort_",
+            "fastMode_",
           };
           java.lang.String info =
-              "\u0000\u0005\u0000\u0000\u0001\u0005\u0005\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
-              "\u0003\u0208\u0004\u0208\u0005\u0208";
+              "\u0000\u0006\u0000\u0001\u0001\u0006\u0006\u0000\u0000\u0000\u0001\u0208\u0002\u0208" +
+              "\u0003\u0208\u0004\u0208\u0005\u0208\u0006\u1007\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

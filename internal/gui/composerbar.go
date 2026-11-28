@@ -2,7 +2,8 @@ package gui
 
 import (
 	"context"
-	"image/color"
+	"math"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -21,35 +22,95 @@ import (
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// The composer's bar, under what is typed, as chat apps lay theirs out: on
-// the left a + to attach files and what the agent may do unasked; on the
-// right the model its latest reply was made with, at its effort, and the
-// button that sends, or while the agent works on a turn and nothing is
-// typed, stops it.
+// The composer's bar, under what is typed: on the left a cohesive inline
+// strip with +, the session's model picker, effort picker, permission mode
+// picker and optional fast mode toggle; on the right the optional terminal
+// escape hatch and the send/stop button.
 
 // composerRadius rounds the composer's box.
 const composerRadius = 20
 
 // composerBar is the bar of session id's composer.
 func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[bool]) ggui.Widget {
-	attach := ui.Tooltip(ui.ButtonOf(icon("plus").Size(17).Color(skin.Fg), func() { m.attachFiles(id) }).
-		Ghost().Pad(5).Radius(15).Name(T("Attach files")).BindDisabled(disabled), T("Attach files"))
+	attach := ui.Tooltip(ui.ButtonOf(icon("plus").Size(17).Color(skin.Muted), func() { m.attachFiles(id) }).
+		Ghost().Pad(5).Radius(8).Name(T("Attach files")).BindDisabled(disabled), T("Attach files"))
 	usage := ggui.Map(state.result, func(v chatResult) *protocol.Usage { return v.Chat.GetUsage() }).WithEqual(protocol.Same)
-	// What the agent says it runs with, and what it may be set to.
-	// Only these of its usage, whose counts move with every reply.
+	// What the agent says it runs with, what it may be set to, and whether
+	// fast mode is enabled. Only these of its usage, whose counts move with
+	// every reply.
 	type running struct {
-		mode, model, effort string
-		controls            *protocol.AgentControls
+		agent, mode, model, effort string
+		fastMode                   bool
+		linked                     bool
+		controls                   *protocol.AgentControls
+		catalog                    []*protocol.AgentModel
 	}
 	now := ggui.Derived(func() running {
 		s, _ := sessionIn(m.Sessions.Get(), id)
 		u := usage.Get()
-		return running{u.GetPermissionMode(), u.GetModel(), u.GetEffort(), s.GetControls()}
+		agentName := s.GetAgent()
+		fastMode := s.GetFastMode()
+		if !s.GetControls().GetFastMode() && u != nil && u.FastMode != nil {
+			fastMode = u.GetFastMode()
+		}
+		var catalog []*protocol.AgentModel
+		if agentName != "" {
+			catalog = m.AgentCatalogs.Get()[agentName]
+		}
+		linked := m.Conn.Get().OK || (m.link != nil && m.link.isLinked())
+		return running{
+			agent:    agentName,
+			mode:     u.GetPermissionMode(),
+			model:    u.GetModel(),
+			effort:   u.GetEffort(),
+			fastMode: fastMode,
+			linked:   linked,
+			controls: s.GetControls(),
+			catalog:  catalog,
+		}
 	}).WithEqual(func(a, b running) bool {
-		return a.mode == b.mode && a.model == b.model && a.effort == b.effort && proto.Equal(a.controls, b.controls)
+		return a.agent == b.agent && a.mode == b.mode && a.model == b.model &&
+			a.effort == b.effort && a.fastMode == b.fastMode && a.linked == b.linked &&
+			proto.Equal(a.controls, b.controls) &&
+			slices.EqualFunc(a.catalog, b.catalog, func(x, y *protocol.AgentModel) bool { return proto.Equal(x, y) })
 	})
-	mode := ggui.View(now, func(r running) ggui.Widget { return modeMenu(m, id, r.mode, r.controls.GetModes()) })
-	model := ggui.View(now, func(r running) ggui.Widget { return modelMenu(m, id, r.model, r.effort, r.controls) })
+	leftControls := ggui.View(now, func(r running) ggui.Widget {
+		if r.linked && r.agent != "" && len(r.catalog) == 0 {
+			m.ensureAgentCatalog(r.agent)
+		}
+		models := r.controls.GetModels()
+		if len(models) == 0 && len(r.catalog) > 0 {
+			if _, ok := agents.As[agent.Models](r.agent); ok {
+				models = make([]string, 0, len(r.catalog))
+				for _, cm := range r.catalog {
+					if cm.GetId() != "" {
+						models = append(models, cm.GetId())
+					}
+				}
+			}
+		}
+		efforts := r.controls.GetEfforts()
+		if len(efforts) > 0 && r.model != "" && len(r.catalog) > 0 {
+			if cm := matchCatalogModel(r.model, r.catalog); cm != nil {
+				efforts = intersectEfforts(cm.GetEfforts(), efforts)
+			}
+		}
+		items := []ggui.Widget{attach}
+		if w := modelMenu(m, id, r.agent, r.model, r.effort, models, r.catalog); w != nil {
+			items = append(items, w)
+		}
+		if w := effortMenu(m, id, r.effort, efforts); w != nil {
+			items = append(items, w)
+		}
+		if w := modeMenu(m, id, r.mode, r.controls.GetModes()); w != nil {
+			items = append(items, w)
+		}
+		if w := fastModeButton(m, id, r.fastMode, r.controls.GetFastMode(), disabled); w != nil {
+			items = append(items, w)
+		}
+		return widget.Row(items...).Gap(4).Align(widget.AlignCenter)
+	})
+	leftScroll := &hscroll{child: widget.Scroll(leftControls).Horizontal().Shrink().Bar(nil).FadeEdges(12)}
 	// The agent at work on a turn, with nothing to send, can be stopped.
 	stoppable := ggui.Derived(func() bool {
 		s, ok := sessionIn(m.Sessions.Get(), id)
@@ -61,20 +122,60 @@ func composerBar(m *model, id string, state *chatState, disabled ggui.Readable[b
 		}
 		return roundButton("arrow-up", T("Send"), func() { m.sendComposer(id) }, disabled)
 	})
-	left := []ggui.Widget{attach}
+	row := []ggui.Widget{widget.Expanded(leftScroll)}
 	if state.inTerminal != nil {
 		// The agent's terminal, here, for what only it takes: a dialog no
 		// card shows, a key the agent asks for.
-		left = append(left, ui.Tooltip(ui.ButtonOf(icon("square-terminal").Size(16).Color(skin.Muted), state.inTerminal).
-			Ghost().Pad(5).Radius(15).Name(T("Type in the terminal")).BindDisabled(disabled), T("Type in the terminal")))
+		row = append(row, ui.Tooltip(ui.ButtonOf(icon("square-terminal").Size(16).Color(skin.Muted), state.inTerminal).
+			Ghost().Pad(5).Radius(8).Name(T("Type in the terminal")).BindDisabled(disabled), T("Type in the terminal")))
 	}
-	return widget.Row(append(left, mode, widget.Spacer(), model, button)...).Gap(6).Align(widget.AlignCenter)
+	row = append(row, button)
+	return widget.Row(row...).Gap(6).Align(widget.AlignCenter)
 }
 
 // roundButton is the composer's main button: a light disc with glyph.
 func roundButton(glyph, name string, fn func(), disabled ggui.Readable[bool]) ggui.Widget {
 	return ui.ButtonOf(iconColored(glyph, uitheme.PrimaryFg).Size(16), fn).
 		Pad(7).Radius(16).Name(name).BindDisabled(disabled)
+}
+
+// hscroll wraps a horizontal ScrollWidget so it takes its content's natural
+// height rather than stretching to a bounded parent's MaxH.
+type hscroll struct{ child *widget.ScrollWidget }
+
+func (h *hscroll) Layout(c ggui.Constraints, env ggui.Env) ggui.Size {
+	sz := h.child.Layout(ggui.Constraints{MinW: c.MinW, MaxW: c.MaxW, MaxH: ggui.Unbounded}, env)
+	return c.Constrain(sz)
+}
+
+func (h *hscroll) Paint(dst *ggui.Canvas, r ggui.Rect) { dst.Paint(h.child, r) }
+
+// composerMenuTrigger styles a composer bar menu button like a borderless
+// ghost control in both light and dark themes, while preserving theme borders
+// for dividers inside its popup menu.
+func composerMenuTrigger(menu *ui.MenuWidget) ggui.Widget {
+	return ggui.WithEnv(func(env ggui.Env) ggui.Env {
+		t := uitheme.From(env)
+		t.ButtonPad = ggui.Insets(0)
+		t.CardShadow = ggui.ShadowStyle{}
+		t = ui.ButtonOutline.Restyle(t, func(th *uitheme.Theme) ui.ButtonStyle {
+			return ui.ButtonGhost.Style(th)
+		})
+		return t.Apply(env)
+	}, menu)
+}
+
+// composerChip is a calm, monochrome inline toolbar chip: leading icon, label,
+// and an optional trailing dropdown chevron when selectable.
+func composerChip(glyph, label string, selectable bool) ggui.Widget {
+	parts := []ggui.Widget{
+		icon(glyph).Size(15).Color(skin.Muted),
+		widget.Text(label).Size(13).Color(skin.Muted).NoWrap(),
+	}
+	if selectable {
+		parts = append(parts, icon("chevron-down").Size(13).Color(skin.Muted))
+	}
+	return widget.Box(widget.Row(parts...).Gap(5).Align(widget.AlignCenter)).Pad(4, 6)
 }
 
 // attachFiles asks for files on this machine and attaches them to session
@@ -121,81 +222,255 @@ func (m *model) stopTurn(id string) {
 	})
 }
 
-// permissionChip says what the agent may do unasked, by the mode it names:
-// everything, loud; edits; planning alone; or asking first, quiet. Nothing
-// for an agent that says none.
-func permissionChip(mode string) ggui.Widget {
+// modeIcon returns the Lucide icon name for a permission mode.
+func modeIcon(mode string) string {
+	switch mode {
+	case "bypassPermissions":
+		return "shield-off"
+	case "readOnly":
+		return "lock"
+	case "acceptEdits":
+		return "pencil"
+	case "plan":
+		return "list"
+	case "default", "auto", "dontAsk":
+		return "shield"
+	default:
+		return "shield"
+	}
+}
+
+// permissionChip says what the agent may do unasked, by the mode it names.
+// Nothing for an agent that says none.
+func permissionChip(mode string, selectable bool) ggui.Widget {
 	if mode == "" {
 		return widget.Box()
 	}
-	glyph, label, tip := "lock", modeLabel(mode), T("What the agent may do without asking, as its terminal sets it.")
-	var c color.Color = skin.Muted
-	switch mode {
-	case "bypassPermissions":
-		glyph, c = "shield-alert", skin.DotWaiting
-	case "acceptEdits":
-		glyph, c = "pencil", skin.AccentBright
-	case "plan":
-		glyph, c = "list", skin.AccentBright
-	}
-	chip := widget.Row(
-		icon(glyph).Size(15).Color(c),
-		widget.Text(label).Size(13).Color(c).NoWrap(),
-	).Gap(5).Align(widget.AlignCenter)
-	return ui.Tooltip(widget.Box(chip).Pad(4, 6), tip)
+	return composerChip(modeIcon(mode), modeLabel(mode), selectable)
 }
 
 // modeMenu is the permission chip, which switches the agent to one of
 // modes, where it has any.
 func modeMenu(m *model, id, mode string, modes []string) ggui.Widget {
+	tip := T("What the agent may do without asking, as its terminal sets it.")
 	if len(modes) == 0 {
-		return permissionChip(mode)
+		if mode == "" {
+			return nil
+		}
+		return ui.Tooltip(permissionChip(mode, false), tip)
 	}
 	if mode == "" {
 		mode = "default"
 	}
 	items := make([]ggui.Widget, len(modes))
 	for i, to := range modes {
-		label := modeLabel(to)
-		if to == mode {
-			label = "✓ " + label
-		}
-		items[i] = ui.MenuItem(label, func() { m.configureAgent(id, &protocol.ConfigureAgent{Mode: to}) })
+		items[i] = ui.MenuItem(modeLabel(to), func() {
+			m.configureAgent(id, &protocol.ConfigureAgent{Mode: to})
+		}).Icon(icon(modeIcon(to)).Size(14)).Checked(to == mode)
 	}
-	return iconMenu(ui.MenuOf(permissionChip(mode), items...).Width(200).Name(T("Permission mode")), 0)
+	menu := ui.MenuOf(permissionChip(mode, true), items...).Width(220).Name(T("Permission mode"))
+	return ui.Tooltip(composerMenuTrigger(menu), tip)
 }
 
-// modelMenu is the model chip, which sets the agent's model or effort to
-// one of those it offers, where it offers any; the agent keeps what is set
-// as the user's default.
-func modelMenu(m *model, id, current, effort string, c *protocol.AgentControls) ggui.Widget {
-	chip := modelChip(current, effort)
-	if len(c.GetModels())+len(c.GetEfforts()) == 0 {
-		return chip
-	}
-	if current == "" {
-		chip = widget.Box(widget.Text(T("Model")).Size(13).Color(skin.Muted).NoWrap()).Pad(4, 6)
-	}
-	var items []ggui.Widget
-	for _, to := range c.GetModels() {
-		label := capitalized(to)
-		if strings.Contains(strings.ToLower(current), to) {
-			label = "✓ " + label
+// modelChip names the model the latest reply was made with alongside the
+// session's agent glyph, or the fallback label when selectable and unset.
+func modelChip(agentName, current string, selectable bool, catalog ...*protocol.AgentModel) ggui.Widget {
+	return modelChipFor(agentName, current, "", selectable, catalog)
+}
+
+func modelChipFor(agentName, current, effort string, selectable bool, catalog []*protocol.AgentModel) ggui.Widget {
+	label := modelChipLabel(current, effort, catalog)
+	if label == "" {
+		if !selectable {
+			return widget.Box()
 		}
-		items = append(items, ui.MenuItem(label, func() { m.configureAgent(id, &protocol.ConfigureAgent{Model: to}) }))
+		label = T("Model")
 	}
-	if len(items) > 0 && len(c.GetEfforts()) > 0 {
-		items = append(items, ui.MenuDivider())
-	}
-	for _, to := range c.GetEfforts() {
-		label := Tf("%s effort", capitalized(to))
-		if to == effort {
-			label = "✓ " + label
+	return composerChip(agentIcon(agentName), label, selectable)
+}
+
+// modelMenu is the dedicated model chip, which sets the agent's model to one
+// of those it offers; the agent keeps what is set as the user's default.
+func modelMenu(m *model, id, agentName, current, effort string, models []string, catalog []*protocol.AgentModel) ggui.Widget {
+	if len(models) == 0 {
+		if current == "" {
+			return nil
 		}
-		items = append(items, ui.MenuItem(label, func() { m.configureAgent(id, &protocol.ConfigureAgent{Effort: to}) }))
+		return ui.Tooltip(modelChipFor(agentName, current, effort, false, catalog), current)
+	}
+	items := make([]ggui.Widget, 0, len(models)+2)
+	for _, to := range models {
+		items = append(items, ui.MenuItem(modelOptionLabel(to, catalog), func() {
+			m.configureAgent(id, &protocol.ConfigureAgent{Model: to})
+		}).Checked(modelMatches(current, to, catalog)))
 	}
 	items = append(items, ui.MenuDivider(), ui.MenuItem(T("The agent keeps these as your default"), nil).Disabled(true))
-	return iconMenu(ui.MenuOf(chip, items...).Width(260).Name(T("Model")), 0)
+	tip := current
+	if tip == "" {
+		tip = T("Model")
+	}
+	menu := ui.MenuOf(modelChipFor(agentName, current, effort, true, catalog), items...).Width(260).Name(T("Model"))
+	return ui.Tooltip(composerMenuTrigger(menu), tip)
+}
+
+// effortChip names the reasoning effort alongside the brain icon, or the
+// fallback label when selectable and unset.
+func effortChip(effort string, selectable bool) ggui.Widget {
+	label := effortLabel(effort)
+	if label == "" {
+		if !selectable {
+			return widget.Box()
+		}
+		label = T("Effort")
+	}
+	return composerChip("brain", label, selectable)
+}
+
+// effortMenu is the dedicated reasoning effort chip, opening a stepped slider
+// popover over the offered effort tiers; the agent keeps what is set as default.
+func effortMenu(m *model, id, current string, efforts []string) ggui.Widget {
+	if len(efforts) == 0 {
+		if current == "" {
+			return nil
+		}
+		return ui.Tooltip(effortChip(current, false), Tf("%s effort", effortLabel(current)))
+	}
+	initialIdx := effortIndex(current, efforts)
+	sliderVal := ggui.State(float64(initialIdx))
+	activeIdx := ggui.Map(sliderVal, func(v float64) int {
+		return clampEffortIndex(int(math.Round(v)), len(efforts))
+	})
+	lastCommitted := current
+	commit := func(idx int) {
+		idx = clampEffortIndex(idx, len(efforts))
+		sliderVal.Set(float64(idx))
+		target := efforts[idx]
+		if !strings.EqualFold(target, lastCommitted) {
+			lastCommitted = target
+			m.configureAgent(id, &protocol.ConfigureAgent{Effort: target})
+		}
+	}
+
+	header := widget.Row(
+		widget.Text(T("Reasoning effort")).Size(12.5).Weight(ggui.WeightMedium).Color(skin.Muted).NoWrap(),
+		widget.Spacer(),
+		ggui.View(activeIdx, func(idx int) ggui.Widget {
+			return widget.Text(effortLabel(efforts[idx])).Size(12.5).Weight(ggui.WeightSemibold).Color(skin.AccentBright).NoWrap()
+		}),
+	).Align(widget.AlignCenter)
+
+	slider := ggui.WithEnv(func(env ggui.Env) ggui.Env {
+		t := uitheme.From(env)
+		if track := ggui.ResolveColor(skin.Surface3, env); track != nil {
+			t.Muted = track
+		}
+		return t.Apply(env)
+	}, ui.Slider(sliderVal, 0, float64(max(len(efforts)-1, 0))).
+		Step(1).LargeStep(1).
+		Name(T("Reasoning effort")).
+		Disabled(len(efforts) <= 1).
+		OnCommit(func(v float64) {
+			commit(int(math.Round(v)))
+		}))
+
+	ticks := ggui.View(activeIdx, func(idx int) ggui.Widget {
+		cols := make([]ggui.Widget, 0, max(len(efforts)*2-1, 1))
+		for i, to := range efforts {
+			if i > 0 {
+				cols = append(cols, widget.Spacer())
+			}
+			label := effortLabel(to)
+			txt := widget.Text(label).Size(11).NoWrap()
+			if i == idx {
+				txt = txt.Weight(ggui.WeightSemibold).Color(skin.Fg)
+			} else {
+				txt = txt.Color(skin.Muted)
+			}
+			stop := i
+			cols = append(cols, ui.ButtonOf(txt, func() { commit(stop) }).
+				Ghost().Pad(2, 3).Radius(6).Name(label))
+		}
+		return widget.Row(cols...).Align(widget.AlignCenter)
+	})
+
+	body := widget.Column(
+		header,
+		widget.Column(slider, ticks).Gap(4).Stretch(),
+		widget.Box().Height(1).Fill(skin.Surface3),
+		widget.Text(T("The agent keeps these as your default")).Size(11.5).Color(skin.ExtraMuted).NoWrap().Ellipsis(),
+	).Gap(10).Stretch()
+
+	tip := T("Effort")
+	if current != "" {
+		tip = Tf("%s effort", effortLabel(current))
+	}
+	pop := ui.PopoverOf(effortChip(current, true), body).
+		Width(264).Pad(12).
+		Side(widget.PopupTop).
+		Align(widget.PopupStart).
+		Name(T("Effort")).
+		OnClose(func() {
+			sliderVal.Set(float64(effortIndex(lastCommitted, efforts)))
+		})
+	pop.Trigger().Ghost().Pad(0).Radius(8)
+	return ui.Tooltip(pop, tip)
+}
+
+func effortIndex(current string, efforts []string) int {
+	if len(efforts) == 0 {
+		return 0
+	}
+	if current != "" {
+		for i, e := range efforts {
+			if strings.EqualFold(e, current) {
+				return i
+			}
+		}
+	}
+	for i, e := range efforts {
+		if strings.EqualFold(e, "medium") {
+			return i
+		}
+	}
+	return 0
+}
+
+func clampEffortIndex(idx, n int) int {
+	if n <= 1 || idx < 0 {
+		return 0
+	}
+	if idx >= n {
+		return n - 1
+	}
+	return idx
+}
+
+// fastModeButton is the lightning toggle at the trailing slot of the composer
+// toolbar, shown only for fast-mode-capable sessions (such as managed Codex
+// sessions) or sessions whose latest turn explicitly reported fast mode.
+func fastModeButton(m *model, id string, enabled, selectable bool, disabled ggui.Readable[bool]) ggui.Widget {
+	if !selectable && !enabled {
+		return nil
+	}
+	if !selectable {
+		return ui.Tooltip(
+			widget.Box(icon("zap").Size(16).Color(skin.AccentBright)).Pad(5),
+			T("Fast mode"),
+		)
+	}
+	glyphColor := skin.Muted
+	tip := T("Fast mode: off")
+	if enabled {
+		glyphColor = skin.AccentBright
+		tip = T("Fast mode: on")
+	}
+	var btn ggui.Widget = ui.ButtonOf(icon("zap").Size(16).Color(glyphColor), func() {
+		m.configureAgent(id, &protocol.ConfigureAgent{FastMode: proto.Bool(!enabled)})
+	}).Ghost().Pad(5).Radius(8).Name(T("Fast mode")).BindDisabled(disabled)
+	if enabled {
+		btn = &washed{child: btn, color: skin.AccentBright, radius: 8}
+	}
+	return ui.Tooltip(btn, tip)
 }
 
 // configureAgent sets what req gives of session id's agent.
@@ -207,9 +482,14 @@ func (m *model) configureAgent(id string, req *protocol.ConfigureAgent) {
 	req.NodeId, req.SessionId = m.remoteID(info.GetNodeId()), id
 	fetch(m, 15*time.Second, func(ctx context.Context, c *client.Client) (*protocol.SessionInfo, error) {
 		return c.ConfigureAgent(ctx, req)
-	}, func(_ *protocol.SessionInfo, err error) {
+	}, func(updated *protocol.SessionInfo, err error) {
 		if err != nil {
 			m.connErr(err)
+		} else if updated != nil {
+			m.editSession(id, func(cur *protocol.SessionInfo) {
+				cur.FastMode = updated.GetFastMode()
+				cur.Controls = proto.CloneOf(updated.GetControls())
+			})
 		}
 		m.link.pollNow()
 	})
@@ -236,17 +516,210 @@ func modeLabel(mode string) string {
 	return mode
 }
 
-// modelChip names the model the latest reply was made with, and its
-// effort, quieter; nothing before there is one.
-func modelChip(model, effort string) ggui.Widget {
-	if model == "" {
-		return widget.Box()
+// effortLabel formats a reasoning effort tier for display.
+func effortLabel(effort string) string {
+	trimmed := strings.TrimSpace(effort)
+	switch strings.ToLower(trimmed) {
+	case "":
+		return ""
+	case "xhigh":
+		return "XHigh"
+	default:
+		return capitalized(trimmed)
 	}
-	parts := []ggui.Widget{widget.Text(modelName(model)).Size(13).NoWrap()}
+}
+
+// modelOptionLabel formats a selectable model alias or ID for the model menu,
+// preferring the agent catalog's human-readable display name when present.
+func modelOptionLabel(id string, catalog []*protocol.AgentModel) string {
+	if cm := catalogModelByID(catalog, id); cm != nil && cm.GetName() != "" && !strings.EqualFold(cm.GetName(), cm.GetId()) {
+		return cm.GetName()
+	}
+	if strings.HasPrefix(id, "claude-") {
+		return modelName(id)
+	}
+	if strings.ContainsAny(id, "-._/") {
+		return id
+	}
+	return capitalized(id)
+}
+
+func intersectEfforts(catalogEfforts, allowed []string) []string {
+	if len(catalogEfforts) == 0 || len(allowed) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(catalogEfforts))
+	for _, e := range catalogEfforts {
+		for _, a := range allowed {
+			if strings.EqualFold(e, a) {
+				if !slices.Contains(out, a) {
+					out = append(out, a)
+				}
+				break
+			}
+		}
+	}
+	return out
+}
+
+func catalogModelByID(catalog []*protocol.AgentModel, id string) *protocol.AgentModel {
+	if id == "" {
+		return nil
+	}
+	for _, cm := range catalog {
+		if strings.EqualFold(cm.GetId(), id) {
+			return cm
+		}
+	}
+	return nil
+}
+
+func isKnownEffortTier(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "low", "medium", "high", "xhigh", "max":
+		return true
+	}
+	return false
+}
+
+func stripEffortParen(s string) (base, tier string, ok bool) {
+	trimmed := strings.TrimSpace(s)
+	if !strings.HasSuffix(trimmed, ")") {
+		return "", "", false
+	}
+	open := strings.LastIndexByte(trimmed, '(')
+	if open <= 0 {
+		return "", "", false
+	}
+	inside := strings.TrimSpace(trimmed[open+1 : len(trimmed)-1])
+	if !isKnownEffortTier(inside) {
+		return "", "", false
+	}
+	return strings.TrimSpace(trimmed[:open]), strings.ToLower(inside), true
+}
+
+func stripEffortDash(s string) (base, tier string, ok bool) {
+	trimmed := strings.TrimSpace(s)
+	i := strings.LastIndexByte(trimmed, '-')
+	if i <= 0 || i+1 >= len(trimmed) {
+		return "", "", false
+	}
+	inside := strings.ToLower(strings.TrimSpace(trimmed[i+1:]))
+	if !isKnownEffortTier(inside) {
+		return "", "", false
+	}
+	return trimmed[:i], inside, true
+}
+
+func containsFold(list []string, target string) bool {
+	for _, item := range list {
+		if strings.EqualFold(item, target) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchCatalogModel(current string, catalog []*protocol.AgentModel) *protocol.AgentModel {
+	cur := strings.TrimSpace(current)
+	if cur == "" || len(catalog) == 0 {
+		return nil
+	}
+	// Pass 1: exact ID or exact display name match (preserves single-tier models
+	// like "GPT-OSS 120B (Medium)" and non-effort variants like "Orchestrator (Neon)").
+	for _, cm := range catalog {
+		if strings.EqualFold(cm.GetId(), cur) || (cm.GetName() != "" && strings.EqualFold(cm.GetName(), cur)) {
+			return cm
+		}
+	}
+	// Pass 2: multi-tier variant ID ("gemini-4-neon-high") or display name with
+	// trailing effort suffix ("Gemini 4 Neon (High)").
+	if base, tier, ok := stripEffortDash(cur); ok {
+		for _, cm := range catalog {
+			if len(cm.GetEfforts()) > 0 && strings.EqualFold(cm.GetId(), base) && containsFold(cm.GetEfforts(), tier) {
+				return cm
+			}
+		}
+	}
+	if base, tier, ok := stripEffortParen(cur); ok {
+		for _, cm := range catalog {
+			if len(cm.GetEfforts()) > 0 && cm.GetName() != "" && strings.EqualFold(cm.GetName(), base) && containsFold(cm.GetEfforts(), tier) {
+				return cm
+			}
+		}
+		for _, cm := range catalog {
+			if len(cm.GetEfforts()) > 0 && cm.GetName() != "" && strings.EqualFold(cm.GetName(), base) {
+				return cm
+			}
+		}
+	}
+	return nil
+}
+
+// modelChipLabel formats the active model for the composer chip, stripping
+// redundant multi-tier effort suffixes while preserving single-tier and
+// non-effort parenthetical qualifiers.
+func modelChipLabel(current, effort string, catalog []*protocol.AgentModel) string {
+	cur := strings.TrimSpace(current)
+	if cur == "" {
+		return ""
+	}
+	if strings.HasPrefix(cur, "claude-") {
+		return modelName(cur)
+	}
+	if cm := matchCatalogModel(cur, catalog); cm != nil {
+		if cm.GetName() != "" {
+			return cm.GetName()
+		}
+		return cm.GetId()
+	}
 	if effort != "" {
-		parts = append(parts, widget.Text(capitalized(effort)).Size(13).Color(skin.Muted).NoWrap())
+		if base, tier, ok := stripEffortParen(cur); ok && strings.EqualFold(tier, effort) {
+			return base
+		}
 	}
-	return ui.Tooltip(widget.Box(widget.Row(parts...).Gap(5).Align(widget.AlignCenter)).Pad(4, 6), model)
+	return modelName(cur)
+}
+
+// modelMatches reports whether the active model name/ID matches a selectable
+// option, using catalog metadata when available and supporting Claude aliases.
+func modelMatches(current, option string, catalog []*protocol.AgentModel) bool {
+	cur := strings.ToLower(strings.TrimSpace(current))
+	opt := strings.ToLower(strings.TrimSpace(option))
+	if cur == "" || opt == "" {
+		return false
+	}
+	if cur == opt {
+		return true
+	}
+	if cm := catalogModelByID(catalog, option); cm != nil {
+		optName := strings.ToLower(strings.TrimSpace(cm.GetName()))
+		if optName != "" && cur == optName {
+			return true
+		}
+		if len(cm.GetEfforts()) > 0 {
+			if base, _, ok := stripEffortDash(cur); ok && base == opt {
+				return true
+			}
+			if base, _, ok := stripEffortParen(cur); ok && optName != "" && base == optName {
+				return true
+			}
+		}
+	}
+	if base, _, ok := stripEffortDash(cur); ok && base == opt {
+		return true
+	}
+	// Short alias matching (e.g. Claude's "opus"/"sonnet"/"haiku" against "claude-opus-5-5").
+	if !strings.ContainsAny(opt, "-._/ ") {
+		for _, tok := range strings.FieldsFunc(cur, func(r rune) bool {
+			return r == '-' || r == '_' || r == ' ' || r == '/'
+		}) {
+			if tok == opt {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // modelName is a model as people say it: claude-opus-5-5 is Opus 5.5, and

@@ -31,9 +31,103 @@ func controls(name string) *protocol.AgentControls {
 	return &c
 }
 
+// controlsLocked returns the session's active AgentControls, including
+// dynamic model catalogs and native bridge capabilities such as Codex Fast
+// Mode while running.
+func (s *Session) controlsLocked() *protocol.AgentControls {
+	c := controls(s.spec.Agent)
+	if s.state == protocol.StateExited {
+		return c
+	}
+	if len(c.GetModels()) == 0 && len(s.dynamicModels) > 0 {
+		if c == nil {
+			c = &protocol.AgentControls{}
+		}
+		c.Models = slices.Clone(s.dynamicModels)
+	}
+	if s.fastModeSupported {
+		if c == nil {
+			c = &protocol.AgentControls{}
+		}
+		c.FastMode = true
+	}
+	return c
+}
+
+func (s *Session) controls() *protocol.AgentControls {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.controlsLocked()
+}
+
+// SetDynamicModels records dynamically discovered model IDs (e.g. from
+// agent.ModelCatalog) for agents whose static Models() list is empty,
+// notifying listeners when the list changes.
+func (s *Session) SetDynamicModels(models []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited || slices.Equal(s.dynamicModels, models) {
+		return
+	}
+	s.dynamicModels = slices.Clone(models)
+	s.changedLocked()
+}
+
+// SetDynamicModelVariants records additional valid variant IDs (such as
+// "<base>-<tier>" slugs from a ModelCatalog) accepted by Configure without
+// cluttering SessionInfo.Controls.Models.
+func (s *Session) SetDynamicModelVariants(variants []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited {
+		return
+	}
+	if len(variants) == 0 {
+		s.dynamicModelVariants = nil
+		return
+	}
+	m := make(map[string]bool, len(variants))
+	for _, v := range variants {
+		if v != "" {
+			m[v] = true
+		}
+	}
+	s.dynamicModelVariants = m
+}
+
+func (s *Session) hasDynamicModelVariant(model string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.state != protocol.StateExited && s.dynamicModelVariants[model]
+}
+
+// SetFastModeSupported records whether this session supports toggling fast
+// mode via ConfigureAgent and notifies listeners when capability changes.
+func (s *Session) SetFastModeSupported(supported bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited || s.fastModeSupported == supported {
+		return
+	}
+	s.fastModeSupported = supported
+	s.changedLocked()
+}
+
+// ReportFastMode records whether fast mode is currently enabled on this
+// session and notifies listeners when the state changes.
+func (s *Session) ReportFastMode(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state == protocol.StateExited || s.fastMode == enabled {
+		return
+	}
+	s.fastMode = enabled
+	s.changedLocked()
+}
+
 // Configure sets what of mode, model and effort is given.
 func (s *Session) Configure(mode, model, effort string) error {
-	c := controls(s.spec.Agent)
+	c := s.controls()
 	if mode != "" {
 		if !slices.Contains(c.GetModes(), mode) {
 			return fmt.Errorf("the agent takes no mode %q", mode)
@@ -43,25 +137,31 @@ func (s *Session) Configure(mode, model, effort string) error {
 		}
 	}
 	m, _ := agents.As[agent.Models](s.spec.Agent)
-	set := func(value string, offered []string, command func(string) string) error {
+	set := func(value string, allowed func(string) bool, command func(agent.Models, string) string) error {
 		if value == "" {
 			return nil
 		}
-		if !slices.Contains(offered, value) {
+		if m == nil || !allowed(value) {
 			return fmt.Errorf("the agent takes no %q", value)
 		}
-		if err := s.Send(command(value), []byte{'\r'}); err != nil {
+		if err := s.Send(command(m, value), []byte{'\r'}); err != nil {
 			return err
 		}
 		return s.confirm(m)
 	}
 	if model != "" {
-		if err := set(model, c.GetModels(), m.ModelCommand); err != nil {
+		offered := c.GetModels()
+		if err := set(model, func(v string) bool {
+			return slices.Contains(offered, v) || s.hasDynamicModelVariant(v)
+		}, agent.Models.ModelCommand); err != nil {
 			return err
 		}
 	}
 	if effort != "" {
-		return set(effort, c.GetEfforts(), m.EffortCommand)
+		offered := c.GetEfforts()
+		return set(effort, func(v string) bool {
+			return slices.Contains(offered, v)
+		}, agent.Models.EffortCommand)
 	}
 	return nil
 }

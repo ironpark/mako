@@ -667,4 +667,16 @@ public interface SessionInfoOrBuilder extends
    * @return The goal.
    */
   dev.ironpark.mako.v2.GoalStatus getGoal();
+
+  /**
+   * <pre>
+   * fast_mode reports whether Codex Fast Mode (priority service tier) is
+   * currently enabled on this session; false when off, unsupported, or once
+   * the session has ended (revision 52).
+   * </pre>
+   *
+   * <code>bool fast_mode = 44 [json_name = "fastMode"];</code>
+   * @return The fastMode.
+   */
+  boolean getFastMode();
 }

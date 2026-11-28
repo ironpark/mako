@@ -7,8 +7,8 @@ package dev.ironpark.mako.v2;
 
 /**
  * <pre>
- * AgentControls are the permission modes, models and efforts a session's
- * agent may be set to, by the names it gives them.
+ * AgentControls are the permission modes, models, efforts and toggles a
+ * session's agent may be set to, by the names it gives them.
  * </pre>
  *
  * Protobuf type {@code mako.v2.AgentControls}
@@ -339,6 +339,47 @@ public  final class AgentControls extends
     efforts_.add(value.toStringUtf8());
   }
 
+  public static final int FAST_MODE_FIELD_NUMBER = 4;
+  private boolean fastMode_;
+  /**
+   * <pre>
+   * fast_mode is true when ConfigureAgent may toggle fast mode on this
+   * session (revision 52).
+   * </pre>
+   *
+   * <code>bool fast_mode = 4 [json_name = "fastMode"];</code>
+   * @return The fastMode.
+   */
+  @java.lang.Override
+  public boolean getFastMode() {
+    return fastMode_;
+  }
+  /**
+   * <pre>
+   * fast_mode is true when ConfigureAgent may toggle fast mode on this
+   * session (revision 52).
+   * </pre>
+   *
+   * <code>bool fast_mode = 4 [json_name = "fastMode"];</code>
+   * @param value The fastMode to set.
+   */
+  private void setFastMode(boolean value) {
+    
+    fastMode_ = value;
+  }
+  /**
+   * <pre>
+   * fast_mode is true when ConfigureAgent may toggle fast mode on this
+   * session (revision 52).
+   * </pre>
+   *
+   * <code>bool fast_mode = 4 [json_name = "fastMode"];</code>
+   */
+  private void clearFastMode() {
+
+    fastMode_ = false;
+  }
+
   public static dev.ironpark.mako.v2.AgentControls parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -424,8 +465,8 @@ public  final class AgentControls extends
 
   /**
    * <pre>
-   * AgentControls are the permission modes, models and efforts a session's
-   * agent may be set to, by the names it gives them.
+   * AgentControls are the permission modes, models, efforts and toggles a
+   * session's agent may be set to, by the names it gives them.
    * </pre>
    *
    * Protobuf type {@code mako.v2.AgentControls}
@@ -753,6 +794,49 @@ public  final class AgentControls extends
       return this;
     }
 
+    /**
+     * <pre>
+     * fast_mode is true when ConfigureAgent may toggle fast mode on this
+     * session (revision 52).
+     * </pre>
+     *
+     * <code>bool fast_mode = 4 [json_name = "fastMode"];</code>
+     * @return The fastMode.
+     */
+    @java.lang.Override
+    public boolean getFastMode() {
+      return instance.getFastMode();
+    }
+    /**
+     * <pre>
+     * fast_mode is true when ConfigureAgent may toggle fast mode on this
+     * session (revision 52).
+     * </pre>
+     *
+     * <code>bool fast_mode = 4 [json_name = "fastMode"];</code>
+     * @param value The fastMode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFastMode(boolean value) {
+      copyOnWrite();
+      instance.setFastMode(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * fast_mode is true when ConfigureAgent may toggle fast mode on this
+     * session (revision 52).
+     * </pre>
+     *
+     * <code>bool fast_mode = 4 [json_name = "fastMode"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFastMode() {
+      copyOnWrite();
+      instance.clearFastMode();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.AgentControls)
   }
   @java.lang.Override
@@ -772,10 +856,11 @@ public  final class AgentControls extends
             "modes_",
             "models_",
             "efforts_",
+            "fastMode_",
           };
           java.lang.String info =
-              "\u0000\u0003\u0000\u0000\u0001\u0003\u0003\u0000\u0003\u0000\u0001\u021a\u0002\u021a" +
-              "\u0003\u021a";
+              "\u0000\u0004\u0000\u0000\u0001\u0004\u0004\u0000\u0003\u0000\u0001\u021a\u0002\u021a" +
+              "\u0003\u021a\u0004\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

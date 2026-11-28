@@ -24,6 +24,7 @@ public  final class Usage extends
     effort_ = "";
     permissionMode_ = "";
   }
+  private int bitField0_;
   public static final int INPUT_FIELD_NUMBER = 1;
   private long input_;
   /**
@@ -524,6 +525,60 @@ public  final class Usage extends
   private void clearCostUsd() {
 
     costUsd_ = 0D;
+  }
+
+  public static final int FAST_MODE_FIELD_NUMBER = 11;
+  private boolean fastMode_;
+  /**
+   * <pre>
+   * fast_mode reports whether the latest reply/turn ran in fast mode, when
+   * known (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+   * @return Whether the fastMode field is set.
+   */
+  @java.lang.Override
+  public boolean hasFastMode() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * fast_mode reports whether the latest reply/turn ran in fast mode, when
+   * known (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+   * @return The fastMode.
+   */
+  @java.lang.Override
+  public boolean getFastMode() {
+    return fastMode_;
+  }
+  /**
+   * <pre>
+   * fast_mode reports whether the latest reply/turn ran in fast mode, when
+   * known (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+   * @param value The fastMode to set.
+   */
+  private void setFastMode(boolean value) {
+    bitField0_ |= 0x00000001;
+    fastMode_ = value;
+  }
+  /**
+   * <pre>
+   * fast_mode reports whether the latest reply/turn ran in fast mode, when
+   * known (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+   */
+  private void clearFastMode() {
+    bitField0_ = (bitField0_ & ~0x00000001);
+    fastMode_ = false;
   }
 
   public static dev.ironpark.mako.v2.Usage parseFrom(
@@ -1159,6 +1214,62 @@ public  final class Usage extends
       return this;
     }
 
+    /**
+     * <pre>
+     * fast_mode reports whether the latest reply/turn ran in fast mode, when
+     * known (revision 52).
+     * </pre>
+     *
+     * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+     * @return Whether the fastMode field is set.
+     */
+    @java.lang.Override
+    public boolean hasFastMode() {
+      return instance.hasFastMode();
+    }
+    /**
+     * <pre>
+     * fast_mode reports whether the latest reply/turn ran in fast mode, when
+     * known (revision 52).
+     * </pre>
+     *
+     * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+     * @return The fastMode.
+     */
+    @java.lang.Override
+    public boolean getFastMode() {
+      return instance.getFastMode();
+    }
+    /**
+     * <pre>
+     * fast_mode reports whether the latest reply/turn ran in fast mode, when
+     * known (revision 52).
+     * </pre>
+     *
+     * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+     * @param value The fastMode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFastMode(boolean value) {
+      copyOnWrite();
+      instance.setFastMode(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * fast_mode reports whether the latest reply/turn ran in fast mode, when
+     * known (revision 52).
+     * </pre>
+     *
+     * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFastMode() {
+      copyOnWrite();
+      instance.clearFastMode();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.Usage)
   }
   @java.lang.Override
@@ -1175,6 +1286,7 @@ public  final class Usage extends
       }
       case BUILD_MESSAGE_INFO: {
           java.lang.Object[] objects = new java.lang.Object[] {
+            "bitField0_",
             "input_",
             "cachedInput_",
             "output_",
@@ -1186,10 +1298,12 @@ public  final class Usage extends
             "effort_",
             "permissionMode_",
             "costUsd_",
+            "fastMode_",
           };
           java.lang.String info =
-              "\u0000\n\u0000\u0000\u0001\n\n\u0000\u0001\u0000\u0001\u0002\u0002\u0002\u0003\u0002" +
-              "\u0004\u0002\u0005\u0002\u0006\u001b\u0007\u0208\b\u0208\t\u0208\n\u0000";
+              "\u0000\u000b\u0000\u0001\u0001\u000b\u000b\u0000\u0001\u0000\u0001\u0002\u0002\u0002" +
+              "\u0003\u0002\u0004\u0002\u0005\u0002\u0006\u001b\u0007\u0208\b\u0208\t\u0208\n\u0000" +
+              "\u000b\u1007\u0000";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

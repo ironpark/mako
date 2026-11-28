@@ -768,7 +768,10 @@ type Usage struct {
 	// "bypassPermissions"; "" where it says none.
 	PermissionMode string `protobuf:"bytes,9,opt,name=permission_mode,json=permissionMode,proto3" json:"permission_mode,omitempty"`
 	// cost_usd is the estimated spend in US dollars when the agent reports one.
-	CostUsd       float64 `protobuf:"fixed64,10,opt,name=cost_usd,json=costUsd,proto3" json:"cost_usd,omitempty"`
+	CostUsd float64 `protobuf:"fixed64,10,opt,name=cost_usd,json=costUsd,proto3" json:"cost_usd,omitempty"`
+	// fast_mode reports whether the latest reply/turn ran in fast mode, when
+	// known (revision 52).
+	FastMode      *bool `protobuf:"varint,11,opt,name=fast_mode,json=fastMode,proto3,oneof" json:"fast_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -871,6 +874,13 @@ func (x *Usage) GetCostUsd() float64 {
 		return x.CostUsd
 	}
 	return 0
+}
+
+func (x *Usage) GetFastMode() bool {
+	if x != nil && x.FastMode != nil {
+		return *x.FastMode
+	}
+	return false
 }
 
 // RateLimit is how much of one of an account's limits is spent.
@@ -1367,7 +1377,7 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\aupdated\x18\n" +
 	" \x01(\x03R\aupdated\x12\x1b\n" +
 	"\ttool_kind\x18\v \x01(\tR\btoolKind\x12\x10\n" +
-	"\x03log\x18\f \x01(\tR\x03log\"\xa8\x02\n" +
+	"\x03log\x18\f \x01(\tR\x03log\"\xd8\x02\n" +
 	"\x05Usage\x12\x14\n" +
 	"\x05input\x18\x01 \x01(\x03R\x05input\x12!\n" +
 	"\fcached_input\x18\x02 \x01(\x03R\vcachedInput\x12\x16\n" +
@@ -1379,7 +1389,10 @@ const file_mako_v2_chat_proto_rawDesc = "" +
 	"\x06effort\x18\b \x01(\tR\x06effort\x12'\n" +
 	"\x0fpermission_mode\x18\t \x01(\tR\x0epermissionMode\x12\x19\n" +
 	"\bcost_usd\x18\n" +
-	" \x01(\x01R\acostUsd\"Q\n" +
+	" \x01(\x01R\acostUsd\x12 \n" +
+	"\tfast_mode\x18\v \x01(\bH\x00R\bfastMode\x88\x01\x01B\f\n" +
+	"\n" +
+	"_fast_mode\"Q\n" +
 	"\tRateLimit\x12\x18\n" +
 	"\aminutes\x18\x01 \x01(\x03R\aminutes\x12\x12\n" +
 	"\x04used\x18\x02 \x01(\x01R\x04used\x12\x16\n" +
@@ -1469,6 +1482,7 @@ func file_mako_v2_chat_proto_init() {
 	}
 	file_mako_v2_session_proto_init()
 	file_mako_v2_chat_proto_msgTypes[1].OneofWrappers = []any{}
+	file_mako_v2_chat_proto_msgTypes[7].OneofWrappers = []any{}
 	file_mako_v2_chat_proto_msgTypes[11].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

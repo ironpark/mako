@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -287,6 +288,122 @@ func TestListAgentModelsRPC(t *testing.T) {
 	if len(got.GetModels()) != 1 || got.GetModels()[0].GetId() != "gpt-6.2-sol" {
 		t.Fatalf("unexpected codex models: %+v", got.GetModels())
 	}
+}
+
+func TestAgyDynamicModelsSeedAndConfigureAgent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("MAKO_HOME", t.TempDir())
+	t.Setenv("SSH_CONNECTION", "")
+	t.Setenv("SSH_CLIENT", "")
+	t.Setenv("SSH_TTY", "")
+
+	binDir := t.TempDir()
+	catalogFile := filepath.Join(binDir, "models.tsv")
+	initialCatalog := "" +
+		"gemini-4-neon-low\tGemini 4 Neon (Low)\n" +
+		"gemini-4-neon-medium\tGemini 4 Neon (Medium)\n" +
+		"gemini-4-neon-high\tGemini 4 Neon (High)\n" +
+		"gemini-4-neon-xhigh\tGemini 4 Neon (XHigh)\n" +
+		"gemini-4-carbon-low\tGemini 4 Carbon (Low)\n" +
+		"gemini-4-carbon-medium\tGemini 4 Carbon (Medium)\n" +
+		"gemini-4-carbon-high\tGemini 4 Carbon (High)\n" +
+		"gemini-pro-orchestrator-neon\tOrchestrator (Neon)\n" +
+		"gpt-oss-120b-medium\tGPT-OSS 120B (Medium)\n"
+	if err := os.WriteFile(catalogFile, []byte(initialCatalog), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fakeAgy := filepath.Join(binDir, "agy")
+	script := "#!/bin/sh\nif [ \"$1\" = \"models\" ]; then\n  cat " + catalogFile + "\n  exit 0\nfi\nexit 1\n"
+	if err := os.WriteFile(fakeAgy, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	d := meshDaemon(t, "agy-dyn")
+	c := dialDaemon(t, d)
+
+	projDir := t.TempDir()
+	ptyCapture := filepath.Join(projDir, "pty.log")
+	s, err := session.Start(session.Spec{
+		ID:       "agy-sess",
+		NodeID:   d.config().NodeID,
+		Agent:    "agy",
+		Project:  projDir,
+		Command:  []string{"sh", "-c", "stty raw -echo; cat > " + ptyCapture},
+		OnChange: d.pokeStatus,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	d.sessions.add(s)
+
+	// 1. seedDynamicModels populates Controls.Models asynchronously/immediately.
+	d.seedDynamicModels(s)
+	wantModels := []string{"gemini-4-neon", "gemini-4-carbon", "gemini-pro-orchestrator-neon", "gpt-oss-120b-medium"}
+	waitFor(t, "agy dynamic models not seeded", func() bool {
+		return slices.Equal(s.Info().GetControls().GetModels(), wantModels)
+	})
+
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+
+	// 2. ConfigureAgent accepts catalog base model ID and writes `/model gemini-4-neon\r`.
+	info, err := c.ConfigureAgent(ctx, &protocol.ConfigureAgent{
+		SessionId: s.ID(),
+		Model:     "gemini-4-neon",
+	})
+	if err != nil {
+		t.Fatalf("ConfigureAgent(base model): %v", err)
+	}
+	if !slices.Equal(info.GetControls().GetModels(), wantModels) {
+		t.Fatalf("SessionInfo.Controls.Models = %v, want %v", info.GetControls().GetModels(), wantModels)
+	}
+	waitFor(t, "PTY did not receive /model gemini-4-neon", func() bool {
+		b, _ := os.ReadFile(ptyCapture)
+		return strings.Contains(string(b), "/model gemini-4-neon\r")
+	})
+
+	// 3. ConfigureAgent accepts valid <base>-<tier> variant ID.
+	if _, err := c.ConfigureAgent(ctx, &protocol.ConfigureAgent{
+		SessionId: s.ID(),
+		Model:     "gemini-4-neon-high",
+	}); err != nil {
+		t.Fatalf("ConfigureAgent(variant model): %v", err)
+	}
+	waitFor(t, "PTY did not receive /model gemini-4-neon-high", func() bool {
+		b, _ := os.ReadFile(ptyCapture)
+		return strings.Contains(string(b), "/model gemini-4-neon-high\r")
+	})
+
+	// 4. ConfigureAgent rejects unsupported tier variant (carbon has no xhigh).
+	if _, err := c.ConfigureAgent(ctx, &protocol.ConfigureAgent{
+		SessionId: s.ID(),
+		Model:     "gemini-4-carbon-xhigh",
+	}); err == nil {
+		t.Fatal("ConfigureAgent accepted unsupported tier variant gemini-4-carbon-xhigh")
+	}
+
+	// 5. ConfigureAgent retries with refresh=true when a newly available model isn't in cache yet.
+	updatedCatalog := initialCatalog + "gemini-5-new\tGemini 5 New\n"
+	if err := os.WriteFile(catalogFile, []byte(updatedCatalog), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err = c.ConfigureAgent(ctx, &protocol.ConfigureAgent{
+		SessionId: s.ID(),
+		Model:     "gemini-5-new",
+	})
+	if err != nil {
+		t.Fatalf("ConfigureAgent(refreshed model): %v", err)
+	}
+	if !slices.Contains(info.GetControls().GetModels(), "gemini-5-new") {
+		t.Fatalf("refreshed Controls.Models missing gemini-5-new: %v", info.GetControls().GetModels())
+	}
+	waitFor(t, "PTY did not receive /model gemini-5-new", func() bool {
+		b, _ := os.ReadFile(ptyCapture)
+		return strings.Contains(string(b), "/model gemini-5-new\r")
+	})
 }
 
 func TestMigrateGlobalHomeMigratesAllAgentsTogether(t *testing.T) {

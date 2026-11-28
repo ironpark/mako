@@ -2461,6 +2461,50 @@ public  final class SessionInfo extends
     bitField0_ = (bitField0_ & ~0x00000800);
   }
 
+  public static final int FAST_MODE_FIELD_NUMBER = 44;
+  private boolean fastMode_;
+  /**
+   * <pre>
+   * fast_mode reports whether Codex Fast Mode (priority service tier) is
+   * currently enabled on this session; false when off, unsupported, or once
+   * the session has ended (revision 52).
+   * </pre>
+   *
+   * <code>bool fast_mode = 44 [json_name = "fastMode"];</code>
+   * @return The fastMode.
+   */
+  @java.lang.Override
+  public boolean getFastMode() {
+    return fastMode_;
+  }
+  /**
+   * <pre>
+   * fast_mode reports whether Codex Fast Mode (priority service tier) is
+   * currently enabled on this session; false when off, unsupported, or once
+   * the session has ended (revision 52).
+   * </pre>
+   *
+   * <code>bool fast_mode = 44 [json_name = "fastMode"];</code>
+   * @param value The fastMode to set.
+   */
+  private void setFastMode(boolean value) {
+    
+    fastMode_ = value;
+  }
+  /**
+   * <pre>
+   * fast_mode reports whether Codex Fast Mode (priority service tier) is
+   * currently enabled on this session; false when off, unsupported, or once
+   * the session has ended (revision 52).
+   * </pre>
+   *
+   * <code>bool fast_mode = 44 [json_name = "fastMode"];</code>
+   */
+  private void clearFastMode() {
+
+    fastMode_ = false;
+  }
+
   public static dev.ironpark.mako.v2.SessionInfo parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -5088,6 +5132,52 @@ public  final class SessionInfo extends
       return this;
     }
 
+    /**
+     * <pre>
+     * fast_mode reports whether Codex Fast Mode (priority service tier) is
+     * currently enabled on this session; false when off, unsupported, or once
+     * the session has ended (revision 52).
+     * </pre>
+     *
+     * <code>bool fast_mode = 44 [json_name = "fastMode"];</code>
+     * @return The fastMode.
+     */
+    @java.lang.Override
+    public boolean getFastMode() {
+      return instance.getFastMode();
+    }
+    /**
+     * <pre>
+     * fast_mode reports whether Codex Fast Mode (priority service tier) is
+     * currently enabled on this session; false when off, unsupported, or once
+     * the session has ended (revision 52).
+     * </pre>
+     *
+     * <code>bool fast_mode = 44 [json_name = "fastMode"];</code>
+     * @param value The fastMode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFastMode(boolean value) {
+      copyOnWrite();
+      instance.setFastMode(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * fast_mode reports whether Codex Fast Mode (priority service tier) is
+     * currently enabled on this session; false when off, unsupported, or once
+     * the session has ended (revision 52).
+     * </pre>
+     *
+     * <code>bool fast_mode = 44 [json_name = "fastMode"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFastMode() {
+      copyOnWrite();
+      instance.clearFastMode();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:mako.v2.SessionInfo)
   }
   @java.lang.Override
@@ -5149,15 +5239,16 @@ public  final class SessionInfo extends
             "parentNodeId_",
             "authError_",
             "goal_",
+            "fastMode_",
           };
           java.lang.String info =
-              "\u0000+\u0000\u0001\u0001++\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
+              "\u0000,\u0000\u0001\u0001,,\u0000\u0002\u0000\u0001\u0208\u0002\u0208\u0003\u0208" +
               "\u0004\u0208\u0005\u0208\u0006\u0208\u0007\u0208\b\u0208\t\u021a\n\u0208\u000b\u000b" +
               "\f\u000b\r\u1009\u0000\u000e\u1002\u0001\u000f\u0007\u0010\u0007\u0011\u0208\u0012" +
               "\u0208\u0013\u0208\u0014\u1009\u0002\u0015\u1009\u0003\u0016\u1009\u0004\u0017\u1009" +
               "\u0005\u0018\u0208\u0019\u000b\u001a\u0208\u001b\u1009\u0006\u001c\u0208\u001d\u0007" +
               "\u001e\u001b\u001f\u0208 \u0003!\u1009\u0007\"\u0003#\u1009\b$\u1009\t%\u0208&\u0003" +
-              "\'\u0003(\u0003)\u0208*\u1009\n+\u1009\u000b";
+              "\'\u0003(\u0003)\u0208*\u1009\n+\u1009\u000b,\u0007";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

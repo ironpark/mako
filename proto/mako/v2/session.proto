@@ -160,6 +160,10 @@ message SessionInfo {
   // notifications; unset when none has been observed or once the session
   // has ended (revision 51).
   GoalStatus goal = 43;
+  // fast_mode reports whether Codex Fast Mode (priority service tier) is
+  // currently enabled on this session; false when off, unsupported, or once
+  // the session has ended (revision 52).
+  bool fast_mode = 44;
 }
 
 // AuthError is a provider authentication failure reported by a session's
@@ -225,24 +229,31 @@ message GoalAction {
   string objective = 4;
 }
 
-// AgentControls are the permission modes, models and efforts a session's
-// agent may be set to, by the names it gives them.
+// AgentControls are the permission modes, models, efforts and toggles a
+// session's agent may be set to, by the names it gives them.
 message AgentControls {
   repeated string modes = 1; // as Usage.permission_mode names them
   repeated string models = 2;
   repeated string efforts = 3;
+  // fast_mode is true when ConfigureAgent may toggle fast mode on this
+  // session (revision 52).
+  bool fast_mode = 4;
 }
 
 // ConfigureAgent sets what of a session's agent is given: its permission
 // mode, as a key at its prompt moves it on; its model and effort, by its
-// own commands, which the agent may keep as the user's defaults. The reply
-// is its SessionInfo.
+// own commands, which the agent may keep as the user's defaults; and fast
+// mode, scoped to the session/thread when offered. The reply is its
+// SessionInfo.
 message ConfigureAgent {
   string node_id = 1;
   string session_id = 2;
   string mode = 3;
   string model = 4;
   string effort = 5;
+  // fast_mode, when set, turns session-scoped fast mode on or off
+  // (revision 52).
+  optional bool fast_mode = 6;
 }
 
 // ScreenDialog is a dialog in an agent's terminal that asks the user to

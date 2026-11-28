@@ -29,7 +29,12 @@ func (n *Node) DialAddrs() []string {
 // Revision numbers what a daemon of this build understands. A front-end
 // that finds its daemon on an older one can say the daemon is out of date
 // rather than leave the newer parts blank.
-const Revision = 51
+const Revision = 52
+
+// RevisionCodexFastMode adds session-scoped Codex Fast Mode state and control:
+// SessionInfo.fast_mode (field 44), AgentControls.fast_mode (field 4),
+// ConfigureAgent.fast_mode (field 6), and Usage.fast_mode (field 11).
+const RevisionCodexFastMode = 52
 
 // RevisionAuthError adds SessionInfo.auth_error (field 42) and AuthError for
 // surfacing host provider OAuth expiration and authentication failures with
@@ -459,6 +464,9 @@ func (u *Usage) Merge(r *Usage) {
 	if u.PermissionMode == "" && r.GetPermissionMode() != "" {
 		u.PermissionMode = r.GetPermissionMode()
 	}
+	if u.FastMode == nil && r != nil && r.FastMode != nil {
+		u.FastMode = proto.Bool(*r.FastMode)
+	}
 	if r.GetCostUsd() > 0 {
 		u.CostUsd = r.GetCostUsd()
 	}
@@ -494,6 +502,9 @@ func (u *Usage) Apply(r *Usage) {
 	}
 	if r.GetPermissionMode() != "" {
 		u.PermissionMode = r.GetPermissionMode()
+	}
+	if r.FastMode != nil {
+		u.FastMode = proto.Bool(*r.FastMode)
 	}
 	if r.GetCostUsd() > 0 {
 		u.CostUsd = r.GetCostUsd()

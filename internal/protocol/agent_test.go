@@ -59,3 +59,42 @@ func TestUsageApplyReplacesUpdatedFieldsAndKeepsOmitted(t *testing.T) {
 		t.Fatalf("partial Apply clobbered fields: %+v", u)
 	}
 }
+
+func TestUsageFastModeMergeAndApply(t *testing.T) {
+	// Merge fills nil FastMode from r, including explicit false, without clobbering existing values.
+	u := &Usage{}
+	u.Merge(&Usage{FastMode: proto.Bool(true)})
+	if u.FastMode == nil || !u.GetFastMode() {
+		t.Fatalf("Merge did not copy FastMode=true: %+v", u)
+	}
+	u.Merge(&Usage{FastMode: proto.Bool(false)})
+	if !u.GetFastMode() {
+		t.Fatalf("Merge overwrote existing FastMode=true: %+v", u)
+	}
+
+	uFalse := &Usage{}
+	src := proto.Bool(false)
+	uFalse.Merge(&Usage{FastMode: src})
+	*src = true
+	if uFalse.FastMode == nil || uFalse.GetFastMode() {
+		t.Fatalf("Merge aliased or lost FastMode=false: %+v", uFalse)
+	}
+
+	// Apply overrides FastMode whenever r.FastMode != nil and preserves it when nil.
+	u.Apply(&Usage{FastMode: proto.Bool(false)})
+	if u.FastMode == nil || u.GetFastMode() {
+		t.Fatalf("Apply did not override FastMode to false: %+v", u)
+	}
+	u.Apply(&Usage{Model: "gpt-5.4"})
+	if u.FastMode == nil || u.GetFastMode() {
+		t.Fatalf("Apply with nil FastMode clobbered existing false: %+v", u)
+	}
+	u.Apply(&Usage{FastMode: proto.Bool(true)})
+	if u.FastMode == nil || !u.GetFastMode() {
+		t.Fatalf("Apply did not override FastMode to true: %+v", u)
+	}
+	u.Apply(&Usage{Effort: "high"})
+	if u.FastMode == nil || !u.GetFastMode() {
+		t.Fatalf("Apply with nil FastMode clobbered existing true: %+v", u)
+	}
+}

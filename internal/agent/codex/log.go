@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -219,10 +221,11 @@ func turnContext(line []byte, total *protocol.Usage) {
 	var r struct {
 		Type    string `json:"type"`
 		Payload struct {
-			Model    string `json:"model"`
-			Effort   string `json:"effort"`
-			Approval string `json:"approval_policy"`
-			Sandbox  struct {
+			Model       string `json:"model"`
+			Effort      string `json:"effort"`
+			ServiceTier string `json:"service_tier"`
+			Approval    string `json:"approval_policy"`
+			Sandbox     struct {
 				Type string `json:"type"`
 			} `json:"sandbox_policy"`
 			Mode struct {
@@ -242,6 +245,9 @@ func turnContext(line []byte, total *protocol.Usage) {
 	}
 	if effort := cmp.Or(p.Effort, p.Mode.Settings.Effort); effort != "" {
 		total.Effort = effort
+	}
+	if p.ServiceTier != "" {
+		total.FastMode = proto.Bool(IsFastServiceTier(p.ServiceTier))
 	}
 	switch {
 	case p.Mode.Mode == "plan":

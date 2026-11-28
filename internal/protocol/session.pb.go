@@ -469,7 +469,11 @@ type SessionInfo struct {
 	// reported by Claude Code transcript attachments or Codex app-server
 	// notifications; unset when none has been observed or once the session
 	// has ended (revision 51).
-	Goal          *GoalStatus `protobuf:"bytes,43,opt,name=goal,proto3" json:"goal,omitempty"`
+	Goal *GoalStatus `protobuf:"bytes,43,opt,name=goal,proto3" json:"goal,omitempty"`
+	// fast_mode reports whether Codex Fast Mode (priority service tier) is
+	// currently enabled on this session; false when off, unsupported, or once
+	// the session has ended (revision 52).
+	FastMode      bool `protobuf:"varint,44,opt,name=fast_mode,json=fastMode,proto3" json:"fast_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -805,6 +809,13 @@ func (x *SessionInfo) GetGoal() *GoalStatus {
 	return nil
 }
 
+func (x *SessionInfo) GetFastMode() bool {
+	if x != nil {
+		return x.FastMode
+	}
+	return false
+}
+
 // AuthError is a provider authentication failure reported by a session's
 // agent on its host, separate from Mako node trust/pairing. Its summary and
 // guidance are fixed, safe instructions that never copy raw provider error
@@ -1107,13 +1118,16 @@ func (x *GoalAction) GetObjective() string {
 	return ""
 }
 
-// AgentControls are the permission modes, models and efforts a session's
-// agent may be set to, by the names it gives them.
+// AgentControls are the permission modes, models, efforts and toggles a
+// session's agent may be set to, by the names it gives them.
 type AgentControls struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Modes         []string               `protobuf:"bytes,1,rep,name=modes,proto3" json:"modes,omitempty"` // as Usage.permission_mode names them
-	Models        []string               `protobuf:"bytes,2,rep,name=models,proto3" json:"models,omitempty"`
-	Efforts       []string               `protobuf:"bytes,3,rep,name=efforts,proto3" json:"efforts,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Modes   []string               `protobuf:"bytes,1,rep,name=modes,proto3" json:"modes,omitempty"` // as Usage.permission_mode names them
+	Models  []string               `protobuf:"bytes,2,rep,name=models,proto3" json:"models,omitempty"`
+	Efforts []string               `protobuf:"bytes,3,rep,name=efforts,proto3" json:"efforts,omitempty"`
+	// fast_mode is true when ConfigureAgent may toggle fast mode on this
+	// session (revision 52).
+	FastMode      bool `protobuf:"varint,4,opt,name=fast_mode,json=fastMode,proto3" json:"fast_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1169,17 +1183,28 @@ func (x *AgentControls) GetEfforts() []string {
 	return nil
 }
 
+func (x *AgentControls) GetFastMode() bool {
+	if x != nil {
+		return x.FastMode
+	}
+	return false
+}
+
 // ConfigureAgent sets what of a session's agent is given: its permission
 // mode, as a key at its prompt moves it on; its model and effort, by its
-// own commands, which the agent may keep as the user's defaults. The reply
-// is its SessionInfo.
+// own commands, which the agent may keep as the user's defaults; and fast
+// mode, scoped to the session/thread when offered. The reply is its
+// SessionInfo.
 type ConfigureAgent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	Mode          string                 `protobuf:"bytes,3,opt,name=mode,proto3" json:"mode,omitempty"`
-	Model         string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
-	Effort        string                 `protobuf:"bytes,5,opt,name=effort,proto3" json:"effort,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	NodeId    string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	SessionId string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Mode      string                 `protobuf:"bytes,3,opt,name=mode,proto3" json:"mode,omitempty"`
+	Model     string                 `protobuf:"bytes,4,opt,name=model,proto3" json:"model,omitempty"`
+	Effort    string                 `protobuf:"bytes,5,opt,name=effort,proto3" json:"effort,omitempty"`
+	// fast_mode, when set, turns session-scoped fast mode on or off
+	// (revision 52).
+	FastMode      *bool `protobuf:"varint,6,opt,name=fast_mode,json=fastMode,proto3,oneof" json:"fast_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1247,6 +1272,13 @@ func (x *ConfigureAgent) GetEffort() string {
 		return x.Effort
 	}
 	return ""
+}
+
+func (x *ConfigureAgent) GetFastMode() bool {
+	if x != nil && x.FastMode != nil {
+		return *x.FastMode
+	}
+	return false
 }
 
 // ScreenDialog is a dialog in an agent's terminal that asks the user to
@@ -3796,7 +3828,7 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x04path\x18\x02 \x01(\tR\x04path\x12\x16\n" +
 	"\x06branch\x18\x03 \x01(\tR\x06branch\x12\x12\n" +
 	"\x04base\x18\x04 \x01(\tR\x04base\x12\x14\n" +
-	"\x05start\x18\x05 \x01(\tR\x05start\"\xb0\v\n" +
+	"\x05start\x18\x05 \x01(\tR\x05start\"\xcd\v\n" +
 	"\vSessionInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x14\n" +
@@ -3845,7 +3877,8 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\x0eparent_node_id\x18) \x01(\tR\fparentNodeId\x121\n" +
 	"\n" +
 	"auth_error\x18* \x01(\v2\x12.mako.v2.AuthErrorR\tauthError\x12'\n" +
-	"\x04goal\x18+ \x01(\v2\x13.mako.v2.GoalStatusR\x04goalB\f\n" +
+	"\x04goal\x18+ \x01(\v2\x13.mako.v2.GoalStatusR\x04goal\x12\x1b\n" +
+	"\tfast_mode\x18, \x01(\bR\bfastModeB\f\n" +
 	"\n" +
 	"_exit_code\"\xc8\x01\n" +
 	"\tAuthError\x12\x12\n" +
@@ -3876,18 +3909,22 @@ const file_mako_v2_session_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x16\n" +
 	"\x06action\x18\x03 \x01(\tR\x06action\x12\x1c\n" +
-	"\tobjective\x18\x04 \x01(\tR\tobjective\"W\n" +
+	"\tobjective\x18\x04 \x01(\tR\tobjective\"t\n" +
 	"\rAgentControls\x12\x14\n" +
 	"\x05modes\x18\x01 \x03(\tR\x05modes\x12\x16\n" +
 	"\x06models\x18\x02 \x03(\tR\x06models\x12\x18\n" +
-	"\aefforts\x18\x03 \x03(\tR\aefforts\"\x8a\x01\n" +
+	"\aefforts\x18\x03 \x03(\tR\aefforts\x12\x1b\n" +
+	"\tfast_mode\x18\x04 \x01(\bR\bfastMode\"\xba\x01\n" +
 	"\x0eConfigureAgent\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x12\n" +
 	"\x04mode\x18\x03 \x01(\tR\x04mode\x12\x14\n" +
 	"\x05model\x18\x04 \x01(\tR\x05model\x12\x16\n" +
-	"\x06effort\x18\x05 \x01(\tR\x06effort\"h\n" +
+	"\x06effort\x18\x05 \x01(\tR\x06effort\x12 \n" +
+	"\tfast_mode\x18\x06 \x01(\bH\x00R\bfastMode\x88\x01\x01B\f\n" +
+	"\n" +
+	"_fast_mode\"h\n" +
 	"\fScreenDialog\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x18\n" +
@@ -4204,6 +4241,7 @@ func file_mako_v2_session_proto_init() {
 	}
 	file_mako_v2_session_proto_msgTypes[2].OneofWrappers = []any{}
 	file_mako_v2_session_proto_msgTypes[4].OneofWrappers = []any{}
+	file_mako_v2_session_proto_msgTypes[9].OneofWrappers = []any{}
 	file_mako_v2_session_proto_msgTypes[13].OneofWrappers = []any{}
 	file_mako_v2_session_proto_msgTypes[44].OneofWrappers = []any{}
 	type x struct{}

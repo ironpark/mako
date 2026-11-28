@@ -1947,4 +1947,10 @@ var catalogKo = map[string]string{
 	"Goal objective":                        "목표 내용",
 	"Describe the objective to work toward": "달성할 목표를 입력하세요",
 	"Goal objective cannot be empty":        "목표 내용을 입력하세요",
+
+	// Revision 52: Codex Fast Mode & Effort Slider
+	"Fast mode":        "빠른 모드",
+	"Fast mode: on":    "빠른 모드: 켜짐",
+	"Fast mode: off":   "빠른 모드: 꺼짐",
+	"Reasoning effort": "추론 강도",
 }

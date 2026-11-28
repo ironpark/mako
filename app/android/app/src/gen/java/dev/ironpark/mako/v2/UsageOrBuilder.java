@@ -133,4 +133,25 @@ public interface UsageOrBuilder extends
    * @return The costUsd.
    */
   double getCostUsd();
+
+  /**
+   * <pre>
+   * fast_mode reports whether the latest reply/turn ran in fast mode, when
+   * known (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+   * @return Whether the fastMode field is set.
+   */
+  boolean hasFastMode();
+  /**
+   * <pre>
+   * fast_mode reports whether the latest reply/turn ran in fast mode, when
+   * known (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 11 [json_name = "fastMode"];</code>
+   * @return The fastMode.
+   */
+  boolean getFastMode();
 }

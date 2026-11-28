@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transport"
@@ -267,19 +269,147 @@ func (d *Daemon) handleSeeSession(ctx context.Context, stream *transport.Stream,
 	})
 }
 
-// handleConfigureAgent sets a session's agent's mode, model or effort, at
-// its prompt, as its driver says to.
+// handleConfigureAgent sets a session's agent's mode, model, effort, or fast
+// mode as its driver or native bridge supports.
 func (d *Daemon) handleConfigureAgent(ctx context.Context, stream *transport.Stream, env *protocol.Envelope) error {
 	return serve(d, ctx, stream, env, protocol.TypeSessionInfo, func(r *protocol.ConfigureAgent) (*protocol.SessionInfo, error) {
 		s, ok := d.sessions.get(r.GetSessionId())
 		if !ok {
 			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
 		}
-		if err := s.Configure(r.GetMode(), r.GetModel(), r.GetEffort()); err != nil {
-			return nil, err
+		if r.FastMode != nil {
+			b := d.codexBridge(s.ID())
+			if b == nil {
+				return nil, errors.New("the agent does not support fast mode")
+			}
+			if err := b.setFastMode(ctx, s, r.GetFastMode()); err != nil {
+				return nil, err
+			}
+		}
+		if r.GetModel() != "" {
+			if err := d.ensureDynamicModelsForConfigure(ctx, s, r.GetModel()); err != nil {
+				return nil, err
+			}
+		}
+		if r.GetMode() != "" || r.GetModel() != "" || r.GetEffort() != "" {
+			if err := s.Configure(r.GetMode(), r.GetModel(), r.GetEffort()); err != nil {
+				return nil, err
+			}
 		}
 		return s.Info(), nil
 	})
+}
+
+func (d *Daemon) dynamicModelCatalog(agentName string) (agent.ModelCatalog, bool) {
+	entry, ok := agents.Lookup(agentName)
+	if !ok {
+		return nil, false
+	}
+	m, ok := entry.Driver.(agent.Models)
+	if !ok || len(m.Models()) > 0 {
+		return nil, false
+	}
+	cat, ok := entry.Driver.(agent.ModelCatalog)
+	return cat, ok
+}
+
+func catalogModelIDsAndVariants(models []agent.ModelInfo) (ids, variants []string) {
+	ids = make([]string, 0, len(models))
+	for _, m := range models {
+		if m.ID == "" {
+			continue
+		}
+		ids = append(ids, m.ID)
+		for _, tier := range m.Efforts {
+			if tier != "" {
+				variants = append(variants, m.ID+"-"+tier)
+			}
+		}
+	}
+	return ids, variants
+}
+
+func catalogContainsModel(models []agent.ModelInfo, want string) bool {
+	if want == "" {
+		return false
+	}
+	for _, m := range models {
+		if m.ID == want {
+			return true
+		}
+		for _, tier := range m.Efforts {
+			if tier != "" && m.ID+"-"+tier == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (d *Daemon) applyDynamicModels(s *session.Session, models []agent.ModelInfo) {
+	ids, variants := catalogModelIDsAndVariants(models)
+	s.SetDynamicModelVariants(variants)
+	s.SetDynamicModels(ids)
+}
+
+// seedDynamicModels populates SessionInfo.Controls.Models for agents whose
+// models come from a dynamic ModelCatalog (such as agy). When the catalog
+// cache is warm it finishes synchronously before openSession returns; when
+// cold it continues in the background without blocking session startup.
+func (d *Daemon) seedDynamicModels(s *session.Session) {
+	if s == nil {
+		return
+	}
+	cat, ok := d.dynamicModelCatalog(s.Agent())
+	if !ok {
+		return
+	}
+	callEnv := agentspec.IsolatedHomeEnvForAgent(s.Agent(), d.isolateHome(), d.agents())
+	parentCtx := d.ctx
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		ctx, cancel := context.WithTimeout(parentCtx, 12*time.Second)
+		defer cancel()
+		models, err := cat.Catalog(ctx, callEnv, false)
+		if err != nil || len(models) == 0 {
+			return
+		}
+		d.applyDynamicModels(s, models)
+	}()
+	select {
+	case <-done:
+	case <-time.After(25 * time.Millisecond):
+	}
+}
+
+// ensureDynamicModelsForConfigure loads (and refreshes if needed) the dynamic
+// model catalog before Configure validates wantModel against the session.
+func (d *Daemon) ensureDynamicModelsForConfigure(ctx context.Context, s *session.Session, wantModel string) error {
+	cat, ok := d.dynamicModelCatalog(s.Agent())
+	if !ok {
+		return nil
+	}
+	callEnv := agentspec.IsolatedHomeEnvForAgent(s.Agent(), d.isolateHome(), d.agents())
+	models, err := cat.Catalog(ctx, callEnv, false)
+	if err != nil || !catalogContainsModel(models, wantModel) {
+		if refreshed, rerr := cat.Catalog(ctx, callEnv, true); rerr == nil && len(refreshed) > 0 {
+			models, err = refreshed, nil
+		} else if err == nil && rerr != nil && len(models) == 0 {
+			err = rerr
+		}
+	}
+	if len(models) > 0 {
+		d.applyDynamicModels(s, models)
+		return nil
+	}
+	if err != nil && len(s.Info().GetControls().GetModels()) == 0 {
+		return fmt.Errorf("load %s models: %w", s.Agent(), err)
+	}
+	return nil
 }
 
 // maxSessionName caps a session's name, which every listing carries.

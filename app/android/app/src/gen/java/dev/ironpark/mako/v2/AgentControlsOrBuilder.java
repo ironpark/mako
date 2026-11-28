@@ -100,4 +100,15 @@ public interface AgentControlsOrBuilder extends
    */
   com.google.protobuf.ByteString
       getEffortsBytes(int index);
+
+  /**
+   * <pre>
+   * fast_mode is true when ConfigureAgent may toggle fast mode on this
+   * session (revision 52).
+   * </pre>
+   *
+   * <code>bool fast_mode = 4 [json_name = "fastMode"];</code>
+   * @return The fastMode.
+   */
+  boolean getFastMode();
 }

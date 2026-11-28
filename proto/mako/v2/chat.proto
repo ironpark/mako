@@ -144,6 +144,9 @@ message Usage {
   string permission_mode = 9;
   // cost_usd is the estimated spend in US dollars when the agent reports one.
   double cost_usd = 10;
+  // fast_mode reports whether the latest reply/turn ran in fast mode, when
+  // known (revision 52).
+  optional bool fast_mode = 11;
 }
 
 // RateLimit is how much of one of an account's limits is spent.

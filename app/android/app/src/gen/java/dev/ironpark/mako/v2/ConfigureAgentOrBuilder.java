@@ -69,4 +69,25 @@ public interface ConfigureAgentOrBuilder extends
    */
   com.google.protobuf.ByteString
       getEffortBytes();
+
+  /**
+   * <pre>
+   * fast_mode, when set, turns session-scoped fast mode on or off
+   * (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+   * @return Whether the fastMode field is set.
+   */
+  boolean hasFastMode();
+  /**
+   * <pre>
+   * fast_mode, when set, turns session-scoped fast mode on or off
+   * (revision 52).
+   * </pre>
+   *
+   * <code>optional bool fast_mode = 6 [json_name = "fastMode"];</code>
+   * @return The fastMode.
+   */
+  boolean getFastMode();
 }
