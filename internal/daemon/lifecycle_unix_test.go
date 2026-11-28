@@ -129,6 +129,23 @@ func TestLifecycleHooksRunOnTheSessionsEventsWithItsBranch(t *testing.T) {
 	}
 }
 
+// A hooks.json that does not read cleanly runs none of its hooks, its
+// good ones neither.
+func TestAWrongHooksFileRunsNone(t *testing.T) {
+	shellHooks(t)
+	d := New(nil, slog.New(slog.DiscardHandler))
+	d.dir = t.TempDir()
+	marker := filepath.Join(t.TempDir(), "ran")
+	writeHooks(t, d.dir,
+		lifecycle.Hook{Event: lifecycle.TurnDone, Command: "touch " + sh(marker)},
+		lifecycle.Hook{Event: lifecycle.TurnDone, Command: "touch " + sh(marker), TimeoutSec: -1},
+	)
+	d.runLifecycle(t.Context(), lifecycle.Event{Name: lifecycle.TurnDone, SessionID: "s1", Agent: "claude", Project: t.TempDir()})
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("a hook of a file that does not read cleanly ran")
+	}
+}
+
 // syncBuffer is a log written from the hooks' goroutines.
 type syncBuffer struct {
 	mu sync.Mutex

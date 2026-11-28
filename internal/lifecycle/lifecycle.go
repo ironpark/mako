@@ -114,10 +114,15 @@ func (h Hook) Validate() error {
 
 // Timeout is how long h runs before it is killed.
 func (h Hook) Timeout() time.Duration {
-	if h.TimeoutSec <= 0 {
+	switch {
+	case h.TimeoutSec <= 0:
 		return DefaultTimeout
+	// Compared in seconds: so many as to overflow a Duration would read
+	// as a negative one.
+	case h.TimeoutSec >= int(MaxTimeout/time.Second):
+		return MaxTimeout
 	}
-	return min(time.Duration(h.TimeoutSec)*time.Second, MaxTimeout)
+	return time.Duration(h.TimeoutSec) * time.Second
 }
 
 // Label names h in a log.
@@ -169,7 +174,8 @@ func For(list []Hook, ev Event) []Hook {
 
 // LoadGlobal reads the user's hooks from the configuration directory dir:
 // none without the file. A file that does not read cleanly, an unknown
-// field or a hook wrong in it, gives none of its hooks and says why.
+// field, a hook wrong in it or anything after its array, gives none of its
+// hooks and says why.
 func LoadGlobal(dir string) ([]Hook, error) {
 	if dir == "" {
 		return nil, nil
@@ -187,7 +193,13 @@ func LoadGlobal(dir string) ([]Hook, error) {
 	if err := dec.Decode(&list); err != nil {
 		return nil, fmt.Errorf("read %s: %w", GlobalFile, err)
 	}
-	return list, validate(GlobalFile, list)
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("read %s: more after the array of hooks", GlobalFile)
+	}
+	if err := validate(GlobalFile, list); err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 // Trust says whether the user trusts the file, a slash-separated path from
@@ -257,19 +269,27 @@ func validate(file string, list []Hook) error {
 // Run runs h for ev in ev's folder, until it exits, its timeout passes or
 // ctx ends, and returns its output, cut at MaxOutput. Whatever processes
 // of its own the command leaves are killed as it ends; on Windows only the
-// command's shell is.
+// command's shell is, and what the shell started runs on (group_windows.go).
+//
+// What the hook is told of ev reaches it only in its environment, never in
+// its command's text. On Windows, cmd reads a variable the command names
+// as %NAME% into the command's text before it parses it, so a hook whose
+// command names that way a value holding cmd's syntax is not run.
 func Run(ctx context.Context, h Hook, ev Event) (string, error) {
+	env := ev.env()
+	shell := []string{"sh", "-c"}
+	if runtime.GOOS == "windows" {
+		if name, value := cmdExpandsUnsafe(h.Command, env); name != "" {
+			return "", fmt.Errorf("not run: cmd would read %%%s%%, %q, as part of the command; read it from the environment in a program or script the command runs", name, value)
+		}
+		shell = []string{"cmd", "/C"}
+	}
 	timeout := h.Timeout()
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "cmd", "/C", h.Command)
-	} else {
-		cmd = exec.CommandContext(ctx, "sh", "-c", h.Command)
-	}
+	cmd := exec.CommandContext(ctx, shell[0], shell[1], h.Command)
 	cmd.Dir = ev.Project
-	cmd.Env = append(os.Environ(), ev.env()...)
+	cmd.Env = append(os.Environ(), env...)
 	ownGroup(cmd)
 	// Output goes to a pipe of its own rather than through exec's copying,
 	// which would wait for every process holding it: the command's end is
@@ -303,10 +323,44 @@ func Run(ctx context.Context, h Hook, ev Event) (string, error) {
 	case <-time.After(outputGrace):
 	}
 	_ = r.Close()
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		err = fmt.Errorf("timed out after %s", timeout)
+	return out.String(), ended(ctx, err, timeout)
+}
+
+// ended is how a hook's command ended, err from its Wait, run under ctx
+// with timeout: a command that failed as ctx's deadline passed timed out.
+// One that exited 0 did not, though the deadline passed while what it
+// left was killed or its output read.
+func ended(ctx context.Context, err error, timeout time.Duration) error {
+	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("timed out after %s", timeout)
 	}
-	return out.String(), err
+	return err
+}
+
+// cmdSyntax are the characters cmd reads as its own syntax in what it
+// expands into a command's text: they join, pipe and redirect commands,
+// quote and escape, open and close blocks, and expand again.
+const cmdSyntax = "&|<>^\"%!()\r\n"
+
+// cmdExpandsUnsafe is the variable of env, and its value, that command
+// names as cmd expands it into the command's text (%NAME%, %NAME:…% or
+// !NAME!) while the value holds cmd's syntax; "" when there is none. A
+// branch may be named x&calc, and a folder R&D.
+func cmdExpandsUnsafe(command string, env []string) (name, value string) {
+	upper := strings.ToUpper(command)
+	for _, kv := range env {
+		name, value, _ := strings.Cut(kv, "=")
+		if !strings.ContainsAny(value, cmdSyntax) {
+			continue
+		}
+		name = strings.ToUpper(name)
+		for _, ref := range []string{"%" + name + "%", "%" + name + ":", "!" + name + "!"} {
+			if strings.Contains(upper, ref) {
+				return name, value
+			}
+		}
+	}
+	return "", ""
 }
 
 // capped keeps the first max bytes written to it, and counts the rest. A

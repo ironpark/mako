@@ -54,7 +54,9 @@ func (d *Daemon) runLifecycle(ctx context.Context, ev lifecycle.Event) {
 	ev.Branch = gitstat.Branch(ev.Project)
 	hooks, err := lifecycle.LoadGlobal(d.dir)
 	if err != nil {
-		d.log.Warn("lifecycle hooks: not read", "file", filepath.Join(d.dir, lifecycle.GlobalFile), "err", err)
+		// A file that does not read cleanly runs none of its hooks.
+		hooks = nil
+		d.log.Warn("lifecycle hooks: not read, so none of the file's run", "file", filepath.Join(d.dir, lifecycle.GlobalFile), "err", err)
 	}
 	// The repository's file is read from its main work tree, for a session
 	// in a folder of it or in another worktree of it too, and trusted there.

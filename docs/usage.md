@@ -515,22 +515,36 @@ command = "make lint"
 
 `agents` limits a hook to those agents' sessions; left out, or with `"*"`,
 it runs for every agent. `enabled = false` keeps a hook without running
-it. A file with a field mako does not know, or a hook without a known
-event or a command, runs none of its hooks, and the daemon's log says why.
+it. A file with a field mako does not know, a hook without a known event
+or a command, a negative `timeout_sec`, or anything after the array runs
+none of its hooks, not even the good ones, and the daemon's log says why.
 
 A hook runs with `sh -c` (`cmd /C` on Windows) in the session's folder.
-Your own hooks run first, one after another. A session's hooks run in the
-order of its events, one event at a time. Each hook gets
+Your own hooks run first, one after another. A session's hooks run one
+event at a time, in the order mako hears of its events. Each hook gets
 `AGENT_MAKO_SESSION`, `AGENT_MAKO_AGENT`, `AGENT_MAKO_PROJECT`,
-`AGENT_MAKO_EVENT` and `AGENT_MAKO_BRANCH`. The branch is the one checked
-out in the session's folder when the event fired. A hook runs for
-`timeout_sec` seconds at most: 30 when not set, and never more than 300.
-When its command exits or times out, mako kills what the command left
-running. On Windows, mako kills only the shell. Mako keeps the first 16
+`AGENT_MAKO_EVENT` and `AGENT_MAKO_BRANCH` in its environment, never in
+its command. The branch is the one checked out in the session's folder
+when the event fired. A hook runs for `timeout_sec` seconds at most: 30
+when not set, and never more than 300. When its command exits or times
+out, mako kills what the command left running. Mako keeps the first 16
 KiB of a hook's output. If the hook fails, the daemon's log shows that
 output. Hooks run in the background: a hook that fails, hangs or times out
 does not stop or hold the session or its agent. When the daemon stops, it
 kills the hooks that are running.
+
+On Windows, two things are different:
+
+- `cmd` puts the value of a variable that the command names as
+  `%AGENT_MAKO_BRANCH%` (or `%NAME:...%`, or `!NAME!`) into the command's
+  text before it runs the command. A branch can be named `x&calc`, so a
+  value with `&`, `|`, `<`, `>`, `^`, `"`, `%`, `!`, `(` or `)` would run
+  as commands. Mako does not run a hook whose command names such a value
+  that way, and the daemon's log says why. A program or script that the
+  command runs can still read the value from its environment.
+- Mako kills only `cmd` when the command exits or times out. The programs
+  that `cmd` started keep running, and mako stops reading their output 2
+  seconds after `cmd` ends.
 
 A repository's hooks run with your permissions, so mako runs them only
 after you trust `.mako/hooks.toml` as it reads (see
