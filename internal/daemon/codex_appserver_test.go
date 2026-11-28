@@ -42,12 +42,16 @@ type mockCodexWSServer struct {
 	mu      sync.Mutex
 	writeMu sync.Mutex
 	conn    *websocket.Conn
+	ready   chan struct{}
 	handler func(id json.RawMessage, method string, params json.RawMessage, reply func(any))
 }
 
 func startMockCodexWSServer(t *testing.T, handler func(id json.RawMessage, method string, params json.RawMessage, reply func(any))) *mockCodexWSServer {
 	t.Helper()
-	m := &mockCodexWSServer{handler: handler}
+	m := &mockCodexWSServer{
+		ready:   make(chan struct{}),
+		handler: handler,
+	}
 	upgrader := websocket.Upgrader{}
 	m.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -56,8 +60,17 @@ func startMockCodexWSServer(t *testing.T, handler func(id json.RawMessage, metho
 		}
 		m.mu.Lock()
 		m.conn = conn
+		close(m.ready)
+		m.ready = make(chan struct{})
 		m.mu.Unlock()
-		defer conn.Close()
+		defer func() {
+			m.mu.Lock()
+			if m.conn == conn {
+				m.conn = nil
+			}
+			m.mu.Unlock()
+			_ = conn.Close()
+		}()
 		reply := func(v any) {
 			m.writeMu.Lock()
 			defer m.writeMu.Unlock()
@@ -89,14 +102,40 @@ func (m *mockCodexWSServer) wsURL() string {
 	return "ws" + strings.TrimPrefix(m.srv.URL, "http")
 }
 
+// activeConn waits for the server-side Upgrade handler to publish m.conn.
+// DialContext returns as soon as the client reads HTTP 101, which can race
+// ahead of the server handler storing m.conn under CPU contention.
+func (m *mockCodexWSServer) activeConn(t *testing.T) *websocket.Conn {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		m.mu.Lock()
+		conn := m.conn
+		ready := m.ready
+		m.mu.Unlock()
+		if conn != nil {
+			return conn
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			t.Fatal("mock server has no active connection")
+		}
+		timer := time.NewTimer(remaining)
+		select {
+		case <-ready:
+			timer.Stop()
+		case <-timer.C:
+			t.Fatal("mock server has no active connection")
+		case <-t.Context().Done():
+			timer.Stop()
+			t.Fatalf("mock server has no active connection: %v", t.Context().Err())
+		}
+	}
+}
+
 func (m *mockCodexWSServer) sendNotificationAt(t *testing.T, method string, params any, emittedAtMs int64) {
 	t.Helper()
-	m.mu.Lock()
-	conn := m.conn
-	m.mu.Unlock()
-	if conn == nil {
-		t.Fatal("mock server has no active connection")
-	}
+	conn := m.activeConn(t)
 	msg := map[string]any{"method": method, "params": params}
 	if emittedAtMs > 0 {
 		msg["emittedAtMs"] = emittedAtMs
