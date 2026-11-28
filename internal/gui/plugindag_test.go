@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ironpark/ggui"
+	"github.com/ironpark/ggui/widget"
 
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gui/skin"
@@ -435,10 +436,20 @@ func TestPluginIntentsAndPermissions(t *testing.T) {
 	m := newModel(config.Default(), "")
 	m.Conn.Set(connState{Self: &protocol.Node{Id: "node-self"}})
 
-	// 1. CopyText -> clipboard.
-	m.handlePluginDone(&protocol.PluginDone{CopyText: "deadbeef"})
-	if got := ggui.CurrentClipboard().Read(); got != "deadbeef" {
-		t.Fatalf("clipboard = %q, want deadbeef", got)
+	// 1. CopyText -> clipboard. The intent runs in a Probe's frame, as it
+	// does in the app's, so it writes the Probe's own clipboard. Outside a
+	// frame ggui uses the system clipboard: the test would overwrite the
+	// user's, and fail when another process writes it in between.
+	clipProbe := ggui.ProbeBuilder(func() ggui.Widget { return widget.Text("") }, ggui.Sz(100, 100))
+	defer clipProbe.Close()
+	var copied string
+	clipProbe.Post(func() {
+		m.handlePluginDone(&protocol.PluginDone{CopyText: "deadbeef"})
+		copied = ggui.CurrentClipboard().Read()
+	})
+	clipProbe.Frame()
+	if copied != "deadbeef" {
+		t.Fatalf("clipboard = %q, want deadbeef", copied)
 	}
 
 	// 2. openDiff intent -> Diffs tab opened.
