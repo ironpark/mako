@@ -1897,7 +1897,7 @@ func TestMakoGitAutoFixDefaultSetting(t *testing.T) {
 	})
 	r.sendEvent(scopeA, findByKeySuffix(treeA, "op-refresh").GetId(), protocol.UiTap, "", nil)
 	time.Sleep(150 * time.Millisecond)
-	treeA = wA.until("PR #101 stays off after refresh", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+	wA.until("PR #101 stays off after refresh", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
 		return findByKeySuffix(n, "forge-autofix") != nil && findByKeySuffix(n, "af-strip") == nil
 	})
 
