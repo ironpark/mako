@@ -329,7 +329,7 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 		if r.GetOp() == protocol.GitOpMerge {
 			return Merge(ctx, r.GetWorktree())
 		}
-		return RemoveWorktree(ctx, r.GetWorktree())
+		return RemoveWorktree(ctx, r.GetWorktree(), r.GetForce())
 	}
 	if out, ok, err := runOp(ctx, r); ok {
 		return out, err

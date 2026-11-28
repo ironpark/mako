@@ -831,7 +831,7 @@ leaves the commits out.
 | `stash`, `stash_apply`, `stash_pop`, `stash_drop` | Stash every change, untracked files too, as `message`; or apply, pop or drop stash `stash`. |
 | `detach`, `cherry_pick`, `revert`, `tag` | Of `commit`: check it out on no branch, apply it, undo it as a new commit, or tag it `tag` (annotated with `message`). |
 | `continue`, `abort` | Go on with the `operation` under way, adding what was resolved, or abandon it. |
-| `merge`, `pull_request`, `remove_worktree` | Of a session's `worktree`: merge its branch into its base, push it and open a pull request, or remove it once nothing is left in it. |
+| `merge`, `pull_request`, `remove_worktree` | Of a session's `worktree`: merge its branch into its base, push it and open a pull request, or remove it once nothing is left in it (with `force`, with its changes and its branch, merged or not). |
 
 Diff lines are `{op, text, old, new}`, where `op` is `+`, `-`, a space for
 context, or `@` for a hunk header, and `old`/`new` are line numbers on each
