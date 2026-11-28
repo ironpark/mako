@@ -181,8 +181,7 @@ func LoadProjectDenyRules(projectDir string) []Rule {
 // Interactive approvals (questions, plans, layout changes, templates) are never
 // auto-approved. Deny rules always take precedence over allow rules.
 func Evaluate(configDir, projectDir string, call Call) Decision {
-	switch call.Kind {
-	case protocol.ToolQuestion, protocol.ToolExitPlan, protocol.ToolLayout, protocol.ToolTemplate:
+	if interactive(call.Kind) {
 		return Decision{}
 	}
 	globalRules, _ := LoadRules(configDir)
@@ -191,13 +190,34 @@ func Evaluate(configDir, projectDir string, call Call) Decision {
 }
 
 // EvaluateRules evaluates an explicit rule slice with deny-first precedence.
+// Interactive approvals (questions, plans, layout changes, templates) are
+// never decided by a rule.
 func EvaluateRules(rules []Rule, call Call) Decision {
+	if interactive(call.Kind) {
+		return Decision{}
+	}
+	// What the call acts on is read once, for the first rule with a
+	// pattern, as a command line is parsed to read it.
+	var read *subjects
+	matches := func(r Rule) bool {
+		if !agentMatches(r, call) || !toolMatches(r.Tool, call) {
+			return false
+		}
+		if r.Pattern == "" {
+			return true
+		}
+		if read == nil {
+			s := readCall(call)
+			read = &s
+		}
+		return patternMatches(r, *read)
+	}
 	var allowMatch *Rule
 	for i := range rules {
 		r := rules[i]
 		// A rule edited by hand into one Validate refuses, an empty
 		// tool among them, matches nothing.
-		if !r.Enabled || r.Validate() != nil || !ruleMatches(r, call) {
+		if !r.Enabled || r.Validate() != nil || !matches(r) {
 			continue
 		}
 		if r.Action == ActionDeny {
@@ -222,26 +242,25 @@ func EvaluateRules(rules []Rule, call Call) Decision {
 	return Decision{}
 }
 
-func ruleMatches(r Rule, call Call) bool {
-	if len(r.Agents) > 0 {
-		matchedAgent := false
-		for _, a := range r.Agents {
-			if a == "*" || strings.EqualFold(strings.TrimSpace(a), call.Agent) {
-				matchedAgent = true
-				break
-			}
-		}
-		if !matchedAgent {
-			return false
-		}
+// interactive says a call of kind asks the user something, which no rule
+// answers for them.
+func interactive(kind string) bool {
+	switch kind {
+	case protocol.ToolQuestion, protocol.ToolExitPlan, protocol.ToolLayout, protocol.ToolTemplate:
+		return true
 	}
-	if !matchGlobFold(r.Tool, call.Tool) && !slices.Contains(toolKinds[strings.ToLower(strings.TrimSpace(r.Tool))], call.Kind) {
-		return false
+	return false
+}
+
+// agentMatches says r holds for the agent that makes call.
+func agentMatches(r Rule, call Call) bool {
+	if len(r.Agents) == 0 {
+		return true
 	}
-	if r.Pattern != "" {
-		return patternMatches(r, call)
-	}
-	return true
+	return slices.ContainsFunc(r.Agents, func(a string) bool {
+		a = strings.TrimSpace(a)
+		return a == "*" || strings.EqualFold(a, call.Agent)
+	})
 }
 
 // matchGlobFold performs case-insensitive wildcard matching supporting '*'
@@ -253,13 +272,14 @@ func matchGlobFold(pattern, text string) bool {
 	starIdx, matchIdx := -1, 0
 	for si < len(s) {
 		switch {
-		case pi < len(p) && (p[pi] == '?' || p[pi] == s[si]):
-			pi++
-			si++
+		// A star is a wildcard first, even against a star in text.
 		case pi < len(p) && p[pi] == '*':
 			starIdx = pi
 			matchIdx = si
 			pi++
+		case pi < len(p) && (p[pi] == '?' || p[pi] == s[si]):
+			pi++
+			si++
 		case starIdx != -1:
 			pi = starIdx + 1
 			matchIdx++

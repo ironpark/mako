@@ -433,7 +433,7 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		}
 		// Rules read the whole call; the detail, cut to a line, is only
 		// what the audit log shows of it.
-		call := policy.Call{Agent: name, Tool: ev.Tool, Kind: kind, Input: canon}
+		call := policy.Call{Agent: name, Tool: ev.Tool, Kind: kind, Input: canon, Dir: s.Info().GetProject()}
 		if dec := policy.Evaluate(d.dir, s.Info().GetProject(), call); dec.Matched {
 			reply := hookReply{Decision: string(dec.Action), Message: dec.Reason}
 			if len(reply.Output) == 0 {

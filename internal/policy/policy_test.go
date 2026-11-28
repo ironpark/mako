@@ -248,9 +248,27 @@ func TestRulesMatchToolsByKindAcrossAgents(t *testing.T) {
 			t.Errorf("%s %s matched %+v", call.Agent, call.Tool, d)
 		}
 	}
+	// Write names only the calls that can make a file.
 	write := []Rule{{ID: "w", Enabled: true, Action: ActionDeny, Tool: "Write"}}
-	if d := EvaluateRules(write, Call{Agent: "agy", Tool: "edit_file", Kind: protocol.ToolEdit, Input: env}); d.Matched {
-		t.Errorf("Write matched an edit: %+v", d)
+	for _, call := range []Call{
+		{Agent: "agy", Tool: "edit_file", Kind: protocol.ToolEdit, Input: map[string]any{"path": "config/.env", "old": "a", "new": "b"}},
+		{Agent: "claude", Tool: "MultiEdit", Kind: protocol.ToolMultiEdit, Input: map[string]any{"path": "a.go", "edits": []any{map[string]any{"old": "a", "new": "b"}}}},
+		{Agent: "codex", Tool: "apply_patch", Kind: protocol.ToolPatch, Input: map[string]any{"patch": "*** Begin Patch\n*** Update File: a.go\n@@\n-a\n+b\n*** End Patch"}},
+	} {
+		if d := EvaluateRules(write, call); d.Matched {
+			t.Errorf("Write matched %s %v: %+v", call.Tool, call.Input, d)
+		}
+	}
+	for _, call := range []Call{
+		{Agent: "claude", Tool: "Edit", Kind: protocol.ToolEdit, Input: map[string]any{"path": "new.go", "new": "package x"}},
+		{Agent: "claude", Tool: "MultiEdit", Kind: protocol.ToolMultiEdit, Input: map[string]any{"path": "new.go", "edits": []any{map[string]any{"new": "package x"}}}},
+		{Agent: "codex", Tool: "apply_patch", Kind: protocol.ToolPatch, Input: map[string]any{"patch": "*** Begin Patch\n*** Add File: new.go\n+package x\n*** End Patch"}},
+		{Agent: "codex", Tool: "apply_patch", Kind: protocol.ToolPatch, Input: map[string]any{"patch": "*** Begin Patch\n*** Update File: a.go\n*** Move to: b.go\n*** End Patch"}},
+		{Agent: "pi", Tool: "edit", Kind: protocol.ToolPatch, Input: map[string]any{"patch": "--- /dev/null\n+++ b/new.go\n@@ -0,0 +1 @@\n+package x\n"}},
+	} {
+		if d := EvaluateRules(write, call); !d.Matched {
+			t.Errorf("Write missed %s %v, which makes a file", call.Tool, call.Input)
+		}
 	}
 }
 

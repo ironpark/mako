@@ -3,6 +3,7 @@ package daemon
 import (
 	"encoding/json"
 	"net"
+	"path/filepath"
 	"testing"
 
 	"github.com/ironpark/mako/internal/config"
@@ -127,5 +128,22 @@ func TestApprovalHookDecisionEndsTheWait(t *testing.T) {
 	}
 	if got := s.Info().GetApproval().GetId(); got != "held" {
 		t.Fatalf("held approval = %q, want it kept", got)
+	}
+}
+
+// The approval hook reads a call's paths against its session's project:
+// an absolute path in it reads as its relative one, and one that climbs
+// out of it with ../ does not.
+func TestApprovalHookReadsPathsInTheProject(t *testing.T) {
+	d, s := policyDaemon(t, "claude", policy.Rule{ID: "src", Enabled: true, Action: policy.ActionAllow, Tool: "Edit", Pattern: "src/*"})
+	in := func(path string) string {
+		b, _ := json.Marshal(map[string]string{"file_path": path, "old_string": "a", "new_string": "b"})
+		return string(b)
+	}
+	if r := hook(t, d, s, 1, permission("Edit", in(filepath.Join(s.Info().GetProject(), "src", "a.go")))); r.Decision != protocol.DecisionAllow {
+		t.Fatalf("an edit of src/a.go by its absolute path: decision %q, want allow", r.Decision)
+	}
+	if r := hook(t, d, s, 2, permission("Edit", in("src/../../.bashrc"))); r.Decision != "" {
+		t.Fatalf("an edit out of the project: decision %q, want it left to the user", r.Decision)
 	}
 }
