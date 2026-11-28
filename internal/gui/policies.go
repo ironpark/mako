@@ -290,6 +290,6 @@ func policySettings(m *model) ggui.Widget {
 		return card(rows...)
 	})
 
-	return page(T("Policies & hooks"), T("Cross-agent permission rules, deterministic lifecycle hooks, and workspace sandbox guardrails."),
+	return page(T("Policies & hooks"), T("Cross-agent permission rules and deterministic lifecycle hooks."),
 		widget.Column(rulesSection, hooksSection, auditSection).Gap(16).Stretch())
 }

@@ -532,18 +532,6 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		cleanup()
 		return nil, fmt.Errorf("conversation %s already belongs to another session", conversationID)
 	}
-	if launch.Sandbox != "" {
-		writable := append(policy.DefaultAgentWritableDirs(), extraDirs...)
-		if d.dir != "" {
-			writable = append(writable, d.dir)
-		}
-		wrapped, ok, note := policy.WrapCommand(launch.Sandbox, req.GetProject(), writable, launch.Command)
-		if ok {
-			launch.Command = wrapped
-		} else if note != "" {
-			d.log.Warn("sandbox: fallback", "session", id, "mode", launch.Sandbox, "note", note)
-		}
-	}
 	s, err := session.Start(session.Spec{ID: id, NodeID: d.config().NodeID, Agent: req.GetAgent(), Profile: req.GetProfile(),
 		Project: req.GetProject(), Command: launch.Command, Shown: launch.Shown, Env: launch.Env, Cols: uint16(req.GetCols()), Rows: uint16(req.GetRows()), Worktree: req.GetWorktree(), OnChange: d.pokeStatus})
 	if err != nil {

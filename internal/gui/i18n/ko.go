@@ -2065,5 +2065,5 @@ var catalogKo = map[string]string{
 	"Shell command (e.g. gofmt -w .)":    "셸 명령 (예: gofmt -w .)",
 	"Add hook":                           "훅 추가",
 	"Policy audit log":                   "정책 감사 로그",
-	"Cross-agent permission rules, deterministic lifecycle hooks, and workspace sandbox guardrails.": "모든 에이전트에 공통 적용되는 권한 규칙, 결정론적 라이프사이클 훅 및 워크스페이스 샌드박스 가드레일입니다.",
+	"Cross-agent permission rules and deterministic lifecycle hooks.": "모든 에이전트에 공통 적용되는 권한 규칙과 결정론적 라이프사이클 훅입니다.",
 }

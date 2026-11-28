@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -98,14 +97,5 @@ func TestLifecycleHooksExecution(t *testing.T) {
 	data, err := os.ReadFile(marker)
 	if err != nil || string(data) != "s-42|claude|on_turn_done" {
 		t.Fatalf("marker = %q, err=%v", data, err)
-	}
-}
-
-func TestBuildSeatbeltProfile(t *testing.T) {
-	prof := BuildSeatbeltProfile("/tmp/my-proj", []string{"/Users/test/.claude"})
-	if !strings.Contains(prof, "(deny file-write*)") ||
-		!strings.Contains(prof, `"/tmp/my-proj"`) ||
-		!strings.Contains(prof, `"/Users/test/.claude"`) {
-		t.Fatalf("unexpected seatbelt profile:\n%s", prof)
 	}
 }
