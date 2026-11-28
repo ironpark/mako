@@ -439,6 +439,85 @@ func TestComposerScrollsPastMaxHeight(t *testing.T) {
 	})
 }
 
+func TestComposerCmdDeleteLine(t *testing.T) {
+	focusField := func(t *testing.T, p *ggui.Probe, name string) {
+		t.Helper()
+		field, ok := p.Semantics().Find(ggui.RoleTextField, name)
+		if !ok {
+			t.Fatalf("no field %q", name)
+		}
+		p.Click(field.Rect.Center())
+	}
+
+	t.Run("chat composer", func(t *testing.T) {
+		m := newModel(config.Default(), "")
+		m.Attached.Set([]string{"s"})
+		m.Sessions.Set([]*protocol.SessionInfo{{Id: "s", Agent: "claude", Project: "/tmp"}})
+		st := m.chatState("s")
+		p := ggui.ProbeBuilder(func() ggui.Widget { return composer(m, "s", st) }, ggui.Sz(600, 400))
+		focusField(t, p, T("Message"))
+
+		// Single-line message (including Korean UTF-8): Cmd+Delete clears it completely.
+		p.Text("hello 안녕하세요")
+		p.Type(ggui.Mods{Meta: true}, ggui.KeyBackspace)
+		if got := m.composerDraft("s"); got != "" {
+			t.Fatalf("after single-line Cmd+Delete: got %q, want empty", got)
+		}
+
+		// Multiline message: Cmd+Delete removes only the current line, stops at line start,
+		// and preserves undo.
+		p.Text("first line")
+		p.Type(ggui.Mods{Shift: true}, ggui.KeyEnter)
+		p.Text("second line")
+		p.Type(ggui.Mods{Meta: true}, ggui.KeyBackspace)
+		if got := m.composerDraft("s"); got != "first line\n" {
+			t.Fatalf("after multiline Cmd+Delete: got %q, want %q", got, "first line\n")
+		}
+		// Pressing Cmd+Delete again at column 0 does not cross the newline.
+		p.Type(ggui.Mods{Meta: true}, ggui.KeyBackspace)
+		if got := m.composerDraft("s"); got != "first line\n" {
+			t.Fatalf("after column-0 Cmd+Delete: got %q, want %q", got, "first line\n")
+		}
+		// Mid-line Cmd+Delete removes to line start; Cmd+Fn+Delete removes to line end.
+		p.Text("alpha beta")
+		for range len("beta") {
+			p.Type(ggui.Mods{}, ggui.KeyArrowLeft)
+		}
+		p.Type(ggui.Mods{Meta: true}, ggui.KeyBackspace)
+		if got := m.composerDraft("s"); got != "first line\nbeta" {
+			t.Fatalf("after mid-line Cmd+Delete: got %q, want %q", got, "first line\nbeta")
+		}
+		p.Type(ggui.Mods{Meta: true}, ggui.KeyDelete)
+		if got := m.composerDraft("s"); got != "first line\n" {
+			t.Fatalf("after Cmd+Fn+Delete: got %q, want %q", got, "first line\n")
+		}
+
+		// Active selection: Cmd+Delete deletes only the selection.
+		p.Text("keep drop")
+		for range len("drop") {
+			p.Type(ggui.Mods{Shift: true}, ggui.KeyArrowLeft)
+		}
+		p.Type(ggui.Mods{Meta: true}, ggui.KeyBackspace)
+		if got := m.composerDraft("s"); got != "first line\nkeep " {
+			t.Fatalf("after selected Cmd+Delete: got %q, want %q", got, "first line\nkeep ")
+		}
+	})
+
+	t.Run("launch composer", func(t *testing.T) {
+		m := newModel(config.Default(), "")
+		id, l := m.newLaunch(newSession{Agent: "claude", Project: "/tmp"})
+		prompt := l.Form.Field(func(f *newSession) *string { return &f.Prompt })
+		p := ggui.ProbeBuilder(func() ggui.Widget { return launchBox(m, id, l) }, ggui.Sz(600, 480))
+		focusField(t, p, T("First prompt"))
+
+		p.Text("start a session message")
+		p.Type(ggui.Mods{Meta: true}, ggui.KeyBackspace)
+		if got := ggui.Peek(prompt); got != "" {
+			t.Fatalf("after launch Cmd+Delete: got %q, want empty", got)
+		}
+	})
+}
+
 // sentThrough is what reached the terminal of a message sent, up to the
 // Enter that ends it; it waits through frames, in which a send that found
 // no node goes through the terminal.

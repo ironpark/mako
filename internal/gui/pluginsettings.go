@@ -540,6 +540,13 @@ func settingRowWithBadges(title string, badges []ggui.Widget, hint string, contr
 // pluginSettingRow is a setting's row, its control as its type is.
 func pluginSettingRow(m *model, id string, s *protocol.PluginSetting, selectedScope string) ggui.Widget {
 	key := s.GetKey()
+	label, description := s.GetLabel(), s.GetDescription()
+	if m.isBundledPlugin(id) {
+		label = T(label)
+		if description != "" {
+			description = T(description)
+		}
+	}
 	sScope := s.GetScope()
 	applies := selectedScope != "" && isScoped(sScope) && strings.HasPrefix(selectedScope, sScope+":")
 	actionScope := ""
@@ -582,17 +589,17 @@ func pluginSettingRow(m *model, id string, s *protocol.PluginSetting, selectedSc
 	switch s.GetType() {
 	case "boolean":
 		on := effectiveVal == "true"
-		control = withReset(ui.Switch(ggui.Bind(func() bool { return on }, func(v bool) { on = v; set(strconv.FormatBool(v)) }), "").Name(s.GetLabel()))
+		control = withReset(ui.Switch(ggui.Bind(func() bool { return on }, func(v bool) { on = v; set(strconv.FormatBool(v)) }), "").Name(label))
 	case "number":
 		n, _ := strconv.ParseFloat(effectiveVal, 64)
 		control = withReset(widget.Box(ui.NumberInput(ggui.Bind(func() float64 { return n }, func(v float64) {
 			n = v
 			set(strconv.FormatFloat(v, 'f', -1, 64))
-		})).Name(s.GetLabel())).Width(140))
+		})).Name(label)).Width(140))
 	case "select":
 		v := effectiveVal
 		control = withReset(widget.Box(ui.Select(ggui.Bind(func() string { return v }, func(x string) { v = x; set(x) })).
-			Options(s.GetOptions()).Name(s.GetLabel())).Width(200))
+			Options(s.GetOptions()).Name(label)).Width(200))
 	case "secret":
 		draft := ggui.State("")
 		save := func(v string) {
@@ -614,7 +621,7 @@ func pluginSettingRow(m *model, id string, s *protocol.PluginSetting, selectedSc
 		} else {
 			placeholder = pick(s.GetSet(), T("Set; type to replace it"), T("Not set"))
 		}
-		field := ui.TextField(draft).Key("secret:" + id + ":" + key + ":" + actionScope).Password().Placeholder(placeholder).Name(s.GetLabel()).OnSubmit(save).OnCommit(save)
+		field := ui.TextField(draft).Key("secret:" + id + ":" + key + ":" + actionScope).Password().Placeholder(placeholder).Name(label).OnSubmit(save).OnCommit(save)
 		parts := []ggui.Widget{widget.Box(field).Width(220)}
 		if applies && overridden {
 			parts = append(parts, ui.Button(T("Reset to default"), func() { set("") }).Outline())
@@ -622,8 +629,8 @@ func pluginSettingRow(m *model, id string, s *protocol.PluginSetting, selectedSc
 			parts = append(parts, ui.Button(T("Clear"), func() { set("") }).Outline())
 		}
 		control = widget.Row(parts...).Gap(8).Align(widget.AlignCenter)
-		desc := strings.TrimSpace(s.GetDescription() + " " + secretWhere(ggui.Peek(m.plugins.Secrets)))
-		return settingRowWithBadges(s.GetLabel(), badges, desc, control)
+		desc := strings.TrimSpace(description + " " + secretWhere(ggui.Peek(m.plugins.Secrets)))
+		return settingRowWithBadges(label, badges, desc, control)
 	default:
 		draft := ggui.State(effectiveVal)
 		save := func(v string) {
@@ -631,10 +638,10 @@ func pluginSettingRow(m *model, id string, s *protocol.PluginSetting, selectedSc
 				set(v)
 			}
 		}
-		field := ui.TextField(draft).Key("setting:" + id + ":" + key + ":" + actionScope + ":" + effectiveVal).Name(s.GetLabel()).OnSubmit(save).OnCommit(save)
+		field := ui.TextField(draft).Key("setting:" + id + ":" + key + ":" + actionScope + ":" + effectiveVal).Name(label).OnSubmit(save).OnCommit(save)
 		control = withReset(widget.Box(field).Width(220))
 	}
-	return settingRowWithBadges(s.GetLabel(), badges, s.GetDescription(), control)
+	return settingRowWithBadges(label, badges, description, control)
 }
 
 // pluginAskBar asks, over the window, to allow what a plugin asks for:

@@ -5,6 +5,7 @@ import (
 	"maps"
 	"math"
 	"reflect"
+	"slices"
 	"unicode/utf8"
 )
 
@@ -218,18 +219,40 @@ func (m *Manager) ApplySyncedSettings(pluginID string, updates []SyncedSettingUp
 			return
 		}
 		p.mu.Lock()
-		var ins []*instance
+		var loaded []*instance
 		for _, in := range p.inst {
-			if in.loaded && (allScopes || scopesCopy[in.scopeKey]) {
-				ins = append(ins, in)
+			if in.loaded {
+				loaded = append(loaded, in)
 			}
 		}
 		p.mu.Unlock()
-		for _, in := range ins {
+		var reloadedKeys []string
+		for _, in := range loaded {
+			matched := allScopes
+			if !matched {
+				for scopeKey := range scopesCopy {
+					if p.settingScopeApplies(scopeKey, in.scopeKey) {
+						matched = true
+						break
+					}
+				}
+			}
+			if !matched {
+				continue
+			}
 			p.load(in)
+			reloadedKeys = append(reloadedKeys, in.key)
 		}
-		if len(ins) > 0 {
-			p.bump()
+		if allScopes {
+			p.renderAll()
+		} else if len(reloadedKeys) > 0 {
+			slices.Sort(reloadedKeys)
+			for _, key := range reloadedKeys {
+				if p.rt == nil {
+					return
+				}
+				p.render(key)
+			}
 		}
 	})
 	return true

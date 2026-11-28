@@ -2,7 +2,7 @@
 // history (fingerprint-deduplicated), forge branch status, and selected commit
 // details in parallel while preserving previous view data on transient errors.
 
-import { POLL_SECONDS, autoFixAvailable, evaluateAutoFix, loadAutoFixState } from "./autofix.js";
+import { POLL_SECONDS, autoFixAvailable, evaluateAutoFix, isPrOpen, loadAutoFixState } from "./autofix.js";
 import { resetForNewRepo } from "./state.js";
 
 function callGit(ctx, mako, method, req) {
@@ -166,7 +166,9 @@ export async function loadPanel(s, ctx, mako) {
   // a check failed or a review comment came. A forced refresh reads the pull
   // request's checks and comments again too.
   if (s.forge && s.forge.hasPr && s.forge.prNumber > 0 && autoFixAvailable(ctx)) {
-    const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber);
+    const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber, {
+      applyDefault: isPrOpen(s.forge.prState),
+    });
     if (af && af.enabled) {
       await evaluateAutoFix(s, ctx, mako, { manual: false, fresh: forcedForge });
     }

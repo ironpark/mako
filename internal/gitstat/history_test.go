@@ -2,6 +2,7 @@ package gitstat
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -161,5 +162,61 @@ func TestRunCommitsBranchesAndPushes(t *testing.T) {
 	}
 	if st, _ := Status(t.Context(), root); st.GetAhead() != 0 {
 		t.Fatalf("still ahead after push: %+v", st)
+	}
+}
+
+func TestCheckoutBranchUsedByAnotherWorktree(t *testing.T) {
+	root, run := cliRepo(t)
+	ctx := context.Background()
+	write(t, root, "a.txt", "main\n")
+	run("add", "-A")
+	run("commit", "-q", "-m", "initial")
+
+	// Create a linked worktree on branch "feat/wt".
+	wtPath := filepath.Join(t.TempDir(), "wt-feat")
+	run("worktree", "add", "-q", "-b", "feat/wt", wtPath, "main")
+	write(t, wtPath, "a.txt", "feat\n")
+	run("-C", wtPath, "commit", "-q", "-am", "feat change")
+
+	// 1. Conflicting uncommitted changes in main repo must still block checkout.
+	write(t, root, "a.txt", "dirty\n")
+	if _, err := Run(ctx, &protocol.GitRun{Root: root, Op: protocol.GitOpCheckout, Branch: "feat/wt"}); err == nil {
+		t.Fatal("checkout overwrote conflicting local changes")
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "a.txt")); string(b) != "dirty\n" {
+		t.Fatalf("local changes altered: %q", b)
+	}
+	run("checkout", "--", "a.txt")
+
+	// 2. Main repo can switch to a branch already checked out in a linked worktree.
+	if _, err := Run(ctx, &protocol.GitRun{Root: root, Op: protocol.GitOpCheckout, Branch: "feat/wt"}); err != nil {
+		t.Fatalf("checkout feat/wt from main repo: %v", err)
+	}
+	if st, err := Status(ctx, root); err != nil || st.GetBranch() != "feat/wt" {
+		t.Fatalf("main repo status after checkout = %+v, %v", st, err)
+	}
+
+	// Switch main repo back to "main", then switch the linked worktree to "main".
+	if _, err := Run(ctx, &protocol.GitRun{Root: root, Op: protocol.GitOpCheckout, Branch: "main"}); err != nil {
+		t.Fatalf("checkout main from main repo: %v", err)
+	}
+	if _, err := Run(ctx, &protocol.GitRun{Root: wtPath, Op: protocol.GitOpCheckout, Branch: "main"}); err != nil {
+		t.Fatalf("checkout main from linked worktree: %v", err)
+	}
+	if st, err := Status(ctx, wtPath); err != nil || st.GetBranch() != "main" {
+		t.Fatalf("worktree status after checkout = %+v, %v", st, err)
+	}
+
+	// 3. Switching to a branch from a stale/deleted worktree also succeeds.
+	staleWT := filepath.Join(t.TempDir(), "wt-stale")
+	run("worktree", "add", "-q", "-b", "feat/stale", staleWT, "main")
+	if err := os.RemoveAll(staleWT); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(ctx, &protocol.GitRun{Root: root, Op: protocol.GitOpCheckout, Branch: "feat/stale"}); err != nil {
+		t.Fatalf("checkout stale worktree branch: %v", err)
+	}
+	if st, err := Status(ctx, root); err != nil || st.GetBranch() != "feat/stale" {
+		t.Fatalf("main repo status after stale checkout = %+v, %v", st, err)
 	}
 }

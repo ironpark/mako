@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/ironpark/mako/internal/protocol"
 )
@@ -152,15 +153,18 @@ func (m *Manager) Act(ctx context.Context, a *protocol.PluginAction) (*protocol.
 				return
 			}
 			p.mu.Lock()
-			var ins []*instance
+			var loaded []*instance
 			for _, in := range p.inst {
-				if in.loaded && (scopeKey == "" || in.scopeKey == scopeKey) {
-					ins = append(ins, in)
+				if in.loaded {
+					loaded = append(loaded, in)
 				}
 			}
 			p.mu.Unlock()
 			var reloadedKeys []string
-			for _, in := range ins {
+			for _, in := range loaded {
+				if !p.settingScopeApplies(scopeKey, in.scopeKey) {
+					continue
+				}
 				p.load(in)
 				reloadedKeys = append(reloadedKeys, in.key)
 			}
@@ -191,4 +195,32 @@ func commandIDs(m *Manifest) []string {
 
 func contains(list []string, s string) bool {
 	return slices.Contains(list, s)
+}
+
+// settingScopeApplies reports whether a setting changed at settingScope can
+// affect a block instance running at instScope, including narrower scopes
+// (folder, session, project) whose resolved project or space matches a
+// project/space override.
+func (p *plugin) settingScopeApplies(settingScope, instScope string) bool {
+	if settingScope == "" || instScope == settingScope {
+		return true
+	}
+	if instScope == "" {
+		return false
+	}
+	if id, ok := strings.CutPrefix(settingScope, protocol.ScopeProject+":"); ok {
+		if id == "" || (!strings.HasPrefix(instScope, protocol.ScopeFolder+":") && !strings.HasPrefix(instScope, protocol.ScopeSession+":")) {
+			return false
+		}
+		return p.m.resolveScope(instScope).ProjectID == id
+	}
+	if id, ok := strings.CutPrefix(settingScope, protocol.ScopeSpace+":"); ok {
+		if id == "" || (!strings.HasPrefix(instScope, protocol.ScopeFolder+":") &&
+			!strings.HasPrefix(instScope, protocol.ScopeProject+":") &&
+			!strings.HasPrefix(instScope, protocol.ScopeSession+":")) {
+			return false
+		}
+		return p.m.resolveScope(instScope).SpaceID == id
+	}
+	return false
 }
