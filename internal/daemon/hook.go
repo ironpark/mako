@@ -400,10 +400,14 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	case agent.Approval:
 		// Evaluate cross-agent Mako permission policy rules before holding the
 		// approval for user interaction.
+		// The call reads as its kind does, as approvals.ask reads it: a
+		// call with no arguments still has the kind its name gives, so a
+		// question or a plan is never decided for the user.
 		kind, canon := "", agent.Fields(ev.Input)
 		if tools, ok := agents.As[agent.Tools](name); ok {
-			if k, read := tools.Tool(ev.Tool, ev.Input); read != nil {
-				kind, canon = k, read
+			var read map[string]any
+			if kind, read = tools.Tool(ev.Tool, ev.Input); read != nil {
+				canon = read
 			}
 		}
 		// Rules read the whole call; the detail, cut to a line, is only
@@ -423,6 +427,10 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 				RuleID:  dec.Rule.ID,
 				Rule:    dec.Rule.Name,
 			})
+			// Decided, the call runs or is refused and the agent works on,
+			// as after an answer in the window. A request the window holds
+			// for another call stands.
+			s.ReportToolStatus(protocol.AgentWorking, msg.Seq)
 			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 			_ = json.NewEncoder(conn).Encode(reply)
 			return

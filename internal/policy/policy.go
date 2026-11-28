@@ -231,7 +231,7 @@ func ruleMatches(r Rule, call Call) bool {
 			return false
 		}
 	}
-	if !matchGlobFold(r.Tool, call.Tool) {
+	if !matchGlobFold(r.Tool, call.Tool) && !slices.Contains(toolKinds[strings.ToLower(strings.TrimSpace(r.Tool))], call.Kind) {
 		return false
 	}
 	if r.Pattern != "" {

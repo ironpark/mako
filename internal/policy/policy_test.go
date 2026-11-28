@@ -206,3 +206,48 @@ func TestEmptyToolIsNeverAWildcard(t *testing.T) {
 		t.Fatalf("a rule with no tool matched: %+v", d)
 	}
 }
+
+// A rule names a tool by what it does, so it holds for every agent's tool
+// of the kind; Edit names each kind that changes a file.
+func TestRulesMatchToolsByKindAcrossAgents(t *testing.T) {
+	rules := []Rule{
+		{ID: "git", Enabled: true, Action: ActionAllow, Tool: "Bash", Pattern: "git status*"},
+		{ID: "env", Enabled: true, Action: ActionDeny, Tool: "Edit", Pattern: "*.env*"},
+		{ID: "src", Enabled: true, Action: ActionAllow, Tool: "Read", Pattern: "src/*"},
+	}
+	shell := map[string]any{"command": "git status"}
+	env := map[string]any{"path": "config/.env"}
+	for _, c := range []struct {
+		call Call
+		want Action
+	}{
+		{Call{Agent: "codex", Tool: "exec_command", Kind: protocol.ToolShell, Input: shell}, ActionAllow},
+		{Call{Agent: "agy", Tool: "run_command", Kind: protocol.ToolShell, Input: shell}, ActionAllow},
+		{Call{Agent: "opencode", Tool: "interactive_bash", Kind: protocol.ToolShell, Input: shell}, ActionAllow},
+		{Call{Agent: "agy", Tool: "replace_file_content", Kind: protocol.ToolEdit, Input: env}, ActionDeny},
+		{Call{Agent: "agy", Tool: "edit_file", Kind: protocol.ToolEdit, Input: env}, ActionDeny},
+		{Call{Agent: "claude", Tool: "MultiEdit", Kind: protocol.ToolMultiEdit, Input: env}, ActionDeny},
+		{Call{Agent: "claude", Tool: "Write", Kind: protocol.ToolWrite, Input: env}, ActionDeny},
+		{Call{Agent: "opencode", Tool: "apply_patch", Kind: protocol.ToolPatch, Input: map[string]any{"patch": "*** Begin Patch\n*** Update File: .env\n*** End Patch"}}, ActionDeny},
+		{Call{Agent: "claude", Tool: "Grep", Kind: protocol.ToolSearch, Input: map[string]any{"pattern": "TODO", "path": "src/x"}}, ActionAllow},
+		{Call{Agent: "codex", Tool: "read", Kind: protocol.ToolRead, Input: map[string]any{"path": "src/main.go"}}, ActionAllow},
+	} {
+		if d := EvaluateRules(rules, c.call); !d.Matched || d.Action != c.want {
+			t.Errorf("%s %s: %+v, want %s", c.call.Agent, c.call.Tool, d, c.want)
+		}
+	}
+	// A rule names only its own kinds.
+	for _, call := range []Call{
+		{Agent: "codex", Tool: "apply_patch", Kind: protocol.ToolPatch, Input: map[string]any{"patch": "*** Begin Patch\n*** Update File: git status\n*** End Patch"}},
+		{Agent: "claude", Tool: "Read", Kind: protocol.ToolRead, Input: env},
+		{Agent: "claude", Tool: "mcp__x__run", Input: shell},
+	} {
+		if d := EvaluateRules(rules, call); d.Matched {
+			t.Errorf("%s %s matched %+v", call.Agent, call.Tool, d)
+		}
+	}
+	write := []Rule{{ID: "w", Enabled: true, Action: ActionDeny, Tool: "Write"}}
+	if d := EvaluateRules(write, Call{Agent: "agy", Tool: "edit_file", Kind: protocol.ToolEdit, Input: env}); d.Matched {
+		t.Errorf("Write matched an edit: %+v", d)
+	}
+}

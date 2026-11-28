@@ -17,6 +17,32 @@ type Call struct {
 	Input map[string]any
 }
 
+// toolKinds are the kinds of call a rule's tool names, whatever each agent
+// calls its tools, by the name in lower case: a kind's own name, and the
+// name Claude Code gives its tool of the kind. As in Claude Code's own
+// permission rules, Edit names every kind that changes a file and Read
+// every kind that reads them, so a rule for Bash or Edit holds for Codex's
+// exec_command and apply_patch, agy's run_command and replace_file_content,
+// and OpenCode's interactive_bash too.
+var toolKinds = map[string][]string{
+	"bash":                 {protocol.ToolShell},
+	protocol.ToolShell:     {protocol.ToolShell},
+	"edit":                 {protocol.ToolEdit, protocol.ToolMultiEdit, protocol.ToolWrite, protocol.ToolPatch},
+	protocol.ToolMultiEdit: {protocol.ToolMultiEdit},
+	protocol.ToolWrite:     {protocol.ToolWrite},
+	protocol.ToolPatch:     {protocol.ToolPatch},
+	"apply_patch":          {protocol.ToolPatch},
+	"read":                 {protocol.ToolRead, protocol.ToolSearch},
+	protocol.ToolSearch:    {protocol.ToolSearch},
+	"grep":                 {protocol.ToolSearch},
+	"glob":                 {protocol.ToolSearch},
+	"webfetch":             {protocol.ToolFetch},
+	protocol.ToolFetch:     {protocol.ToolFetch},
+	protocol.ToolWebSearch: {protocol.ToolWebSearch},
+	protocol.ToolTask:      {protocol.ToolTask},
+	"agent":                {protocol.ToolTask},
+}
+
 // patternMatches reports whether r's pattern holds for call. A deny rule
 // holds when its pattern matches anything the call acts on; an allow rule
 // only when it matches everything the call acts on, so a call cannot carry
