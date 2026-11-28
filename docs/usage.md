@@ -284,6 +284,12 @@ setup_cmd = "npm ci --prefer-offline"
 teardown_cmd = ""
 ```
 
+A path in `shared_paths` is a link to the same folder in the main
+repository, so every worktree and the main repository write into it.
+Mako makes and removes the worktrees of one repository one at a time, so
+two `setup_cmd` runs do not change a shared folder at the same time. An
+agent in a worktree can still change a shared folder while it works.
+
 When you remove a worktree, Mako first refuses it if it has changes.
 Then Mako runs `teardown_cmd`, and takes out the links and the unchanged
 copies that it made. If `teardown_cmd` fails, Mako removes the worktree

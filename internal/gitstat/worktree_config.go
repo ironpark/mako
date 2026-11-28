@@ -19,6 +19,8 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"go.yaml.in/yaml/v3"
+
+	"github.com/ironpark/mako/internal/safeexec"
 )
 
 const (
@@ -576,6 +578,6 @@ func runWorktreeHook(ctx context.Context, wtPath, repo, branch, base, command st
 		"MAKO_WORKTREE_BRANCH="+branch,
 		"MAKO_WORKTREE_BASE="+base,
 	)
-	out, err := cmd.CombinedOutput()
+	out, err := safeexec.CombinedOutput(cmd)
 	return strings.TrimSpace(string(out)), err
 }

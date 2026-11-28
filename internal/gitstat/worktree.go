@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -28,6 +29,30 @@ const WorktreeTimeout = 3 * time.Minute
 // rollbackTimeout is how long undoing a worktree that failed to bootstrap
 // can take, even after the request it was made for ended.
 const rollbackTimeout = 30 * time.Second
+
+// repoLocks holds a token for each repository while a worktree of it is
+// made or removed, so one is made or removed at a time: the bootstraps of
+// two could fight over the paths they share with the repository, as two
+// setup_cmds installing into one shared node_modules would, and two could
+// pick one free name.
+var repoLocks sync.Map // the repository's path, links resolved: chan struct{}
+
+// lockRepo waits for the repository at repo to be the caller's to make or
+// remove a worktree of, or for ctx to end; unlock gives it back.
+func lockRepo(ctx context.Context, repo string) (unlock func(), err error) {
+	key := repo
+	if real, err := filepath.EvalSymlinks(repo); err == nil {
+		key = real
+	}
+	v, _ := repoLocks.LoadOrStore(key, make(chan struct{}, 1))
+	token := v.(chan struct{})
+	select {
+	case token <- struct{}{}:
+		return func() { <-token }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
 
 // NewWorktree is a worktree for AddWorktree to make.
 type NewWorktree struct {
@@ -80,6 +105,11 @@ func AddWorktree(ctx context.Context, dir string, w NewWorktree) (MadeWorktree, 
 		return MadeWorktree{}, err
 	}
 	repo := filepath.Dir(strings.TrimSpace(string(common)))
+	unlock, err := lockRepo(ctx, repo)
+	if err != nil {
+		return MadeWorktree{}, err
+	}
+	defer unlock()
 	cfg, err := LoadWorktreeConfig(repo)
 	if err != nil {
 		return MadeWorktree{}, err
@@ -231,6 +261,11 @@ func RemoveWorktree(ctx context.Context, w *protocol.Worktree, trusted HookTrust
 	if path == "" || repo == "" {
 		return "", errors.New("no worktree to remove")
 	}
+	unlock, err := lockRepo(ctx, repo)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
 	// A malformed config does not stop the removal: it bootstraps nothing.
 	cfg, err := LoadWorktreeConfig(repo)
 	if err != nil {
