@@ -725,3 +725,112 @@ func TestKVStoreDelRollbackAndCorruptJSON(t *testing.T) {
 		})
 	}
 }
+
+func TestApplySyncedSettingsReloadsFolderScopedInstance(t *testing.T) {
+	folderAlpha := protocol.FolderScope("local", "/tmp/alpha")
+	folderBeta := protocol.FolderScope("local", "/tmp/beta")
+
+	r := startRig(t, Config{
+		Limits: testLimits,
+		ResolveScope: func(scopeKey string) ScopeContext {
+			switch scopeKey {
+			case folderAlpha:
+				return ScopeContext{SpaceID: "sp-1", ProjectID: "alpha", Node: "local", Folder: "/tmp/alpha"}
+			case folderBeta:
+				return ScopeContext{SpaceID: "sp-2", ProjectID: "beta", Node: "local", Folder: "/tmp/beta"}
+			case "project:alpha":
+				return ScopeContext{SpaceID: "sp-1", ProjectID: "alpha"}
+			case "session:s-alpha":
+				return ScopeContext{SpaceID: "sp-1", ProjectID: "alpha", SessionID: "s-alpha"}
+			}
+			return ScopeContext{}
+		},
+	})
+	r.write("sync-reload", map[string]string{
+		ManifestName: `id = "sync-reload"
+version = "0.1.0"
+publisher = "test"
+api = 1
+entry = "main.js"
+permissions = []
+
+[[contributes.block]]
+id = "panel"
+title = "Folder Panel"
+scope = "folder"
+
+[contributes.settings]
+autofix = { type = "boolean", label = "Auto-fix", default = false, scope = "project" }
+`,
+		"main.js": `export default {
+  activate(m) {
+    m.blocks.register("panel", {
+      state: { flag: false, loads: 0 },
+      async load(s, ctx) {
+        s.loads += 1;
+        const scope = ctx.projectId ? "project:" + ctx.projectId : "";
+        const res = await m.settings.getSetting({ key: "autofix", scope });
+        s.flag = Boolean(res && res.setting && res.setting.flag);
+      },
+      render(s, ui, ctx) {
+        return ui.text(ctx.projectId + "|flag=" + s.flag + "|loads=" + s.loads);
+      },
+    });
+  },
+};`,
+	})
+	r.state("sync-reload", protocol.PluginReady)
+
+	wAlpha := r.watchScoped("plugin:sync-reload/panel", folderAlpha)
+	wBeta := r.watchScoped("plugin:sync-reload/panel", folderBeta)
+	wAlpha.until("alpha initial", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "alpha|flag=false|loads=1")
+	})
+	wBeta.until("beta initial", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "beta|flag=false|loads=1")
+	})
+
+	// Verify settingScopeApplies across folder, session, and project scopes.
+	p, ok := r.m.plugin("sync-reload")
+	if !ok {
+		t.Fatal("missing sync-reload plugin")
+	}
+	for _, tc := range []struct {
+		settingScope, instScope string
+		want                    bool
+	}{
+		{"project:alpha", folderAlpha, true},
+		{"project:alpha", folderBeta, false},
+		{"project:alpha", "session:s-alpha", true},
+		{"space:sp-1", folderAlpha, true},
+		{"space:sp-1", "project:alpha", true},
+		{"space:sp-1", "session:s-alpha", true},
+		{"space:sp-1", folderBeta, false},
+		{"space:sp-1", "", false},
+	} {
+		if got := p.settingScopeApplies(tc.settingScope, tc.instScope); got != tc.want {
+			t.Errorf("settingScopeApplies(%q, %q) = %v, want %v", tc.settingScope, tc.instScope, got, tc.want)
+		}
+	}
+
+	// Peer-synced project:alpha override must live-reload & re-render folderAlpha
+	// without reloading folderBeta.
+	if !r.m.ApplySyncedSettings("sync-reload", []SyncedSettingUpdate{{
+		ScopeKey: "project:alpha",
+		Key:      "autofix",
+		Value:    []byte("true"),
+	}}) {
+		t.Fatal("ApplySyncedSettings returned false, want true")
+	}
+	wAlpha.until("alpha reloaded after synced project setting", func(n *protocol.UiNode, _ *protocol.BlockUpdate) bool {
+		return hasText(n, "alpha|flag=true|loads=2")
+	})
+
+	// Confirm beta was not reloaded by project:alpha sync.
+	wBeta.mu.Lock()
+	betaTree := wBeta.tree
+	wBeta.mu.Unlock()
+	if !hasText(betaTree, "beta|flag=false|loads=1") {
+		t.Fatalf("beta unexpectedly reloaded: %v", betaTree)
+	}
+}

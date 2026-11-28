@@ -6,8 +6,7 @@ import (
 	"io/fs"
 	"testing"
 
-	"github.com/ironpark/ggfx"
-	"github.com/ironpark/ggfx/svg"
+	"github.com/ironpark/svgx"
 
 	"github.com/ironpark/mako/internal/gui/iconset"
 )
@@ -75,15 +74,15 @@ func TestFileIconsLoad(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		doc, err := svg.Parse(bytes.NewReader(bytes.ReplaceAll(data, []byte("currentColor"), []byte("#ffffff"))))
+		doc, err := svgx.Parse(bytes.NewReader(bytes.ReplaceAll(data, []byte("currentColor"), []byte("#ffffff"))))
 		if err != nil {
 			t.Fatalf("%s: %v", n, err)
 		}
 		img := image.NewRGBA(image.Rect(0, 0, 32, 32))
-		_, _, w, _ := doc.ViewBox()
-		var g ggfx.GeoM
-		g.Scale(32/w, 32/w)
-		doc.Draw(img, g)
+		vb := doc.ViewBox()
+		var m svgx.Matrix
+		m.Scale(32/vb.W, 32/vb.W)
+		_ = doc.Draw(img, m, &svgx.DrawOptions{Static: true})
 		covered := 0
 		for i := 3; i < len(img.Pix); i += 4 {
 			if img.Pix[i] > 0 {

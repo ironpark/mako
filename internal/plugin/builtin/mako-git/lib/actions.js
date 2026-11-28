@@ -10,6 +10,7 @@ import {
   isPrOpen,
   listAvailableAgents,
   loadAutoFixState,
+  readAutoFixDefault,
   resetAutoFix as startAttemptsAgain,
   saveAutoFixState,
   wakeViews,
@@ -415,6 +416,7 @@ export function createActions(mako) {
       const ctx = getCtx();
       if (!hasAutoFixPr(s, ctx)) return;
       const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber);
+      const defaultEnabled = await readAutoFixDefault(ctx, mako);
       const agentOptions = [{ value: "", label: ctx.t("Auto (default agent)") }];
       for (const a of await listAvailableAgents(mako)) {
         if (!a || !a.agent || a.agent === "shell" || a.installed === false) continue;
@@ -426,6 +428,7 @@ export function createActions(mako) {
         kind: "autofix",
         prNumber: s.forge.prNumber,
         enabled: Boolean(af.enabled),
+        defaultEnabled,
         fixCi: af.fixCi !== false,
         fixReviews: af.fixReviews !== false,
         replyOnGitHub: af.replyOnGitHub !== false,
