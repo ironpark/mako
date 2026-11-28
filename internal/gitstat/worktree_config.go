@@ -31,7 +31,12 @@ const (
 	// worktreeHookDisableEnv set to 1 in the daemon's environment runs no
 	// setup_cmd or teardown_cmd, trusted or not.
 	worktreeHookDisableEnv = "MAKO_NO_WORKTREE_HOOKS"
-	worktreeHookTimeout    = 2 * time.Minute
+	// worktreeHookTimeout is how long a setup_cmd or teardown_cmd can run.
+	worktreeHookTimeout = 2 * time.Minute
+	// maxWorktreeConfig is the largest .mako/worktree.toml or orca.yaml
+	// read: as large as a command file the user can trust, which is
+	// repotrust.MaxSize.
+	maxWorktreeConfig = 256 << 10
 )
 
 // HookTrust says whether the user trusts the commands of file, a
@@ -88,8 +93,7 @@ func LoadWorktreeConfig(dir string) (WorktreeConfig, error) {
 		return WorktreeConfig{}, nil
 	}
 	repo := cmp.Or(Repo(dir), dir)
-	tomlPath := filepath.Join(repo, filepath.FromSlash(WorktreeConfigFile))
-	if data, err := os.ReadFile(tomlPath); err == nil {
+	if data, err := readRepoFile(repo, WorktreeConfigFile, maxWorktreeConfig); err == nil {
 		var cfg WorktreeConfig
 		md, err := toml.Decode(string(data), &cfg)
 		if err != nil {
@@ -107,8 +111,7 @@ func LoadWorktreeConfig(dir string) (WorktreeConfig, error) {
 		return WorktreeConfig{}, fmt.Errorf("read %s: %w", WorktreeConfigFile, err)
 	}
 
-	orcaPath := filepath.Join(repo, orcaFallbackFile)
-	if data, err := os.ReadFile(orcaPath); err == nil {
+	if data, err := readRepoFile(repo, orcaFallbackFile, maxWorktreeConfig); err == nil {
 		var oc orcaYAMLConfig
 		if err := yaml.Unmarshal(data, &oc); err != nil {
 			return WorktreeConfig{}, fmt.Errorf("parse %s: %w", orcaFallbackFile, err)
@@ -122,6 +125,40 @@ func LoadWorktreeConfig(dir string) (WorktreeConfig, error) {
 		return WorktreeConfig{}, fmt.Errorf("read %s: %w", orcaFallbackFile, err)
 	}
 	return WorktreeConfig{}, nil
+}
+
+// readRepoFile reads the file rel, slash-separated, of the repository at
+// repo: a regular file of at most max bytes, through no link that leads
+// out of the repository. It does not wait on what is no regular file, as
+// opening a FIFO waits for a writer, so a repository's config cannot hold
+// up the worktrees of it waiting for one; a missing file is
+// os.ErrNotExist.
+func readRepoFile(repo, rel string, max int64) ([]byte, error) {
+	root, err := os.OpenRoot(repo)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	f, err := root.OpenFile(filepath.FromSlash(rel), os.O_RDONLY|openNonblock, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", rel)
+	}
+	var b bytes.Buffer
+	if _, err := b.ReadFrom(io.LimitReader(f, max+1)); err != nil {
+		return nil, err
+	}
+	if int64(b.Len()) > max {
+		return nil, fmt.Errorf("%s is larger than %d bytes", rel, max)
+	}
+	return b.Bytes(), nil
 }
 
 func validateWorktreeConfig(cfg WorktreeConfig) error {
