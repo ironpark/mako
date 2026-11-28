@@ -12,8 +12,8 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/grandcat/zeroconf v1.0.0
 	github.com/ironpark/fswatch v0.4.0
-	github.com/ironpark/ggfx v0.3.1
-	github.com/ironpark/ggui v0.9.1
+	github.com/ironpark/ggfx v0.3.2
+	github.com/ironpark/ggui v0.9.2-0.20261128090324-3a76f5a91db9
 	github.com/ironpark/ggwd v0.0.0-20261123092851-969c1988e18d
 	github.com/ironpark/gostty v0.0.0-20261108124048-de82fbcca291
 	github.com/ironpark/qngg v0.0.0-20261030173357-5bb022c263f0
