@@ -23,6 +23,16 @@ function renderAutoFixDialog(s, d, ui, t) {
       size: "small",
       tone: "muted",
     }),
+    ui.text(
+      d.defaultEnabled
+        ? t("Auto-fix is on by default for new pull requests (Settings ▸ Plugins ▸ mako-git).")
+        : t("To turn on Auto-fix by default for new pull requests, enable it in Settings ▸ Plugins ▸ mako-git."),
+      {
+        key: "af-default-note",
+        size: "small",
+        tone: "faint",
+      },
+    ),
     ui.column([
       ui.checkbox(d.fixCi ? "on" : "off", t("Fix failing CI checks"), {
         key: "af-fix-ci",

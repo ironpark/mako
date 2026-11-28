@@ -2019,4 +2019,8 @@ var catalogKo = map[string]string{
 	"Install makod to ~/.mako/bin/makod on the remote host for full chat, hooks, approvals, MCP, and persistent sessions.": "원격 호스트의 ~/.mako/bin/makod에 makod를 설치하면 챗, 훅, 승인, MCP 및 영구 세션을 모두 사용할 수 있습니다.",
 	"Probing remote host…": "원격 호스트를 확인하는 중…",
 	"Installed %s at %s":   "%[2]s에 %[1]s 설치 완료",
+
+	// mako-git plugin settings
+	"Auto-fix pull requests by default":                                                  "풀 리퀘스트 자동 수정 기본으로 켜기",
+	"Turn on Auto-fix automatically for open pull requests you have not configured yet.": "아직 설정하지 않은 열린 풀 리퀘스트에 자동 수정을 자동으로 켭니다.",
 }
