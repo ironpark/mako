@@ -3,6 +3,7 @@ package routines
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -60,7 +61,8 @@ func Save(configDir string, list []Routine) error {
 	return fsutil.Write(FilePath(configDir), raw)
 }
 
-// Find looks up a routine by exact ID or case-insensitive name.
+// Find looks up a routine by exact ID or case-insensitive name. A name
+// more than one routine has finds none: an ID tells them apart.
 func Find(list []Routine, idOrName string) (int, bool) {
 	q := strings.TrimSpace(idOrName)
 	for i, r := range list {
@@ -68,12 +70,16 @@ func Find(list []Routine, idOrName string) (int, bool) {
 			return i, true
 		}
 	}
+	found := -1
 	for i, r := range list {
 		if strings.EqualFold(r.Name, q) {
-			return i, true
+			if found >= 0 {
+				return -1, false
+			}
+			found = i
 		}
 	}
-	return -1, false
+	return found, found >= 0
 }
 
 // LoadHistory reads recent run records from configDir (newest first).
@@ -92,9 +98,15 @@ func LoadHistory(configDir string) ([]RunRecord, error) {
 	return list, nil
 }
 
-// AppendHistory prepends rec to routines-history.json and trims to maxHistoryItems.
+// AppendHistory prepends rec to routines-history.json and trims to
+// maxHistoryItems. A history that cannot be read is left as it is, and its
+// error returned, rather than replaced by rec alone. It reads and writes
+// the file unlocked: its caller serializes appends, as the daemon does.
 func AppendHistory(configDir string, rec RunRecord) error {
-	list, _ := LoadHistory(configDir)
+	list, err := LoadHistory(configDir)
+	if err != nil {
+		return fmt.Errorf("routine history not updated: %w", err)
+	}
 	if rec.ID == "" {
 		rec.ID = NewID("run")
 	}

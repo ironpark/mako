@@ -1,6 +1,8 @@
 package routines
 
 import (
+	"bytes"
+	"os"
 	"testing"
 	"time"
 )
@@ -173,5 +175,31 @@ func TestBranchPrefixIsValidated(t *testing.T) {
 	r := Routine{Name: "x", Project: "/p", Agent: "claude", Prompt: "p", Trigger: TriggerCron, Schedule: "@daily", BranchPrefix: "-rf"}
 	if err := r.Validate(); err == nil {
 		t.Fatal("Validate took a branch prefix beginning with -")
+	}
+}
+
+// A history that cannot be read is never replaced by the record appended.
+func TestAppendHistoryKeepsAnUnreadableHistory(t *testing.T) {
+	dir := t.TempDir()
+	bad := []byte("[{\"id\": \"run-1\", \"status\": \"started\"}, oops")
+	if err := os.WriteFile(HistoryPath(dir), bad, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := AppendHistory(dir, RunRecord{RoutineID: "r", Status: "started"}); err == nil {
+		t.Fatal("AppendHistory wrote over a history it could not read")
+	}
+	got, err := os.ReadFile(HistoryPath(dir))
+	if err != nil || !bytes.Equal(got, bad) {
+		t.Fatalf("history = %q, %v; want it untouched", got, err)
+	}
+}
+
+func TestFindRefusesAnAmbiguousName(t *testing.T) {
+	list := []Routine{{ID: "rtn-a", Name: "Nightly"}, {ID: "rtn-b", Name: "nightly"}}
+	if _, ok := Find(list, "NIGHTLY"); ok {
+		t.Fatal("Find chose one of two routines of the same name")
+	}
+	if i, ok := Find(list, "rtn-b"); !ok || i != 1 {
+		t.Fatalf("Find by ID = %d, %v", i, ok)
 	}
 }
