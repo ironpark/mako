@@ -22,6 +22,9 @@ message ForgeList {
   // Of the branch checked out, in place of branch: for pull requests, the
   // one gh finds for it by its upstream.
   bool current = 7;
+  // order is "created" for the newest opened first; "" for the most
+  // recently active first. Pull requests and issues (revision 53).
+  string order = 8;
 }
 
 // ForgeItems answers ForgeList.
@@ -53,6 +56,12 @@ message ForgeItem {
   repeated string labels = 14;
   string workflow = 18; // a run's
   string event = 19; // what started a run: push, pull_request and the like
+  // fork is set for a pull request from, or a run of a branch of, another
+  // repository, as far as the forge tells (revision 53).
+  bool fork = 20;
+  // association is a pull request's author's tie to the repository, as
+  // ForgeComment.association; "" when the forge does not tell (revision 53).
+  string association = 21;
 }
 
 // ForgeView asks for one pull request, issue or run in full. A pull

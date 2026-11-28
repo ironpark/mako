@@ -237,4 +237,37 @@ public interface ForgeItemOrBuilder extends
    */
   com.google.protobuf.ByteString
       getEventBytes();
+
+  /**
+   * <pre>
+   * fork is set for a pull request from, or a run of a branch of, another
+   * repository, as far as the forge tells (revision 53).
+   * </pre>
+   *
+   * <code>bool fork = 20 [json_name = "fork"];</code>
+   * @return The fork.
+   */
+  boolean getFork();
+
+  /**
+   * <pre>
+   * association is a pull request's author's tie to the repository, as
+   * ForgeComment.association; "" when the forge does not tell (revision 53).
+   * </pre>
+   *
+   * <code>string association = 21 [json_name = "association"];</code>
+   * @return The association.
+   */
+  java.lang.String getAssociation();
+  /**
+   * <pre>
+   * association is a pull request's author's tie to the repository, as
+   * ForgeComment.association; "" when the forge does not tell (revision 53).
+   * </pre>
+   *
+   * <code>string association = 21 [json_name = "association"];</code>
+   * @return The bytes for association.
+   */
+  com.google.protobuf.ByteString
+      getAssociationBytes();
 }

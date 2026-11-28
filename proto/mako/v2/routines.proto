@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package mako.v2;
+
+import "google/protobuf/timestamp.proto";
+import "mako/v2/session.proto";
+
+option go_package = "github.com/ironpark/mako/internal/protocol";
+
+// Routines are agent runs a node's daemon starts by itself: on a cron
+// schedule, or when the forge of a routine's repository has a new pull
+// request or a failed CI run. The daemon keeps them, and their latest
+// runs, in its configuration directory; front-ends read and change them
+// with these requests, routed by node_id (revision 53).
+
+// Routine is one routine as the daemon keeps it.
+message Routine {
+  string id = 1;
+  string name = 2;
+  bool enabled = 3;
+  string trigger = 4; // cron, forge_pr_opened or forge_ci_failed
+  // A cron trigger's schedule: five fields, @hourly, @daily, @weekly or
+  // @every and a whole number of minutes.
+  string schedule = 5;
+  string project = 6; // the folder its sessions start in, on its node
+  string agent = 7; // an agent, or agent:profile
+  bool worktree = 8; // each run in a new git worktree
+  // branch_prefix begins a worktree's branch, which a run's time and a
+  // random suffix end; "" for routine/<id>.
+  string branch_prefix = 9;
+  string prompt = 10; // typed into the session as it is
+  // allow_external lets a Forge trigger run for a pull request or a run
+  // from a fork, or by an author without write access to the repository;
+  // without it only the repository's own branches and members do.
+  bool allow_external = 11;
+  uint32 max_concurrent = 12; // its sessions at work at once; 0 for 1
+  uint32 max_per_poll = 13; // runs one poll of the forge starts; 0 for 1
+  // cooldown is the least time between two Forge-triggered runs, as Go
+  // reads a duration ("10m"): "" for 10 minutes, "0" for none.
+  string cooldown = 14;
+}
+
+// RoutineRun is one run of a routine, or a trigger it did not run for.
+message RoutineRun {
+  string id = 1;
+  string routine_id = 2;
+  string routine_name = 3;
+  string trigger = 4; // manual, cron:<schedule>, pr:#<number> or ci:#<run>
+  string session_id = 5;
+  string status = 6; // started, error or skipped
+  string error = 7; // why, for error and skipped
+  google.protobuf.Timestamp started = 8;
+}
+
+// ListRoutines asks a node for its routines and its latest runs. The
+// reply is routines.
+message ListRoutines {
+  string node_id = 1;
+  uint32 runs = 2; // at most so many runs, newest first; 0 for all it keeps
+}
+
+// Routines answers ListRoutines and RoutineAction.
+message Routines {
+  repeated Routine routines = 1;
+  repeated RoutineRun runs = 2; // newest first
+  string runs_error = 3; // why the runs could not be read, when they could not
+  SessionInfo session = 4; // the session a run started
+}
+
+// RoutineAction changes a node's routines, or runs one now. The reply is
+// routines, the node's after the change.
+message RoutineAction {
+  string node_id = 1;
+  string op = 2; // add, update, remove, enable, disable or run
+  // routine is the one acted on: by its ID, or a name no other routine
+  // has; update's by its ID.
+  string routine = 3;
+  Routine spec = 4; // add's and update's; add gives it an ID of its own
+  uint32 runs = 5; // as ListRoutines.runs
+}

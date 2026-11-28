@@ -439,7 +439,11 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	}
 	req.Project = project
 	// A session of its own worktree gets it made once, when it first
-	// starts; the saved request then names it.
+	// starts; the saved request then names it. If startSessionWithParent
+	// fails before the session starts, roll back the freshly created
+	// worktree so failed launches (e.g. timed-out routines) do not leak.
+	var createdWorktree *protocol.Worktree
+	startedOK := false
 	if w := req.GetWorktree(); w != nil && w.GetPath() == "" {
 		if w.GetBase() == "" {
 			w.Base = gitstat.Branch(project)
@@ -452,6 +456,16 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		}
 		w.Repo, w.Path, w.Branch = repo, path, branch
 		req.Project = w.GetPath()
+		createdWorktree = proto.CloneOf(w)
+		defer func() {
+			if !startedOK && createdWorktree != nil {
+				rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer rmCancel()
+				if _, rmErr := gitstat.RemoveWorktree(rmCtx, createdWorktree); rmErr != nil {
+					d.log.Warn("failed to roll back worktree after session start error", "path", createdWorktree.GetPath(), "err", rmErr)
+				}
+			}
+		}()
 	}
 	// A project that gives its folders gives them to an agent started in
 	// one: worked out at each start, so a resumed session has its
@@ -625,6 +639,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		go d.followProjectAgent(s, parent)
 	}
 	d.log.Info("session started", "id", id, "agent", req.GetAgent(), "project", req.GetProject())
+	startedOK = true
 	go func() { <-s.Done(); d.live.resetSuggestion(id); cleanup(); d.releaseSession(id) }()
 	return s, nil
 }
@@ -784,10 +799,18 @@ func (d *Daemon) closeSession(id string) error {
 		}
 		return err
 	}
+	root := entry.Info.GetProject()
+	wtRepo := entry.Info.GetWorktree().GetRepo()
 	if live {
+		info := s.Info()
+		root = info.GetProject()
+		if r := info.GetWorktree().GetRepo(); r != "" {
+			wtRepo = r
+		}
 		_ = s.Close()
 		d.sessions.remove(id)
 	}
+	d.dropCheckpoints(id, root, wtRepo)
 	d.live.forget(id)
 	d.loggedCommands.forget(id)
 	if err := d.projectAgents.messages.remove(id); err != nil {
