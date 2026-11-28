@@ -290,10 +290,30 @@ Mako makes and removes the worktrees of one repository one at a time, so
 two `setup_cmd` runs do not change a shared folder at the same time. An
 agent in a worktree can still change a shared folder while it works.
 
+A path in `copy_paths` is copied into the worktree. Mako copies only
+folders, regular files, and links that lead to files of the repository,
+also through the links they lead on to. Mako refuses a link that leads
+out of the repository, and leaves out a link that leads nowhere. Mako also
+leaves out a `.git` in a copied folder, so that git does not use the
+config or hooks of a repository inside it in the worktree.
+
 When you remove a worktree, Mako first refuses it if it has changes.
 Then Mako runs `teardown_cmd`, and takes out the links and the unchanged
 copies that it made. If `teardown_cmd` fails, Mako removes the worktree
-anyway and shows the failure.
+anyway and shows the failure. Mako removes only a worktree that git lists
+for the repository.
+
+Mako gives the two commands the worktree only in environment variables:
+`MAKO_WORKTREE_PATH`, `MAKO_WORKTREE_REPO`, `MAKO_WORKTREE_BRANCH`, and
+`MAKO_WORKTREE_BASE`, the branch that the worktree came off. Both commands
+get the same base. Each command can run for two minutes. When the time
+is up, Mako stops the command and, on macOS and Linux, all that it
+started. A removal then continues without the command.
+
+On Windows, the commands run with `cmd /C`, which puts in the value of
+each `%NAME%` before it reads the line. So Mako does not run them for a
+branch or base whose name has one of `& | < > ^ % ! " ( )`. Put quotes
+around the paths in a command, as in `"%MAKO_WORKTREE_PATH%"`.
 
 Mako reads the file from the main work tree of the repository, also
 when you start in a folder of it or in another worktree. `base_ref` is
@@ -301,7 +321,8 @@ where a new worktree starts when you do not name a base or a start.
 
 If `.mako/worktree.toml` is absent and `orca.yaml` defines
 `worktree.sharedDirectories`, Mako honors those shared directories
-automatically.
+automatically. Mako reads each file only if it is a regular file of at
+most 256 KiB in the repository.
 
 `setup_cmd` and `teardown_cmd` run with your permissions, so Mako runs
 them only after you trust the file as it reads (see Repository commands
