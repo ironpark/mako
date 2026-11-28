@@ -46,6 +46,9 @@ type Config struct {
 	SSHKey string `json:"ssh_key"`
 	// P2P is how the daemon links to its peers over libp2p.
 	P2P P2P `json:"p2p"`
+	// AHP serves this node's sessions to Agent Host Protocol clients. It
+	// is off until Listen is set.
+	AHP AHP `json:"ahp,omitzero"`
 	// Agents are how this node launches each agent by name: its command,
 	// default flags and environment, and its profiles. A built-in left out
 	// launches with its default command.
@@ -151,6 +154,19 @@ type Devices struct {
 
 // Shares reports whether the node lends devices of kind.
 func (d Devices) Shares(kind string) bool { return slices.Contains(d.Share, kind) }
+
+// AHP configures the daemon's Agent Host Protocol endpoint
+// (docs/ahp.md). With Listen set, the daemon serves AHP over WebSocket on
+// that loopback address, with the token in ahp-token in its configuration
+// directory, and on ahp.sock in its run directory.
+type AHP struct {
+	// Listen is a loopback host:port, as 127.0.0.1:8787. "" leaves the
+	// endpoint off.
+	Listen string `json:"listen,omitempty"`
+	// Origins are the browser origins, as path.Match patterns of
+	// host:port, that may connect besides the endpoint's own.
+	Origins []string `json:"origins,omitempty"`
+}
 
 // P2P configures the daemon's libp2p host, which its peers reach it on.
 type P2P struct {

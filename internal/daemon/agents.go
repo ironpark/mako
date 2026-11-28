@@ -123,6 +123,7 @@ func cloneConfig(c *config.Config) *config.Config {
 	out.Peers = slices.Clone(c.Peers)
 	out.Discovery.TailnetHosts = slices.Clone(c.Discovery.TailnetHosts)
 	out.P2P.Relays = slices.Clone(c.P2P.Relays)
+	out.AHP.Origins = slices.Clone(c.AHP.Origins)
 	out.Agents = cloneAgentsMap(c.Agents)
 	out.Shell = cloneShell(c.Shell)
 	out.ContextServers = cloneContextServers(c.ContextServers)

@@ -310,6 +310,9 @@ func (d *Daemon) Run(ctx context.Context) error {
 	wg.Go(func() { d.maintain(ctx) })
 	wg.Go(func() { d.watchState(ctx) })
 	wg.Go(func() { d.runRoutines(ctx) })
+	if cfg.AHP.Listen != "" {
+		wg.Go(func() { d.serveAHP(ctx, dir, run, cfg.AHP) })
+	}
 
 	<-ctx.Done()
 	_ = d.ln.Close()
