@@ -313,7 +313,10 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 			}
 			return run(ctx, r.GetRoot(), nil, "switch", "-c", r.GetBranch(), c)
 		}
-		return run(ctx, r.GetRoot(), nil, "switch", r.GetBranch())
+		// Allow switching to a branch already checked out in another worktree
+		// (e.g. a sibling session worktree or the main work tree); conflicting
+		// uncommitted changes in this work tree are still refused by git.
+		return run(ctx, r.GetRoot(), nil, "switch", "--ignore-other-worktrees", r.GetBranch())
 	case protocol.GitOpDiscard:
 		if len(r.GetPaths()) != 1 {
 			return "", errors.New("a discard is of one file")
