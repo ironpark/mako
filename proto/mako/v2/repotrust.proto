@@ -21,8 +21,12 @@ message RepoTrust {
   // file at path, or every file of the repository whose root is path;
   // "list" lists the files trusted.
   string op = 2;
-  // path is absolute: a file of a git work tree, whose root is the
-  // repository's, or with "revoke" a repository's root.
+  // path is absolute: a file of a git work tree, or with "revoke" a
+  // repository's root. The repository is the main work tree of the work
+  // tree the file is in, and a file of a linked worktree stands for the
+  // same file of the main work tree, which is the one read and trusted. A
+  // folder whose .git points into a repository that does not list it as
+  // a worktree of its own is a repository of its own.
   string path = 3;
   string sha256 = 4;
 }
@@ -36,7 +40,7 @@ message RepoTrustInfo {
 // TrustedFile is a command file of a repository, as the user trusts it or
 // not.
 message TrustedFile {
-  string root = 1; // the repository's root, links resolved
+  string root = 1; // the repository's main work tree, links resolved
   string path = 2; // the file, slash-separated, from root
   // sha256 is of the content: as it reads now when shown, as it was
   // trusted otherwise.

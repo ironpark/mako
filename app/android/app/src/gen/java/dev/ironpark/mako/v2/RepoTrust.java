@@ -168,8 +168,12 @@ public  final class RepoTrust extends
   private java.lang.String path_;
   /**
    * <pre>
-   * path is absolute: a file of a git work tree, whose root is the
-   * repository's, or with "revoke" a repository's root.
+   * path is absolute: a file of a git work tree, or with "revoke" a
+   * repository's root. The repository is the main work tree of the work
+   * tree the file is in, and a file of a linked worktree stands for the
+   * same file of the main work tree, which is the one read and trusted. A
+   * folder whose .git points into a repository that does not list it as
+   * a worktree of its own is a repository of its own.
    * </pre>
    *
    * <code>string path = 3 [json_name = "path"];</code>
@@ -181,8 +185,12 @@ public  final class RepoTrust extends
   }
   /**
    * <pre>
-   * path is absolute: a file of a git work tree, whose root is the
-   * repository's, or with "revoke" a repository's root.
+   * path is absolute: a file of a git work tree, or with "revoke" a
+   * repository's root. The repository is the main work tree of the work
+   * tree the file is in, and a file of a linked worktree stands for the
+   * same file of the main work tree, which is the one read and trusted. A
+   * folder whose .git points into a repository that does not list it as
+   * a worktree of its own is a repository of its own.
    * </pre>
    *
    * <code>string path = 3 [json_name = "path"];</code>
@@ -195,8 +203,12 @@ public  final class RepoTrust extends
   }
   /**
    * <pre>
-   * path is absolute: a file of a git work tree, whose root is the
-   * repository's, or with "revoke" a repository's root.
+   * path is absolute: a file of a git work tree, or with "revoke" a
+   * repository's root. The repository is the main work tree of the work
+   * tree the file is in, and a file of a linked worktree stands for the
+   * same file of the main work tree, which is the one read and trusted. A
+   * folder whose .git points into a repository that does not list it as
+   * a worktree of its own is a repository of its own.
    * </pre>
    *
    * <code>string path = 3 [json_name = "path"];</code>
@@ -210,8 +222,12 @@ public  final class RepoTrust extends
   }
   /**
    * <pre>
-   * path is absolute: a file of a git work tree, whose root is the
-   * repository's, or with "revoke" a repository's root.
+   * path is absolute: a file of a git work tree, or with "revoke" a
+   * repository's root. The repository is the main work tree of the work
+   * tree the file is in, and a file of a linked worktree stands for the
+   * same file of the main work tree, which is the one read and trusted. A
+   * folder whose .git points into a repository that does not list it as
+   * a worktree of its own is a repository of its own.
    * </pre>
    *
    * <code>string path = 3 [json_name = "path"];</code>
@@ -222,8 +238,12 @@ public  final class RepoTrust extends
   }
   /**
    * <pre>
-   * path is absolute: a file of a git work tree, whose root is the
-   * repository's, or with "revoke" a repository's root.
+   * path is absolute: a file of a git work tree, or with "revoke" a
+   * repository's root. The repository is the main work tree of the work
+   * tree the file is in, and a file of a linked worktree stands for the
+   * same file of the main work tree, which is the one read and trusted. A
+   * folder whose .git points into a repository that does not list it as
+   * a worktree of its own is a repository of its own.
    * </pre>
    *
    * <code>string path = 3 [json_name = "path"];</code>
@@ -530,8 +550,12 @@ public  final class RepoTrust extends
 
     /**
      * <pre>
-     * path is absolute: a file of a git work tree, whose root is the
-     * repository's, or with "revoke" a repository's root.
+     * path is absolute: a file of a git work tree, or with "revoke" a
+     * repository's root. The repository is the main work tree of the work
+     * tree the file is in, and a file of a linked worktree stands for the
+     * same file of the main work tree, which is the one read and trusted. A
+     * folder whose .git points into a repository that does not list it as
+     * a worktree of its own is a repository of its own.
      * </pre>
      *
      * <code>string path = 3 [json_name = "path"];</code>
@@ -543,8 +567,12 @@ public  final class RepoTrust extends
     }
     /**
      * <pre>
-     * path is absolute: a file of a git work tree, whose root is the
-     * repository's, or with "revoke" a repository's root.
+     * path is absolute: a file of a git work tree, or with "revoke" a
+     * repository's root. The repository is the main work tree of the work
+     * tree the file is in, and a file of a linked worktree stands for the
+     * same file of the main work tree, which is the one read and trusted. A
+     * folder whose .git points into a repository that does not list it as
+     * a worktree of its own is a repository of its own.
      * </pre>
      *
      * <code>string path = 3 [json_name = "path"];</code>
@@ -557,8 +585,12 @@ public  final class RepoTrust extends
     }
     /**
      * <pre>
-     * path is absolute: a file of a git work tree, whose root is the
-     * repository's, or with "revoke" a repository's root.
+     * path is absolute: a file of a git work tree, or with "revoke" a
+     * repository's root. The repository is the main work tree of the work
+     * tree the file is in, and a file of a linked worktree stands for the
+     * same file of the main work tree, which is the one read and trusted. A
+     * folder whose .git points into a repository that does not list it as
+     * a worktree of its own is a repository of its own.
      * </pre>
      *
      * <code>string path = 3 [json_name = "path"];</code>
@@ -573,8 +605,12 @@ public  final class RepoTrust extends
     }
     /**
      * <pre>
-     * path is absolute: a file of a git work tree, whose root is the
-     * repository's, or with "revoke" a repository's root.
+     * path is absolute: a file of a git work tree, or with "revoke" a
+     * repository's root. The repository is the main work tree of the work
+     * tree the file is in, and a file of a linked worktree stands for the
+     * same file of the main work tree, which is the one read and trusted. A
+     * folder whose .git points into a repository that does not list it as
+     * a worktree of its own is a repository of its own.
      * </pre>
      *
      * <code>string path = 3 [json_name = "path"];</code>
@@ -587,8 +623,12 @@ public  final class RepoTrust extends
     }
     /**
      * <pre>
-     * path is absolute: a file of a git work tree, whose root is the
-     * repository's, or with "revoke" a repository's root.
+     * path is absolute: a file of a git work tree, or with "revoke" a
+     * repository's root. The repository is the main work tree of the work
+     * tree the file is in, and a file of a linked worktree stands for the
+     * same file of the main work tree, which is the one read and trusted. A
+     * folder whose .git points into a repository that does not list it as
+     * a worktree of its own is a repository of its own.
      * </pre>
      *
      * <code>string path = 3 [json_name = "path"];</code>

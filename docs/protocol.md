@@ -852,9 +852,9 @@ agent that works in it can write one too. So a node runs these commands
 only while its user trusts the file as it reads now.
 
 A trust is for one file of one repository. The node keeps it by three
-values: the root of the repository with its links resolved, the path of
-the file from that root (slash-separated), and the SHA-256 of the file's
-content. The node keeps these in `repo-trust.json` in its configuration
+values: the root of the repository's main work tree with its links
+resolved, the path of the file from that root (slash-separated), and the
+SHA-256 of the file's content. The node keeps these in `repo-trust.json` in its configuration
 directory. When the file changes, it is not trusted. The user must trust
 it again as it reads then. These requests need revision 55.
 
@@ -864,9 +864,9 @@ it again as it reads then. These requests need revision 55.
 
 | `op` | |
 |---|---|
-| `""` | Show the file at `path` (absolute). Its repository is the git work tree it is in. The reply gives its `root`, `path`, `sha256` and `content` as it reads now, and `trusted` if the user trusts it as it reads now. |
+| `""` | Show the file at `path` (absolute). Its repository is the main work tree of the git work tree it is in. A file of a linked worktree stands for the same file of the main work tree, which is the one shown and trusted: features read a repository's command files from its main work tree, for a session in any worktree of it. A folder whose `.git` points into a repository that does not list it as a worktree, both ways, is a repository of its own. The reply gives its `root`, `path`, `sha256` and `content` as it reads now, and `trusted` if the user trusts it as it reads now. |
 | `trust` | Trust the file at `path` as it reads now. Its content must hash to `sha256`, the content the user saw. If the file changed, the node refuses. |
-| `revoke` | Forget the file at `path`, or every file of the repository whose root is `path`, also when the repository is gone. |
+| `revoke` | Forget the file at `path`, or every file of the repository whose root is `path`, also when the repository is gone. A path in a linked worktree stands for the same path of the main work tree. |
 | `list` | List every file trusted, with the hash it is trusted at. |
 
 A front-end shows the user the whole file before it asks to trust it,

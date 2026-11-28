@@ -38,8 +38,12 @@ type RepoTrust struct {
 	// file at path, or every file of the repository whose root is path;
 	// "list" lists the files trusted.
 	Op string `protobuf:"bytes,2,opt,name=op,proto3" json:"op,omitempty"`
-	// path is absolute: a file of a git work tree, whose root is the
-	// repository's, or with "revoke" a repository's root.
+	// path is absolute: a file of a git work tree, or with "revoke" a
+	// repository's root. The repository is the main work tree of the work
+	// tree the file is in, and a file of a linked worktree stands for the
+	// same file of the main work tree, which is the one read and trusted. A
+	// folder whose .git points into a repository that does not list it as
+	// a worktree of its own is a repository of its own.
 	Path          string `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
 	Sha256        string `protobuf:"bytes,4,opt,name=sha256,proto3" json:"sha256,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -154,7 +158,7 @@ func (x *RepoTrustInfo) GetFiles() []*TrustedFile {
 // not.
 type TrustedFile struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Root  string                 `protobuf:"bytes,1,opt,name=root,proto3" json:"root,omitempty"` // the repository's root, links resolved
+	Root  string                 `protobuf:"bytes,1,opt,name=root,proto3" json:"root,omitempty"` // the repository's main work tree, links resolved
 	Path  string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"` // the file, slash-separated, from root
 	// sha256 is of the content: as it reads now when shown, as it was
 	// trusted otherwise.
