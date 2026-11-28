@@ -298,6 +298,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 	wg.Go(func() { d.discover(ctx) })
 	wg.Go(func() { d.maintain(ctx) })
 	wg.Go(func() { d.watchState(ctx) })
+	wg.Go(func() { d.runRoutines(ctx) })
 
 	<-ctx.Done()
 	_ = d.ln.Close()

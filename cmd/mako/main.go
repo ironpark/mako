@@ -42,6 +42,16 @@ Projects:
   mako projects dirs [add <path>|remove <path>|default <path>]
                                      list or configure default project storage directories
 
+Routines (self-hosted scheduled & event-triggered agent runs):
+  mako routines [list]              list configured routines
+  mako routines add -name <name> -project <dir> -agent <target> (-schedule <cron> | -trigger forge_pr_opened|forge_ci_failed) -prompt <text> [-worktree]
+                                     add a scheduled or Forge-triggered routine
+  mako routines remove <id|name>    remove a routine
+  mako routines enable|disable <id|name>
+                                     enable or disable a routine
+  mako routines run <id|name>       trigger a routine immediately
+  mako routines history [-limit N]  show recent routine runs
+
 Remote SSH hosts:
   mako ssh [list]                   list configured remote SSH hosts
   mako ssh add <host> [-name <name>] [-user <user>] [-port <port>] [-key <path>] [-jump <host>] [-dir <path>] [-mode auto|daemon|direct]
@@ -148,6 +158,9 @@ func run(args []string, daemonAddr, nodeID, project string, devices []string) er
 	}
 	if args[0] == "ssh" {
 		return sshCmd(args[1:])
+	}
+	if args[0] == "routines" {
+		return routinesCmd(args[1:], daemonAddr)
 	}
 	cfg, err := config.Load()
 	if err != nil {
