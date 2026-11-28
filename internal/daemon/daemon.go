@@ -247,6 +247,7 @@ func (d *Daemon) Run(ctx context.Context) error {
 		return err
 	}
 	defer func() {
+		d.stopHosts()
 		if err := d.hosts.flush(); err != nil {
 			d.log.Warn("session host: drafts not saved", "err", err)
 		}

@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,13 +51,30 @@ const (
 	// hostRemembered is how many actions of each front-end a host knows
 	// it took, to take each once.
 	hostRemembered = 256
-	// hostQueueMax bounds a session's prompt queue, and hostDraftMax its
-	// draft.
-	hostQueueMax = 32
-	hostDraftMax = 64 << 10
+	// hostForget is how long a host remembers a front-end, its actions and
+	// where its requests come from, after its last stream ended and its
+	// last action.
+	hostForget = hostLinger
+	// hostQueueMax bounds a session's prompt queue, hostDraftMax its draft
+	// and hostPromptMax a prompt's text, hostKeysMax the keys that submit
+	// it, and hostClientMax and hostNameMax a front-end's ID and, in
+	// characters, its name.
+	hostQueueMax  = 32
+	hostDraftMax  = 64 << 10
+	hostPromptMax = 64 << 10
+	hostKeysMax   = 64
+	hostClientMax = 128
+	hostNameMax   = 64
+	// hostDeliverTries is how many times a queued prompt is typed and
+	// fails before the queue gives it up, for the prompts after it.
+	hostDeliverTries = 5
 	// hostSaveDelay gathers drafts written in a burst into one save.
 	hostSaveDelay = time.Second
 )
+
+// errHostClosed is an action or a subscription of a session that closed,
+// or of a daemon stopping.
+var errHostClosed = errors.New("the session closed")
 
 // hostHub holds the session hosts of this daemon, the sequence their
 // events are numbered from, and the sessions' drafts, which outlast the
@@ -66,8 +85,12 @@ type hostHub struct {
 	n      uint64 // the events numbered this run
 	hosts  map[string]*sessionHost
 	drafts map[string]*protocol.HostDraft
-	path   string      // host.json, "" before load
-	save   *time.Timer // a save due
+	// closed are the sessions closed for good, which no host is started
+	// for again; stopped, once the daemon stops, none is.
+	closed  map[string]bool
+	stopped bool
+	path    string      // host.json, "" before load
+	save    *time.Timer // a save due
 }
 
 // hostFile is host.json.
@@ -97,17 +120,19 @@ func (hub *hostHub) load(dir string, keep func(id string) bool) error {
 			return fmt.Errorf("%s: %w", path, err)
 		}
 	}
+	// keep takes the sessions' lock, which is taken before the hub's.
+	drafts := map[string]*protocol.HostDraft{}
+	for id, dr := range f.Drafts {
+		if keep(id) && dr.Text != "" {
+			drafts[id] = &protocol.HostDraft{Text: dr.Text, ClientId: dr.ClientID, At: timestamppb.New(dr.At)}
+		}
+	}
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
 	hub.path = path
 	hub.epoch = (f.Epoch + 1) << 32
 	hub.n = 0
-	hub.drafts = map[string]*protocol.HostDraft{}
-	for id, dr := range f.Drafts {
-		if keep(id) && dr.Text != "" {
-			hub.drafts[id] = &protocol.HostDraft{Text: dr.Text, ClientId: dr.ClientID, At: timestamppb.New(dr.At)}
-		}
-	}
+	hub.drafts = drafts
 	return hub.saveLocked()
 }
 
@@ -127,18 +152,29 @@ func (hub *hostHub) saveLocked() error {
 	return fsutil.Write(hub.path, data)
 }
 
-// setDraft keeps session id's draft, saved soon.
-func (hub *hostHub) setDraft(id string, dr *protocol.HostDraft, log func(error)) {
+// setDraft keeps the draft of h's session, saved soon: while h is its
+// session's host, so that a host stopped as its session closes, whose
+// last action is still under way, does not bring the draft back.
+func (hub *hostHub) setDraft(h *sessionHost, dr *protocol.HostDraft, log func(error)) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
+	if hub.hosts[h.id] != h {
+		return
+	}
 	if hub.drafts == nil {
 		hub.drafts = map[string]*protocol.HostDraft{}
 	}
 	if dr.GetText() == "" {
-		delete(hub.drafts, id)
+		delete(hub.drafts, h.id)
 	} else {
-		hub.drafts[id] = dr
+		hub.drafts[h.id] = dr
 	}
+	hub.saveSoonLocked(log)
+}
+
+// saveSoonLocked has host.json written in a moment, with what changes of
+// it meanwhile.
+func (hub *hostHub) saveSoonLocked(log func(error)) {
 	if hub.path == "" || hub.save != nil {
 		return
 	}
@@ -185,16 +221,47 @@ func (hub *hostHub) now() (seq, epoch uint64) {
 	return hub.epoch | hub.n, hub.epoch
 }
 
-// host is session s's host, started for it if it has none.
-func (d *Daemon) host(ctx context.Context, s *session.Session) *sessionHost {
+// host is session s's host, started for it if it has none, and what lets
+// it go: a host held so does not stop as its last subscriber's linger
+// ends, and lingers once let go. It waits, as long as ctx lets it, for a
+// host just started to have its state.
+func (d *Daemon) host(ctx context.Context, s *session.Session) (*sessionHost, func(), error) {
 	hub := &d.hosts
-	hub.mu.Lock()
-	h := hub.hosts[s.ID()]
-	if h != nil {
-		hub.mu.Unlock()
-		<-h.ready
-		return h
+	for {
+		hub.mu.Lock()
+		if hub.stopped || hub.closed[s.ID()] {
+			hub.mu.Unlock()
+			return nil, nil, errHostClosed
+		}
+		h := hub.hosts[s.ID()]
+		if h == nil {
+			h = d.newHostLocked(s)
+			hub.mu.Unlock()
+			go h.start(s)
+		} else {
+			hub.mu.Unlock()
+		}
+		select {
+		case <-h.ready:
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		}
+		h.mu.Lock()
+		if !h.shut {
+			h.holds++
+			h.mu.Unlock()
+			var once sync.Once
+			return h, func() { once.Do(h.let) }, nil
+		}
+		// It stopped as it was found, its linger over: another takes its
+		// place, unless its session closed.
+		h.mu.Unlock()
 	}
+}
+
+// newHostLocked makes session s's host, which start starts.
+func (d *Daemon) newHostLocked(s *session.Session) *sessionHost {
+	hub := &d.hosts
 	if hub.hosts == nil {
 		hub.hosts = map[string]*sessionHost{}
 	}
@@ -203,52 +270,91 @@ func (d *Daemon) host(ctx context.Context, s *session.Session) *sessionHost {
 	}
 	// The host outlives the request that started it: the daemon's run
 	// bounds it.
-	run, stop := context.WithCancel(d.ctx)
-	h = &sessionHost{
-		d: d, id: s.ID(), s: s, stop: stop,
+	base := d.ctx
+	if base == nil {
+		base = context.Background() // a daemon not run, as in a test
+	}
+	alive, stop := context.WithCancel(base)
+	h := &sessionHost{
+		d: d, id: s.ID(), s: s, alive: alive, stop: stop,
 		state:   &protocol.HostState{Seq: hub.epoch | hub.n, Draft: hub.drafts[s.ID()], Queue: &protocol.HostQueue{}, Clients: &protocol.HostClients{}},
 		floor:   hub.epoch | hub.n,
 		subs:    map[*hostSub]struct{}{},
 		clients: map[string]*hostClient{},
-		done:    map[string]*hostDone{},
+		known:   map[string]*hostKnown{},
 		ready:   make(chan struct{}),
 		stopped: make(chan struct{}),
 	}
 	hub.hosts[s.ID()] = h
-	hub.mu.Unlock()
+	return h
+}
 
+// start reads the host's session for its first state, and follows it.
+func (h *sessionHost) start(s *session.Session) {
 	h.refreshInfo(s)
-	h.refreshChat(ctx, s)
+	h.refreshChat(h.alive, s)
 	h.mu.Lock()
 	h.lingerLocked()
 	h.mu.Unlock()
 	close(h.ready)
-	go h.run(run)
-	return h
+	h.run(h.alive)
+}
+
+// let lets the host go, as a request that held it ends.
+func (h *sessionHost) let() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.holds--
+	h.lingerLocked()
 }
 
 // forgetHost stops session id's host, as the session closes for good,
-// and drops its draft.
+// drops its draft, and starts it no other.
 func (d *Daemon) forgetHost(id string) {
 	hub := &d.hosts
 	hub.mu.Lock()
 	h := hub.hosts[id]
 	delete(hub.hosts, id)
+	if hub.closed == nil {
+		hub.closed = map[string]bool{}
+	}
+	hub.closed[id] = true
+	if _, ok := hub.drafts[id]; ok {
+		delete(hub.drafts, id)
+		hub.saveSoonLocked(func(err error) { d.log.Warn("session host: drafts not saved", "err", err) })
+	}
 	hub.mu.Unlock()
-	// Not waiting for it to be ready: the session's close holds what its
-	// start may wait on.
+	// Not waiting for it to be ready, or for an action under way: the
+	// session's close holds what they may wait on. Each looks again once
+	// it has the host's lock.
 	if h != nil {
 		h.mu.Lock()
 		h.shutLocked()
 		h.mu.Unlock()
 	}
-	hub.setDraft(id, nil, func(err error) { d.log.Warn("session host: drafts not saved", "err", err) })
+	d.approvals.forgetSession(id)
+}
+
+// stopHosts stops every host as the daemon stops, and starts no other.
+func (d *Daemon) stopHosts() {
+	hub := &d.hosts
+	hub.mu.Lock()
+	hub.stopped = true
+	hosts := slices.Collect(maps.Values(hub.hosts))
+	clear(hub.hosts)
+	hub.mu.Unlock()
+	for _, h := range hosts {
+		h.mu.Lock()
+		h.shutLocked()
+		h.mu.Unlock()
+	}
 }
 
 // sessionHost is one session's host.
 type sessionHost struct {
-	d  *Daemon
-	id string
+	d     *Daemon
+	id    string
+	alive context.Context // the host's own, ended by stop
 
 	actMu sync.Mutex // one action, or queued prompt typed, at a time
 
@@ -261,10 +367,12 @@ type sessionHost struct {
 	floor     uint64 // every event after it is in ring
 	subs      map[*hostSub]struct{}
 	clients   map[string]*hostClient
-	done      map[string]*hostDone // by client
+	known     map[string]*hostKnown // by client
 	queue     []hostQueued
 	queuedN   uint64
 	delivered time.Time // when a queued prompt was last typed
+	failed    int       // the times the first queued prompt failed to be typed
+	holds     int       // the requests holding the host (Daemon.host)
 	linger    *time.Timer
 	stop      context.CancelFunc
 	ready     chan struct{} // closed once the host has its state
@@ -285,7 +393,12 @@ type hostClient struct {
 	approvals int
 }
 
-type hostDone struct {
+// hostKnown is what a host knows of a front-end: where its requests come
+// from, which binds its client_id to it, when it was last heard of, and
+// the results of its actions, to take each once.
+type hostKnown struct {
+	origin  string // "" for this daemon's socket, else the peer that passed them on
+	last    time.Time
 	results map[uint64]*protocol.SessionActionResult
 	order   []uint64
 }
@@ -322,6 +435,13 @@ func (h *sessionHost) emitLocked(origin *protocol.HostOrigin, ev *protocol.HostE
 		}
 	}
 	return ev.Seq
+}
+
+// snapshot is a copy of the state, as stateLocked makes it.
+func (h *sessionHost) snapshot() *protocol.HostState {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.stateLocked()
 }
 
 // stateLocked is a copy of the state to send: its fields are shared, as
@@ -371,14 +491,17 @@ func wholeKind(ev *protocol.HostEvent) string {
 	return ""
 }
 
-// subscribe adds a subscriber for req and says what it is sent first:
-// what it missed after req's last_seen_seq, if the host has all of it,
-// else the host's state.
-func (h *sessionHost) subscribe(req *protocol.SubscribeSession) (*hostSub, *protocol.HostSubscribed, error) {
+// subscribe adds a subscriber for req, of a front-end whose requests come
+// from origin, and says what it is sent first: what it missed after req's
+// last_seen_seq, if the host has all of it, else the host's state.
+func (h *sessionHost) subscribe(req *protocol.SubscribeSession, origin string) (*hostSub, *protocol.HostSubscribed, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.shut {
-		return nil, nil, errors.New("the session closed")
+		return nil, nil, errHostClosed
+	}
+	if _, err := h.knowLocked(req.GetClientId(), origin); err != nil {
+		return nil, nil, err
 	}
 	_, epoch := h.d.hosts.now()
 	first := &protocol.HostSubscribed{Epoch: epoch}
@@ -393,20 +516,72 @@ func (h *sessionHost) subscribe(req *protocol.SubscribeSession) (*hostSub, *prot
 		h.linger.Stop()
 		h.linger = nil
 	}
+	name := clientName(req.GetClientName())
 	c := h.clients[sub.client]
 	if c == nil {
-		c = &hostClient{name: req.GetClientName(), since: time.Now()}
+		c = &hostClient{name: name, since: time.Now()}
 		h.clients[sub.client] = c
 	}
 	c.streams++
 	if req.GetApprovals() {
 		c.approvals++
 	}
-	if req.GetClientName() != "" {
-		c.name = req.GetClientName()
+	if name != "" {
+		c.name = name
 	}
 	h.clientsChangedLocked()
 	return sub, first, nil
+}
+
+// checkClient refuses a client_id no host takes: none, too long, or one
+// that would show as something else.
+func checkClient(id string) error {
+	switch {
+	case id == "":
+		return errors.New("a session action or subscription names its front-end (client_id)")
+	case len(id) > hostClientMax:
+		return fmt.Errorf("a client_id is at most %d bytes", hostClientMax)
+	case strings.ContainsFunc(id, protocol.Spoofing):
+		return errors.New("a client_id is printable")
+	}
+	return nil
+}
+
+// clientName is a front-end's name as others are shown it: on one line,
+// printable, and at most hostNameMax characters.
+func clientName(name string) string {
+	name = strings.Join(strings.Fields(name), " ")
+	name = protocol.Printable(name)
+	if r := []rune(name); len(r) > hostNameMax {
+		name = string(r[:hostNameMax-1]) + "…"
+	}
+	return name
+}
+
+// knowLocked is what the host knows of front-end client, whose request
+// came from origin. The first request of a client_id binds it to where it
+// came from, until the host forgets the front-end: one from elsewhere
+// with the same client_id is another's, refused.
+func (h *sessionHost) knowLocked(client, origin string) (*hostKnown, error) {
+	k := h.known[client]
+	if k == nil {
+		k = &hostKnown{origin: origin, results: map[uint64]*protocol.SessionActionResult{}}
+		h.known[client] = k
+	} else if k.origin != origin {
+		return nil, fmt.Errorf("client_id %q is another front-end's", client)
+	}
+	k.last = time.Now()
+	return k, nil
+}
+
+// forgetLocked forgets the front-ends with no stream that were last heard
+// of before hostForget ago.
+func (h *sessionHost) forgetLocked(now time.Time) {
+	for id, k := range h.known {
+		if h.clients[id] == nil && now.Sub(k.last) > hostForget {
+			delete(h.known, id)
+		}
+	}
 }
 
 // unsubscribe takes sub away.
@@ -422,6 +597,9 @@ func (h *sessionHost) unsubscribe(sub *hostSub, approvals bool) {
 		if c.streams <= 0 {
 			delete(h.clients, sub.client)
 		}
+	}
+	if k := h.known[sub.client]; k != nil {
+		k.last = time.Now()
 	}
 	if !h.shut {
 		h.clientsChangedLocked()
@@ -458,31 +636,36 @@ func compareStrings(a, b string) int {
 	return 0
 }
 
-// lingerLocked stops the host hostLinger after its last subscriber left,
-// unless one comes back, or its queue still waits.
+// lingerLocked stops the host hostLinger after its last subscriber left
+// and the last request holding it let it go, unless one comes back, or
+// its queue still waits.
 func (h *sessionHost) lingerLocked() {
-	if len(h.subs) > 0 || h.linger != nil || h.shut {
+	if len(h.subs) > 0 || h.holds > 0 || h.linger != nil || h.shut {
 		return
 	}
-	h.linger = time.AfterFunc(hostLinger, func() {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		h.linger = nil
-		if len(h.subs) > 0 || h.shut {
-			return
-		}
-		if len(h.queue) > 0 {
-			h.lingerLocked()
-			return
-		}
-		hub := &h.d.hosts
-		hub.mu.Lock()
-		if hub.hosts[h.id] == h {
-			delete(hub.hosts, h.id)
-		}
-		hub.mu.Unlock()
-		h.shutLocked()
-	})
+	h.linger = time.AfterFunc(hostLinger, h.lingered)
+}
+
+// lingered stops the host as its linger ends, unless a subscriber came
+// back, a request holds it, or its queue waits.
+func (h *sessionHost) lingered() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.linger = nil
+	if len(h.subs) > 0 || h.holds > 0 || h.shut {
+		return
+	}
+	if len(h.queue) > 0 {
+		h.lingerLocked()
+		return
+	}
+	hub := &h.d.hosts
+	hub.mu.Lock()
+	if hub.hosts[h.id] == h {
+		delete(hub.hosts, h.id)
+	}
+	hub.mu.Unlock()
+	h.shutLocked()
 }
 
 // shutLocked stops the host: its subscribers are told the session is no
@@ -579,6 +762,9 @@ func (h *sessionHost) follow(ctx context.Context, s *session.Session) {
 		case <-tick.C:
 			h.refreshInfo(s)
 			h.deliver(ctx, s)
+			h.mu.Lock()
+			h.forgetLocked(time.Now())
+			h.mu.Unlock()
 		}
 	}
 }
@@ -682,10 +868,11 @@ func (h *sessionHost) setLive(l *protocol.ChatLive) {
 }
 
 // deliver types the first queued prompt once the agent has settled at its
-// prompt, as an agent's messages are.
+// prompt, as an agent's messages are. One that fails hostDeliverTries
+// times is given up, for the prompts after it.
 func (h *sessionHost) deliver(ctx context.Context, s *session.Session) {
 	h.mu.Lock()
-	if len(h.queue) == 0 {
+	if len(h.queue) == 0 || h.shut {
 		h.mu.Unlock()
 		return
 	}
@@ -703,19 +890,32 @@ func (h *sessionHost) deliver(ctx context.Context, s *session.Session) {
 	}
 	defer h.actMu.Unlock()
 	h.mu.Lock()
-	if len(h.queue) == 0 || h.queue[0].item != first.item {
+	if h.shut || len(h.queue) == 0 || h.queue[0].item != first.item {
 		h.mu.Unlock()
-		return // cancelled meanwhile
+		return // cancelled meanwhile, or the session closed
 	}
 	h.mu.Unlock()
-	if err := h.d.sendToSession(ctx, s, first.item.GetText(), first.keys); err != nil {
-		h.d.log.Warn("session host: queued prompt not typed", "session", h.id, "err", err)
-		return
-	}
+	err := h.d.sendToSession(ctx, s, first.item.GetText(), first.keys)
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.shut || len(h.queue) == 0 || h.queue[0].item != first.item {
+		return
+	}
+	if err != nil {
+		h.failed++
+		h.d.log.Warn("session host: queued prompt not typed", "session", h.id, "tries", h.failed, "err", err)
+		if h.failed < hostDeliverTries {
+			return
+		}
+		h.d.log.Warn("session host: queued prompt given up", "session", h.id, "queued", first.item.GetId())
+		h.queue = h.queue[1:]
+		h.failed = 0
+		h.queueChangedLocked(nil)
+		return
+	}
 	h.delivered = time.Now()
-	h.queue = slices.DeleteFunc(h.queue, func(q hostQueued) bool { return q.item == first.item })
+	h.failed = 0
+	h.queue = h.queue[1:]
 	h.queueChangedLocked(first.item.GetOrigin())
 	h.emitLocked(first.item.GetOrigin(), &protocol.HostEvent{Body: &protocol.HostEvent_Prompt{Prompt: &protocol.HostPrompt{Text: first.item.GetText(), QueuedId: first.item.GetId()}}})
 }
@@ -729,41 +929,45 @@ func (h *sessionHost) queueChangedLocked(origin *protocol.HostOrigin) uint64 {
 	return h.emitLocked(origin, &protocol.HostEvent{Body: &protocol.HostEvent_Queue{Queue: q}})
 }
 
-// act takes a front-end's action, once for each of its client_seq.
-func (h *sessionHost) act(ctx context.Context, r *protocol.SessionAction, fromPeer bool) (*protocol.SessionActionResult, error) {
+// act takes a front-end's action, once for each of its client_seq. origin
+// is where the request came from, which client_id is bound to.
+func (h *sessionHost) act(ctx context.Context, r *protocol.SessionAction, fromPeer bool, origin string) (*protocol.SessionActionResult, error) {
 	client, seq := r.GetClientId(), r.GetClientSeq()
-	if client == "" {
-		return nil, errors.New("a session action names its front-end (client_id)")
+	if err := checkClient(client); err != nil {
+		return nil, err
 	}
 	h.actMu.Lock()
 	defer h.actMu.Unlock()
 	h.mu.Lock()
-	shut := h.shut
+	if h.shut {
+		h.mu.Unlock()
+		return nil, errHostClosed
+	}
+	k, err := h.knowLocked(client, origin)
 	var took *protocol.SessionActionResult
-	if done := h.done[client]; done != nil && seq != 0 {
-		took = done.results[seq]
+	if err == nil && seq != 0 {
+		took = k.results[seq]
 	}
 	h.mu.Unlock()
-	if shut {
-		return nil, errors.New("the session closed")
+	if err != nil {
+		return nil, err
 	}
 	if took != nil {
 		out := proto.CloneOf(took)
 		out.Duplicate = true
 		return out, nil
 	}
-	origin := &protocol.HostOrigin{ClientId: client, ClientSeq: seq}
+	by := &protocol.HostOrigin{ClientId: client, ClientSeq: seq}
 	var res *protocol.SessionActionResult
-	var err error
 	switch a := r.GetAction().(type) {
 	case *protocol.SessionAction_SetDraft:
-		res, err = h.setDraft(origin, a.SetDraft.GetText())
+		res, err = h.setDraft(by, a.SetDraft.GetText())
 	case *protocol.SessionAction_SendPrompt:
-		res, err = h.sendPrompt(ctx, origin, a.SendPrompt)
+		res, err = h.sendPrompt(ctx, by, a.SendPrompt)
 	case *protocol.SessionAction_CancelQueued:
-		res, err = h.cancelQueued(origin, a.CancelQueued.GetId())
+		res, err = h.cancelQueued(by, a.CancelQueued.GetId())
 	case *protocol.SessionAction_AnswerApproval:
-		res, err = h.answerApproval(origin, a.AnswerApproval, fromPeer)
+		res, err = h.answerApproval(by, a.AnswerApproval, fromPeer)
 	default:
 		err = errors.New("a session action names what to do")
 	}
@@ -772,23 +976,19 @@ func (h *sessionHost) act(ctx context.Context, r *protocol.SessionAction, fromPe
 	}
 	if seq != 0 {
 		h.mu.Lock()
-		h.rememberLocked(client, seq, res)
+		h.rememberLocked(k, seq, res)
 		h.mu.Unlock()
 	}
 	return res, nil
 }
 
-func (h *sessionHost) rememberLocked(client string, seq uint64, res *protocol.SessionActionResult) {
-	done := h.done[client]
-	if done == nil {
-		done = &hostDone{results: map[uint64]*protocol.SessionActionResult{}}
-		h.done[client] = done
-	}
-	done.results[seq] = res
-	done.order = append(done.order, seq)
-	for len(done.order) > hostRemembered {
-		delete(done.results, done.order[0])
-		done.order = done.order[1:]
+func (h *sessionHost) rememberLocked(k *hostKnown, seq uint64, res *protocol.SessionActionResult) {
+	k.results[seq] = res
+	k.order = append(k.order, seq)
+	k.last = time.Now()
+	for len(k.order) > hostRemembered {
+		delete(k.results, k.order[0])
+		k.order = k.order[1:]
 	}
 }
 
@@ -798,6 +998,9 @@ func (h *sessionHost) setDraft(origin *protocol.HostOrigin, text string) (*proto
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.shut {
+		return nil, errHostClosed
+	}
 	if h.state.GetDraft().GetText() == text {
 		return &protocol.SessionActionResult{}, nil
 	}
@@ -807,7 +1010,7 @@ func (h *sessionHost) setDraft(origin *protocol.HostOrigin, text string) (*proto
 func (h *sessionHost) draftLocked(origin *protocol.HostOrigin, text string) uint64 {
 	dr := &protocol.HostDraft{Text: text, ClientId: origin.GetClientId(), At: timestamppb.Now()}
 	h.state.Draft = dr
-	h.d.hosts.setDraft(h.id, dr, func(err error) { h.d.log.Warn("session host: drafts not saved", "err", err) })
+	h.d.hosts.setDraft(h, dr, func(err error) { h.d.log.Warn("session host: drafts not saved", "err", err) })
 	return h.emitLocked(origin, &protocol.HostEvent{Body: &protocol.HostEvent_Draft{Draft: dr}})
 }
 
@@ -822,39 +1025,69 @@ func (h *sessionHost) clearDraftLocked(origin *protocol.HostOrigin) uint64 {
 
 func (h *sessionHost) sendPrompt(ctx context.Context, origin *protocol.HostOrigin, p *protocol.HostSendPrompt) (*protocol.SessionActionResult, error) {
 	text, keys := p.GetText(), p.GetKeys()
-	if p.GetQueue() {
-		if text == "" {
-			return nil, errors.New("a queued prompt has text")
-		}
-		if len(keys) == 0 {
-			keys = []byte{'\r'}
-		}
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		if len(h.queue) >= hostQueueMax {
-			return nil, fmt.Errorf("the queue holds %d prompts at most", hostQueueMax)
-		}
-		h.queuedN++
-		item := &protocol.HostQueued{Id: "q" + strconv.FormatUint(h.queuedN, 10), Text: text, Origin: origin, At: timestamppb.Now()}
-		h.queue = append(h.queue, hostQueued{item: item, keys: keys})
-		res := &protocol.SessionActionResult{Queued: true, Seq: h.queueChangedLocked(origin)}
-		if p.GetClearDraft() {
-			if seq := h.clearDraftLocked(origin); seq != 0 {
-				res.Seq = seq
-			}
-		}
-		return res, nil
-	}
-	if text == "" && len(keys) == 0 {
+	switch {
+	case len(text) > hostPromptMax:
+		return nil, fmt.Errorf("a prompt is at most %d bytes", hostPromptMax)
+	case len(keys) > hostKeysMax:
+		return nil, fmt.Errorf("a prompt's keys are at most %d bytes", hostKeysMax)
+	case text == "" && len(keys) == 0:
 		return nil, errors.New("a prompt has text or keys")
 	}
-	if err := h.d.sendToSession(ctx, h.session(), text, keys); err != nil {
+	// Text with no keys is submitted as the composer submits it, queued or
+	// not.
+	if text != "" && len(keys) == 0 {
+		keys = []byte{'\r'}
+	}
+	if p.GetQueue() {
+		return h.queuePrompt(origin, text, keys, p.GetClearDraft())
+	}
+	h.mu.Lock()
+	shut, s := h.shut, h.s
+	h.mu.Unlock()
+	if shut {
+		return nil, errHostClosed
+	}
+	if err := h.d.sendToSession(ctx, s, text, keys); err != nil {
 		return nil, err
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.shut {
+		return &protocol.SessionActionResult{}, nil // typed as the session closed: no one is told
+	}
 	res := &protocol.SessionActionResult{Seq: h.emitLocked(origin, &protocol.HostEvent{Body: &protocol.HostEvent_Prompt{Prompt: &protocol.HostPrompt{Text: text}}})}
 	if p.GetClearDraft() {
+		if seq := h.clearDraftLocked(origin); seq != 0 {
+			res.Seq = seq
+		}
+	}
+	return res, nil
+}
+
+// queuePrompt puts a prompt in the queue, to be typed once the agent is
+// at its prompt.
+func (h *sessionHost) queuePrompt(origin *protocol.HostOrigin, text string, keys []byte, clearDraft bool) (*protocol.SessionActionResult, error) {
+	if strings.TrimSpace(text) == "" {
+		return nil, errors.New("a queued prompt has text")
+	}
+	// Refused now, as typing it would be: a prompt that fails each time
+	// would hold up the queue behind it.
+	if strings.Contains(text, "\x1b[201~") {
+		return nil, errors.New("a prompt may not end a paste (ESC [201~)")
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.shut {
+		return nil, errHostClosed
+	}
+	if len(h.queue) >= hostQueueMax {
+		return nil, fmt.Errorf("the queue holds %d prompts at most", hostQueueMax)
+	}
+	h.queuedN++
+	item := &protocol.HostQueued{Id: "q" + strconv.FormatUint(h.queuedN, 10), Text: text, Origin: origin, At: timestamppb.Now()}
+	h.queue = append(h.queue, hostQueued{item: item, keys: keys})
+	res := &protocol.SessionActionResult{Queued: true, Seq: h.queueChangedLocked(origin)}
+	if clearDraft {
 		if seq := h.clearDraftLocked(origin); seq != 0 {
 			res.Seq = seq
 		}
@@ -865,20 +1098,35 @@ func (h *sessionHost) sendPrompt(ctx context.Context, origin *protocol.HostOrigi
 func (h *sessionHost) cancelQueued(origin *protocol.HostOrigin, id string) (*protocol.SessionActionResult, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.shut {
+		return nil, errHostClosed
+	}
 	i := slices.IndexFunc(h.queue, func(q hostQueued) bool { return q.item.GetId() == id })
 	if i < 0 {
 		return nil, fmt.Errorf("no queued prompt %q: it went to the agent, or was cancelled", id)
+	}
+	if i == 0 {
+		h.failed = 0
 	}
 	h.queue = slices.Delete(h.queue, i, i+1)
 	return &protocol.SessionActionResult{Seq: h.queueChangedLocked(origin)}, nil
 }
 
+// answerApproval answers an approval of the host's session: one of
+// another's is refused, as answer_approval refuses it for that session.
 func (h *sessionHost) answerApproval(origin *protocol.HostOrigin, r *protocol.AnswerApproval, fromPeer bool) (*protocol.SessionActionResult, error) {
-	if err := h.d.answerApproval(h.session(), r, fromPeer); err != nil {
+	if sid, ok := h.d.approvalSession(r.GetApprovalId()); !ok || sid != h.id {
+		return nil, errors.New("the approval was answered or withdrawn, or is not this session's")
+	}
+	s := h.session()
+	if err := h.d.answerApproval(s, r, fromPeer); err != nil {
 		return nil, err
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.shut {
+		return &protocol.SessionActionResult{}, nil
+	}
 	return &protocol.SessionActionResult{Seq: h.emitLocked(origin, &protocol.HostEvent{Body: &protocol.HostEvent_ApprovalAnswered{
 		ApprovalAnswered: &protocol.HostApprovalAnswered{ApprovalId: r.GetApprovalId(), Decision: r.GetDecision()},
 	}})}, nil
@@ -894,15 +1142,20 @@ func (d *Daemon) handleSubscribeSession(ctx context.Context, stream *transport.S
 	if !d.local(req.GetNodeId()) && !d.isDirectSSH(req.GetNodeId()) {
 		return d.relayToPeer(ctx, protocol.TypeSubscribeSession, req, stream)
 	}
-	if req.GetClientId() == "" {
-		return errors.New("a subscription names its front-end (client_id)")
+	if err := checkClient(req.GetClientId()); err != nil {
+		return err
 	}
 	s, ok := d.sessions.get(req.GetSessionId())
 	if !ok {
 		return fmt.Errorf("unknown session %s", req.GetSessionId())
 	}
-	h := d.host(ctx, s)
-	sub, first, err := h.subscribe(req)
+	h, let, err := d.host(ctx, s)
+	if err != nil {
+		return err
+	}
+	// Its subscriber holds the host from here on.
+	sub, first, err := h.subscribe(req, peerOf(ctx))
+	let()
 	if err != nil {
 		return err
 	}
@@ -941,13 +1194,28 @@ func (d *Daemon) handleSubscribeSession(ctx context.Context, stream *transport.S
 	}
 }
 
-// handleSessionAction takes a front-end's action on a session's host.
+// handleSessionAction takes a front-end's action on a session's host. What
+// the host refuses is said so (protocol.CodeNotTaken), for the front-end to
+// tell it from a failure on the way, after which it sends the action again.
 func (d *Daemon) handleSessionAction(ctx context.Context, stream *transport.Stream, env *protocol.Envelope, fromPeer bool) error {
 	return serveWithDirect(d, ctx, stream, env, protocol.TypeSessionActionResult, func(r *protocol.SessionAction) (*protocol.SessionActionResult, error) {
-		s, ok := d.sessions.get(r.GetSessionId())
-		if !ok {
-			return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
+		res, err := d.sessionAction(ctx, r, fromPeer)
+		if err != nil {
+			return nil, &protocol.CodedError{Code: protocol.CodeNotTaken, Message: err.Error()}
 		}
-		return d.host(ctx, s).act(ctx, r, fromPeer)
+		return res, nil
 	})
+}
+
+func (d *Daemon) sessionAction(ctx context.Context, r *protocol.SessionAction, fromPeer bool) (*protocol.SessionActionResult, error) {
+	s, ok := d.sessions.get(r.GetSessionId())
+	if !ok {
+		return nil, fmt.Errorf("unknown session %q", r.GetSessionId())
+	}
+	h, let, err := d.host(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	defer let()
+	return h.act(ctx, r, fromPeer, peerOf(ctx))
 }

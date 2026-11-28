@@ -70,20 +70,27 @@ type templateInput struct {
 // templateAsks are the templates waiting for the user, by approval ID.
 type templateAsks struct {
 	mu      sync.Mutex
-	waiting map[string]chan templateAnswer
+	waiting map[string]templateWait
+}
+
+// templateWait is a template waiting: where its answer goes, and the
+// session whose agent asked.
+type templateWait struct {
+	answers chan templateAnswer
+	session string
 }
 
 // templateAnswer is the user's, as AnswerApproval gives it.
 type templateAnswer struct{ decision, option, message string }
 
-func (a *templateAsks) open(id string) <-chan templateAnswer {
+func (a *templateAsks) open(id, session string) <-chan templateAnswer {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.waiting == nil {
-		a.waiting = map[string]chan templateAnswer{}
+		a.waiting = map[string]templateWait{}
 	}
 	ch := make(chan templateAnswer, 1)
-	a.waiting[id] = ch
+	a.waiting[id] = templateWait{answers: ch, session: session}
 	return ch
 }
 
@@ -95,10 +102,17 @@ func (a *templateAsks) close(id string) {
 
 // owns reports whether the approval id is a template's.
 func (a *templateAsks) owns(id string) bool {
+	_, ok := a.sessionOf(id)
+	return ok
+}
+
+// sessionOf is the session whose agent asked for the template waiting as
+// id, and whether one waits so.
+func (a *templateAsks) sessionOf(id string) (string, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	_, ok := a.waiting[id]
-	return ok
+	w, ok := a.waiting[id]
+	return w.session, ok
 }
 
 // answer gives the template waiting as id the user's answer; the first
@@ -106,12 +120,12 @@ func (a *templateAsks) owns(id string) bool {
 func (a *templateAsks) answer(id string, ans templateAnswer) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	ch, ok := a.waiting[id]
+	w, ok := a.waiting[id]
 	if !ok {
 		return fmt.Errorf("no template waits as %q", id)
 	}
 	select {
-	case ch <- ans:
+	case w.answers <- ans:
 	default:
 	}
 	return nil
@@ -167,7 +181,7 @@ func (d *Daemon) saveTemplate(ctx context.Context, s *session.Session, in saveTe
 		return saveTemplateResult{}, errTemplateNoWindow
 	}
 	id := approvalID()
-	answers := d.templateAsks.open(id)
+	answers := d.templateAsks.open(id, s.ID())
 	defer d.templateAsks.close(id)
 	input, _ := json.Marshal(templateInput(in))
 	call := "//" + t.Name
