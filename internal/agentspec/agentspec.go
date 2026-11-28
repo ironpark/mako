@@ -28,6 +28,14 @@ const (
 	PermissionYOLO = "yolo"
 )
 
+// ClaudeSettings holds Claude Code-specific settings for an agent or profile.
+type ClaudeSettings struct {
+	// CommitSignature allows Claude Code to append its commit attribution
+	// signature (e.g. Co-Authored-By). False (the default) disables commit
+	// attribution via Claude Code's --settings flag.
+	CommitSignature bool `json:"commit_signature,omitempty"`
+}
+
 // Agent is how a node launches one agent: its command, the flags and
 // environment every session of it gets, and named profiles that add their
 // own on top.
@@ -55,6 +63,8 @@ type Agent struct {
 	// AllowTemplate controls whether prompt templates may run the default
 	// (no-profile) agent configuration via mako.ask / mako.spawn. Nil defaults to true.
 	AllowTemplate *bool `json:"allow_template,omitempty"`
+	// Claude holds Claude Code-specific settings.
+	Claude ClaudeSettings `json:"claude,omitzero"`
 }
 
 // AgentAllowed reports whether models/agents may spawn this agent's default configuration via MCP.
@@ -122,6 +132,8 @@ type Profile struct {
 	// AllowTemplate controls whether prompt templates may run this profile via
 	// mako.ask / mako.spawn. Nil defaults to true.
 	AllowTemplate *bool `json:"allow_template,omitempty"`
+	// Claude holds Claude Code-specific settings for this profile.
+	Claude ClaudeSettings `json:"claude,omitzero"`
 }
 
 // AgentAllowed reports whether models/agents may spawn this profile via MCP.
@@ -358,6 +370,7 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 	effectiveEffort := cmp.Or(opts.Effort, p.Effort, a.Effort)
 	var yoloDriver agent.YoloFlag
 	var permDriver agent.PermissionFlag
+	var commitSigDriver agent.CommitSignatureFlag
 	if e, ok := agents.Native(name, path); ok {
 		if norm, ok := e.Driver.(agent.ModelEffortNormalizer); ok {
 			effectiveModel, effectiveEffort = norm.NormalizeModelEffort(effectiveModel, effectiveEffort)
@@ -367,6 +380,9 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 		}
 		if pf, ok := e.Driver.(agent.PermissionFlag); ok {
 			permDriver = pf
+		}
+		if csf, ok := e.Driver.(agent.CommitSignatureFlag); ok {
+			commitSigDriver = csf
 		}
 	}
 	agentArgs, profileArgs := a.Args, p.Args
@@ -410,6 +426,13 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 		}
 	} else if effectivePerm != "" && permDriver != nil {
 		permDriver.WithPermission(&launch.Launch, effectivePerm)
+	}
+	if commitSigDriver != nil {
+		commitSig := a.Claude.CommitSignature
+		if profile != "" {
+			commitSig = p.Claude.CommitSignature
+		}
+		commitSigDriver.WithCommitSignature(&launch.Launch, commitSig)
 	}
 	launch.Command = append(launch.Command, args...)
 	return launch, nil

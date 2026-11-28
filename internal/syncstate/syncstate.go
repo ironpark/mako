@@ -491,6 +491,7 @@ func SanitizeAgent(a agentspec.Agent) agentspec.Agent {
 		Enabled:       cloneBoolPtr(a.Enabled),
 		AllowAgent:    cloneBoolPtr(a.AllowAgent),
 		AllowTemplate: cloneBoolPtr(a.AllowTemplate),
+		Claude:        a.Claude,
 	}
 	if len(out.Command) == 0 {
 		out.Command = nil
@@ -513,6 +514,7 @@ func SanitizeAgent(a agentspec.Agent) agentspec.Agent {
 				ContextServers: cloneStringSlicePtr(p.ContextServers),
 				AllowAgent:     cloneBoolPtr(p.AllowAgent),
 				AllowTemplate:  cloneBoolPtr(p.AllowTemplate),
+				Claude:         p.Claude,
 			}
 			if len(np.Args) == 0 {
 				np.Args = nil
@@ -536,7 +538,7 @@ func IsDefaultAgent(name string, a agentspec.Agent) bool {
 		return false
 	}
 	s := SanitizeAgent(a)
-	if len(s.Args) > 0 || len(s.Profiles) > 0 || s.Model != "" || s.Effort != "" || s.Permission != "" || s.Yolo || s.Enabled != nil || s.AllowAgent != nil || s.AllowTemplate != nil {
+	if len(s.Args) > 0 || len(s.Profiles) > 0 || s.Model != "" || s.Effort != "" || s.Permission != "" || s.Yolo || s.Enabled != nil || s.AllowAgent != nil || s.AllowTemplate != nil || s.Claude != (agentspec.ClaudeSettings{}) {
 		return false
 	}
 	return len(s.Command) == 0 || slices.Equal(s.Command, defCmd)

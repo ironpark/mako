@@ -367,6 +367,12 @@ type PermissionFlag interface {
 	WithPermission(l *Launch, mode string)
 }
 
+// CommitSignatureFlag is an agent whose git commit attribution signature
+// (such as Claude Code's Co-Authored-By trailer) can be toggled at launch.
+type CommitSignatureFlag interface {
+	WithCommitSignature(l *Launch, enabled bool)
+}
+
 // OneShotRequest configures a single non-interactive prompt invocation.
 type OneShotRequest struct {
 	Prompt     string

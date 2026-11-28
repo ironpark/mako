@@ -26,6 +26,27 @@ var hookEvents = []agent.HookEvent{
 // them, alongside the user's own.
 const settingsFlag = "--settings"
 
+// WithCommitSignature configures Claude Code's git commit attribution
+// signature. When enabled is false, it sets attribution.commit to "" in
+// --settings so Claude Code omits its Co-Authored-By trailer. When enabled is
+// true, Claude Code's own default or user settings apply.
+func (*Agent) WithCommitSignature(l *agent.Launch, enabled bool) {
+	if enabled {
+		return
+	}
+	mergeSettings(l, func(doc map[string]any) {
+		if b, ok := doc["attribution"].(bool); ok && !b {
+			return
+		}
+		attr, _ := doc["attribution"].(map[string]any)
+		if attr == nil {
+			attr = map[string]any{}
+		}
+		attr["commit"] = ""
+		doc["attribution"] = attr
+	})
+}
+
 // WithHooks gives the hooks, and the status line, as a --settings document.
 // If the command already passes --settings pointing to readable JSON or an
 // inline JSON object, mako merges its hooks (preserving existing matchers) and
@@ -49,24 +70,7 @@ func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
 		makoHooks[e.Name] = []matcher{{Hooks: []handler{h}}}
 	}
 
-	// Check if --settings is already present in l.Command.
-	for i := 1; i < len(l.Command); i++ {
-		arg := l.Command[i]
-		var raw string
-		inlineEq := false
-		switch {
-		case arg == settingsFlag && i+1 < len(l.Command):
-			raw = l.Command[i+1]
-		case strings.HasPrefix(arg, settingsFlag+"="):
-			raw = strings.TrimPrefix(arg, settingsFlag+"=")
-			inlineEq = true
-		default:
-			continue
-		}
-		doc, ok := loadSettingsJSON(raw, l.Env)
-		if !ok {
-			return false
-		}
+	return mergeSettings(l, func(doc map[string]any) {
 		existingHooks, _ := doc["hooks"].(map[string]any)
 		if existingHooks == nil {
 			existingHooks = map[string]any{}
@@ -87,6 +91,32 @@ func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
 				doc["statusLine"] = map[string]any{"type": "command", "command": status}
 			}
 		}
+	})
+}
+
+// mergeSettings updates an existing --settings JSON document in l.Command in
+// place, or appends a new --settings flag when none is present. It returns
+// false without modifying l.Command if an existing --settings value cannot be
+// read or parsed as a JSON object.
+func mergeSettings(l *agent.Launch, mutate func(doc map[string]any)) bool {
+	for i := 1; i < len(l.Command); i++ {
+		arg := l.Command[i]
+		var raw string
+		inlineEq := false
+		switch {
+		case arg == settingsFlag && i+1 < len(l.Command):
+			raw = l.Command[i+1]
+		case strings.HasPrefix(arg, settingsFlag+"="):
+			raw = strings.TrimPrefix(arg, settingsFlag+"=")
+			inlineEq = true
+		default:
+			continue
+		}
+		doc, ok := loadSettingsJSON(raw, l.Env)
+		if !ok {
+			return false
+		}
+		mutate(doc)
 		merged, err := json.Marshal(doc)
 		if err != nil {
 			return false
@@ -99,10 +129,8 @@ func (*Agent) WithHooks(l *agent.Launch, hook, status, _ string) bool {
 		return true
 	}
 
-	doc := map[string]any{"hooks": makoHooks}
-	if status != "" {
-		doc["statusLine"] = map[string]any{"type": "command", "command": status}
-	}
+	doc := map[string]any{}
+	mutate(doc)
 	settings, err := json.Marshal(doc)
 	if err != nil {
 		return false

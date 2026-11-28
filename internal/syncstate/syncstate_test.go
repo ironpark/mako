@@ -173,6 +173,9 @@ func TestAgentAndMCPSanitizationPreservesLocalEnv(t *testing.T) {
 	if IsDefaultAgent("claude", agentspec.Agent{Command: []string{"claude"}, Model: "opus"}) {
 		t.Fatal("built-in with custom model should not count as default")
 	}
+	if IsDefaultAgent("claude", agentspec.Agent{Command: []string{"claude"}, Claude: agentspec.ClaudeSettings{CommitSignature: true}}) {
+		t.Fatal("built-in with custom claude settings should not count as default")
+	}
 	if IsDefaultAgent("claude", orig) {
 		t.Fatal("customized built-in should not count as default")
 	}

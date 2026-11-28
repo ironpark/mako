@@ -41,11 +41,12 @@ type agentDraft struct {
 	// one ID a line, rather than every one enabled.
 	PickServers   bool
 	Servers       string
-	Model         string // "" for default (agent) or inherit (profile)
-	Effort        string // "" for default (agent) or inherit (profile)
-	Permission    string // "", "default", driver mode, or "yolo"
-	AllowAgent    bool   // allow models/agents to spawn via MCP
-	AllowTemplate bool   // allow prompt templates to run
+	Model                 string // "" for default (agent) or inherit (profile)
+	Effort                string // "" for default (agent) or inherit (profile)
+	Permission            string // "", "default", driver mode, or "yolo"
+	AllowAgent            bool   // allow models/agents to spawn via MCP
+	AllowTemplate         bool   // allow prompt templates to run
+	ClaudeCommitSignature bool   // claude: include commit attribution signature (off by default)
 }
 
 // draftAgents lays out cfg's agents for editing: every agent the node can
@@ -67,6 +68,7 @@ func draftAgents(configured map[string]agentspec.Agent) []agentDraft {
 			Command: agentspec.JoinArgs(a.Command), Args: agentspec.JoinArgs(agentArgs), Env: envText(a.Env),
 			Model: a.Model, Effort: a.Effort, Permission: agentPerm,
 			AllowAgent: a.AgentAllowed(), AllowTemplate: a.TemplateAllowed(),
+			ClaudeCommitSignature: a.Claude.CommitSignature,
 		}
 		if a.Enabled != nil {
 			d.Enabled = pick(*a.Enabled, "on", "off")
@@ -91,6 +93,7 @@ func draftAgents(configured map[string]agentspec.Agent) []agentDraft {
 				Description: p.Description, Args: agentspec.JoinArgs(pArgs), ReplaceArgs: p.ReplaceArgs, Env: envText(p.Env),
 				Model: p.Model, Effort: p.Effort, Permission: profPerm,
 				AllowAgent: p.AgentAllowed(), AllowTemplate: p.TemplateAllowed(),
+				ClaudeCommitSignature: p.Claude.CommitSignature,
 			}
 			if p.ContextServers != nil {
 				d.PickServers, d.Servers = true, strings.Join(*p.ContextServers, "\n")
@@ -151,6 +154,7 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			Effort:     strings.TrimSpace(r.Effort),
 			Permission: perm,
 			Yolo:       perm == agentspec.PermissionYOLO,
+			Claude:     agentspec.ClaudeSettings{CommitSignature: r.ClaudeCommitSignature},
 		}
 		if r.Enabled != "" {
 			on := r.Enabled == "on"
@@ -200,6 +204,7 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			Model:       strings.TrimSpace(r.Model),
 			Effort:      strings.TrimSpace(r.Effort),
 			Permission:  perm,
+			Claude:      agentspec.ClaudeSettings{CommitSignature: r.ClaudeCommitSignature},
 		}
 		if !r.AllowAgent {
 			off := false
@@ -699,6 +704,9 @@ func agentBaseBody(m *model, a agentDraft, mono ggui.TextStyle, showCommand bool
 	if rowCtrl := modelEffortPermissionRow(m, a, a.Agent, mono, false); rowCtrl != nil {
 		children = append(children, rowCtrl)
 	}
+	if claudeCtrl := claudeSettingsSection(m, a.ID, a.Agent, a.Agent); claudeCtrl != nil {
+		children = append(children, claudeCtrl)
+	}
 	children = append(children,
 		executionSwitches(m, a.ID, a.Agent, false),
 		advancedOptionsSection(m, a, a.Agent, mono, false, showCommand, advancedOpen),
@@ -810,6 +818,9 @@ func profileCardWithState(m *model, p agentDraft, mono ggui.TextStyle, advancedO
 	}
 	if rowCtrl := modelEffortPermissionRow(m, p, target, mono, true); rowCtrl != nil {
 		body = append(body, rowCtrl)
+	}
+	if claudeCtrl := claudeSettingsSection(m, id, p.Agent, target); claudeCtrl != nil {
+		body = append(body, claudeCtrl)
 	}
 	body = append(body,
 		executionSwitches(m, id, target, true),
@@ -939,6 +950,30 @@ func advancedOptionsSection(m *model, rowDraft agentDraft, target string, mono g
 
 	return widget.Box(widget.Column(head, body).Stretch()).
 		Fill(skin.Surface0).Border(1, skin.Border).Radius(8)
+}
+
+func claudeSettingsSection(m *model, id int, agentName, target string) ggui.Widget {
+	entry, ok := agents.Lookup(agentName)
+	if !ok {
+		return nil
+	}
+	if _, ok := entry.Driver.(agent.CommitSignatureFlag); !ok {
+		return nil
+	}
+	commitSigSwitch := widget.Row(
+		widget.Expanded(widget.Column(
+			widget.Text(T("Commit signature")).Size(12.5).Weight(ggui.WeightMedium),
+			muted(widget.Text(T("Include Claude's commit attribution signature (Co-Authored-By) in git commits. Off by default.")).Size(11.5)),
+		).Gap(2).Stretch()),
+		ui.Switch(m.agentBoolField(id, func(d *agentDraft) *bool { return &d.ClaudeCommitSignature }), "").
+			Name(Tf("%s commit signature", target)),
+	).Gap(10).Align(widget.AlignCenter)
+	return widget.Box(widget.Column(
+		widget.Text(T("Claude settings")).Size(12).Weight(ggui.WeightSemibold).Color(skin.Muted),
+		hline(),
+		commitSigSwitch,
+	).Gap(8).Stretch()).
+		Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(10, 12)
 }
 
 func executionSwitches(m *model, id int, target string, isProfile bool) ggui.Widget {

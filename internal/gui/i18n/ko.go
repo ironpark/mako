@@ -1953,4 +1953,10 @@ var catalogKo = map[string]string{
 	"Fast mode: on":    "빠른 모드: 켜짐",
 	"Fast mode: off":   "빠른 모드: 꺼짐",
 	"Reasoning effort": "추론 강도",
+
+	// Claude agent/profile settings
+	"Claude settings":     "Claude 설정",
+	"Commit signature":    "커밋 시그니처",
+	"%s commit signature": "%s 커밋 시그니처",
+	"Include Claude's commit attribution signature (Co-Authored-By) in git commits. Off by default.": "Git 커밋에 Claude의 커밋 시그니처(Co-Authored-By)를 포함합니다. 기본값은 꺼짐입니다.",
 }

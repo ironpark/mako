@@ -41,9 +41,11 @@ func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, _ str
 	cmd = append(cmd, "--print", "--no-session-persistence")
 	// Internal one-shot runs (agents:ask, templates, summaries) must not trigger
 	// heavy user or project lifecycle hooks.
-	if !hasFlag(cmd, "--settings") {
-		cmd = append(cmd, "--settings", `{"disableAllHooks":true}`)
-	}
+	tmp := agent.Launch{Command: cmd, Env: l.Env}
+	mergeSettings(&tmp, func(doc map[string]any) {
+		doc["disableAllHooks"] = true
+	})
+	cmd = tmp.Command
 	if !slices.Contains(cmd, "--dangerously-skip-permissions") && !slices.Contains(cmd, "--permission-prompts") {
 		cmd = append(cmd, "--permission-prompts", "none")
 	}
@@ -101,14 +103,4 @@ func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, _ str
 			return strings.TrimSpace(string(stdout)), nil
 		},
 	}, nil
-}
-
-func hasFlag(args []string, flag string) bool {
-	prefix := flag + "="
-	for _, a := range args {
-		if a == flag || strings.HasPrefix(a, prefix) {
-			return true
-		}
-	}
-	return false
 }

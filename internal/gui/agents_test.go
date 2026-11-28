@@ -615,3 +615,84 @@ func TestProfileExecutionSwitchesRoundTripAndToggle(t *testing.T) {
 		t.Fatalf("expected both profile switches off after toggling, got %+v", rp)
 	}
 }
+
+func TestClaudeCommitSignatureSettings(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	in := map[string]agentspec.Agent{
+		"claude": {
+			Claude: agentspec.ClaudeSettings{CommitSignature: true},
+			Profiles: []agentspec.Profile{
+				{Name: "default-off"},
+				{Name: "sig-on", Claude: agentspec.ClaudeSettings{CommitSignature: true}},
+			},
+		},
+	}
+	got, err := applyAgents(draftAgents(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got["claude"].Claude.CommitSignature {
+		t.Fatalf("agent CommitSignature lost in round-trip: %+v", got["claude"])
+	}
+	ps := got["claude"].Profiles
+	if len(ps) != 2 || ps[0].Claude.CommitSignature || !ps[1].Claude.CommitSignature {
+		t.Fatalf("profile CommitSignature round-trip = %+v", ps)
+	}
+
+	// Default is off on both claude agent and profile; toggling turns them on.
+	m := newModel(&config.Config{Agents: map[string]agentspec.Agent{
+		"claude": {Profiles: []agentspec.Profile{{Name: "work"}}},
+		"codex":  {Profiles: []agentspec.Profile{{Name: "fast"}}},
+	}}, "")
+	var claudeRow, claudeProfile, codexRow, codexProfile agentDraft
+	for _, r := range ggui.Peek(m.AgentDraft) {
+		switch {
+		case r.Agent == "claude" && !r.IsProfile:
+			claudeRow = r
+		case r.Agent == "claude" && r.IsProfile:
+			claudeProfile = r
+		case r.Agent == "codex" && !r.IsProfile:
+			codexRow = r
+		case r.Agent == "codex" && r.IsProfile:
+			codexProfile = r
+		}
+	}
+	if claudeRow.ClaudeCommitSignature || claudeProfile.ClaudeCommitSignature {
+		t.Fatalf("expected commit signature off by default: agent=%v profile=%v", claudeRow.ClaudeCommitSignature, claudeProfile.ClaudeCommitSignature)
+	}
+
+	p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(agentEditor(m, claudeRow, []agentDraft{claudeProfile})) }, ggui.Sz(700, 1800))
+	defer p.Close()
+	p.Frame()
+
+	for _, label := range []string{
+		Tf("%s commit signature", "claude"),
+		Tf("%s commit signature", "claude:work"),
+	} {
+		sw, ok := p.Find(label)
+		if !ok {
+			t.Fatalf("missing switch %q:\n%s", label, p.Semantics().String())
+		}
+		p.Click(sw.Center())
+		p.Frame()
+	}
+
+	after, err := applyAgents(ggui.Peek(m.AgentDraft))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after["claude"].Claude.CommitSignature || !after["claude"].Profiles[0].Claude.CommitSignature {
+		t.Fatalf("expected commit signature enabled after toggling, got %+v", after["claude"])
+	}
+
+	// Non-claude agents do not show the Claude commit signature switch.
+	pCodex := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(agentEditor(m, codexRow, []agentDraft{codexProfile})) }, ggui.Sz(700, 1800))
+	defer pCodex.Close()
+	pCodex.Frame()
+	if _, ok := pCodex.Find(Tf("%s commit signature", "codex")); ok {
+		t.Fatal("codex agent should not show Claude commit signature switch")
+	}
+	if _, ok := pCodex.Find(Tf("%s commit signature", "codex:fast")); ok {
+		t.Fatal("codex profile should not show Claude commit signature switch")
+	}
+}

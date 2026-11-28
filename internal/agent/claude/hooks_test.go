@@ -125,3 +125,60 @@ func TestClaudeWithHooksMergesExistingSettings(t *testing.T) {
 		t.Fatalf("unexpected merged2: %+v", merged2)
 	}
 }
+
+func TestClaudeWithCommitSignature(t *testing.T) {
+	c := New()
+
+	// Enabled leaves command untouched.
+	lOn := agent.Launch{Command: []string{"claude", "--model", "opus"}}
+	c.WithCommitSignature(&lOn, true)
+	if len(lOn.Command) != 3 {
+		t.Fatalf("enabled modified command: %q", lOn.Command)
+	}
+
+	// Disabled adds --settings with attribution.commit = "".
+	lOff := agent.Launch{Command: []string{"claude", "--model", "opus"}}
+	c.WithCommitSignature(&lOff, false)
+	if len(lOff.Command) != 5 || lOff.Command[3] != "--settings" || lOff.Command[4] != `{"attribution":{"commit":""}}` {
+		t.Fatalf("disabled command = %q", lOff.Command)
+	}
+
+	// WithHooks merges cleanly into the --settings added by WithCommitSignature.
+	if !c.WithHooks(&lOff, "/bin/makod hook /s", "/bin/makod statusline /s", "") {
+		t.Fatal("WithHooks failed after WithCommitSignature")
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(lOff.Command[4]), &doc); err != nil {
+		t.Fatalf("invalid merged JSON: %v", err)
+	}
+	attr, _ := doc["attribution"].(map[string]any)
+	if v, ok := attr["commit"].(string); !ok || v != "" {
+		t.Fatalf("attribution.commit lost after WithHooks: %+v", doc)
+	}
+	if doc["hooks"] == nil || doc["statusLine"] == nil {
+		t.Fatalf("hooks/statusLine missing: %+v", doc)
+	}
+
+	// Preserves existing attribution.pr and other settings when merging.
+	lExisting := agent.Launch{Command: []string{"claude", "--settings", `{"theme":"dark","attribution":{"pr":"custom"}}`}}
+	c.WithCommitSignature(&lExisting, false)
+	var doc2 map[string]any
+	if err := json.Unmarshal([]byte(lExisting.Command[2]), &doc2); err != nil {
+		t.Fatal(err)
+	}
+	attr2, _ := doc2["attribution"].(map[string]any)
+	if doc2["theme"] != "dark" || attr2["pr"] != "custom" || attr2["commit"] != "" {
+		t.Fatalf("unexpected merged attribution: %+v", doc2)
+	}
+
+	// Preserves attribution: false without overwriting it.
+	lFalse := agent.Launch{Command: []string{"claude", "--settings", `{"attribution":false}`}}
+	c.WithCommitSignature(&lFalse, false)
+	var doc3 map[string]any
+	if err := json.Unmarshal([]byte(lFalse.Command[2]), &doc3); err != nil {
+		t.Fatal(err)
+	}
+	if b, ok := doc3["attribution"].(bool); !ok || b {
+		t.Fatalf("expected attribution=false preserved, got %+v", doc3)
+	}
+}

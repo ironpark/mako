@@ -202,7 +202,7 @@ func TestResolveGivesAProfilesModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(l.Command[1:], " "); got != "--a --b --model opus --effort high req" {
+	if got := strings.Join(l.Command[1:], " "); got != `--a --b --model opus --effort high --settings {"attribution":{"commit":""}} req` {
 		t.Fatalf("command %q", got)
 	}
 	l, err = Resolve("claude", "p", nil, nil, map[string]Agent{"claude": {Command: []string{"/bin/sh", "-c", "claude"}, Profiles: profiles}})
@@ -258,7 +258,7 @@ func TestResolveYoloAndOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(l.Command[1:], " "); got != "--dangerously-skip-permissions do work" {
+	if got := strings.Join(l.Command[1:], " "); got != `--dangerously-skip-permissions --settings {"attribution":{"commit":""}} do work` {
 		t.Fatalf("claude inherit = %q", got)
 	}
 
@@ -276,7 +276,7 @@ func TestResolveYoloAndOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(l.Command[1:], " "); got != "--model sonnet --effort low --dangerously-skip-permissions hi" {
+	if got := strings.Join(l.Command[1:], " "); got != `--model sonnet --effort low --dangerously-skip-permissions --settings {"attribution":{"commit":""}} hi` {
 		t.Fatalf("claude override = %q", got)
 	}
 
@@ -346,15 +346,15 @@ func TestResolveYoloAndOverrides(t *testing.T) {
 		t.Fatalf("unexpected EffectiveYolo for legacy claude config")
 	}
 	l, err = Resolve("claude", "inherit", nil, nil, legacy)
-	if err != nil || !slices.Equal(l.Command[1:], []string{"--verbose", "--dangerously-skip-permissions"}) {
+	if err != nil || !slices.Equal(l.Command[1:], []string{"--verbose", "--dangerously-skip-permissions", "--settings", `{"attribution":{"commit":""}}`}) {
 		t.Fatalf("legacy claude inherit = %q, %v", l.Command, err)
 	}
 	l, err = Resolve("claude", "safe", nil, nil, legacy)
-	if err != nil || !slices.Equal(l.Command[1:], []string{"--verbose"}) {
+	if err != nil || !slices.Equal(l.Command[1:], []string{"--verbose", "--settings", `{"attribution":{"commit":""}}`}) {
 		t.Fatalf("legacy claude safe should strip flag: %q, %v", l.Command, err)
 	}
 	l, err = ResolveWith("claude", "", nil, nil, ResolveOptions{Yolo: &no}, legacy)
-	if err != nil || !slices.Equal(l.Command[1:], []string{"--verbose"}) {
+	if err != nil || !slices.Equal(l.Command[1:], []string{"--verbose", "--settings", `{"attribution":{"commit":""}}`}) {
 		t.Fatalf("legacy claude opts.Yolo=false should strip flag: %q, %v", l.Command, err)
 	}
 	t.Setenv("OPENCODE_CONFIG_CONTENT", "")
@@ -415,18 +415,19 @@ func TestResolveAgentDefaultsAndPermissionModes(t *testing.T) {
 		},
 	}
 
+	const noCommitSig = ` --settings {"attribution":{"commit":""}}`
 	cases := []struct {
 		agent, profile string
 		wantArgs       string
 	}{
-		{"claude", "", "--model claude-sonnet-4-6 --effort medium --permission-mode acceptEdits"},
-		{"claude", "inherit", "--model claude-sonnet-4-6 --effort medium --permission-mode acceptEdits"},
-		{"claude", "planner", "--model claude-opus-4-6 --effort high --permission-mode plan"},
-		{"claude", "manual", "--model claude-sonnet-4-6 --effort medium --permission-mode default"},
-		{"claude", "auto", "--model claude-sonnet-4-6 --effort medium --permission-mode auto"},
-		{"claude", "dontask", "--model claude-sonnet-4-6 --effort medium --permission-mode dontAsk"},
-		{"claude", "yolo", "--model claude-sonnet-4-6 --effort medium --dangerously-skip-permissions"},
-		{"claude", "normal", "--model claude-sonnet-4-6 --effort medium"},
+		{"claude", "", "--model claude-sonnet-4-6 --effort medium --permission-mode acceptEdits" + noCommitSig},
+		{"claude", "inherit", "--model claude-sonnet-4-6 --effort medium --permission-mode acceptEdits" + noCommitSig},
+		{"claude", "planner", "--model claude-opus-4-6 --effort high --permission-mode plan" + noCommitSig},
+		{"claude", "manual", "--model claude-sonnet-4-6 --effort medium --permission-mode default" + noCommitSig},
+		{"claude", "auto", "--model claude-sonnet-4-6 --effort medium --permission-mode auto" + noCommitSig},
+		{"claude", "dontask", "--model claude-sonnet-4-6 --effort medium --permission-mode dontAsk" + noCommitSig},
+		{"claude", "yolo", "--model claude-sonnet-4-6 --effort medium --dangerously-skip-permissions" + noCommitSig},
+		{"claude", "normal", "--model claude-sonnet-4-6 --effort medium" + noCommitSig},
 		{"codex", "", `--model gpt-5.4 -c model_reasoning_effort="high" -a on-request -s read-only`},
 		{"codex", "edit", `--model gpt-5.4 -c model_reasoning_effort="high" -a on-request -s workspace-write`},
 		{"codex", "auto", `--model gpt-5.4 -c model_reasoning_effort="high" --approve-for-me`},
@@ -461,7 +462,7 @@ func TestResolveAgentDefaultsAndPermissionModes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(l.Command[1:], " "); got != "--model claude-opus-4-6 --effort high --permission-mode plan" {
+	if got := strings.Join(l.Command[1:], " "); got != `--model claude-opus-4-6 --effort high --permission-mode plan --settings {"attribution":{"commit":""}}` {
 		t.Fatalf("claude:planner with opts.Yolo=false = %q", got)
 	}
 	l, err = ResolveWith("claude", "yolo", nil, nil, ResolveOptions{Yolo: &no}, agentsMap)
@@ -491,7 +492,7 @@ func TestResolveProfileReplaceArgs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(l.Command[1:], " "); got != "--verbose --debug --extra --permission-mode acceptEdits req" {
+	if got := strings.Join(l.Command[1:], " "); got != `--verbose --debug --extra --permission-mode acceptEdits --settings {"attribution":{"commit":""}} req` {
 		t.Fatalf("append = %q", got)
 	}
 
@@ -499,7 +500,7 @@ func TestResolveProfileReplaceArgs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(l.Command[1:], " "); got != "--only-this --permission-mode acceptEdits req" {
+	if got := strings.Join(l.Command[1:], " "); got != `--only-this --permission-mode acceptEdits --settings {"attribution":{"commit":""}} req` {
 		t.Fatalf("overwrite = %q", got)
 	}
 
@@ -507,7 +508,7 @@ func TestResolveProfileReplaceArgs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(l.Command[1:], " "); got != "--permission-mode acceptEdits req" {
+	if got := strings.Join(l.Command[1:], " "); got != `--permission-mode acceptEdits --settings {"attribution":{"commit":""}} req` {
 		t.Fatalf("clear = %q", got)
 	}
 
@@ -525,8 +526,81 @@ func TestResolveProfileReplaceArgs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(l.Command[1:], " "); got != "--quiet" {
-		t.Fatalf("legacy replace = %q, want --quiet", got)
+	if got := strings.Join(l.Command[1:], " "); got != `--quiet --settings {"attribution":{"commit":""}}` {
+		t.Fatalf("legacy replace = %q", got)
+	}
+}
+
+func TestResolveClaudeCommitSignature(t *testing.T) {
+	onPath(t, "claude")
+	agentsMap := map[string]Agent{
+		"claude": {
+			Profiles: []Profile{
+				{Name: "default-off"},
+				{Name: "sig-on", Claude: ClaudeSettings{CommitSignature: true}},
+			},
+		},
+	}
+
+	// Agent defaults to commit signature off.
+	l, err := Resolve("claude", "", nil, nil, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != `--settings {"attribution":{"commit":""}}` {
+		t.Fatalf("claude default = %q", got)
+	}
+
+	// Profile defaults to commit signature off.
+	l, err = Resolve("claude", "default-off", nil, nil, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != `--settings {"attribution":{"commit":""}}` {
+		t.Fatalf("claude:default-off = %q", got)
+	}
+
+	// Profile with CommitSignature=true omits attribution override.
+	l, err = Resolve("claude", "sig-on", nil, nil, agentsMap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Command) != 1 {
+		t.Fatalf("claude:sig-on should not pass --settings, got %q", l.Command)
+	}
+
+	// Agent with CommitSignature=true omits attribution override on base launch,
+	// while a profile with default-off still disables commit signature.
+	agentsOn := map[string]Agent{
+		"claude": {
+			Claude: ClaudeSettings{CommitSignature: true},
+			Profiles: []Profile{
+				{Name: "off"},
+			},
+		},
+	}
+	l, err = Resolve("claude", "", nil, nil, agentsOn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(l.Command) != 1 {
+		t.Fatalf("claude with CommitSignature=true should not pass --settings, got %q", l.Command)
+	}
+	l, err = Resolve("claude", "off", nil, nil, agentsOn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(l.Command[1:], " "); got != `--settings {"attribution":{"commit":""}}` {
+		t.Fatalf("claude:off = %q", got)
+	}
+
+	// JSON omits zero-value ClaudeSettings.
+	data, err := json.Marshal(Agent{Command: []string{"claude"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "claude") && strings.Contains(string(data), "commit_signature") {
+		t.Fatalf("zero ClaudeSettings should be omitted: %s", data)
 	}
 }
 
