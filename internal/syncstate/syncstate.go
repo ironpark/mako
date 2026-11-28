@@ -493,6 +493,7 @@ func SanitizeAgent(a agentspec.Agent) agentspec.Agent {
 		AllowAgent:    cloneBoolPtr(a.AllowAgent),
 		AllowTemplate: cloneBoolPtr(a.AllowTemplate),
 		Claude:        a.Claude,
+		Sandbox:       a.Sandbox,
 	}
 	if len(out.Command) == 0 {
 		out.Command = nil
@@ -517,6 +518,7 @@ func SanitizeAgent(a agentspec.Agent) agentspec.Agent {
 				AllowAgent:     cloneBoolPtr(p.AllowAgent),
 				AllowTemplate:  cloneBoolPtr(p.AllowTemplate),
 				Claude:         p.Claude,
+				Sandbox:        p.Sandbox,
 			}
 			if len(np.Args) == 0 {
 				np.Args = nil
@@ -540,7 +542,7 @@ func IsDefaultAgent(name string, a agentspec.Agent) bool {
 		return false
 	}
 	s := SanitizeAgent(a)
-	if len(s.Args) > 0 || len(s.Profiles) > 0 || s.Model != "" || s.Effort != "" || s.Fast != nil || s.Permission != "" || s.Yolo || s.Enabled != nil || s.AllowAgent != nil || s.AllowTemplate != nil || s.Claude != (agentspec.ClaudeSettings{}) {
+	if len(s.Args) > 0 || len(s.Profiles) > 0 || s.Model != "" || s.Effort != "" || s.Fast != nil || s.Permission != "" || s.Yolo || s.Enabled != nil || s.AllowAgent != nil || s.AllowTemplate != nil || s.Claude != (agentspec.ClaudeSettings{}) || s.Sandbox != "" {
 		return false
 	}
 	return len(s.Command) == 0 || slices.Equal(s.Command, defCmd)
