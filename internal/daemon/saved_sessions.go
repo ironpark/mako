@@ -667,8 +667,18 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	}
 	d.log.Info("session started", "id", id, "agent", req.GetAgent(), "project", req.GetProject())
 	startedOK = true
-	d.sessionStartHooks(s)
-	go func() { <-s.Done(); d.live.resetSuggestion(id); cleanup(); d.releaseSession(id) }()
+	if startsSession(ctx, existed) {
+		d.sessionStartHooks(s)
+	}
+	go func() {
+		<-s.Done()
+		if s.EndUntold() {
+			d.sessionEndHooks(s)
+		}
+		d.live.resetSuggestion(id)
+		cleanup()
+		d.releaseSession(id)
+	}()
 	return s, nil
 }
 

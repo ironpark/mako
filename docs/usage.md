@@ -492,11 +492,27 @@ agent is not listed, and a `//` draft naming no template is sent as typed.
 
 ### Lifecycle hooks
 
-Lifecycle hooks are shell commands that mako runs for a session of any
-agent: when the session starts (`on_session_start`), when its agent ends a
-turn (`on_turn_done`), and when its agent's session ends
-(`on_session_end`). Your own hooks are in `hooks.json` beside
-`config.json`:
+Lifecycle hooks are shell commands that mako runs on the events of an
+agent's session:
+
+- `on_session_start` runs once, when mako starts a new session. It does
+  not run again when a session wakes from sleep, when mako resumes a
+  saved session (after the daemon restarts, for example), or when you
+  rewind a conversation into a new session.
+- `on_turn_done` runs when the agent ends a turn: once for each turn,
+  even when the agent tells mako of the turn's end more than once. Each
+  agent in the table above, other than the shell, tells mako when a turn
+  ends.
+- `on_session_end` runs when the agent's session ends by itself. Claude,
+  Codex (with its hooks feature), pi, oh-my-pi and OmO tell mako so.
+  Claude also does on `/clear`, which starts a new conversation. For the
+  other agents, agy and opencode among them, and for an agent that
+  crashes, it runs when the agent's program exits. It does not run when
+  you close a session, when mako puts a session to sleep, or when the
+  daemon stops: then mako stops the agent's program itself.
+
+No lifecycle hook runs for a plain shell session. Your own hooks are in
+`hooks.json` beside `config.json`:
 
 ```json
 [

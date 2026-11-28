@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/lifecycle"
 	"github.com/ironpark/mako/internal/session"
@@ -22,11 +23,46 @@ import (
 // timeout does not pile them up without end.
 const maxQueuedHookEvents = 16
 
+// The events, and what fires each (docs/usage.md, Lifecycle hooks):
+//
+//   - on_session_start: a new session's first start, in
+//     startSessionWithParent; not a saved or slept session's waking, nor a
+//     rewind's session, which goes on with the conversation it was rewound
+//     from.
+//   - on_turn_done: the end of each of its agent's turns, once however
+//     many report it (session.ReportTurnEnd): the Stop hook of every agent,
+//     and Codex's app server.
+//   - on_session_end: its agent's session ending on its own, once for each
+//     conversation: the agent's SessionEnd hook (Claude, Codex, pi), or its
+//     program exiting without mako ending it (agy and opencode, which hook
+//     no end, or any agent that crashed). Not a session mako closes, puts
+//     to sleep or stops with the daemon: mako kills its program then.
+//
+// None fires for a plain shell session, which has no agent.
+
 // sessionStartHooks runs the hooks of s's start; turnDoneHooks of its
 // agent's turn ending; sessionEndHooks of its agent's session ending.
 func (d *Daemon) sessionStartHooks(s *session.Session) { d.fireLifecycle(lifecycle.SessionStart, s) }
 func (d *Daemon) turnDoneHooks(s *session.Session)     { d.fireLifecycle(lifecycle.TurnDone, s) }
 func (d *Daemon) sessionEndHooks(s *session.Session)   { d.fireLifecycle(lifecycle.SessionEnd, s) }
+
+// rewindStart marks the context a rewind starts its new session under:
+// that session goes on with the conversation it was rewound from, which
+// started already, so it runs no on_session_start.
+type rewindStart struct{}
+
+// rewinding is ctx marked as a rewind's.
+func rewinding(ctx context.Context) context.Context {
+	return context.WithValue(ctx, rewindStart{}, true)
+}
+
+// startsSession says whether a session that starts, under ctx, is a new
+// one to its hooks: one that did not exist before (existed) nor goes on
+// with a rewound conversation.
+func startsSession(ctx context.Context, existed bool) bool {
+	rewound, _ := ctx.Value(rewindStart{}).(bool)
+	return !existed && !rewound
+}
 
 // fireLifecycle queues the hooks of event for s, after those of its
 // events before.
@@ -36,6 +72,9 @@ func (d *Daemon) fireLifecycle(event string, s *session.Session) {
 		return
 	}
 	info := s.Info()
+	if agent := info.GetAgent(); agent == "" || agent == agentspec.ShellName {
+		return // a shell, no agent's
+	}
 	ev := lifecycle.Event{Name: event, SessionID: info.GetId(), Agent: info.GetAgent(), Project: info.GetProject()}
 	if !d.hookRuns.start(ev.SessionID, func() { d.runLifecycle(ctx, ev) }) {
 		d.log.Warn("lifecycle hooks: dropped, too many waiting or the daemon stopping", "event", event, "session", ev.SessionID)
