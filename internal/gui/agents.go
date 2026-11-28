@@ -582,7 +582,7 @@ func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[stri
 		if d.Permission != "" {
 			parts = append(parts, permissionOptionLabel(d.Permission, false))
 		}
-		if d.Sandbox == agentspec.SandboxWorkspace {
+		if d.Sandbox == agentspec.SandboxWorkspace || d.Sandbox == agentspec.SandboxWorkspaceSSH {
 			parts = append(parts, T("Sandboxed"))
 		}
 		if n := m.profileCount(name); n > 0 {
@@ -1041,6 +1041,8 @@ func sandboxOptionLabel(mode string, isProfile bool) string {
 		return T("Off")
 	case agentspec.SandboxWorkspace:
 		return T("Workspace")
+	case agentspec.SandboxWorkspaceSSH:
+		return T("Workspace with SSH agent")
 	default:
 		return mode
 	}
@@ -1048,7 +1050,7 @@ func sandboxOptionLabel(mode string, isProfile bool) string {
 
 // sandboxSection chooses the OS sandbox sessions run in.
 func sandboxSection(m *model, id int, target string, isProfile bool) ggui.Widget {
-	options := []string{"", agentspec.SandboxWorkspace}
+	options := []string{"", agentspec.SandboxWorkspace, agentspec.SandboxWorkspaceSSH}
 	if isProfile {
 		options = append(options, agentspec.SandboxOff)
 	}
@@ -1062,7 +1064,7 @@ func sandboxSection(m *model, id int, target string, isProfile bool) ggui.Widget
 	return widget.Box(widget.Row(
 		widget.Expanded(widget.Column(
 			widget.Text(T("Workspace sandbox")).Size(12.5).Weight(ggui.WeightMedium),
-			muted(widget.Text(T("Run sessions in an OS sandbox that lets them write to their project but not to Mako's settings, git hooks, or agent settings, which would run code outside it. The agent keeps its own settings and sign-in for sandboxed sessions. macOS only: elsewhere, sandboxed sessions do not start.")).Size(11.5)),
+			muted(widget.Text(T("Run sessions in an OS sandbox that lets them write to their project but not to Mako's settings, git hooks, or agent settings, which would run code outside it. The agent keeps its own settings and sign-in for sandboxed sessions. With the SSH agent, sessions can also sign in to SSH hosts and push to git remotes over SSH, where what they run is outside the sandbox. A session keeps the sandbox it started in. macOS only: elsewhere, sandboxed sessions do not start.")).Size(11.5)),
 		).Gap(2).Stretch()),
 		widget.Box(choose).Width(156),
 	).Gap(10).Align(widget.AlignCenter)).
