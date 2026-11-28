@@ -14,6 +14,7 @@ import (
 var builtins = []agent.Command{
 	{Name: "add-dir", Description: "Add a working directory", Args: "<path>"},
 	{Name: "agents", Description: "Manage agent configurations"},
+	{Name: "btw", Description: "Ask a side question without interrupting the current task", Args: "<question>"},
 	{Name: "clear", Description: "Clear conversation history and free up context"},
 	{Name: "compact", Description: "Clear conversation history but keep a summary in context", Args: "[instructions]"},
 	{Name: "config", Description: "Open the settings panel"},

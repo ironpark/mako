@@ -78,15 +78,29 @@ func composed(text string, attached []string, project string) string {
 
 // sendComposer types a session's draft into its terminal, with the files
 // it goes with, followed by Enter, and clears both.
+// A `/btw ...` (or Codex `/side ...`) draft is intercepted as a side question
+// so it never interrupts the turn, queues a follow-up, or enters chat history.
 func (m *model) sendComposer(id string) {
+	state := m.chatState(id)
+	draft := m.composerDraft(id)
+	s, _ := m.session(id)
+	if q, ok := parseSideQuestionCommand(s.GetAgent(), draft); ok {
+		if m.composerDraft(id) == draft {
+			m.setComposerDraft(id, "")
+		}
+		if q == "" {
+			m.openSideQuestion(id)
+			return
+		}
+		m.askSideQuestion(id, q)
+		return
+	}
 	conn := m.conns[id]
 	if conn == nil {
 		return
 	}
-	state := m.chatState(id)
 	// A draft that calls a template sends the prompt it makes, and stays
 	// as it is while the call is wrong.
-	draft := m.composerDraft(id)
 	m.expandDraft(id, state, draft, func(prompt string) { m.sendPrompt(id, state, draft, prompt) })
 }
 

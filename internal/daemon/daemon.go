@@ -60,6 +60,7 @@ type Daemon struct {
 	codexBridges  map[string]*codexBridge
 	codexStartup  codexStartupCoordinator
 	goalActions   goalActionGuard
+	sideQuestions sideQuestionGuard
 	conversations conversations
 	approvals     approvals
 	turns         turnCheckpoints // whether each session's turn has its checkpoint; see checkpoints.go
@@ -517,6 +518,8 @@ func (d *Daemon) dispatch(ctx context.Context, stream *transport.Stream, env *pr
 		return d.handleRewindSession(ctx, stream, env)
 	case protocol.TypeGoalAction:
 		return d.handleGoalAction(ctx, stream, env)
+	case protocol.TypeAskSideQuestion:
+		return d.handleAskSideQuestion(ctx, stream, env)
 	case protocol.TypeListRoutines:
 		return d.handleListRoutines(ctx, stream, env)
 	case protocol.TypeRoutineAction:

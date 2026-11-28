@@ -55,7 +55,9 @@ func (d *Daemon) handleRunAgentPrompt(ctx context.Context, stream *transport.Str
 }
 
 type oneShotOptions struct {
-	stripYolo bool
+	stripYolo        bool
+	noTools          bool
+	skipTemplateGate bool
 }
 
 func (d *Daemon) runAgentPrompt(ctx context.Context, req *protocol.RunAgentPrompt) (*protocol.AgentPromptResult, error) {
@@ -82,13 +84,15 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 		return nil, errors.New("agent is required")
 	}
 	configured := d.agents()
-	if a, ok := agentspec.Lookup(agentName, configured); ok {
-		if profName := strings.TrimSpace(req.GetProfile()); profName != "" {
-			if p, ok := a.Profile(profName); ok && !p.TemplateAllowed() {
-				return nil, fmt.Errorf("profile %q is not enabled for prompt templates", profName)
+	if !opts.skipTemplateGate {
+		if a, ok := agentspec.Lookup(agentName, configured); ok {
+			if profName := strings.TrimSpace(req.GetProfile()); profName != "" {
+				if p, ok := a.Profile(profName); ok && !p.TemplateAllowed() {
+					return nil, fmt.Errorf("profile %q is not enabled for prompt templates", profName)
+				}
+			} else if !a.TemplateAllowed() {
+				return nil, fmt.Errorf("agent %q default configuration is not enabled for prompt templates", agentName)
 			}
-		} else if !a.TemplateAllowed() {
-			return nil, fmt.Errorf("agent %q default configuration is not enabled for prompt templates", agentName)
 		}
 	}
 	launch, err := agentspec.ResolveWith(agentName, req.GetProfile(), nil, nil, agentspec.ResolveOptions{
@@ -162,6 +166,7 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 		Prompt:     req.GetPrompt(),
 		Format:     format,
 		JSONSchema: req.GetJsonSchema(),
+		NoTools:    opts.noTools,
 	}, workDir, tempDir)
 	if err != nil {
 		return nil, err

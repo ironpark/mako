@@ -212,6 +212,10 @@ message Envelope {
     ListRoutines list_routines = 167;
     Routines routines = 168;
     RoutineAction routine_action = 169;
+
+    // Side questions (/btw) asked without interrupting a turn (revision 54).
+    AskSideQuestion ask_side_question = 170;
+    SideQuestionAnswer side_question_answer = 171;
   }
 }
 

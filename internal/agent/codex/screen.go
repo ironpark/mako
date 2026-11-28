@@ -29,6 +29,15 @@ var transcriptViewer = detect.Rule{
 	Any:      []detect.Gate{{Contains: []string{"esc to edit prev"}}, {Contains: []string{"esc/← to edit prev"}}},
 }
 
+// sideOverlay is Codex's ephemeral /side (or /btw) overlay over the prompt.
+var sideOverlay = detect.Rule{
+	ID: "side_overlay", Priority: 920, Region: detect.Whole, Hold: true,
+	Lines: []string{
+		`(?i)^\s*(?:[│┃]\s*)?(?:/side(?:\s|$)|/btw(?:\s|$)|side\s+conversation\b)`,
+		`(?i)esc\s+to\s+(?:close|dismiss|return)\b`,
+	},
+}
+
 // questionDialog are the footers of request_user_input's dialog.
 var questionDialog = []detect.Gate{
 	{Contains: []string{"enter to submit answer"}},
@@ -45,6 +54,7 @@ var screenRules = detect.MustCompile([]detect.Rule{
 		Regex: []string{spinner},
 	},
 	transcriptViewer,
+	sideOverlay,
 	{
 		ID: "trust_directory", State: detect.Blocked, Priority: 950, Region: detect.Top(20),
 		All: []detect.Gate{

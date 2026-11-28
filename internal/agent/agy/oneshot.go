@@ -58,6 +58,9 @@ func HasYoloFlag(cmd []string) bool {
 // PrepareOneShot configures agy for a single non-interactive print run.
 func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, _ string) (agent.OneShotPrepared, error) {
 	cmd := slices.Clone(l.Command)
+	if req.NoTools && !slices.Contains(cmd, "--disable-slash-commands") {
+		cmd = append(cmd, "--disable-slash-commands")
+	}
 	prompt := req.Prompt
 	if req.Format == "json" {
 		cmd = append(cmd, "--output-format", "json")

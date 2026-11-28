@@ -36,7 +36,8 @@ func TestCommandsAreFoundWhereClaudeCodeKeepsThem(t *testing.T) {
 		got[c.Name] = c
 	}
 	want := map[string]agent.Command{
-		"compact":         {Name: "compact", Description: builtins[3].Description, Args: "[instructions]"},
+		"btw":             {Name: "btw", Description: "Ask a side question without interrupting the current task", Args: "<question>"},
+		"compact":         {Name: "compact", Description: "Clear conversation history but keep a summary in context", Args: "[instructions]"},
 		"frontend:review": {Name: "frontend:review", Description: "Review the UI", Args: "[file]", Source: "user"},
 		"commit":          {Name: "commit", Description: "Make a commit", Source: "user"},
 		"deploy":          {Name: "deploy", Description: "Deploy the app", Source: "project"},

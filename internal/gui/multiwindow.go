@@ -864,6 +864,14 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 			}
 			sw.sidebarPage.Set("")
 		})
+		hSide := w.Shortcut(m.shortcutChord("side_question"), func() {
+			if m.isRecordingShortcut() {
+				return
+			}
+			if id := m.spaceWindowActiveTab(sw); id != "" && isSessionTab(id) {
+				m.openSideQuestion(id)
+			}
+		})
 		title := ggui.Derived(func() string { return m.spaceTitleByIDReactive(spaceID) + " — mako" })
 		ggui.Watch(title, func(t string) { w.SetTitle(t) })
 		exists := ggui.Derived(func() bool {
@@ -878,6 +886,9 @@ func (m *model) openSpaceWindow(spaceID string) *spaceWindowState {
 		ggui.OnCleanup(func() {
 			if hEsc != nil {
 				hEsc.Remove()
+			}
+			if hSide != nil {
+				hSide.Remove()
 			}
 			closed()
 		})

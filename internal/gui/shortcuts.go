@@ -45,6 +45,7 @@ var shortcutList = []shortcutSpec{
 	{ID: "next_diff", Chord: "alt+cmd+down", Action: "Next changed file"},
 	{ID: "prev_diff", Chord: "alt+cmd+up", Action: "Previous changed file"},
 	{ID: "open_inbox", Chord: "cmd+shift+i", Action: "Open Needs You inbox"},
+	{ID: "side_question", Chord: "cmd+/", Action: "Ask a side question"},
 }
 
 // secondaryPaletteChord keeps Cmd+Shift+P opening the command palette unless
@@ -327,6 +328,12 @@ func (m *model) shortcutAction(id string) func() {
 		return func() { m.stepDiff(1) }
 	case "prev_diff":
 		return func() { m.stepDiff(-1) }
+	case "side_question":
+		return func() {
+			if id := m.chatTarget(); id != "" {
+				m.openSideQuestion(id)
+			}
+		}
 	default:
 		return nil
 	}

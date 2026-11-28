@@ -54,6 +54,9 @@ func (*Agent) PrepareOneShot(l *agent.Launch, req agent.OneShotRequest, _, tempD
 	var schemaPath string
 	prompt := req.Prompt
 	cmd := append(slices.Clone(l.Command), "exec", "--ephemeral", "--skip-git-repo-check", "-o", outPath)
+	if req.NoTools && !slices.Contains(cmd, "--sandbox") && !slices.Contains(cmd, "-s") {
+		cmd = append(cmd, "--sandbox", "read-only")
+	}
 	if req.Format == "json" {
 		if schema := strings.TrimSpace(req.JSONSchema); schema != "" {
 			schemaPath = filepath.Join(tempDir, "codex-schema.json")

@@ -503,6 +503,12 @@ func (c *Client) GoalAction(ctx context.Context, req *protocol.GoalAction) (*pro
 	return request[*protocol.SessionInfo](ctx, c, protocol.TypeGoalAction, req)
 }
 
+// AskSideQuestion asks a quick side question (/btw) about a session without
+// interrupting an active turn or adding the exchange to its history.
+func (c *Client) AskSideQuestion(ctx context.Context, req *protocol.AskSideQuestion) (*protocol.SideQuestionAnswer, error) {
+	return request[*protocol.SideQuestionAnswer](ctx, c, protocol.TypeAskSideQuestion, req)
+}
+
 // Sleep stops the program of a session whose agent rests, to resume it
 // when it is next attached, and returns the session as it is now.
 func (c *Client) Sleep(ctx context.Context, req *protocol.SleepSession) (*protocol.SessionInfo, error) {
