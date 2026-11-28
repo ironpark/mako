@@ -1051,6 +1051,8 @@ func spaceWindowView(m *model, sw *spaceWindowState) ggui.Widget {
 	).Stretch()
 	return widget.Stack(
 		widget.Row(left, widget.Expanded(right)).Stretch(),
+		// Below the confirmation, which picking a race's winner asks in.
+		raceDialogFor(m, sw.spaceID),
 		confirmDialogFor(m, sw.spaceID),
 	).Expand()
 }
@@ -1374,6 +1376,7 @@ func spaceWindowHeader(m *model, sw *spaceWindowState) ggui.Widget {
 	return widget.Box(widget.Row(
 		iconButton("panel-left", T("Toggle sidebar"), func() { ggui.Toggle(sw.sidebarOpen) }),
 		widget.Expanded(title),
+		raceButtonFor(m, sw.spaceID),
 	).Gap(8).Align(widget.AlignCenter)).Pad(0, 10, 0, 8).Height(headerHeight)
 }
 

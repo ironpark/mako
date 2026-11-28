@@ -41,6 +41,10 @@ type newSession struct {
 	// Team is the name of the team the agent leads, started with it; ""
 	// for none.
 	Team string
+	// RaceTargets are extra agent targets run in parallel isolated worktrees
+	// alongside Agent for A/B comparison. Picking another Agent or node
+	// drops them.
+	RaceTargets []string
 }
 
 // model is the GUI's state. Signals are touched on the UI goroutine only;
@@ -172,6 +176,10 @@ type model struct {
 	chatImages   *imageCache
 	usages       map[string]*usageState // for the usage overlay
 	AccountUsage *accountUsageState     // session-independent global account quotas; see accountusage.go
+	Races        *raceState             // multi-agent A/B comparison races; see race.go
+	// UsagesRev counts the entries put in usages, which is no signal: a
+	// view listing them reads it to see the ones added since it was built.
+	UsagesRev *ggui.StateValue[int]
 
 	files *filesState // the Files tab's; see filesstate.go
 
@@ -396,7 +404,9 @@ func newModel(cfg *config.Config, addr string) *model {
 		chats:               map[string]*chatState{},
 		chatImages:          newImageCache(),
 		usages:              map[string]*usageState{},
+		UsagesRev:           ggui.State(0),
 		AccountUsage:        newAccountUsageState(),
+		Races:               newRaceState(),
 		diffChanges:         newDiffChangesState(),
 		DraftReview:         ggui.State([]draftReviewComment(nil)),
 		DraftReviewOpen:     ggui.State(false),
@@ -840,7 +850,12 @@ func (m *model) submitLaunch(id string) {
 	if ggui.Peek(l.Starting) {
 		return
 	}
-	m.startSession(id, ggui.Peek(l.Form))
+	f := ggui.Peek(l.Form)
+	if len(raceTargetSet(f.Agent, f.RaceTargets)) >= 2 {
+		m.startRace(id, f)
+		return
+	}
+	m.startSession(id, f)
 }
 
 // startSession starts the session f describes, with its prompt and its
@@ -894,38 +909,7 @@ func (m *model) startSession(tab string, f newSession) {
 		}
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
-		inMain := slices.Contains(ggui.Peek(m.Tabs), tab)
-		otherKey := ""
-		if tab != "" && !inMain {
-			otherKey = m.findLayoutOfTab(tab)
-		}
-		if otherKey != "" {
-			// Launched from a secondary Space window or detached pane:
-			// replace the launch tab in-place without hijacking the main window.
-			m.editLayoutForKey(otherKey, func(root *layoutNode) int {
-				g := root.groupOf(tab)
-				if g == nil {
-					return 0
-				}
-				i := slices.Index(g.Tabs, tab)
-				g.Tabs[i] = info.GetId()
-				g.Active = info.GetId()
-				return g.ID
-			})
-			delete(m.launches, tab)
-			m.attach(info.GetId())
-		} else {
-			targetKey := layoutKey(m.spacesNow().spaceID(m.spacesNow().Space), projectContext(sectionID(m.projectsNow(), info)))
-			if inMain {
-				if m.ws.layoutKey == targetKey {
-					m.replaceTab(tab, info.GetId())
-				} else {
-					m.closeTab(tab)
-				}
-			}
-			delete(m.launches, tab)
-			m.selectSession(info.GetId())
-		}
+		m.showStarted(tab, info)
 		if len(team.Members) > 0 {
 			m.startTeam(info.GetId(), team, prompt)
 		}
@@ -933,6 +917,43 @@ func (m *model) startSession(tab string, f newSession) {
 			m.setChatMode(info.GetId(), true)
 		}
 	})
+}
+
+// showStarted shows session info, just started from new session's tab
+// tab, in the tab's place: in a secondary Space window or a detached pane
+// the tab is replaced where it is, without taking over the main window;
+// in the main window, or with no tab, the session is selected.
+func (m *model) showStarted(tab string, info *protocol.SessionInfo) {
+	inMain := slices.Contains(ggui.Peek(m.Tabs), tab)
+	otherKey := ""
+	if tab != "" && !inMain {
+		otherKey = m.findLayoutOfTab(tab)
+	}
+	if otherKey != "" {
+		m.editLayoutForKey(otherKey, func(root *layoutNode) int {
+			g := root.groupOf(tab)
+			if g == nil {
+				return 0
+			}
+			i := slices.Index(g.Tabs, tab)
+			g.Tabs[i] = info.GetId()
+			g.Active = info.GetId()
+			return g.ID
+		})
+		delete(m.launches, tab)
+		m.attach(info.GetId())
+		return
+	}
+	targetKey := layoutKey(m.spacesNow().spaceID(m.spacesNow().Space), projectContext(sectionID(m.projectsNow(), info)))
+	if inMain {
+		if m.ws.layoutKey == targetKey {
+			m.replaceTab(tab, info.GetId())
+		} else {
+			m.closeTab(tab)
+		}
+	}
+	delete(m.launches, tab)
+	m.selectSession(info.GetId())
 }
 
 // syncTitles publishes the titles programs set on their terminals.

@@ -511,7 +511,7 @@ const (
 	GitOpDiscard  = "discard_hunk"
 	GitOpMerge    = "merge"           // a worktree's branch into its base, in the main work tree
 	GitOpPR       = "pull_request"    // pushes a worktree's branch and opens a pull request of it
-	GitOpRemoveWT = "remove_worktree" // a worktree with no changes left, and its merged branch
+	GitOpRemoveWT = "remove_worktree" // a worktree with no changes left, and its merged branch; with Force, changes and an unmerged branch too
 
 	GitOpDiscardFiles = "discard_files" // Paths' changes, and untracked files themselves
 	GitOpIgnore       = "ignore"        // adds Paths to the root's .gitignore

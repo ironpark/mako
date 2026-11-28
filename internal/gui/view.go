@@ -73,6 +73,8 @@ func window(m *model) ggui.Widget {
 		sshHostDialog(m),
 		tunnelDialog(m),
 		forgeDialogs(m),
+		// Below the confirmation, which picking a race's winner asks in.
+		raceDialog(m),
 		confirmDialog(m),
 		rewindDialog(m),
 		homeMigrateDialog(m),
@@ -345,6 +347,7 @@ func sidebarFooter(m *model) ggui.Widget {
 		widget.Expanded(host),
 		devicesMenu(m),
 		tunnelsMenu(m),
+		raceFooterButton(m),
 		accountUsageButton(m),
 		iconButton("settings", T("Settings"), func() { m.openSettings("") }),
 	).Gap(4)).Pad(8, 10, 8, 16).Height(52)

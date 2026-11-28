@@ -113,20 +113,41 @@ func checkBranch(ctx context.Context, dir, branch string) error {
 	return nil
 }
 
+// RemoveWorktreeOptions is how RemoveWorktree removes a worktree.
+type RemoveWorktreeOptions struct {
+	// Force removes the worktree with any changes left in it, and deletes
+	// its branch merged or not: what a caller asks only once the user has
+	// said that work may go.
+	Force bool
+}
+
 // RemoveWorktree removes a session's worktree, which must have no changes
-// left, and its branch once merged.
-func RemoveWorktree(ctx context.Context, w *protocol.Worktree) (string, error) {
+// left, and its branch once merged; opts.Force removes them whatever is
+// left in them.
+func RemoveWorktree(ctx context.Context, w *protocol.Worktree, opts RemoveWorktreeOptions) (string, error) {
 	if w.GetPath() == "" || w.GetRepo() == "" {
 		return "", errors.New("no worktree to remove")
 	}
-	out, err := run(ctx, w.GetRepo(), nil, "worktree", "remove", w.GetPath())
+	force := opts.Force
+	args := []string{"worktree", "remove"}
+	if force {
+		args = append(args, "--force")
+	}
+	out, err := run(ctx, w.GetRepo(), nil, append(args, w.GetPath())...)
 	if err != nil {
 		return out, err
 	}
-	// A branch with work not merged anywhere stays: -d refuses it.
-	if more, err := run(ctx, w.GetRepo(), nil, "branch", "-d", w.GetBranch()); err == nil {
-		out = strings.TrimSpace(out + "\n" + more)
+	if w.GetBranch() == "" {
+		return out, nil
 	}
+	more, err := run(ctx, w.GetRepo(), nil, "branch", pick(force, "-D", "-d"), "--", w.GetBranch())
+	switch {
+	case err == nil:
+		out = strings.TrimSpace(out + "\n" + more)
+	case force:
+		return out, fmt.Errorf("removed the worktree, but not its branch %s: %w", w.GetBranch(), err)
+	}
+	// Otherwise a branch with work not merged anywhere stays: -d refuses it.
 	return out, nil
 }
 

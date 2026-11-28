@@ -736,6 +736,45 @@ func TestGitUnavailableAndLimits(t *testing.T) {
 	}
 }
 
+// TestPluginCannotForceAWorktreeRemoval keeps a plugin's remove_worktree
+// to a worktree with nothing left in it, while Force still reaches the ops
+// a plugin may force, such as deleting a branch.
+func TestPluginCannotForceAWorktreeRemoval(t *testing.T) {
+	fg := newFakeGitHost()
+	ran := make(chan *protocol.GitRun, 2)
+	fg.runFn = func(_ context.Context, _ GitTarget, r *protocol.GitRun, _ bool) (string, error) {
+		ran <- r
+		return "", nil
+	}
+	m := New(Config{DataDir: t.TempDir(), Git: fg})
+	defer m.shutdown()
+	p := newPlugin(m, "test-force")
+	p.gesture = true
+	h := &host{p: p}
+	fg.allowed[GitTarget{Path: "/tmp/force-repo"}] = true
+	target := &hostapi.GitTarget{Path: "/tmp/force-repo"}
+	for _, tc := range []struct {
+		op    string
+		force bool
+	}{
+		{protocol.GitOpRemoveWT, false},
+		{protocol.GitOpDeleteBranch, true},
+	} {
+		if _, err := h.GitRun(context.Background(), &hostapi.GitServiceRunRequest{Target: target, Op: tc.op, Branch: "b", Force: true, Worktree: true}); err != nil {
+			t.Fatalf("%s: %v", tc.op, err)
+		}
+		select {
+		case r := <-ran:
+			if r.GetOp() != tc.op || r.GetForce() != tc.force {
+				t.Fatalf("%s ran as op=%s force=%v, want force=%v", tc.op, r.GetOp(), r.GetForce(), tc.force)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s never ran", tc.op)
+		}
+	}
+	p.cancelPending("done")
+}
+
 // TestForgeRunIDsPast32Bits keeps a GitHub run ID, past 2^31, exact from
 // BranchStatus to FailedLogs, and FailedLogs keeps the end of a long log,
 // where the failure is.

@@ -477,6 +477,12 @@ func (h *host) GitRun(_ context.Context, req *hostapi.GitServiceRunRequest) (*ho
 		Force:   req.GetForce(),
 		Tag:     req.GetTag(),
 	}
+	if op == protocol.GitOpRemoveWT {
+		// A forced removal deletes a worktree's changes and its unmerged
+		// branch, which only the user, asked in Mako's own window, may let
+		// go: a plugin removes a worktree only once nothing is left in it.
+		runReq.Force = false
+	}
 	if op == protocol.GitOpAuth {
 		// Restrict plugin-originated auth requests to the target repository's
 		// own HTTPS remote by stripping any caller-supplied URL, and execute

@@ -485,7 +485,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 			if !startedOK && createdWorktree != nil {
 				rmCtx, rmCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer rmCancel()
-				if _, rmErr := gitstat.RemoveWorktree(rmCtx, createdWorktree); rmErr != nil {
+				if _, rmErr := gitstat.RemoveWorktree(rmCtx, createdWorktree, gitstat.RemoveWorktreeOptions{}); rmErr != nil {
 					d.log.Warn("failed to roll back worktree after session start error", "path", createdWorktree.GetPath(), "err", rmErr)
 				}
 			}
