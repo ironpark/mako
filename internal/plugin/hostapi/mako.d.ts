@@ -1134,8 +1134,14 @@ export interface ForgeServiceBranchStatusResponse {
   prChecks?: string;
   runs?: number;
   runsState?: string;
+  /**
+   * run_number is the run's ID when it fits in 32 bits, else 0: read
+   * run_id.
+   */
   runNumber?: number;
   runHead?: string;
+  /** run_id is the run's ID, exact past 32 bits (GitHub's are). */
+  runId?: number;
 }
 
 /**
@@ -1164,7 +1170,13 @@ export interface ForgeServicePullRequestDetailResponse {
   checks?: string;
   body?: string;
   checkItems?: ForgeCheckEntry[];
+  /** comments are oldest first, the latest 300 at most. */
   comments?: ForgeCommentEntry[];
+  /**
+   * viewer is the forge account the node reads it as, which the user's
+   * own comments carry; "" when the forge does not tell.
+   */
+  viewer?: string;
 }
 
 /** ForgeCheckEntry is one CI check run or commit status on a pull request. */
@@ -1192,12 +1204,21 @@ export interface ForgeCommentEntry {
   review?: string;
   path?: string;
   line?: number;
+  /**
+   * association is the author's tie to the repository: "OWNER",
+   * "MEMBER", "COLLABORATOR", "CONTRIBUTOR", "NONE" and the like, or ""
+   * when the forge does not tell (Forgejo and Gitea do not).
+   */
+  association?: string;
+  /** bot says the author is a bot or an app. */
+  bot?: boolean;
 }
 
 /** ForgeServiceFailedLogsRequest asks for the tail of a failed CI run's logs. */
 export interface ForgeServiceFailedLogsRequest {
   target?: GitTarget | null;
-  runNumber?: number;
+  /** run_id is the run's ID, as BranchStatus gives it. */
+  runId?: number;
   /**
    * max_lines bounds the number of trailing log lines returned (default 250,
    * max 400).
@@ -1871,6 +1892,11 @@ export interface StartAgentRequest {
   name?: string;
   /** parent_session_id optionally links the spawned session to an existing parent session. */
   parentSessionId?: string;
+  /**
+   * no_yolo starts the agent with YOLO off, whatever its profile says, so
+   * that it asks the user before it acts. A plugin cannot turn YOLO on.
+   */
+  noYolo?: boolean;
 }
 
 /** StartAgentResponse says the start was taken. */

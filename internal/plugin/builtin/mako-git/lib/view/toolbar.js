@@ -1,7 +1,7 @@
 // Top toolbar (row with variant "toolbar"): lifted into the dock header when
 // standalone and drawn cleanly under the tab strip when tabbed.
 
-import { isPrOpen } from "../autofix.js";
+import { autoFixAvailable, isPrOpen } from "../autofix.js";
 import { lineCount } from "../i18n.js";
 import { folderName, isRepo, safeKey, sanitizeText } from "../state.js";
 
@@ -117,7 +117,7 @@ export function renderToolbar(s, ui, ctx) {
     ui.menuItem(t("Create pull request…"), { key: "op-pr", onTap: ["createPR"] }),
   ];
 
-  if (s.forge && s.forge.hasPr && s.forge.prNumber > 0 && isPrOpen(s.forge.prState)) {
+  if (s.forge && s.forge.hasPr && s.forge.prNumber > 0 && isPrOpen(s.forge.prState) && autoFixAvailable(ctx)) {
     moreItems.push(ui.menuItem(t("Auto-fix settings"), {
       key: "op-autofix",
       icon: "sparkles",

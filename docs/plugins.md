@@ -541,7 +541,7 @@ plugin lacks the permission. The schema, with every field, is
 | `http.fetch({url, method, headers, body})` | `net:<host>` | `{status, headers, body}`; see [Permissions](#permissions). |
 | `commands.runCommand({id, arg})` | none | Runs a window intent command: `mako.openUrl` (http/https URL), `mako.toast` (notice ≤ 240 runes), `mako.copyText` (UTF-8 text ≤ 64 KiB), `mako.openDiff`, `mako.openFile`, `mako.openForge`, `mako.createPullRequest` (revision 46), and `mako.openTab` / `mako.closeTab` (revision 49). All except `mako.toast` require a user gesture (at most 8 intents per gesture); prelude exposes `ctx.ui.*` helpers. See [Window intents](#window-intents). |
 | `messages.sendMessage({sessionId, text})` | `sessions:write` | `{id}`: leaves a message for a session's agent, headed as the plugin's; see [Agents](#agents). |
-| `messages.startAgent({agent, profile, project, root, prompt, name, parentSessionId})` | `sessions:write` | `{requestId, asked}`: asks to start an agent; its outcome comes to `on.agentStarted` or `on.agentRefused`. |
+| `messages.startAgent({agent, profile, project, root, prompt, name, parentSessionId, noYolo})` | `sessions:write` | `{requestId, asked}`: asks to start an agent; its outcome comes to `on.agentStarted` or `on.agentRefused`. `noYolo` starts it in its normal permission mode even when its settings turn YOLO on. |
 | `messages.stopAgent({sessionId})` | `sessions:write` | Stops an agent the plugin started. |
 | `files.listProjects()` | `fs:project` | `{projects}`: the projects this node knows, each `{id, name, roots}`, its folders on this node. See [Project files](#project-files). |
 | `files.readFile({project, root, path, offset, length})` | `fs:project` | `{text, data, size, eof, binary}`: a file of a project's folder, or a piece of it, 1 MiB at most. |
@@ -564,9 +564,9 @@ plugin lacks the permission. The schema, with every field, is
 | `git.watch({target})` | `git:read` | `{root}`: binds a repository watcher to the calling block instance (up to 16 watches per plugin; idempotent), reloading the instance after a 300 ms debounce on changes (revision 46). |
 | `git.unwatch({target})` | `git:read` | Stops watching `target` for the calling block instance (revision 46). |
 | `git.run({target, op, message, paths, amend, branch, commit, stash, rebase, force, tag, worktree})` | `git:write` | `{job}`: runs a mutating git operation asynchronously in answer to a user gesture (2 min timeout); outcome arrives at `on.gitDone({job, scopeKey, op, ok, output, error})` (revision 46). |
-| `forge.branchStatus({target, branch})` | `forge:read` | `{forge, hasPr, prNumber, prTitle, prState, prChecks, runs, runsState, runNumber, runHead}`: reads pull request and CI status for a branch on its forge (revision 46). |
-| `forge.pullRequestDetail({target, number})` | `forge:read` | `{forge, number, title, state, url, head, base, headOid, checks, body, checkItems, comments}`: reads a pull request's checks (`name`, `workflow`, `status`, `conclusion`, `url`) and its conversation comments, reviews, and line comments (`author`, `body`, `time`, `review`, `path`, `line`). Number 0 reads the branch's pull request. |
-| `forge.failedLogs({target, runNumber, maxLines})` | `forge:read` | `{logs, truncated, workflow, head, url}`: reads the last lines (default 250, at most 400) of a CI run's failed steps. |
+| `forge.branchStatus({target, branch})` | `forge:read` | `{forge, hasPr, prNumber, prTitle, prState, prChecks, runs, runsState, runNumber, runId, runHead}`: reads pull request and CI status for a branch on its forge (revision 46). `runId` is the latest run's ID, exact up to 2^53; `runNumber` holds the same ID, or 0 when it does not fit in 32 bits, as GitHub's run IDs no longer do. |
+| `forge.pullRequestDetail({target, number})` | `forge:read` | `{forge, number, title, state, url, head, base, headOid, checks, body, checkItems, comments, viewer}`: reads a pull request's checks (`name`, `workflow`, `status`, `conclusion`, `url`) and its conversation comments, reviews, and line comments (`author`, `body`, `time`, `review`, `path`, `line`, `association`, `bot`), oldest first. `association` is the author's tie to the repository as the forge tells it (`OWNER`, `MEMBER`, `COLLABORATOR`, `CONTRIBUTOR`, `NONE`, and so on; empty when the forge does not say), `bot` is true for an app or bot account, and `author` is empty for a deleted account. `viewer` is the login the node reads the forge as, empty when unknown. Only the latest 300 comments come, each cut at 8 KiB, and no more than 256 KiB in all. Number 0 reads the branch's pull request. |
+| `forge.failedLogs({target, runId, maxLines})` | `forge:read` | `{logs, truncated, workflow, head, url}`: reads the last lines (default 250, at most 400) of a CI run's failed steps; `runId` is a whole number from 1 to 2^53, as `forge.branchStatus` gives it. A log over 64 KiB keeps its end, from the first whole line. |
 | `exec.runProcess` | `exec` | Not available: no manifest may ask for `exec` in this version. |
 
 ### Transcripts and events
@@ -694,7 +694,10 @@ covers, **Allow once**, **Always allow this plugin** or **Deny** (or
 `mako plugins allow-agent <id> once|always`, `deny-agent <id>`), on this
 node alone; Settings ▸ Plugins says when a plugin may start agents
 without asking, and **Ask again** takes that back (`mako plugins
-forget-agents <id>`), as does revoking its permissions. The call returns
+forget-agents <id>`), as does revoking its permissions. A bundled plugin
+asks as any other does; it may also start one in a folder it shows on
+this node (an existing directory within a folder scope it is watched in,
+links resolved) that no project holds, as a worktree. The call returns
 at once, `{requestId, asked}`; the start, once allowed, may take a
 minute, and its outcome comes as an event without a subscription:
 `on.agentStarted(event)` with the session, or `on.agentRefused(event)`

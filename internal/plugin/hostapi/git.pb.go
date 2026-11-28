@@ -1281,17 +1281,21 @@ func (x *ForgeServiceBranchStatusRequest) GetBranch() string {
 // ForgeServiceBranchStatusResponse holds the pull request and CI summary for a
 // branch on its forge.
 type ForgeServiceBranchStatusResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Forge         string                 `protobuf:"bytes,1,opt,name=forge,proto3" json:"forge,omitempty"`
-	HasPr         bool                   `protobuf:"varint,2,opt,name=has_pr,json=hasPr,proto3" json:"has_pr,omitempty"`
-	PrNumber      int32                  `protobuf:"varint,3,opt,name=pr_number,json=prNumber,proto3" json:"pr_number,omitempty"`
-	PrTitle       string                 `protobuf:"bytes,4,opt,name=pr_title,json=prTitle,proto3" json:"pr_title,omitempty"`
-	PrState       string                 `protobuf:"bytes,5,opt,name=pr_state,json=prState,proto3" json:"pr_state,omitempty"`
-	PrChecks      string                 `protobuf:"bytes,6,opt,name=pr_checks,json=prChecks,proto3" json:"pr_checks,omitempty"`
-	Runs          int32                  `protobuf:"varint,7,opt,name=runs,proto3" json:"runs,omitempty"`
-	RunsState     string                 `protobuf:"bytes,8,opt,name=runs_state,json=runsState,proto3" json:"runs_state,omitempty"`
-	RunNumber     int32                  `protobuf:"varint,9,opt,name=run_number,json=runNumber,proto3" json:"run_number,omitempty"`
-	RunHead       string                 `protobuf:"bytes,10,opt,name=run_head,json=runHead,proto3" json:"run_head,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Forge     string                 `protobuf:"bytes,1,opt,name=forge,proto3" json:"forge,omitempty"`
+	HasPr     bool                   `protobuf:"varint,2,opt,name=has_pr,json=hasPr,proto3" json:"has_pr,omitempty"`
+	PrNumber  int32                  `protobuf:"varint,3,opt,name=pr_number,json=prNumber,proto3" json:"pr_number,omitempty"`
+	PrTitle   string                 `protobuf:"bytes,4,opt,name=pr_title,json=prTitle,proto3" json:"pr_title,omitempty"`
+	PrState   string                 `protobuf:"bytes,5,opt,name=pr_state,json=prState,proto3" json:"pr_state,omitempty"`
+	PrChecks  string                 `protobuf:"bytes,6,opt,name=pr_checks,json=prChecks,proto3" json:"pr_checks,omitempty"`
+	Runs      int32                  `protobuf:"varint,7,opt,name=runs,proto3" json:"runs,omitempty"`
+	RunsState string                 `protobuf:"bytes,8,opt,name=runs_state,json=runsState,proto3" json:"runs_state,omitempty"`
+	// run_number is the run's ID when it fits in 32 bits, else 0: read
+	// run_id.
+	RunNumber int32  `protobuf:"varint,9,opt,name=run_number,json=runNumber,proto3" json:"run_number,omitempty"`
+	RunHead   string `protobuf:"bytes,10,opt,name=run_head,json=runHead,proto3" json:"run_head,omitempty"`
+	// run_id is the run's ID, exact past 32 bits (GitHub's are).
+	RunId         float64 `protobuf:"fixed64,11,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1396,6 +1400,13 @@ func (x *ForgeServiceBranchStatusResponse) GetRunHead() string {
 	return ""
 }
 
+func (x *ForgeServiceBranchStatusResponse) GetRunId() float64 {
+	if x != nil {
+		return x.RunId
+	}
+	return 0
+}
+
 // ForgeServicePullRequestDetailRequest asks for a pull request's checks and
 // review comments.
 type ForgeServicePullRequestDetailRequest struct {
@@ -1454,19 +1465,23 @@ func (x *ForgeServicePullRequestDetailRequest) GetNumber() int32 {
 // ForgeServicePullRequestDetailResponse holds a pull request's metadata,
 // checks, and review/conversation comments.
 type ForgeServicePullRequestDetailResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Forge         string                 `protobuf:"bytes,1,opt,name=forge,proto3" json:"forge,omitempty"`
-	Number        int32                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
-	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
-	Url           string                 `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
-	Head          string                 `protobuf:"bytes,6,opt,name=head,proto3" json:"head,omitempty"`
-	Base          string                 `protobuf:"bytes,7,opt,name=base,proto3" json:"base,omitempty"`
-	HeadOid       string                 `protobuf:"bytes,8,opt,name=head_oid,json=headOid,proto3" json:"head_oid,omitempty"`
-	Checks        string                 `protobuf:"bytes,9,opt,name=checks,proto3" json:"checks,omitempty"`
-	Body          string                 `protobuf:"bytes,10,opt,name=body,proto3" json:"body,omitempty"`
-	CheckItems    []*ForgeCheckEntry     `protobuf:"bytes,11,rep,name=check_items,json=checkItems,proto3" json:"check_items,omitempty"`
-	Comments      []*ForgeCommentEntry   `protobuf:"bytes,12,rep,name=comments,proto3" json:"comments,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Forge      string                 `protobuf:"bytes,1,opt,name=forge,proto3" json:"forge,omitempty"`
+	Number     int32                  `protobuf:"varint,2,opt,name=number,proto3" json:"number,omitempty"`
+	Title      string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	State      string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	Url        string                 `protobuf:"bytes,5,opt,name=url,proto3" json:"url,omitempty"`
+	Head       string                 `protobuf:"bytes,6,opt,name=head,proto3" json:"head,omitempty"`
+	Base       string                 `protobuf:"bytes,7,opt,name=base,proto3" json:"base,omitempty"`
+	HeadOid    string                 `protobuf:"bytes,8,opt,name=head_oid,json=headOid,proto3" json:"head_oid,omitempty"`
+	Checks     string                 `protobuf:"bytes,9,opt,name=checks,proto3" json:"checks,omitempty"`
+	Body       string                 `protobuf:"bytes,10,opt,name=body,proto3" json:"body,omitempty"`
+	CheckItems []*ForgeCheckEntry     `protobuf:"bytes,11,rep,name=check_items,json=checkItems,proto3" json:"check_items,omitempty"`
+	// comments are oldest first, the latest 300 at most.
+	Comments []*ForgeCommentEntry `protobuf:"bytes,12,rep,name=comments,proto3" json:"comments,omitempty"`
+	// viewer is the forge account the node reads it as, which the user's
+	// own comments carry; "" when the forge does not tell.
+	Viewer        string `protobuf:"bytes,13,opt,name=viewer,proto3" json:"viewer,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1585,6 +1600,13 @@ func (x *ForgeServicePullRequestDetailResponse) GetComments() []*ForgeCommentEnt
 	return nil
 }
 
+func (x *ForgeServicePullRequestDetailResponse) GetViewer() string {
+	if x != nil {
+		return x.Viewer
+	}
+	return ""
+}
+
 // ForgeCheckEntry is one CI check run or commit status on a pull request.
 type ForgeCheckEntry struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1672,9 +1694,15 @@ type ForgeCommentEntry struct {
 	Time string `protobuf:"bytes,3,opt,name=time,proto3" json:"time,omitempty"`
 	// review is "APPROVED", "CHANGES_REQUESTED", "COMMENTED", or "" for plain
 	// conversation comments.
-	Review        string `protobuf:"bytes,4,opt,name=review,proto3" json:"review,omitempty"`
-	Path          string `protobuf:"bytes,5,opt,name=path,proto3" json:"path,omitempty"`
-	Line          int32  `protobuf:"varint,6,opt,name=line,proto3" json:"line,omitempty"`
+	Review string `protobuf:"bytes,4,opt,name=review,proto3" json:"review,omitempty"`
+	Path   string `protobuf:"bytes,5,opt,name=path,proto3" json:"path,omitempty"`
+	Line   int32  `protobuf:"varint,6,opt,name=line,proto3" json:"line,omitempty"`
+	// association is the author's tie to the repository: "OWNER",
+	// "MEMBER", "COLLABORATOR", "CONTRIBUTOR", "NONE" and the like, or ""
+	// when the forge does not tell (Forgejo and Gitea do not).
+	Association string `protobuf:"bytes,7,opt,name=association,proto3" json:"association,omitempty"`
+	// bot says the author is a bot or an app.
+	Bot           bool `protobuf:"varint,8,opt,name=bot,proto3" json:"bot,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1751,11 +1779,26 @@ func (x *ForgeCommentEntry) GetLine() int32 {
 	return 0
 }
 
+func (x *ForgeCommentEntry) GetAssociation() string {
+	if x != nil {
+		return x.Association
+	}
+	return ""
+}
+
+func (x *ForgeCommentEntry) GetBot() bool {
+	if x != nil {
+		return x.Bot
+	}
+	return false
+}
+
 // ForgeServiceFailedLogsRequest asks for the tail of a failed CI run's logs.
 type ForgeServiceFailedLogsRequest struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	Target    *GitTarget             `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	RunNumber int32                  `protobuf:"varint,2,opt,name=run_number,json=runNumber,proto3" json:"run_number,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Target *GitTarget             `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// run_id is the run's ID, as BranchStatus gives it.
+	RunId float64 `protobuf:"fixed64,2,opt,name=run_id,json=runId,proto3" json:"run_id,omitempty"`
 	// max_lines bounds the number of trailing log lines returned (default 250,
 	// max 400).
 	MaxLines      int32 `protobuf:"varint,3,opt,name=max_lines,json=maxLines,proto3" json:"max_lines,omitempty"`
@@ -1800,9 +1843,9 @@ func (x *ForgeServiceFailedLogsRequest) GetTarget() *GitTarget {
 	return nil
 }
 
-func (x *ForgeServiceFailedLogsRequest) GetRunNumber() int32 {
+func (x *ForgeServiceFailedLogsRequest) GetRunId() float64 {
 	if x != nil {
-		return x.RunNumber
+		return x.RunId
 	}
 	return 0
 }
@@ -1986,7 +2029,7 @@ const file_mako_plugin_v1_git_proto_rawDesc = "" +
 	"\x03job\x18\x01 \x01(\tR\x03job\"l\n" +
 	"\x1fForgeServiceBranchStatusRequest\x121\n" +
 	"\x06target\x18\x01 \x01(\v2\x19.mako.plugin.v1.GitTargetR\x06target\x12\x16\n" +
-	"\x06branch\x18\x02 \x01(\tR\x06branch\"\xac\x02\n" +
+	"\x06branch\x18\x02 \x01(\tR\x06branch\"\xc3\x02\n" +
 	" ForgeServiceBranchStatusResponse\x12\x14\n" +
 	"\x05forge\x18\x01 \x01(\tR\x05forge\x12\x15\n" +
 	"\x06has_pr\x18\x02 \x01(\bR\x05hasPr\x12\x1b\n" +
@@ -2000,10 +2043,11 @@ const file_mako_plugin_v1_git_proto_rawDesc = "" +
 	"\n" +
 	"run_number\x18\t \x01(\x05R\trunNumber\x12\x19\n" +
 	"\brun_head\x18\n" +
-	" \x01(\tR\arunHead\"q\n" +
+	" \x01(\tR\arunHead\x12\x15\n" +
+	"\x06run_id\x18\v \x01(\x01R\x05runId\"q\n" +
 	"$ForgeServicePullRequestDetailRequest\x121\n" +
 	"\x06target\x18\x01 \x01(\v2\x19.mako.plugin.v1.GitTargetR\x06target\x12\x16\n" +
-	"\x06number\x18\x02 \x01(\x05R\x06number\"\x83\x03\n" +
+	"\x06number\x18\x02 \x01(\x05R\x06number\"\x9b\x03\n" +
 	"%ForgeServicePullRequestDetailResponse\x12\x14\n" +
 	"\x05forge\x18\x01 \x01(\tR\x05forge\x12\x16\n" +
 	"\x06number\x18\x02 \x01(\x05R\x06number\x12\x14\n" +
@@ -2018,7 +2062,8 @@ const file_mako_plugin_v1_git_proto_rawDesc = "" +
 	" \x01(\tR\x04body\x12@\n" +
 	"\vcheck_items\x18\v \x03(\v2\x1f.mako.plugin.v1.ForgeCheckEntryR\n" +
 	"checkItems\x12=\n" +
-	"\bcomments\x18\f \x03(\v2!.mako.plugin.v1.ForgeCommentEntryR\bcomments\"\x8b\x01\n" +
+	"\bcomments\x18\f \x03(\v2!.mako.plugin.v1.ForgeCommentEntryR\bcomments\x12\x16\n" +
+	"\x06viewer\x18\r \x01(\tR\x06viewer\"\x8b\x01\n" +
 	"\x0fForgeCheckEntry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12\x16\n" +
@@ -2026,18 +2071,19 @@ const file_mako_plugin_v1_git_proto_rawDesc = "" +
 	"\n" +
 	"conclusion\x18\x04 \x01(\tR\n" +
 	"conclusion\x12\x10\n" +
-	"\x03url\x18\x05 \x01(\tR\x03url\"\x93\x01\n" +
+	"\x03url\x18\x05 \x01(\tR\x03url\"\xc7\x01\n" +
 	"\x11ForgeCommentEntry\x12\x16\n" +
 	"\x06author\x18\x01 \x01(\tR\x06author\x12\x12\n" +
 	"\x04body\x18\x02 \x01(\tR\x04body\x12\x12\n" +
 	"\x04time\x18\x03 \x01(\tR\x04time\x12\x16\n" +
 	"\x06review\x18\x04 \x01(\tR\x06review\x12\x12\n" +
 	"\x04path\x18\x05 \x01(\tR\x04path\x12\x12\n" +
-	"\x04line\x18\x06 \x01(\x05R\x04line\"\x8e\x01\n" +
+	"\x04line\x18\x06 \x01(\x05R\x04line\x12 \n" +
+	"\vassociation\x18\a \x01(\tR\vassociation\x12\x10\n" +
+	"\x03bot\x18\b \x01(\bR\x03bot\"\x86\x01\n" +
 	"\x1dForgeServiceFailedLogsRequest\x121\n" +
-	"\x06target\x18\x01 \x01(\v2\x19.mako.plugin.v1.GitTargetR\x06target\x12\x1d\n" +
-	"\n" +
-	"run_number\x18\x02 \x01(\x05R\trunNumber\x12\x1b\n" +
+	"\x06target\x18\x01 \x01(\v2\x19.mako.plugin.v1.GitTargetR\x06target\x12\x15\n" +
+	"\x06run_id\x18\x02 \x01(\x01R\x05runId\x12\x1b\n" +
 	"\tmax_lines\x18\x03 \x01(\x05R\bmaxLines\"\x94\x01\n" +
 	"\x1eForgeServiceFailedLogsResponse\x12\x12\n" +
 	"\x04logs\x18\x01 \x01(\tR\x04logs\x12\x1c\n" +

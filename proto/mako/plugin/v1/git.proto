@@ -239,8 +239,12 @@ message ForgeServiceBranchStatusResponse {
   string pr_checks = 6;
   int32 runs = 7;
   string runs_state = 8;
+  // run_number is the run's ID when it fits in 32 bits, else 0: read
+  // run_id.
   int32 run_number = 9;
   string run_head = 10;
+  // run_id is the run's ID, exact past 32 bits (GitHub's are).
+  double run_id = 11;
 }
 
 // ForgeServicePullRequestDetailRequest asks for a pull request's checks and
@@ -265,7 +269,11 @@ message ForgeServicePullRequestDetailResponse {
   string checks = 9;
   string body = 10;
   repeated ForgeCheckEntry check_items = 11;
+  // comments are oldest first, the latest 300 at most.
   repeated ForgeCommentEntry comments = 12;
+  // viewer is the forge account the node reads it as, which the user's
+  // own comments carry; "" when the forge does not tell.
+  string viewer = 13;
 }
 
 // ForgeCheckEntry is one CI check run or commit status on a pull request.
@@ -289,12 +297,19 @@ message ForgeCommentEntry {
   string review = 4;
   string path = 5;
   int32 line = 6;
+  // association is the author's tie to the repository: "OWNER",
+  // "MEMBER", "COLLABORATOR", "CONTRIBUTOR", "NONE" and the like, or ""
+  // when the forge does not tell (Forgejo and Gitea do not).
+  string association = 7;
+  // bot says the author is a bot or an app.
+  bool bot = 8;
 }
 
 // ForgeServiceFailedLogsRequest asks for the tail of a failed CI run's logs.
 message ForgeServiceFailedLogsRequest {
   GitTarget target = 1;
-  int32 run_number = 2;
+  // run_id is the run's ID, as BranchStatus gives it.
+  double run_id = 2;
   // max_lines bounds the number of trailing log lines returned (default 250,
   // max 400).
   int32 max_lines = 3;

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"google.golang.org/protobuf/proto"
 
@@ -122,6 +123,28 @@ func localPathWithin(target, base string) bool {
 	return pathscope.Within(cleanPath(target), cleanPath(base))
 }
 
+// realPath is p, absolute, read through its symbolic links as far as it
+// exists: what does not exist yet is joined, as it is, to the nearest
+// folder that does.
+func realPath(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return filepath.Clean(p)
+	}
+	rest := ""
+	for dir := abs; ; {
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(real, rest)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return abs
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
+		dir = parent
+	}
+}
+
 func cleanRemotePath(p string) string {
 	if p == "" {
 		return ""
@@ -169,12 +192,16 @@ func (g daemonGitHost) Allowed(t plugin.GitTarget) bool {
 	st := d.workspace.get(false).GetState()
 
 	if local {
-		if !filepath.IsAbs(t.Path) {
+		if !filepath.IsAbs(t.Path) || !utf8.ValidString(t.Path) {
 			return false
 		}
+		// Within as both read through their links: a link inside a
+		// project that points out of it is not within it.
+		real := realPath(t.Path)
+		within := func(base string) bool { return base != "" && pathscope.Within(real, realPath(base)) }
 		for _, p := range d.projects.get() {
 			for _, loc := range p.GetPaths() {
-				if localPathWithin(t.Path, loc) {
+				if within(loc) {
 					return true
 				}
 			}
@@ -182,25 +209,22 @@ func (g daemonGitHost) Allowed(t plugin.GitTarget) bool {
 		if st != nil && nodeID != "" {
 			for _, sc := range workspace.Scopes(st, nodeID) {
 				for _, loc := range sc.GetPaths() {
-					if localPathWithin(t.Path, loc) {
+					if within(loc) {
 						return true
 					}
 				}
 			}
 		}
 		for _, info := range d.localSessionSnapshots() {
-			if p := info.GetProject(); p != "" && localPathWithin(t.Path, p) {
+			if within(info.GetProject()) {
 				return true
 			}
 			if w := info.GetWorktree(); w != nil {
-				if w.GetPath() != "" && localPathWithin(t.Path, w.GetPath()) {
-					return true
-				}
-				if w.GetRepo() != "" && localPathWithin(t.Path, w.GetRepo()) {
+				if within(w.GetPath()) || within(w.GetRepo()) {
 					return true
 				}
 			}
-			if r := info.GetRepo(); r != "" && localPathWithin(t.Path, r) {
+			if within(info.GetRepo()) {
 				return true
 			}
 		}
@@ -783,7 +807,7 @@ func (f daemonForgeHost) BranchStatus(ctx context.Context, t plugin.GitTarget, b
 			}
 			out.Runs = int32(len(latest))
 			out.RunsState = forgeRunsState(latest)
-			out.RunNumber = int32(first.GetNumber())
+			out.RunID = first.GetNumber()
 			out.RunHead = first.GetHeadOid()
 		}
 	}
@@ -811,9 +835,10 @@ func forgeRunsState(runs []*protocol.ForgeItem) string {
 func (f daemonForgeHost) PullRequestDetail(ctx context.Context, t plugin.GitTarget, number int32) (*plugin.ForgePRDetail, error) {
 	d := f.d
 	req := &protocol.ForgeView{
-		Root:   t.Path,
-		Kind:   protocol.ForgePR,
-		Number: int64(number),
+		Root:    t.Path,
+		Kind:    protocol.ForgePR,
+		Number:  int64(number),
+		NoFiles: true,
 	}
 	var (
 		det *protocol.ForgeDetail
@@ -843,6 +868,7 @@ func (f daemonForgeHost) PullRequestDetail(ctx context.Context, t plugin.GitTarg
 		HeadOID: it.GetHeadOid(),
 		Checks:  it.GetChecks(),
 		Body:    det.GetBody(),
+		Viewer:  det.GetViewer(),
 	}
 	for _, c := range det.GetChecks() {
 		out.CheckItems = append(out.CheckItems, plugin.ForgeCheck{
@@ -859,12 +885,14 @@ func (f daemonForgeHost) PullRequestDetail(ctx context.Context, t plugin.GitTarg
 			when = ts.UTC().Format(time.RFC3339)
 		}
 		out.Comments = append(out.Comments, plugin.ForgeComment{
-			Author: c.GetAuthor(),
-			Body:   c.GetBody(),
-			Time:   when,
-			Review: c.GetReview(),
-			Path:   c.GetPath(),
-			Line:   int32(c.GetLine()),
+			Author:      c.GetAuthor(),
+			Body:        c.GetBody(),
+			Time:        when,
+			Review:      c.GetReview(),
+			Path:        c.GetPath(),
+			Line:        int32(c.GetLine()),
+			Association: c.GetAssociation(),
+			Bot:         c.GetBot(),
 		})
 	}
 	return out, nil
@@ -872,18 +900,18 @@ func (f daemonForgeHost) PullRequestDetail(ctx context.Context, t plugin.GitTarg
 
 // FailedLogs reads the trailing lines of a failed CI run's failed step logs
 // along with run metadata when available.
-func (f daemonForgeHost) FailedLogs(ctx context.Context, t plugin.GitTarget, runNumber int32, maxLines int32) (*plugin.ForgeFailedLogs, error) {
+func (f daemonForgeHost) FailedLogs(ctx context.Context, t plugin.GitTarget, runID int64, maxLines int32) (*plugin.ForgeFailedLogs, error) {
 	d := f.d
 	local := d.isLocalGitNode(t.Node)
 	runReq := &protocol.ForgeRun{
 		Root:   t.Path,
 		Op:     protocol.ForgeOpFailedLogs,
-		Number: int64(runNumber),
+		Number: runID,
 	}
 	viewReq := &protocol.ForgeView{
 		Root:   t.Path,
 		Kind:   protocol.ForgeRuns,
-		Number: int64(runNumber),
+		Number: runID,
 	}
 
 	var (

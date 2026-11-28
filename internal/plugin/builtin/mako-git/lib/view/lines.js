@@ -3,7 +3,7 @@
 // - Busy spinner / dismissible git output note (matching gitops.go:250-264)
 // - Conflict / in-progress operation banner (matching gitactions.go:345-392)
 
-import { isPrOpen } from "../autofix.js";
+import { MAX_AUTO_RUNS, autoFixAvailable, isPrOpen } from "../autofix.js";
 import { shortHash } from "../i18n.js";
 import { isRepo, sanitizeText, truncateRunes } from "../state.js";
 
@@ -40,6 +40,8 @@ function autoFixLook(af, t) {
   switch (af.phase) {
     case "starting":
       return { icon: "loader-circle", tone: "warning", badge: t("Working"), headline: t("Auto-fix: starting an agent") };
+    case "asking":
+      return { icon: "clock", tone: "warning", badge: t("Waiting"), headline: t("Auto-fix: waiting for you to allow the agent") };
     case "fixing":
       return {
         icon: "loader-circle",
@@ -54,7 +56,14 @@ function autoFixLook(af, t) {
     case "waiting_session":
       return { icon: "clock", tone: "warning", badge: t("On"), headline: t("Auto-fix: waiting for the agent to finish its turn") };
     case "paused":
-      return { icon: "shield-alert", tone: "warning", badge: t("Paused"), headline: t("Auto-fix: CI fixes paused ({used}/{max})", count) };
+      return {
+        icon: "shield-alert",
+        tone: "warning",
+        badge: t("Paused"),
+        headline: af.pauseReason === "runs"
+          ? t("Auto-fix: paused after {count} fixes", { count: MAX_AUTO_RUNS })
+          : t("Auto-fix: CI fixes paused ({used}/{max})", count),
+      };
     case "error":
       return { icon: "shield-alert", tone: "danger", badge: t("Error"), headline: t("Auto-fix: needs attention") };
     default: {
@@ -108,7 +117,7 @@ function renderAutoFixStrip(s, ui, ctx) {
     }));
   }
 
-  if (af.phase === "paused") {
+  if (af.phase === "paused" || (af.phase === "error" && af.hold)) {
     headRow.push(ui.button(t("Reset"), {
       key: "af-reset",
       variant: "ghost",
@@ -125,7 +134,7 @@ function renderAutoFixStrip(s, ui, ctx) {
       variant: "ghost",
       size: "small",
       placeholder: t("Fix now"),
-      disabled: af.phase === "starting",
+      disabled: af.phase === "starting" || af.phase === "asking",
       onTap: ["fixNow"],
     }),
     ui.button("", {
@@ -208,18 +217,20 @@ export function renderForgeLine(s, ui, ctx) {
       variant: "ghost",
       size: "small",
       placeholder: tip,
-      onTap: ["openForgeRuns", f.runNumber],
+      onTap: ["openForgeRuns", f.runId || f.runNumber],
     }));
   }
 
-  if (f.hasPr && f.prNumber > 0 && isPrOpen(f.prState)) {
+  // Auto-fix sends to this node's sessions: a peer's folder has none here.
+  const autoFix = f.hasPr && f.prNumber > 0 && isPrOpen(f.prState) && autoFixAvailable(ctx);
+  if (autoFix) {
     parts.push(renderAutoFixButton(s.autofix, ui, t));
   }
 
   const colKids = [
     ui.card([ui.row(parts, { key: "forge-row", gap: 4 })], { key: "forge-pad", variant: "ghost", gap: 0 }),
   ];
-  const strip = renderAutoFixStrip(s, ui, ctx);
+  const strip = autoFix ? renderAutoFixStrip(s, ui, ctx) : null;
   if (strip) colKids.push(strip);
   colKids.push(ui.divider({ key: "forge-div" }));
 

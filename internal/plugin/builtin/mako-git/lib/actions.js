@@ -2,15 +2,17 @@
 
 import {
   MAX_ATTEMPT_CHOICES,
+  autoFixAvailable,
   disableAutoFix as turnOffAutoFix,
   enableAutoFix as turnOnAutoFix,
-  ensureSessionSubscription,
   evaluateAutoFix,
   formatAgentChoice,
   isPrOpen,
   listAvailableAgents,
   loadAutoFixState,
+  resetAutoFix as startAttemptsAgain,
   saveAutoFixState,
+  wakeViews,
 } from "./autofix.js";
 import { lastLines, shortHash } from "./i18n.js";
 import { loadCommitDetail } from "./data.js";
@@ -57,6 +59,15 @@ function repoLocation(s, ctx) {
 
 function isTruthyCheck(val) {
   return val === "on" || val === true || val === "true";
+}
+
+// The Auto-fix dialog's switches, each a field of the record.
+const AUTOFIX_SWITCHES = ["enabled", "fixCi", "fixReviews", "replyOnGitHub", "anyAuthor", "ownComments", "allowYolo"];
+
+// hasAutoFixPr says the panel shows a pull request Auto-fix can work on: of
+// a folder of this node's.
+function hasAutoFixPr(s, ctx) {
+  return Boolean(s.forge && s.forge.hasPr && s.forge.prNumber && autoFixAvailable(ctx));
 }
 
 function isHTTPSAuthError(msg) {
@@ -343,7 +354,7 @@ export function createActions(mako) {
     async toggleAutoFix(s) {
       const ctx = getCtx();
       const t = ctx.t;
-      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber || !isPrOpen(s.forge.prState)) return;
+      if (!hasAutoFixPr(s, ctx) || !isPrOpen(s.forge.prState)) return;
       const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber);
       if (af.enabled) {
         turnOffAutoFix(af);
@@ -351,8 +362,8 @@ export function createActions(mako) {
         return;
       }
       turnOnAutoFix(af);
-      await ensureSessionSubscription(mako);
       await saveAutoFixState(s, ctx, mako);
+      wakeViews(mako, af);
       const res = await evaluateAutoFix(s, ctx, mako, { manual: false });
       if (res && res.dispatched) {
         await sendIntent(ctx, mako, "toast", "mako.toast", t("Auto-fix sent a fix for PR #{number}.", { number: s.forge.prNumber }));
@@ -361,7 +372,7 @@ export function createActions(mako) {
 
     async disableAutoFix(s) {
       const ctx = getCtx();
-      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber) return;
+      if (!hasAutoFixPr(s, ctx)) return;
       turnOffAutoFix(await loadAutoFixState(s, ctx, mako, s.forge.prNumber));
       await saveAutoFixState(s, ctx, mako);
     },
@@ -369,11 +380,13 @@ export function createActions(mako) {
     async fixNow(s) {
       const ctx = getCtx();
       const t = ctx.t;
-      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber || !isPrOpen(s.forge.prState)) return;
+      if (!hasAutoFixPr(s, ctx) || !isPrOpen(s.forge.prState)) return;
       if (s.dialog && s.dialog.kind === "autofix") closeDialog(s);
       const res = await evaluateAutoFix(s, ctx, mako, { manual: true });
       if (res && res.dispatched) {
         await sendIntent(ctx, mako, "toast", "mako.toast", t("Auto-fix sent a fix for PR #{number}.", { number: s.forge.prNumber }));
+      } else if (res && res.reason === "starting") {
+        setNote(s, t("An Auto-fix agent is starting for this pull request."), false);
       } else if (res && res.reason === "nothing_to_fix") {
         setNote(s, t("Checks pass and no review comments are open."), false);
       } else if (res && res.reason === "busy") {
@@ -385,16 +398,9 @@ export function createActions(mako) {
 
     async resetAutoFix(s) {
       const ctx = getCtx();
-      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber) return;
+      if (!hasAutoFixPr(s, ctx)) return;
       const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber);
-      af.attempts = 0;
-      af.lastHandledCiKey = "";
-      af.lastCheckAt = 0;
-      af.inFlight = false;
-      af.sawBusy = false;
-      af.pendingRequestId = "";
-      af.lastError = "";
-      af.phase = af.enabled ? "watching" : "off";
+      startAttemptsAgain(af);
       await saveAutoFixState(s, ctx, mako);
       if (af.enabled) await evaluateAutoFix(s, ctx, mako, { manual: false });
     },
@@ -407,7 +413,7 @@ export function createActions(mako) {
 
     async openAutoFixSettings(s) {
       const ctx = getCtx();
-      if (!s.forge || !s.forge.hasPr || !s.forge.prNumber) return;
+      if (!hasAutoFixPr(s, ctx)) return;
       const af = await loadAutoFixState(s, ctx, mako, s.forge.prNumber);
       const agentOptions = [{ value: "", label: ctx.t("Auto (default agent)") }];
       for (const a of await listAvailableAgents(mako)) {
@@ -423,6 +429,9 @@ export function createActions(mako) {
         fixCi: af.fixCi !== false,
         fixReviews: af.fixReviews !== false,
         replyOnGitHub: af.replyOnGitHub !== false,
+        anyAuthor: Boolean(af.anyAuthor),
+        ownComments: Boolean(af.ownComments),
+        allowYolo: Boolean(af.allowYolo),
         maxAttempts: Number(af.maxAttempts) || 3,
         preferredAgent: af.preferredAgent || "",
         instructions: af.instructions || "",
@@ -433,7 +442,7 @@ export function createActions(mako) {
     setAutoFixDialogField(s, field, val) {
       if (!s.dialog || s.dialog.kind !== "autofix") return;
       const d = s.dialog;
-      if (field === "enabled" || field === "fixCi" || field === "fixReviews" || field === "replyOnGitHub") {
+      if (AUTOFIX_SWITCHES.includes(field)) {
         d[field] = isTruthyCheck(val);
       } else if (field === "maxAttempts") {
         const n = Number(val);
@@ -459,17 +468,21 @@ export function createActions(mako) {
       af.fixCi = Boolean(d.fixCi);
       af.fixReviews = Boolean(d.fixReviews);
       af.replyOnGitHub = Boolean(d.replyOnGitHub);
+      af.anyAuthor = Boolean(d.anyAuthor);
+      af.ownComments = Boolean(d.ownComments);
+      af.allowYolo = Boolean(d.allowYolo);
       af.maxAttempts = MAX_ATTEMPT_CHOICES.includes(Number(d.maxAttempts)) ? Number(d.maxAttempts) : 3;
       af.preferredAgent = String(d.preferredAgent || "");
       af.instructions = instructions.trim();
+      const wasOn = af.enabled;
       if (d.enabled) {
         turnOnAutoFix(af);
-        await ensureSessionSubscription(mako);
       } else {
         turnOffAutoFix(af);
       }
       closeDialog(s);
       await saveAutoFixState(s, ctx, mako);
+      if (af.enabled && !wasOn) wakeViews(mako, af);
       if (af.enabled) await evaluateAutoFix(s, ctx, mako, { manual: false });
     },
 

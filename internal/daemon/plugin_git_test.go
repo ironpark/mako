@@ -133,7 +133,28 @@ func TestDaemonGitHostAllowed(t *testing.T) {
 		}
 	}
 
+	// A link inside the project to a folder outside it is not within it,
+	// and a path that does not exist yet is judged by the folders it is in.
+	linkOut := filepath.Join(dirProj, "link-out")
+	if err := os.Symlink(dirOther, linkOut); err != nil {
+		t.Fatal(err)
+	}
+	linkIn := filepath.Join(dirProj, "link-in")
+	if err := os.Symlink(dirSub, linkIn); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []plugin.GitTarget{
+		{Node: "", Path: linkIn},
+		{Node: "", Path: filepath.Join(dirSub, "not-yet")},
+	} {
+		if !gh.Allowed(tc) {
+			t.Errorf("Allowed(%+v) = false, want true", tc)
+		}
+	}
+
 	deniedCases := []plugin.GitTarget{
+		{Node: "", Path: linkOut},
+		{Node: "", Path: filepath.Join(linkOut, "not-yet")},
 		{Node: "", Path: dirOther},
 		{Node: "local", Path: "relative/path"},
 		{Node: "", Path: filepath.Join(dirProj, "..", filepath.Base(dirOther))},

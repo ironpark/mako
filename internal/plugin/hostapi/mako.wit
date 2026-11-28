@@ -172,8 +172,12 @@ interface types {
     pr-checks: string,
     runs: s32,
     runs-state: string,
+    /// run_number is the run's ID when it fits in 32 bits, else 0: read
+    /// run_id.
     run-number: s32,
     run-head: string,
+    /// run_id is the run's ID, exact past 32 bits (GitHub's are).
+    run-id: f64,
   }
 
   /// ForgeServicePullRequestDetailRequest asks for a pull request's checks and
@@ -198,7 +202,11 @@ interface types {
     checks: string,
     body: string,
     check-items: list<forge-check-entry>,
+    /// comments are oldest first, the latest 300 at most.
     comments: list<forge-comment-entry>,
+    /// viewer is the forge account the node reads it as, which the user's
+    /// own comments carry; "" when the forge does not tell.
+    viewer: string,
   }
 
   /// ForgeCheckEntry is one CI check run or commit status on a pull request.
@@ -222,12 +230,19 @@ interface types {
     review: string,
     path: string,
     line: s32,
+    /// association is the author's tie to the repository: "OWNER",
+    /// "MEMBER", "COLLABORATOR", "CONTRIBUTOR", "NONE" and the like, or ""
+    /// when the forge does not tell (Forgejo and Gitea do not).
+    association: string,
+    /// bot says the author is a bot or an app.
+    bot: bool,
   }
 
   /// ForgeServiceFailedLogsRequest asks for the tail of a failed CI run's logs.
   record forge-service-failed-logs-request {
     target: option<git-target>,
-    run-number: s32,
+    /// run_id is the run's ID, as BranchStatus gives it.
+    run-id: f64,
     /// max_lines bounds the number of trailing log lines returned (default 250,
     /// max 400).
     max-lines: s32,
@@ -817,6 +832,9 @@ interface types {
     name: string,
     /// parent_session_id optionally links the spawned session to an existing parent session.
     parent-session-id: string,
+    /// no_yolo starts the agent with YOLO off, whatever its profile says, so
+    /// that it asks the user before it acts. A plugin cannot turn YOLO on.
+    no-yolo: bool,
   }
 
   /// StartAgentResponse says the start was taken.

@@ -144,8 +144,11 @@ type StartAgentRequest struct {
 	Name string `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
 	// parent_session_id optionally links the spawned session to an existing parent session.
 	ParentSessionId string `protobuf:"bytes,7,opt,name=parent_session_id,json=parentSessionId,proto3" json:"parent_session_id,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// no_yolo starts the agent with YOLO off, whatever its profile says, so
+	// that it asks the user before it acts. A plugin cannot turn YOLO on.
+	NoYolo        bool `protobuf:"varint,8,opt,name=no_yolo,json=noYolo,proto3" json:"no_yolo,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StartAgentRequest) Reset() {
@@ -225,6 +228,13 @@ func (x *StartAgentRequest) GetParentSessionId() string {
 		return x.ParentSessionId
 	}
 	return ""
+}
+
+func (x *StartAgentRequest) GetNoYolo() bool {
+	if x != nil {
+		return x.NoYolo
+	}
+	return false
 }
 
 // StartAgentResponse says the start was taken.
@@ -2402,7 +2412,7 @@ const file_mako_plugin_v1_later_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\"%\n" +
 	"\x13SendMessageResponse\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\xc9\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\xe2\x01\n" +
 	"\x11StartAgentRequest\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x18\n" +
 	"\aprofile\x18\x02 \x01(\tR\aprofile\x12\x18\n" +
@@ -2410,7 +2420,8 @@ const file_mako_plugin_v1_later_proto_rawDesc = "" +
 	"\x04root\x18\x04 \x01(\tR\x04root\x12\x16\n" +
 	"\x06prompt\x18\x05 \x01(\tR\x06prompt\x12\x12\n" +
 	"\x04name\x18\x06 \x01(\tR\x04name\x12*\n" +
-	"\x11parent_session_id\x18\a \x01(\tR\x0fparentSessionId\"I\n" +
+	"\x11parent_session_id\x18\a \x01(\tR\x0fparentSessionId\x12\x17\n" +
+	"\ano_yolo\x18\b \x01(\bR\x06noYolo\"I\n" +
 	"\x12StartAgentResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x14\n" +

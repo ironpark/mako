@@ -67,6 +67,9 @@ message StartAgentRequest {
   string name = 6;
   // parent_session_id optionally links the spawned session to an existing parent session.
   string parent_session_id = 7;
+  // no_yolo starts the agent with YOLO off, whatever its profile says, so
+  // that it asks the user before it acts. A plugin cannot turn YOLO on.
+  bool no_yolo = 8;
 }
 
 // StartAgentResponse says the start was taken.

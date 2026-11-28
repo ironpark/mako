@@ -32,11 +32,30 @@ function renderAutoFixDialog(s, d, ui, t) {
         key: "af-fix-reviews",
         onChange: ["setAutoFixDialogField", "fixReviews"],
       }),
-      ui.checkbox(d.replyOnGitHub ? "on" : "off", t("Reply to addressed comments on GitHub"), {
+      ui.checkbox(d.replyOnGitHub ? "on" : "off", t("Reply to the comments it addressed"), {
         key: "af-reply",
         onChange: ["setAutoFixDialogField", "replyOnGitHub"],
       }),
     ], { key: "af-triggers", gap: 6 }),
+    ui.column([
+      ui.checkbox(d.anyAuthor ? "on" : "off", t("Answer comments from people outside the repository"), {
+        key: "af-any-author",
+        onChange: ["setAutoFixDialogField", "anyAuthor"],
+      }),
+      ui.text(t("When this is off, only comments of the repository's owners, members, and collaborators, and of Claude's bot, start a fix. Forgejo and Gitea do not say who those are."), {
+        key: "af-any-author-note",
+        size: "small",
+        tone: "muted",
+      }),
+      ui.checkbox(d.ownComments ? "on" : "off", t("Answer my own comments"), {
+        key: "af-own",
+        onChange: ["setAutoFixDialogField", "ownComments"],
+      }),
+      ui.checkbox(d.allowYolo ? "on" : "off", t("Let a new agent act without asking (YOLO)"), {
+        key: "af-yolo",
+        onChange: ["setAutoFixDialogField", "allowYolo"],
+      }),
+    ], { key: "af-trust", gap: 6 }),
     ui.row([
       ui.column([
         ui.text(t("CI fix attempts in a row"), { key: "af-max-lbl", size: "small", weight: "medium" }),

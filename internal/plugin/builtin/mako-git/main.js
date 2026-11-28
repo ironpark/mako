@@ -5,7 +5,6 @@
 
 import { createActions } from "./lib/actions.js";
 import {
-  IDLE_POLL_SECONDS,
   POLL_SECONDS,
   anyAutoFixEnabled,
   createAutoFixEventHandlers,
@@ -27,10 +26,11 @@ export default {
 
     mako.blocks.register("panel", {
       state: initialState(),
-      // The host reads refresh before each load: Auto-fix polls the pull
-      // request's checks and comments only while one is on.
+      // The host reads refresh before each load: the panel polls the pull
+      // request's checks and comments only while an Auto-fix is on, and
+      // loads on Git's changes alone otherwise.
       get refresh() {
-        return anyAutoFixEnabled() ? POLL_SECONDS : IDLE_POLL_SECONDS;
+        return anyAutoFixEnabled() ? POLL_SECONDS : 0;
       },
       load(s, ctx) {
         return loadPanel(s, ctx, mako);
