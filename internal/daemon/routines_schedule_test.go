@@ -507,3 +507,32 @@ func TestRemovedRoutineDuringPollIsNotResurrected(t *testing.T) {
 		t.Fatalf("removed routine resurrected trigger state: %+v", st)
 	}
 }
+
+// Once the scheduler's context is done, neither a poll nor a cron tick
+// starts anything: its select may still pick a due timer over ctx.Done.
+func TestNoRoutineStartsOnceTheSchedulerStops(t *testing.T) {
+	d := newRoutineDaemon(t)
+	saveRoutines(t, d,
+		routines.Routine{ID: "rtn-pr", Name: "PRs", Enabled: true, Trigger: routines.TriggerForgePR, Project: t.TempDir(), Agent: "claude", Prompt: "Review it."},
+		routines.Routine{ID: "rtn-cron", Name: "Every minute", Enabled: true, Trigger: routines.TriggerCron, Schedule: "* * * * *",
+			Project: "/nonexistent/mako-routine-test", Agent: "claude", Prompt: "p"},
+	)
+	var calls atomic.Int32
+	d.routines.forgeList = func(context.Context, *protocol.ForgeList) (*protocol.ForgeItems, error) {
+		calls.Add(1)
+		return &protocol.ForgeItems{}, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if d.startForgePoll(ctx) {
+		t.Fatal("a poll started after the scheduler stopped")
+	}
+	d.tickCronRoutines(ctx, time.Now())
+	d.routines.runs.Wait()
+	if n := calls.Load(); n != 0 {
+		t.Fatalf("the forge was polled %d times after the scheduler stopped", n)
+	}
+	if hist, _ := routines.LoadHistory(d.dir); len(hist) != 0 {
+		t.Fatalf("a run was recorded after the scheduler stopped: %+v", hist)
+	}
+}
