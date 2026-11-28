@@ -490,6 +490,58 @@ those given, and a wrong call is not sent. A template not for the session's
 agent is not listed, and a `//` draft naming no template is sent as typed.
 <!-- /prompttmpl:reference -->
 
+### Lifecycle hooks
+
+Lifecycle hooks are shell commands that mako runs for a session of any
+agent: when the session starts (`on_session_start`), when its agent ends a
+turn (`on_turn_done`), and when its agent's session ends
+(`on_session_end`). Your own hooks are in `hooks.json` beside
+`config.json`:
+
+```json
+[
+  {"name": "format", "event": "on_turn_done", "command": "gofmt -w .", "agents": ["claude", "codex"]},
+  {"event": "on_session_end", "command": "say done", "timeout_sec": 10, "enabled": false}
+]
+```
+
+A repository can keep its own in `.mako/hooks.toml` at its root:
+
+```toml
+[[hook]]
+event = "on_turn_done"
+command = "make lint"
+```
+
+`agents` limits a hook to those agents' sessions; left out, or with `"*"`,
+it runs for every agent. `enabled = false` keeps a hook without running
+it. A file with a field mako does not know, or a hook without a known
+event or a command, runs none of its hooks, and the daemon's log says why.
+
+A hook runs with `sh -c` (`cmd /C` on Windows) in the session's folder.
+Your own hooks run first, one after another. A session's hooks run in the
+order of its events, one event at a time. Each hook gets
+`AGENT_MAKO_SESSION`, `AGENT_MAKO_AGENT`, `AGENT_MAKO_PROJECT`,
+`AGENT_MAKO_EVENT` and `AGENT_MAKO_BRANCH`. The branch is the one checked
+out in the session's folder when the event fired. A hook runs for
+`timeout_sec` seconds at most: 30 when not set, and never more than 300.
+When its command exits or times out, mako kills what the command left
+running. On Windows, mako kills only the shell. Mako keeps the first 16
+KiB of a hook's output. If the hook fails, the daemon's log shows that
+output. Hooks run in the background: a hook that fails, hangs or times out
+does not stop or hold the session or its agent. When the daemon stops, it
+kills the hooks that are running.
+
+A repository's hooks run with your permissions, so mako runs them only
+after you trust `.mako/hooks.toml` as it reads (see
+[Repository commands](#repository-commands)). Mako reads the file from
+the main work tree of the repository, also for a session in a folder of
+it or in another worktree of it, so one trust covers them all. Until you
+trust it, and again after it changes, mako runs your own hooks but none
+of the file's. The app and `mako run` then tell you so, with the command
+that trusts it. Set `MAKO_NO_LIFECYCLE_HOOKS=1` in the daemon's
+environment to run no hooks at all.
+
 ## Security
 
 - **Vouch with your SSH key.** Each machine vouches with its SSH key,
@@ -513,7 +565,8 @@ but port 4243 faces the network, and it can face the internet.
 ## Repository commands
 
 A repository can track a file that tells mako to run commands for it, such
-as the `setup_cmd` of `.mako/worktree.toml`. Anyone who can commit to the
+as the `setup_cmd` of `.mako/worktree.toml` or the hooks of
+`.mako/hooks.toml`. Anyone who can commit to the
 repository can write such a file, and so can an agent that works in it.
 So mako runs these commands only after you read the file and trust it.
 Each trust is for one file of one repository, as the file reads now. When
