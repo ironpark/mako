@@ -99,8 +99,11 @@ func (m *model) startTeam(parent string, team agentTeam, task string) {
 		project := s.GetProject()
 		wt := s.GetWorktree()
 		if team.IsolateWorktrees {
+			// Off the leader's base when it works in a worktree; otherwise
+			// as the repository's base_ref says, or off its checked-out
+			// branch, which the node works out.
 			project = cmp.Or(s.GetWorktree().GetRepo(), s.GetProject())
-			wt = &protocol.Worktree{Base: cmp.Or(s.GetWorktree().GetBase(), s.GetBranch())}
+			wt = &protocol.Worktree{Base: s.GetWorktree().GetBase()}
 		}
 		reqs[i] = &protocol.OpenSession{NodeId: node, Agent: agent, Profile: profile, Project: project, Worktree: wt,
 			Cols: 120, Rows: 36, ParentSessionId: parent, Name: mb.Name, Prompt: memberPrompt(mb, task)}

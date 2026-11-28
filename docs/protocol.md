@@ -556,9 +556,13 @@ instead, which is routed.
 for that launch. `project`
 is the working directory; empty starts in the node's home. `args` and `env` add
 to the node's own. `cols` and `rows` size the PTY. With `worktree` set, the
-daemon first makes a git worktree on a new `branch` from `base` (the
-branch checked out when empty), or from the commit `start` when set, in the
-repository `project` is in, and starts there. If `branch` is empty, the
+daemon first makes a git worktree on a new `branch` in the repository
+`project` is in, and starts there. The worktree starts at the commit `start`
+when set, else at `base`. If both are empty, it starts at the repository's
+`base_ref` from `.mako/worktree.toml`, else at `project`'s HEAD. If `base` is
+empty, the daemon sets it to the local branch the worktree came off: `main`
+for a `base_ref` of `origin/main`, or else the branch `project` has checked
+out. If `branch` is empty, the
 daemon names it after the repository's folder and a random 6-character ID,
 for example `mako-k3x9q2`. The session's `worktree` reports that name.
 `base` stays the branch the worktree merges and opens its pull request into.

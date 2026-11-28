@@ -35,7 +35,7 @@ type NewWorktree struct {
 	// short random ID, such as mako-k3x9q2.
 	Branch string
 	// Start is the branch or commit it starts at; "" for the repository's
-	// base_ref, or without one HEAD.
+	// base_ref, or without one dir's HEAD.
 	Start string
 	// Trusted says whether the repository's setup_cmd may run; nil runs
 	// none.
@@ -47,6 +47,14 @@ type MadeWorktree struct {
 	Repo   string // the repository's main work tree
 	Path   string
 	Branch string
+	// Start is the branch or commit it started at, as NewWorktree or the
+	// repository's base_ref named it; "" for dir's HEAD.
+	Start string
+	// Base is the local branch it came off, which it merges into and
+	// opens its pull request against: Start's, origin/main's being main;
+	// or, for a commit or tag, or no Start, the branch dir has checked
+	// out. "" when there is none.
+	Base string
 	// SkippedHooks is the repository's command file, as an absolute path,
 	// whose setup_cmd did not run because the user does not trust it as it
 	// reads; "" when none was skipped.
@@ -76,7 +84,8 @@ func AddWorktree(ctx context.Context, dir string, w NewWorktree) (MadeWorktree, 
 	if err != nil {
 		return MadeWorktree{}, err
 	}
-	if base == "" && strings.TrimSpace(cfg.BaseRef) != "" {
+	// What the caller names wins over what the repository's config says.
+	if base == "" {
 		base = strings.TrimSpace(cfg.BaseRef)
 	}
 	parent := filepath.Join(filepath.Dir(repo), filepath.Base(repo)+".worktrees")
@@ -93,9 +102,12 @@ func AddWorktree(ctx context.Context, dir string, w NewWorktree) (MadeWorktree, 
 	if base != "" {
 		args = append(args, base)
 	}
-	if _, err := run(ctx, repo, nil, args...); err != nil {
+	// From dir, so that without a start the worktree starts at dir's HEAD,
+	// the branch it records as its base, even when dir is a worktree.
+	if _, err := run(ctx, dir, nil, args...); err != nil {
 		return MadeWorktree{}, err
 	}
+	from := cmp.Or(localBranch(ctx, repo, base), Branch(dir))
 	skipped, err := applyWorktreeBootstrap(ctx, repo, path, branch, base, cfg, w.Trusted)
 	if err != nil {
 		// Roll back the newly created worktree and branch so failed setup
@@ -107,11 +119,49 @@ func AddWorktree(ctx context.Context, dir string, w NewWorktree) (MadeWorktree, 
 		_, _ = run(rctx, repo, nil, "branch", "-D", branch)
 		return MadeWorktree{}, err
 	}
-	made := MadeWorktree{Repo: repo, Path: path, Branch: branch}
+	made := MadeWorktree{Repo: repo, Path: path, Branch: branch, Start: base, Base: from}
 	if skipped {
 		made.SkippedHooks = filepath.Join(repo, filepath.FromSlash(WorktreeConfigFile))
 	}
 	return made, nil
+}
+
+// localBranch is the local branch name ref is, or follows on a remote:
+// main for main or origin/main; "" for a commit, a tag, or "".
+func localBranch(ctx context.Context, repo, ref string) string {
+	if ref == "" {
+		return ""
+	}
+	out, err := gitOut(ctx, repo, nil, "rev-parse", "--symbolic-full-name", ref)
+	if err != nil {
+		return ""
+	}
+	full := strings.TrimSpace(string(out))
+	if name, ok := strings.CutPrefix(full, "refs/heads/"); ok {
+		return name
+	}
+	rest, ok := strings.CutPrefix(full, "refs/remotes/")
+	if !ok {
+		return ""
+	}
+	remotes, err := gitOut(ctx, repo, nil, "remote")
+	if err != nil {
+		return ""
+	}
+	// The longest remote it is under, as a remote's name can have a slash.
+	name := ""
+	for r := range strings.Lines(string(remotes)) {
+		if r = strings.TrimSpace(r); r == "" {
+			continue
+		}
+		if n, ok := strings.CutPrefix(rest, r+"/"); ok && (name == "" || len(n) < len(name)) {
+			name = n
+		}
+	}
+	if name == "HEAD" {
+		return ""
+	}
+	return name
 }
 
 // idAlphabet is what a worktree's random ID is made of, as nanoid makes

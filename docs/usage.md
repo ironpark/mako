@@ -284,6 +284,10 @@ setup_cmd = "npm ci --prefer-offline"
 teardown_cmd = ""
 ```
 
+Mako reads the file from the main work tree of the repository, also
+when you start in a folder of it or in another worktree. `base_ref` is
+where a new worktree starts when you do not name a base or a start.
+
 If `.mako/worktree.toml` is absent and `orca.yaml` defines
 `worktree.sharedDirectories`, Mako honors those shared directories
 automatically.

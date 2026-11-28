@@ -1,6 +1,7 @@
 package gitstat
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -76,12 +77,14 @@ type orcaYAMLConfig struct {
 }
 
 // LoadWorktreeConfig reads .mako/worktree.toml (or orca.yaml fallback) from
-// repo (or the main repository root containing dir). When neither file exists,
-// a zero WorktreeConfig and nil error are returned.
-func LoadWorktreeConfig(repo string) (WorktreeConfig, error) {
-	if strings.TrimSpace(repo) == "" {
+// the main work tree of the repository dir is in, from any folder or
+// worktree of it, or from dir itself outside a repository. When neither
+// file exists, a zero WorktreeConfig and nil error are returned.
+func LoadWorktreeConfig(dir string) (WorktreeConfig, error) {
+	if strings.TrimSpace(dir) == "" {
 		return WorktreeConfig{}, nil
 	}
+	repo := cmp.Or(Repo(dir), dir)
 	tomlPath := filepath.Join(repo, filepath.FromSlash(WorktreeConfigFile))
 	if data, err := os.ReadFile(tomlPath); err == nil {
 		var cfg WorktreeConfig

@@ -420,22 +420,21 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	// A session of its own worktree gets it made once, when it first
 	// starts; the saved request then names it.
 	if w := req.GetWorktree(); w != nil && w.GetPath() == "" {
-		start := w.GetStart()
-		if w.GetBase() == "" {
-			if cfg, err := gitstat.LoadWorktreeConfig(project); err == nil && strings.TrimSpace(cfg.BaseRef) != "" && start == "" {
-				start = strings.TrimSpace(cfg.BaseRef)
-			}
-			w.Base = gitstat.Branch(project)
-		}
 		wtCtx, cancel := context.WithTimeout(ctx, gitstat.WorktreeTimeout)
-		// The repository's setup_cmd runs only while the user trusts its
-		// file as it reads; the worktree says it was skipped otherwise.
-		made, err := gitstat.AddWorktree(wtCtx, project, gitstat.NewWorktree{Branch: w.GetBranch(), Start: cmp.Or(start, w.GetBase()), Trusted: d.repoTrust.Trusted})
+		// It starts at the start or base the request names, or the
+		// repository's base_ref, or the project's HEAD. The repository's
+		// setup_cmd runs only while the user trusts its file as it reads;
+		// the worktree says it was skipped otherwise.
+		made, err := gitstat.AddWorktree(wtCtx, project, gitstat.NewWorktree{Branch: w.GetBranch(), Start: cmp.Or(w.GetStart(), w.GetBase()), Trusted: d.repoTrust.Trusted})
 		cancel()
 		if err != nil {
 			return nil, err
 		}
 		w.Repo, w.Path, w.Branch, w.SkippedHooks = made.Repo, made.Path, made.Branch, made.SkippedHooks
+		w.Base = cmp.Or(w.GetBase(), made.Base)
+		if w.GetStart() == "" && made.Start != w.GetBase() {
+			w.Start = made.Start // as origin/main, of base main
+		}
 		req.Project = w.GetPath()
 	}
 	// A project that gives its folders gives them to an agent started in
