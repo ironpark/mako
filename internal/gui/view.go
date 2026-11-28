@@ -73,11 +73,12 @@ func window(m *model) ggui.Widget {
 		sshHostDialog(m),
 		tunnelDialog(m),
 		forgeDialogs(m),
+		// Below the confirmation, which picking a race's winner asks in.
+		raceDialog(m),
 		confirmDialog(m),
 		rewindDialog(m),
 		homeMigrateDialog(m),
 		accountUsageDialog(m),
-		raceDialog(m),
 		imageViewer(m),
 		shellDialog(m),
 		searchDialog(m),

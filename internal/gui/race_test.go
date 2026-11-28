@@ -8,6 +8,7 @@ import (
 
 	"github.com/ironpark/ggui"
 
+	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
@@ -141,5 +142,95 @@ func TestSetAgentDropsTheComparison(t *testing.T) {
 	l.setAgent("shell")
 	if f := ggui.Peek(l.Form); f.Agent != "shell" || f.RaceTargets != nil {
 		t.Fatalf("form %+v after picking a shell", f)
+	}
+}
+
+func TestRaceChangedSinceTheAsk(t *testing.T) {
+	entries := []raceEntry{{SessionID: "s1"}, {SessionID: "s2"}}
+	ask := raceAsk{Group: "race-1", Winner: "s1", Entries: []string{"s1", "s2"}}
+	for _, tc := range []struct {
+		name   string
+		groups []raceGroup
+		ok     bool
+	}{
+		{"unchanged", []raceGroup{{ID: "race-1", Entries: entries}}, true},
+		{"dismissed", nil, false},
+		{"merged", []raceGroup{{ID: "race-1", Entries: entries, WinnerID: "s2"}}, false},
+		{"starting", []raceGroup{{ID: "race-1", Entries: entries, Starting: 1}}, false},
+		{"late contestant", []raceGroup{{ID: "race-1", Entries: append(slices.Clone(entries), raceEntry{SessionID: "s3"})}}, false},
+	} {
+		if got := raceChanged(tc.groups, ask); (got == "") != tc.ok {
+			t.Errorf("%s: raceChanged = %q", tc.name, got)
+		}
+	}
+	gone := ask
+	gone.Winner = "s9"
+	if raceChanged([]raceGroup{{ID: "race-1", Entries: entries}}, gone) == "" {
+		t.Error("a winner not in the race was not refused")
+	}
+}
+
+func TestRaceFilesKeyFollowsEveryFile(t *testing.T) {
+	one := &protocol.GitChanges{Files: []*protocol.GitFile{{Path: "a.go", Status: protocol.GitModified, Added: 1}}}
+	key, n, blocked := raceFiles(one)
+	if n != 1 || blocked != "" || key == "" {
+		t.Fatalf("raceFiles = %q, %d, %q", key, n, blocked)
+	}
+	edited := &protocol.GitChanges{Files: []*protocol.GitFile{{Path: "a.go", Status: protocol.GitModified, Added: 2}}}
+	more := &protocol.GitChanges{Files: []*protocol.GitFile{{Path: "b.go", Status: protocol.GitAdded}, {Path: "a.go", Status: protocol.GitModified, Added: 1}}}
+	for name, ch := range map[string]*protocol.GitChanges{"edited": edited, "more": more, "clean": {}} {
+		if k, _, _ := raceFiles(ch); k == key {
+			t.Errorf("%s: key unchanged", name)
+		}
+	}
+	reordered := &protocol.GitChanges{Files: []*protocol.GitFile{{Path: "a.go", Status: protocol.GitModified, Added: 1}, {Path: "b.go", Status: protocol.GitAdded}}}
+	if k1, _, _ := raceFiles(more); k1 != func() string { k, _, _ := raceFiles(reordered); return k }() {
+		t.Error("the same files in another order changed the key")
+	}
+	if _, _, blocked := raceFiles(&protocol.GitChanges{Files: []*protocol.GitFile{{Path: "a.go", Status: protocol.GitConflicted}}}); blocked == "" {
+		t.Error("a conflicted file did not stop the merge")
+	}
+	if _, _, blocked := raceFiles(&protocol.GitChanges{Operation: "rebase"}); blocked == "" {
+		t.Error("a rebase under way did not stop the merge")
+	}
+}
+
+func TestDismissRaceForgetsOnlyTheComparison(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	m := newModel(config.Default(), "")
+	m.Sessions.Set([]*protocol.SessionInfo{{Id: "s1"}, {Id: "s2"}, {Id: "s3"}})
+	m.Races.Groups.Set([]raceGroup{
+		{ID: "race-2", Entries: []raceEntry{{SessionID: "s3"}}, Starting: 1},
+		{ID: "race-1", Entries: []raceEntry{{SessionID: "s1"}, {SessionID: "s2"}}},
+	})
+	m.Races.Active.Set("race-1")
+	m.Races.Changes.Set(map[string]*protocol.GitChanges{"s1": {}, "s3": {}})
+	m.Races.Errs.Set(map[string]string{"s2": "offline"})
+
+	m.Races.Busy.Set("race-1")
+	m.dismissRace("race-1")
+	if len(ggui.Peek(m.Races.Groups)) != 2 {
+		t.Fatal("a race was dismissed while its winner was merged")
+	}
+	m.Races.Busy.Set("")
+	m.dismissRace("race-2")
+	if len(ggui.Peek(m.Races.Groups)) != 2 {
+		t.Fatal("a race was dismissed while its agents were starting")
+	}
+	m.dismissRace("race-1")
+	if groups := ggui.Peek(m.Races.Groups); len(groups) != 1 || groups[0].ID != "race-2" {
+		t.Fatalf("groups after dismissing race-1 = %+v", groups)
+	}
+	if got := ggui.Peek(m.Races.Active); got != "race-2" {
+		t.Fatalf("active race = %q, want race-2", got)
+	}
+	if ch := ggui.Peek(m.Races.Changes); len(ch) != 1 || ch["s3"] == nil {
+		t.Fatalf("changes left = %v", ch)
+	}
+	if len(ggui.Peek(m.Races.Errs)) != 0 {
+		t.Fatalf("errors left = %v", ggui.Peek(m.Races.Errs))
+	}
+	if len(ggui.Peek(m.Sessions)) != 3 {
+		t.Fatal("dismissing a race stopped its sessions")
 	}
 }

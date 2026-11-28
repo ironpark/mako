@@ -109,8 +109,7 @@ func (m *model) openDiffTab(root fileRoot, repo, commit, base string, f *protoco
 // openDiffFrom shows a file's diff in a tab, read as from says: from what
 // project and repository, and against what.
 func (m *model) openDiffFrom(from diffTab, f *protocol.GitFile, preview bool) {
-	root, repo := from.Root, from.Repo
-	id := diffTabID(root.Node, repo, from.against(), f.GetPath())
+	id := diffTabID(from.Root.Node, from.Repo, from.against(), f.GetPath())
 	var replaced string
 	if _, open := ggui.Peek(m.Diffs)[id]; !open && preview {
 		for other, d := range ggui.Peek(m.Diffs) {
@@ -119,18 +118,7 @@ func (m *model) openDiffFrom(from diffTab, f *protocol.GitFile, preview bool) {
 			}
 		}
 	}
-	m.Diffs.Update(func(v map[string]diffTab) map[string]diffTab {
-		v = maps.Clone(v)
-		d, ok := v[id]
-		if !ok {
-			d = diffTab{Root: root, Repo: repo, Commit: from.Commit, Base: from.Base, Pull: from.Pull, Loading: true, Preview: preview}
-		} else if !preview {
-			d.Preview = false
-		}
-		d.File = f
-		v[id] = d
-		return v
-	})
+	m.putDiff(from, f, preview)
 	if replaced != "" {
 		m.replaceTab(replaced, id)
 		m.Diffs.Update(func(v map[string]diffTab) map[string]diffTab {
@@ -140,6 +128,44 @@ func (m *model) openDiffFrom(from diffTab, f *protocol.GitFile, preview bool) {
 		})
 	}
 	m.showTab(id)
+	m.readDiffFrom(id, from)
+}
+
+// openDiffIn is openDiffFrom in window sw: a Space window, whose layout
+// the diff's tab then opens in, as no preview, leaving the main window as
+// it is; or the main window for nil.
+func (m *model) openDiffIn(sw *spaceWindowState, from diffTab, f *protocol.GitFile) {
+	if sw == nil {
+		m.openDiffFrom(from, f, false)
+		return
+	}
+	id := m.putDiff(from, f, false)
+	sw.focusGroup.Set(m.activateTabInKey(sw.peekLayoutKey(), ggui.Peek(sw.focusGroup), id))
+	m.readDiffFrom(id, from)
+}
+
+// putDiff keeps the diff tab of f, read as from says, as a preview or
+// not, and gives its ID.
+func (m *model) putDiff(from diffTab, f *protocol.GitFile, preview bool) string {
+	id := diffTabID(from.Root.Node, from.Repo, from.against(), f.GetPath())
+	m.Diffs.Update(func(v map[string]diffTab) map[string]diffTab {
+		v = maps.Clone(v)
+		d, ok := v[id]
+		if !ok {
+			d = diffTab{Root: from.Root, Repo: from.Repo, Commit: from.Commit, Base: from.Base, Pull: from.Pull, Loading: true, Preview: preview}
+		} else if !preview {
+			d.Preview = false
+		}
+		d.File = f
+		v[id] = d
+		return v
+	})
+	return id
+}
+
+// readDiffFrom reads diff tab id's diff, and the list of files from
+// changed that it steps through.
+func (m *model) readDiffFrom(id string, from diffTab) {
 	m.readDiff(id)
 	if from.Pull == 0 {
 		if from.Commit != "" {
