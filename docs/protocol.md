@@ -1503,8 +1503,27 @@ and Codex session hooks that run the daemon's own program as
 JSON object:
 
 ```json
-{"session": "<MAKO_SESSION>", "seq": 1761475200000000000, "kind": "", "input": { ...the agent's own hook input... }}
+{"session": "<MAKO_SESSION>", "token": "<the session's hook token>", "seq": 1761475200000000000, "kind": "", "input": { ...the agent's own hook input... }}
 ```
+
+`token` proves that the connection comes from a process of that session.
+It is HMAC-SHA256 of the session ID under a random 32-byte secret that the
+daemon makes again each time it starts. Before a session starts, the daemon
+writes its token to a file of its own beside the socket,
+`hook-tokens/<first 16 bytes of SHA-256 of the session ID, in hex>`, mode
+0600 in a folder of mode 0700, and empties that folder each time it starts
+to listen. The hook, the status line and the clipboard tools read the file
+for the session in `MAKO_SESSION`, from the folder of the socket they are
+given. The token is not put in the session's environment or on a command
+line: on macOS a process of the same user can read another process's
+environment and arguments, even from inside a Seatbelt sandbox, but a
+sandbox can hide the run folder except for the session's own file. The
+daemon compares the token in constant time and drops a connection whose
+token is missing or is not that session's before it acts on the input, so
+no event, approval, status line or copy of it is taken. It logs such a
+connection at most once a minute, with a count of the ones it did not log.
+The hook commands carry no secret, so the ones the daemon writes into an
+agent's settings stay the same.
 
 `seq` is when the hook ran, in Unix nanoseconds, so a report that arrives
 late changes nothing. `kind` is `statusline` for the status line's input, from
@@ -1521,7 +1540,10 @@ line forwards its input and then prints the user's own status line, so
 mako's does not take its place on screen.
 
 The socket is reachable by the user's own processes only and is not part of
-the network protocol.
+the network protocol. A process of the user's that is not in a session can
+connect to it, but cannot report for a session without that session's token.
+The token is only as private as its file: a process of the same user that is
+not in a sandbox can read it, as it can read the rest of the user's files.
 
 ## Access
 

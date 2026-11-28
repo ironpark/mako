@@ -239,11 +239,11 @@ func TestRunHookPreservesExtensionEventOrder(t *testing.T) {
 }
 
 func TestChildHooksDelayCompletionAndIgnoreLateParentEvents(t *testing.T) {
-	_, s, socket := hookedDaemon(t)
+	d, s, socket := hookedDaemon(t)
 	base := time.Now().UnixNano()
 	send := func(seq int64, input string) {
 		t.Helper()
-		conn, err := sendHook(socket, hookMessage{Session: s.ID(), Seq: base + seq, Input: json.RawMessage(input)})
+		conn, err := sendHook(socket, hookMessage{Session: s.ID(), Token: d.hookToken(s.ID()), Seq: base + seq, Input: json.RawMessage(input)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -280,7 +280,7 @@ func TestHooksClearTheSuggestionOfTheirTurn(t *testing.T) {
 	base := time.Now().UnixNano()
 	send := func(seq int64, input string) {
 		t.Helper()
-		conn, err := sendHook(socket, hookMessage{Session: s.ID(), Seq: base + seq, Input: json.RawMessage(input)})
+		conn, err := sendHook(socket, hookMessage{Session: s.ID(), Token: d.hookToken(s.ID()), Seq: base + seq, Input: json.RawMessage(input)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -512,7 +512,7 @@ func TestApprovalsAreAllowedWithAnOption(t *testing.T) {
 func TestAnApprovalTheAgentAbandonsIsWithdrawn(t *testing.T) {
 	d, s, socket := hookedDaemon(t)
 	d.approvals.watch(true)
-	conn, err := sendHook(socket, hookMessage{Session: s.ID(), Seq: 1,
+	conn, err := sendHook(socket, hookMessage{Session: s.ID(), Token: d.hookToken(s.ID()), Seq: 1,
 		Input: json.RawMessage(`{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"ls"}}`)})
 	if err != nil {
 		t.Fatal(err)
@@ -634,7 +634,7 @@ func TestAgySubagentHooksDoNotHijackParentConversation(t *testing.T) {
 			defer close(done)
 			d.serveHook(t.Context(), server)
 		}()
-		if err := json.NewEncoder(client).Encode(hookMessage{Session: s.ID(), Seq: seq, Input: json.RawMessage(payload)}); err != nil {
+		if err := json.NewEncoder(client).Encode(hookMessage{Session: s.ID(), Token: d.hookToken(s.ID()), Seq: seq, Input: json.RawMessage(payload)}); err != nil {
 			t.Fatal(err)
 		}
 		_, _ = io.Copy(io.Discard, client)
@@ -715,6 +715,7 @@ func TestServeHookDoesNotStallWhenSessionMuHeld(t *testing.T) {
 	}()
 	if err := json.NewEncoder(client).Encode(hookMessage{
 		Session: s.ID(),
+		Token:   d.hookToken(s.ID()),
 		Seq:     1,
 		Input:   json.RawMessage(`{"hook_event_name":"UserPromptSubmit"}`),
 	}); err != nil {
@@ -747,7 +748,7 @@ func TestAgyStatusLineYoloPermissionModeAndLiveUpdates(t *testing.T) {
 			d.serveHook(t.Context(), server)
 		}()
 		if err := json.NewEncoder(client).Encode(hookMessage{
-			Session: sessID, Seq: seq, Kind: statusArg, Input: json.RawMessage(payload),
+			Session: sessID, Token: d.hookToken(sessID), Seq: seq, Kind: statusArg, Input: json.RawMessage(payload),
 		}); err != nil {
 			t.Fatal(err)
 		}

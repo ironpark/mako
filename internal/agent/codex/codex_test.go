@@ -1,6 +1,8 @@
 package codex
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -223,5 +225,76 @@ func TestCodexWithFastAndSplitRemoteLaunchServiceTier(t *testing.T) {
 	c.WithFast(&lOff, false)
 	if splitOff := SplitRemoteLaunch(lOff.Command); splitOff.ServiceTier != "default" {
 		t.Fatalf("SplitRemoteLaunch ServiceTier(off) = %q, want default", splitOff.ServiceTier)
+	}
+}
+
+func TestWithoutOwnSandbox(t *testing.T) {
+	// Codex takes -s once: one the command has is changed, not added to.
+	in := []string{"codex", "-a", "on-request", "-s", "read-only", "resume", "abc", "--", "-s", "prompt"}
+	got := WithoutOwnSandboxTopLevel(in)
+	want := []string{"codex", "-c", `sandbox_mode="danger-full-access"`, "-a", "on-request", "-s", FullAccess, "resume", "abc", "--", "-s", "prompt"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("WithoutOwnSandboxTopLevel = %q\nwant %q", got, want)
+	}
+	got = WithoutOwnSandboxTopLevel([]string{"codex", "--sandbox=workspace-write", "--", "-s"})
+	if want := []string{"codex", "-c", `sandbox_mode="danger-full-access"`, "--sandbox=" + FullAccess, "--", "-s"}; !slices.Equal(got, want) {
+		t.Fatalf("WithoutOwnSandboxTopLevel = %q\nwant %q", got, want)
+	}
+	got = WithoutOwnSandbox([]string{"codex", "-c", `sandbox_mode="read-only"`, "-c", "model=x"})
+	if want := []string{"codex", "-c", `sandbox_mode="danger-full-access"`, "-c", `sandbox_mode="danger-full-access"`, "-c", "model=x"}; !slices.Equal(got, want) {
+		t.Fatalf("WithoutOwnSandbox = %q\nwant %q", got, want)
+	}
+	got = WithoutOwnSandboxTopLevel([]string{"codex", "--", "-s"})
+	if want := []string{"codex", "-s", FullAccess, "-c", `sandbox_mode="danger-full-access"`, "--", "-s"}; !slices.Equal(got, want) {
+		t.Fatalf("WithoutOwnSandboxTopLevel = %q\nwant %q", got, want)
+	}
+	split := SplitRemoteLaunch(got)
+	if split.Sandbox != FullAccess || !slices.Contains(split.NewTUIArgs, FullAccess) {
+		t.Fatalf("split = %+v", split)
+	}
+	if !slices.Contains(split.ServerArgs, `sandbox_mode="danger-full-access"`) {
+		t.Fatalf("server args = %q", split.ServerArgs)
+	}
+	approve := SplitRemoteLaunch(WithoutOwnSandboxTopLevel([]string{"codex", "--approve-for-me"}))
+	if approve.Sandbox != FullAccess {
+		t.Fatalf("--approve-for-me took back Codex's own sandbox: %+v", approve)
+	}
+	if got := WithoutOwnSandbox([]string{"codex"}); !slices.Equal(got, []string{"codex", "-c", `sandbox_mode="danger-full-access"`}) {
+		t.Fatalf("WithoutOwnSandbox = %q", got)
+	}
+	// Each form Codex takes an option in.
+	full := `sandbox_mode="danger-full-access"`
+	got = WithoutOwnSandbox([]string{"codex", `--config=sandbox_mode="read-only"`, `-c=sandbox_mode="read-only"`, `-csandbox_mode="read-only"`, "-sread-only", "-s=read-only", "-cmodel=x", "--config", "model=y"})
+	if want := []string{"codex", "-c", full, "--config=" + full, "-c=" + full, "-c" + full, "-s" + FullAccess, "-s=" + FullAccess, "-cmodel=x", "--config", "model=y"}; !slices.Equal(got, want) {
+		t.Fatalf("WithoutOwnSandbox = %q\nwant %q", got, want)
+	}
+	if got := WithoutOwnSandboxTopLevel([]string{"codex", "-sread-only"}); slices.Contains(got, "-s") {
+		t.Fatalf("WithoutOwnSandboxTopLevel added a second -s: %q", got)
+	}
+	// codex exec, which --approve-for-me would give Codex's own sandbox
+	// back without a top-level -s.
+	got = WithoutOwnSandboxTopLevel([]string{"codex", "--approve-for-me"})
+	if want := []string{"codex", "-s", FullAccess, "-c", full, "--approve-for-me"}; !slices.Equal(got, want) {
+		t.Fatalf("WithoutOwnSandboxTopLevel = %q\nwant %q", got, want)
+	}
+}
+
+func TestOneShotReadsNoLinkOutOfItsFolder(t *testing.T) {
+	temp, outside := t.TempDir(), t.TempDir()
+	secret := filepath.Join(outside, "secret")
+	if err := os.WriteFile(secret, []byte("token"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l := &agent.Launch{Command: []string{"codex"}}
+	prep, err := New().PrepareOneShot(l, agent.OneShotRequest{Prompt: "hi"}, "", temp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(temp, "codex-out.txt")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := prep.Parse([]byte("stdout"), nil)
+	if err != nil || got != "stdout" {
+		t.Fatalf("Parse = %q, %v; want the run's own output, not the linked file", got, err)
 	}
 }

@@ -87,6 +87,12 @@ func (d *Daemon) deliverNativeMessage(peer *agentPeer, batch []agentMessage) boo
 	if info.GetAgent() == "codex" {
 		return d.deliverViaCodexBridge(peer.ctx, peer.id, d.agentPrompt(batch))
 	}
+	// agy's agentapi, which delivers natively, runs outside the sandbox
+	// with the agent's home, where a sandboxed agent could put its own:
+	// a sandboxed session's messages are typed into its terminal.
+	if d.sandboxed(peer.id) {
+		return false
+	}
 	convID := info.GetConversationId()
 	if convID == "" {
 		return false

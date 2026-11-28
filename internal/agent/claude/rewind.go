@@ -8,11 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/ironpark/mako/pkg/fsutil"
+	"github.com/ironpark/mako/internal/homefs"
 )
 
 type rewindRecord struct {
@@ -41,7 +40,7 @@ func ForkTranscriptBefore(srcPath, targetUUID string, userTurnIndex int) (newSes
 	if srcPath == "" {
 		return "", "", false, errors.New("claude rewind: missing transcript path")
 	}
-	f, err := os.Open(srcPath)
+	f, err := homefs.Open(srcPath)
 	if err != nil {
 		return "", "", false, fmt.Errorf("claude rewind: open transcript: %w", err)
 	}
@@ -93,7 +92,7 @@ func ForkTranscriptBefore(srcPath, targetUUID string, userTurnIndex int) (newSes
 	}
 
 	dstPath := filepath.Join(filepath.Dir(srcPath), newID+".jsonl")
-	if err := fsutil.Write(dstPath, out.Bytes()); err != nil {
+	if err := homefs.Write(dstPath, out.Bytes()); err != nil {
 		return "", "", false, fmt.Errorf("claude rewind: write forked transcript: %w", err)
 	}
 	return newID, dstPath, false, nil

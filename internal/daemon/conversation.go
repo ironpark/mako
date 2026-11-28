@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"strings"
@@ -492,7 +493,16 @@ func (d *Daemon) savedTranscriptEnv(saved savedSession) map[string]string {
 	if err != nil {
 		return transcript.Env(os.Environ(), req.GetEnv())
 	}
-	if d.isolateHome() {
+	switch {
+	case saved.Sandbox != "":
+		// Its conversation is in its sandbox home.
+		if env, _, err := agentspec.SandboxHomeEnv(req.GetAgent()); err == nil && env != nil {
+			if launch.Env == nil {
+				launch.Env = map[string]string{}
+			}
+			maps.Copy(launch.Env, env)
+		}
+	case d.isolateHome():
 		_ = agentspec.ApplyIsolatedHome(req.GetAgent(), &launch)
 	}
 	return transcript.Env(os.Environ(), launch.Env)

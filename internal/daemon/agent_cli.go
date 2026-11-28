@@ -321,7 +321,7 @@ func (d *Daemon) serveAgentCLI(ctx context.Context, conn net.Conn) {
 			return
 		}
 		var tools []plugin.ContributedTool
-		if d.plugins != nil {
+		if d.plugins != nil && !d.sandboxed(peer.id) {
 			scopeCtx := d.sessionScopeContext(s.ID(), s.Info())
 			for _, tl := range d.plugins.Tools() {
 				if req.PluginID != "" && tl.PluginID != req.PluginID {
@@ -347,6 +347,10 @@ func (d *Daemon) serveAgentCLI(ctx context.Context, conn net.Conn) {
 		}
 		if req.PluginID == "" || req.ToolID == "" {
 			writeResp(agentCLIResponse{Error: "plugin_id and tool_id are required"})
+			return
+		}
+		if d.sandboxed(peer.id) {
+			writeResp(agentCLIResponse{Error: errSandboxPlugins.Error()})
 			return
 		}
 		scopeCtx := d.sessionScopeContext(s.ID(), s.Info())
@@ -379,6 +383,12 @@ func (d *Daemon) serveAgentCLI(ctx context.Context, conn net.Conn) {
 		s, err := d.projectCaller(peer)
 		if err != nil {
 			writeResp(agentCLIResponse{Error: err.Error()})
+			return
+		}
+		// Adding a project clones it wherever the caller says, which
+		// for a session in the sandbox would be outside it.
+		if d.sandboxed(peer.id) {
+			writeResp(agentCLIResponse{Error: "a sandboxed session cannot add projects"})
 			return
 		}
 		res, err := d.addProjectFromCLI(reqCtx, s.Info().GetProject(), req.Target, req.Name, req.BaseDir, req.Folder, req.Space)

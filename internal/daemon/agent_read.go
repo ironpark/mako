@@ -173,6 +173,9 @@ func (d *Daemon) readProjectAgent(ctx context.Context, peer *agentPeer, in readA
 	if id == "" {
 		return readAgentResult{}, errors.New("session_id is required")
 	}
+	if err := d.sandboxReach(peer.id, id, false); err != nil {
+		return readAgentResult{}, err
+	}
 	scope := d.projectScope(caller.Info())
 
 	var info *protocol.SessionInfo

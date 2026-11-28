@@ -274,6 +274,11 @@ func isSidecarSocketMissing(socket string, err error) bool {
 func runAgySidecarOnce(socket string, driver sidecarDeliverer) (bool, error) {
 	tokenPath := filepath.Join(filepath.Dir(socket), sidecarTokenFile)
 	tokenBytes, err := os.ReadFile(tokenPath)
+	if errors.Is(err, os.ErrPermission) {
+		// In the workspace sandbox, which keeps the token from it: the
+		// daemon types the session's messages into its terminal.
+		return false, fmt.Errorf("%w: read sidecar token: %w", errSidecarUnauthorized, err)
+	}
 	if err != nil {
 		return false, fmt.Errorf("read sidecar token: %w", err)
 	}

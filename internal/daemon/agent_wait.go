@@ -66,6 +66,12 @@ func (d *Daemon) watchProjectAgent(peer *agentPeer, in watchAgentArgs) (watchAge
 	case in.SessionID == peer.id:
 		return watchAgentResult{}, errors.New("an agent cannot watch itself")
 	}
+	// What another agent prints is read by matching it.
+	if !byTurn {
+		if err := d.sandboxReach(peer.id, in.SessionID, false); err != nil {
+			return watchAgentResult{}, err
+		}
+	}
 
 	callerInfo := caller.Info()
 	scope := d.projectScope(callerInfo)

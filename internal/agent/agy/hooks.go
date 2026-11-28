@@ -12,7 +12,7 @@ import (
 	"sync"
 
 	"github.com/ironpark/mako/internal/agent"
-	"github.com/ironpark/mako/pkg/fsutil"
+	"github.com/ironpark/mako/internal/homefs"
 )
 
 // agy takes hooks from no command line, only from the hooks.json files of
@@ -129,7 +129,7 @@ func loadSettingsObject(raw string, env map[string]string) (map[string]any, bool
 			}
 		}
 		var err error
-		body, err = os.ReadFile(p)
+		body, err = homefs.ReadFile(p)
 		if err != nil {
 			return nil, false
 		}
@@ -150,7 +150,7 @@ func writeHooks(path, hook string) error {
 	defer hooksMu.Unlock()
 
 	doc := map[string]json.RawMessage{}
-	body, err := os.ReadFile(path)
+	body, err := homefs.ReadFile(path)
 	switch {
 	case err == nil:
 		// agy reads a file saved with a byte-order mark too.
@@ -189,10 +189,10 @@ func writeHooks(path, hook string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := homefs.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return fsutil.Write(path, append(out, '\n'))
+	return homefs.Write(path, append(out, '\n'))
 }
 
 // hookEntry is mako's entry in hooks.json: hook on each event, the event

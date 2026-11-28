@@ -48,6 +48,9 @@ type agentDraft struct {
 	AllowAgent            bool   // allow models/agents to spawn via MCP
 	AllowTemplate         bool   // allow prompt templates to run
 	ClaudeCommitSignature bool   // claude: include commit attribution signature (off by default)
+	// Sandbox is the workspace sandbox sessions run in: "" for none (agent)
+	// or the agent's (profile), "workspace", or "off" (profile).
+	Sandbox string
 }
 
 // draftAgents lays out cfg's agents for editing: every agent the node can
@@ -70,6 +73,10 @@ func draftAgents(configured map[string]agentspec.Agent) []agentDraft {
 			Model: a.Model, Effort: a.Effort, Fast: boolOptionString(a.Fast), Permission: agentPerm,
 			AllowAgent: a.AgentAllowed(), AllowTemplate: a.TemplateAllowed(),
 			ClaudeCommitSignature: a.Claude.CommitSignature,
+			Sandbox:               strings.TrimSpace(a.Sandbox),
+		}
+		if d.Sandbox == agentspec.SandboxOff {
+			d.Sandbox = ""
 		}
 		if a.Enabled != nil {
 			d.Enabled = pick(*a.Enabled, "on", "off")
@@ -95,6 +102,7 @@ func draftAgents(configured map[string]agentspec.Agent) []agentDraft {
 				Model: p.Model, Effort: p.Effort, Fast: boolOptionString(p.Fast), Permission: profPerm,
 				AllowAgent: p.AgentAllowed(), AllowTemplate: p.TemplateAllowed(),
 				ClaudeCommitSignature: p.Claude.CommitSignature,
+				Sandbox:               strings.TrimSpace(p.Sandbox),
 			}
 			if p.ContextServers != nil {
 				d.PickServers, d.Servers = true, strings.Join(*p.ContextServers, "\n")
@@ -157,6 +165,10 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			Permission: perm,
 			Yolo:       perm == agentspec.PermissionYOLO,
 			Claude:     agentspec.ClaudeSettings{CommitSignature: r.ClaudeCommitSignature},
+			Sandbox:    strings.TrimSpace(r.Sandbox),
+		}
+		if a.Sandbox == agentspec.SandboxOff {
+			a.Sandbox = ""
 		}
 		if r.Enabled != "" {
 			on := r.Enabled == "on"
@@ -208,6 +220,7 @@ func applyAgents(rows []agentDraft) (map[string]agentspec.Agent, error) {
 			Fast:        parseBoolOption(r.Fast),
 			Permission:  perm,
 			Claude:      agentspec.ClaudeSettings{CommitSignature: r.ClaudeCommitSignature},
+			Sandbox:     strings.TrimSpace(r.Sandbox),
 		}
 		if !r.AllowAgent {
 			off := false
@@ -569,6 +582,9 @@ func agentItem(m *model, open *ggui.StateValue[string], shown ggui.Readable[stri
 		if d.Permission != "" {
 			parts = append(parts, permissionOptionLabel(d.Permission, false))
 		}
+		if d.Sandbox == agentspec.SandboxWorkspace || d.Sandbox == agentspec.SandboxWorkspaceSSH {
+			parts = append(parts, T("Sandboxed"))
+		}
 		if n := m.profileCount(name); n > 0 {
 			parts = append(parts, Tf("%d profiles", n))
 		}
@@ -717,6 +733,7 @@ func agentBaseBody(m *model, a agentDraft, mono ggui.TextStyle, showCommand bool
 		children = append(children, claudeCtrl)
 	}
 	children = append(children,
+		sandboxSection(m, a.ID, a.Agent, false),
 		executionSwitches(m, a.ID, a.Agent, false),
 		advancedOptionsSection(m, a, a.Agent, mono, false, showCommand, advancedOpen),
 	)
@@ -835,6 +852,7 @@ func profileCardWithState(m *model, p agentDraft, mono ggui.TextStyle, advancedO
 		body = append(body, claudeCtrl)
 	}
 	body = append(body,
+		sandboxSection(m, id, target, true),
 		executionSwitches(m, id, target, true),
 		profileServers(m, id, target),
 		advancedOptionsSection(m, p, target, mono, true, false, advancedOpen),
@@ -1008,6 +1026,48 @@ func claudeSettingsSection(m *model, id int, agentName, target string) ggui.Widg
 		hline(),
 		commitSigSwitch,
 	).Gap(8).Stretch()).
+		Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(10, 12)
+}
+
+// sandboxOptionLabel names a Sandbox choice.
+func sandboxOptionLabel(mode string, isProfile bool) string {
+	switch mode {
+	case "":
+		if isProfile {
+			return T("Inherit from agent")
+		}
+		return T("Off")
+	case agentspec.SandboxOff:
+		return T("Off")
+	case agentspec.SandboxWorkspace:
+		return T("Workspace")
+	case agentspec.SandboxWorkspaceSSH:
+		return T("Workspace with SSH agent")
+	default:
+		return mode
+	}
+}
+
+// sandboxSection chooses the OS sandbox sessions run in.
+func sandboxSection(m *model, id int, target string, isProfile bool) ggui.Widget {
+	options := []string{"", agentspec.SandboxWorkspace, agentspec.SandboxWorkspaceSSH}
+	if isProfile {
+		options = append(options, agentspec.SandboxOff)
+	}
+	bind := m.agentField(id, func(d *agentDraft) *string { return &d.Sandbox })
+	if v := ggui.Peek(bind); v != "" && !slices.Contains(options, v) {
+		options = append(options, v)
+	}
+	choose := ui.Select(bind).Options(options).Format(func(s string) string {
+		return sandboxOptionLabel(s, isProfile)
+	}).Name(Tf("%s sandbox", target))
+	return widget.Box(widget.Row(
+		widget.Expanded(widget.Column(
+			widget.Text(T("Workspace sandbox")).Size(12.5).Weight(ggui.WeightMedium),
+			muted(widget.Text(T("Run sessions in an OS sandbox that lets them write to their project but not to Mako's settings, git hooks, or agent settings, which would run code outside it. The agent keeps its own settings and sign-in for sandboxed sessions. With the SSH agent, sessions can also sign in to SSH hosts and push to git remotes over SSH, where what they run is outside the sandbox. A session keeps the sandbox it started in. macOS only: elsewhere, sandboxed sessions do not start.")).Size(11.5)),
+		).Gap(2).Stretch()),
+		widget.Box(choose).Width(156),
+	).Gap(10).Align(widget.AlignCenter)).
 		Fill(skin.Surface0).Border(1, skin.Border).Radius(8).Pad(10, 12)
 }
 

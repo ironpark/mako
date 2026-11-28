@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/session"
@@ -774,6 +776,17 @@ func (d *Daemon) openDirectSSHSession(ctx context.Context, req *protocol.OpenSes
 }
 
 func (d *Daemon) startDirectSSHSession(ctx context.Context, id string, req *protocol.OpenSession, parent string) (*session.Session, error) {
+	// The workspace sandbox is this computer's: what runs on an SSH host
+	// runs outside it.
+	d.sessionMu.Lock()
+	boxedParent := d.sandboxedLocked(parent)
+	d.sessionMu.Unlock()
+	if boxedParent {
+		return nil, errSandboxRemote
+	}
+	if mode, err := d.configuredSandbox(req.GetAgent(), req.GetProfile()); err != nil || mode != "" {
+		return nil, cmp.Or(err, fmt.Errorf("agent %q runs in the workspace sandbox, which cannot run sessions on SSH hosts", agentspec.Target(req.GetAgent(), req.GetProfile())))
+	}
 	req = proto.CloneOf(req)
 	nodeID := req.GetNodeId()
 	host, ctrl, remoteHome, remoteShell, err := d.ssh.directConnInfo(nodeID)

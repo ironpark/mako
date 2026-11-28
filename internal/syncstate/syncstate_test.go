@@ -184,6 +184,22 @@ func TestAgentAndMCPSanitizationPreservesLocalEnv(t *testing.T) {
 		t.Fatal("customized built-in should not count as default")
 	}
 
+	// The sandbox of an agent and its profiles reaches the other nodes,
+	// next to their fast mode.
+	fastOff := false
+	boxed := agentspec.Agent{Command: []string{"claude"}, Sandbox: agentspec.SandboxWorkspace, Fast: &fastOn,
+		Profiles: []agentspec.Profile{{Name: "open", Sandbox: agentspec.SandboxOff, Fast: &fastOff}}}
+	got := SanitizeAgent(boxed)
+	if got.Sandbox != agentspec.SandboxWorkspace || got.Profiles[0].Sandbox != agentspec.SandboxOff {
+		t.Fatalf("SanitizeAgent dropped the sandbox: %+v", got)
+	}
+	if got.Fast == nil || !*got.Fast || got.Profiles[0].Fast == nil || *got.Profiles[0].Fast {
+		t.Fatalf("SanitizeAgent dropped fast mode beside the sandbox: %+v", got)
+	}
+	if IsDefaultAgent("claude", agentspec.Agent{Command: []string{"claude"}, Sandbox: agentspec.SandboxWorkspace}) {
+		t.Fatal("a built-in in the sandbox should not count as default")
+	}
+
 	// MCP server sanitization strips Command.Env and preserves local Command.Env.
 	srv := mcp.Server{
 		Enabled:  &on,

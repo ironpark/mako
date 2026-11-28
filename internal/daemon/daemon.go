@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -54,6 +55,10 @@ type Daemon struct {
 	// starting are the sessions whose launch is being made ready, each
 	// closed as its start ends; guarded by sessionMu.
 	starting map[string]chan struct{}
+	// sandboxSeeds are the sandboxes sessions about to start for the
+	// first time run in, at least: a rewind's of the session it rewinds.
+	// Guarded by sessionMu; a start takes its own.
+	sandboxSeeds map[string]string
 
 	sessions      *registry
 	codexMu       sync.Mutex
@@ -121,6 +126,11 @@ type Daemon struct {
 
 	hookBinary  string // the program agents run as their hook; see HookMain
 	hookCommand string // the shell command agents run as their hook; "" for none
+	// hookSecret is what each session's hook token is made from, new each
+	// time the daemon starts; see hookToken.
+	hookSecret   []byte
+	hookRun      string       // the folder of the hook socket and the sessions' token files; "" before it listens
+	hookRefusals hookRefusals // the hook connections refused, logged now and then
 	// statusCommand is the one Claude runs as its status line, which
 	// reports the account's limits; "" for none.
 	statusCommand string
@@ -152,7 +162,9 @@ func New(cfg *config.Config, log *slog.Logger) *Daemon {
 		statusPoke: make(chan struct{}, 1),
 
 		hookBinary: hookProgram,
+		hookSecret: make([]byte, 32),
 	}
+	_, _ = rand.Read(d.hookSecret) // never fails: it crashes the program instead
 	d.cfgSnap.Store(snap)
 	d.ssh = newSSHManager(d)
 	d.agentUI = agentui.New(d.changes.fireAgentBlocks)

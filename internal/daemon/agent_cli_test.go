@@ -517,6 +517,26 @@ body = { type = "string", description = "Body text" }
 	if code != 0 || strings.Contains(out, "combine") {
 		t.Fatalf("list with AGENT_MAKO_PLUGINS=none should hide all tools: code=%d out=%q stderr=%q", code, out, stderr)
 	}
+
+	// 6. A sandboxed session has no plugin tools: they run in the daemon,
+	// outside its sandbox.
+	t.Setenv("AGENT_MAKO_PLUGINS", "echo:combine")
+	d.sessionMu.Lock()
+	entry := d.saved[peer.id]
+	entry.Sandbox = agentspec.SandboxWorkspace
+	d.saved[peer.id] = entry
+	d.sessionMu.Unlock()
+	code, out, stderr = runPluginCLI("", "list")
+	if code != 0 || strings.Contains(out, "combine") {
+		t.Fatalf("a sandboxed session listed plugin tools: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	code, out, stderr = runPluginCLI("", "call", "echo", "combine", "--title", "Escaped")
+	if code == 0 || strings.Contains(out, "Escaped") || !strings.Contains(stderr, "sandboxed") {
+		t.Fatalf("a sandboxed session called a plugin tool: code=%d out=%q stderr=%q", code, out, stderr)
+	}
+	if ids := d.usablePluginIDs(peer); len(ids) != 0 {
+		t.Fatalf("a sandboxed session is told of plugins %v", ids)
+	}
 }
 
 func TestAgySidecarRejectsUnauthorized(t *testing.T) {
@@ -929,5 +949,32 @@ func TestAgentProjectCLIAddLocalAndGitURL(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(defaultStore, "cli-repo", "README.md")); err != nil {
 			t.Fatalf("expected clone inside defaultStore: %v", err)
 		}
+	}
+}
+
+func TestRunAgySidecarStopsWhenItCannotReadItsToken(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("root reads every file")
+	}
+	// As in the workspace sandbox, which keeps the token from the sidecar
+	// of a sandboxed agy: it stops, rather than try again for ever.
+	dir := t.TempDir()
+	token := filepath.Join(dir, sidecarTokenFile)
+	if err := os.WriteFile(token, []byte("x"), 0o000); err != nil {
+		t.Fatal(err)
+	}
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- runAgySidecarLoop(t.Context(), filepath.Join(dir, "agent-cli.sock"), noopSidecarDeliverer{}, io.Discard, sidecarRetryPolicy{
+			initial: time.Second, max: time.Second, maxMissing: time.Minute,
+		})
+	}()
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, errSidecarUnauthorized) {
+			t.Fatalf("runAgySidecarLoop = %v, want errSidecarUnauthorized", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("the sidecar kept trying without its token")
 	}
 }

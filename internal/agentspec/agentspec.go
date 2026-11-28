@@ -28,6 +28,36 @@ const (
 	PermissionYOLO = "yolo"
 )
 
+// Sandbox modes shared by Agent and Profile configuration.
+const (
+	// SandboxOff runs sessions without the OS sandbox; on a profile it
+	// turns off one its agent has.
+	SandboxOff = "off"
+	// SandboxWorkspace runs sessions in the workspace sandbox, which lets
+	// them write to their project but not to the files that would make
+	// code run outside it. See internal/sandbox.
+	SandboxWorkspace = "workspace"
+	// SandboxWorkspaceSSH is SandboxWorkspace with the user's SSH agent,
+	// which lets sessions sign in to SSH hosts and git remotes: what they
+	// run there runs outside the sandbox.
+	SandboxWorkspaceSSH = "workspace-ssh"
+)
+
+// InheritedSandbox is the sandbox a session runs in that a session in the
+// sandbox parent starts, or that is the rewind of one, when its own agent
+// would run it in own: always a sandbox, and the SSH agent only when both
+// give it.
+func InheritedSandbox(parent, own string) string {
+	switch {
+	case parent == "":
+		return own
+	case parent == SandboxWorkspaceSSH && own == SandboxWorkspaceSSH:
+		return SandboxWorkspaceSSH
+	default:
+		return SandboxWorkspace
+	}
+}
+
 // ClaudeSettings holds Claude Code-specific settings for an agent or profile.
 type ClaudeSettings struct {
 	// CommitSignature allows Claude Code to append its commit attribution
@@ -57,6 +87,9 @@ type Agent struct {
 	// Yolo skips permission prompts and sandboxing when the agent's driver
 	// supports it. Synchronized with Permission == "yolo" for backward compatibility.
 	Yolo bool `json:"yolo,omitempty"`
+	// Sandbox runs its sessions in an OS sandbox: "workspace", or
+	// "workspace-ssh" with the user's SSH agent, or "" or "off" for none.
+	Sandbox string `json:"sandbox,omitempty"`
 	// Enabled offers the agent to start sessions with, or not; unset, it
 	// is offered while its program is installed.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -128,6 +161,9 @@ type Profile struct {
 	Permission string `json:"permission,omitempty"`
 	// Yolo overrides the agent's YOLO switch for this profile when set.
 	Yolo *bool `json:"yolo,omitempty"`
+	// Sandbox overrides the agent's sandbox when set: "workspace",
+	// "workspace-ssh", or "off" for none; "" takes the agent's.
+	Sandbox string `json:"sandbox,omitempty"`
 	// ContextServers picks the MCP servers its sessions get, by ID, an
 	// empty list none; unset, they get every server enabled. A server
 	// picked here is given even when turned off for the node.
@@ -180,6 +216,35 @@ func (p Profile) EffectivePermission(name string, a Agent) string {
 		return ""
 	}
 	return a.EffectivePermission(name)
+}
+
+// EffectiveSandbox is the sandbox the agent's own sessions run in:
+// SandboxWorkspace, or "" for none.
+func (a Agent) EffectiveSandbox() (string, error) {
+	return sandboxMode(a.Sandbox)
+}
+
+// EffectiveSandbox is the sandbox the profile's sessions run in: its own
+// when set, else its agent's.
+func (p Profile) EffectiveSandbox(a Agent) (string, error) {
+	if strings.TrimSpace(p.Sandbox) == "" {
+		return a.EffectiveSandbox()
+	}
+	return sandboxMode(p.Sandbox)
+}
+
+// sandboxMode reads a configured sandbox, refusing one it does not know
+// rather than run without it.
+func sandboxMode(mode string) (string, error) {
+	switch strings.TrimSpace(mode) {
+	case "", SandboxOff:
+		return "", nil
+	case SandboxWorkspace:
+		return SandboxWorkspace, nil
+	case SandboxWorkspaceSSH:
+		return SandboxWorkspaceSSH, nil
+	}
+	return "", fmt.Errorf("unknown sandbox %q (want %q, %q or %q)", mode, SandboxWorkspace, SandboxWorkspaceSSH, SandboxOff)
 }
 
 // EffectiveYolo reports whether profile p of agent name runs in YOLO mode:
@@ -299,6 +364,9 @@ type Launch struct {
 	// adds its hooks and MCP servers: those are long, and sent with every
 	// state. Nil reports Command.
 	Shown []string
+	// Sandbox is the sandbox the session runs in: SandboxWorkspace or
+	// SandboxWorkspaceSSH, or "" for none.
+	Sandbox string
 }
 
 // ResolveOptions overrides a profile's or agent's model, effort, fast mode,
@@ -401,11 +469,16 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 		agentArgs, _ = LiftYoloArgs(name, agentArgs)
 		profileArgs, _ = LiftYoloArgs(name, profileArgs)
 	}
-	var effectivePerm string
+	var effectivePerm, effectiveSandbox string
 	if profile != "" {
 		effectivePerm = p.EffectivePermission(name, a)
+		effectiveSandbox, err = p.EffectiveSandbox(a)
 	} else {
 		effectivePerm = a.EffectivePermission(name)
+		effectiveSandbox, err = a.EffectiveSandbox()
+	}
+	if err != nil {
+		return Launch{}, fmt.Errorf("agent %q: %w", Target(name, profile), err)
 	}
 	if opts.Yolo != nil {
 		if *opts.Yolo {
@@ -430,7 +503,8 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 
 	launch := Launch{ContextServers: p.ContextServers,
 		Command: command,
-		Env:     merged}
+		Env:     merged,
+		Sandbox: effectiveSandbox}
 	if effectivePerm == PermissionYOLO {
 		if yoloDriver != nil {
 			yoloDriver.WithYolo(&launch.Launch)

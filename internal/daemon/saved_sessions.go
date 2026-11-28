@@ -15,11 +15,13 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agent/codex"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/sandbox"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/skills"
 	"github.com/ironpark/mako/internal/transcript"
@@ -40,6 +42,11 @@ type savedSession struct {
 	PluginID       string
 	PinnedRepo     *string
 	PinnedRemote   *string
+	// Sandbox is the sandbox the session ran in, which it runs in again
+	// whatever its agent's configuration says now: its agent's settings
+	// and conversations are in its sandbox home, and those of what it
+	// starts are in its sandbox too.
+	Sandbox string
 }
 
 // savedJSON is a savedSession as sessions.json has it. The messages are in
@@ -54,6 +61,7 @@ type savedJSON struct {
 	PluginID       string          `json:"plugin_id,omitempty"`
 	PinnedRepo     *string         `json:"pinned_repo,omitempty"`
 	PinnedRemote   *string         `json:"pinned_remote,omitempty"`
+	Sandbox        string          `json:"sandbox,omitempty"`
 }
 
 var (
@@ -74,6 +82,7 @@ func (e savedSession) MarshalJSON() ([]byte, error) {
 		Info: info, Request: req, TranscriptPath: e.TranscriptPath,
 		ParentID: e.ParentID, ParentNodeID: e.ParentNodeID, PluginID: e.PluginID,
 		PinnedRepo: e.PinnedRepo, PinnedRemote: e.PinnedRemote,
+		Sandbox: e.Sandbox,
 	})
 }
 
@@ -88,6 +97,7 @@ func (e *savedSession) UnmarshalJSON(data []byte) error {
 	e.PluginID = raw.PluginID
 	e.PinnedRepo = raw.PinnedRepo
 	e.PinnedRemote = raw.PinnedRemote
+	e.Sandbox = raw.Sandbox
 	if len(raw.Info) > 0 {
 		if err := savedUnmarshal.Unmarshal(raw.Info, e.Info); err != nil {
 			return fmt.Errorf("info: %w", err)
@@ -441,9 +451,22 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	if err != nil {
 		return nil, err
 	}
-	if d.isolateHome() {
-		if err := agentspec.ApplyIsolatedHome(req.GetAgent(), &launch); err != nil {
-			return nil, err
+	// A session runs in the sandbox it started in, whatever its agent's
+	// configuration says now: its agent's settings and conversation are
+	// in the home of that sandbox, or of none. One that a session in the
+	// sandbox starts, or that rewinds one, runs in it too.
+	d.sessionMu.Lock()
+	prior, resumed := d.saved[id]
+	inherited := cmp.Or(d.saved[cmp.Or(prior.ParentID, parent)].Sandbox, d.sandboxSeeds[id])
+	delete(d.sandboxSeeds, id)
+	d.sessionMu.Unlock()
+	if resumed {
+		launch.Sandbox = prior.Sandbox
+	}
+	launch.Sandbox = agentspec.InheritedSandbox(inherited, launch.Sandbox)
+	if launch.Sandbox != "" {
+		if err := sandbox.Supported(); err != nil {
+			return nil, fmt.Errorf("agent %q runs in the workspace sandbox: %w", agentspec.Target(req.GetAgent(), req.GetProfile()), err)
 		}
 	}
 	if req.GetProject() == "" {
@@ -462,6 +485,17 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		project = real
 	}
 	req.Project = project
+	// A sandbox that would be refused is refused before its home, or a
+	// worktree, is made for it.
+	if launch.Sandbox != "" {
+		if err := d.checkSandbox(id, req.GetAgent(), launch.Sandbox, sandboxRoots(project, d.projectDirs(project))); err != nil {
+			return nil, err
+		}
+	}
+	sandboxHome, err := d.withSandboxHome(req.GetAgent(), &launch)
+	if err != nil {
+		return nil, err
+	}
 	// A session of its own worktree gets it made once, when it first
 	// starts; the saved request then names it. If startSessionWithParent
 	// fails before the session starts, roll back the freshly created
@@ -542,6 +576,14 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		mode = "subagent"
 	}
 	launch.SetEnv("AGENT_MAKO_SESSION", id)
+	if d.hookCommand != "" {
+		// What the session's hooks, status line and clipboard tools prove
+		// to the hook socket they are its own with; without it they are
+		// refused, and the daemon watches the agent's files alone.
+		if err := d.giveHookToken(id); err != nil {
+			d.log.Warn("hooks: no token for the session", "id", id, "err", err)
+		}
+	}
 	launch.SetEnv("AGENT_MAKO_PROJECT", req.GetProject())
 	launch.SetEnv("AGENT_MAKO_MODE", mode)
 	if nodeID := d.config().NodeID; nodeID != "" {
@@ -591,15 +633,41 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		d.log.Warn("failed to sync mako built-in skills", "agent", req.GetAgent(), "err", err)
 	}
 	d.trustLaunchDirs(req.GetAgent(), req.GetProject(), extraDirs, &launch.Launch)
+	var box *sandbox.Spec
+	if launch.Sandbox != "" {
+		spec, removeTemp, err := d.newSandbox(id, req.GetAgent(), launch.Sandbox, sandboxRoots(req.GetProject(), extraDirs), sandboxHome, &launch.Launch)
+		if err != nil {
+			cleanup()
+			return nil, err
+		}
+		box = spec
+		prevCleanup := cleanup
+		cleanup = func() {
+			prevCleanup()
+			removeTemp()
+		}
+		if req.GetAgent() == "codex" && len(launch.Command) > 0 && isNative("codex", launch.Command[0]) {
+			launch.Command = codex.WithoutOwnSandboxTopLevel(launch.Command)
+			d.withCodexSocket(box, id)
+		}
+	}
 	var codexBridge *codexBridge
 	if req.GetAgent() == "codex" {
 		var stopCodex func()
-		codexBridge, stopCodex = d.prepareCodexAppServer(ctx, id, req.GetProject(), &launch, &conversationID, &transcriptPath)
+		codexBridge, stopCodex = d.prepareCodexAppServer(ctx, id, req.GetProject(), &launch, box, &conversationID, &transcriptPath)
 		prevCleanup := cleanup
 		cleanup = func() {
 			stopCodex()
 			prevCleanup()
 		}
+	}
+	if box != nil {
+		wrapped, err := sandbox.Command(*box, launch.Command)
+		if err != nil {
+			cleanup()
+			return nil, err
+		}
+		launch.Command = wrapped
 	}
 
 	d.sessionMu.Lock()
@@ -636,6 +704,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		Info: info, Request: req, TranscriptPath: transcriptPath,
 		ParentID: parent, ParentNodeID: parentNode, PluginID: pluginID,
 		PinnedRepo: pinnedRepo, PinnedRemote: pinnedRemote,
+		Sandbox: launch.Sandbox,
 	}
 	if err := d.saveSessionsLocked(); err != nil {
 		if existed {

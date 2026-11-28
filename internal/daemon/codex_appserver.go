@@ -22,6 +22,7 @@ import (
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
+	"github.com/ironpark/mako/internal/sandbox"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
 	"google.golang.org/protobuf/proto"
@@ -198,6 +199,9 @@ type codexServerLaunchConfig struct {
 	split       codex.RemoteLaunchSplit
 	serverEnv   map[string]string
 	stateDirKey string
+	// sandbox is the workspace sandbox the app-server runs in, which runs
+	// the session's tools; nil for none.
+	sandbox *sandbox.Spec
 }
 
 type codexStartedServer struct {
@@ -1058,7 +1062,14 @@ func (d *Daemon) startCodexAppServerProcess(ctx context.Context, cfg codexServer
 		serverArgs = append(serverArgs, tr.extraServerArgs...)
 		serverArgs = append(serverArgs, cfg.split.ServerArgs...)
 
-		cmd = exec.Command(cfg.split.Program, serverArgs...)
+		argv := append([]string{cfg.split.Program}, serverArgs...)
+		if cfg.sandbox != nil {
+			if argv, attemptErr = sandbox.Command(*cfg.sandbox, argv); attemptErr != nil {
+				tr.cleanupFiles()
+				return nil, attemptErr
+			}
+		}
+		cmd = exec.Command(argv[0], argv[1:]...)
 		cmd.Dir = cfg.project
 		cmd.Stdout = io.Discard
 		stderrPipe, pipeErr := cmd.StderrPipe()
@@ -1212,6 +1223,13 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 	}
 
 	tuiCmd, tuiEnv := buildCodexRemoteTUICommand(cfg.split, started.tr, started.remoteAddr, threadID, false)
+	tuiCmd, err = sandboxedTUI(cfg.sandbox, tuiCmd)
+	if err != nil {
+		_ = started.client.Close()
+		stopCodexServerCmd(started.cmd, started.exited)
+		started.tr.cleanupFiles()
+		return nil, err
+	}
 	if agent.IsLoopbackURL(started.remoteAddr) {
 		tmp := agent.Launch{Env: map[string]string{}}
 		if v, ok := cfg.serverEnv["NO_PROXY"]; ok {
@@ -1244,15 +1262,27 @@ func (d *Daemon) restartManagedCodexServer(ctx context.Context, cfg codexServerL
 	}, nil
 }
 
+// sandboxedTUI is the command of a restarted session's TUI, in box when
+// the session is sandboxed, as it was at the start: the TUI runs the
+// session's shell and its ! commands.
+func sandboxedTUI(box *sandbox.Spec, tuiCmd []string) ([]string, error) {
+	if box == nil {
+		return tuiCmd, nil
+	}
+	return sandbox.Command(*box, tuiCmd)
+}
+
 // prepareCodexAppServer starts a per-session `codex app-server` for native Codex
 // sessions when supported by the installed CLI, establishes Mako's JSON-RPC client,
 // pre-creates or resumes the thread, and rewrites launch.Command to `codex --remote`.
 // If unsupported or startup fails, launch is left untouched so Mako falls back cleanly
-// to direct PTY execution.
+// to direct PTY execution. A sandboxed session's app-server runs in box,
+// as it is what runs the session's tools.
 func (d *Daemon) prepareCodexAppServer(
 	ctx context.Context,
 	sessionID, project string,
 	launch *agentspec.Launch,
+	box *sandbox.Spec,
 	conversationID, transcriptPath *string,
 ) (*codexBridge, func()) {
 	noop := func() {}
@@ -1291,6 +1321,7 @@ func (d *Daemon) prepareCodexAppServer(
 		split:       split,
 		serverEnv:   serverEnv,
 		stateDirKey: codexStateDirKey(serverEnv),
+		sandbox:     box,
 	}
 
 	started, err := d.startCodexAppServerProcess(ctx, cfg)

@@ -13,11 +13,13 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agent/codex"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/protocol"
 	"github.com/ironpark/mako/internal/safeexec"
+	"github.com/ironpark/mako/internal/sandbox"
 	"github.com/ironpark/mako/internal/transport"
 )
 
@@ -103,9 +105,13 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 		rest, _ := agentspec.LiftYoloArgs(agentName, launch.Command[1:])
 		launch.Command = append(launch.Command[:1:1], rest...)
 	}
-	if d.isolateHome() {
-		if err := agentspec.ApplyIsolatedHome(agentName, &launch); err != nil {
-			return nil, err
+	// What a session in the sandbox asks runs in it too.
+	d.sessionMu.Lock()
+	launch.Sandbox = agentspec.InheritedSandbox(d.saved[strings.TrimSpace(req.GetParentSessionId())].Sandbox, launch.Sandbox)
+	d.sessionMu.Unlock()
+	if launch.Sandbox != "" {
+		if err := sandbox.Supported(); err != nil {
+			return nil, fmt.Errorf("agent %q runs in the workspace sandbox: %w", agentspec.Target(agentName, req.GetProfile()), err)
 		}
 	}
 
@@ -134,7 +140,18 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 	if parentID := strings.TrimSpace(req.GetParentSessionId()); parentID != "" {
 		launch.SetEnv("AGENT_MAKO_PARENT", parentID)
 	}
-	launch.Command = withProjectDirs(agentName, launch.Command, d.projectDirs(workDir))
+	extraDirs := d.projectDirs(workDir)
+	launch.Command = withProjectDirs(agentName, launch.Command, extraDirs)
+	runID := "oneshot-" + newSessionID()
+	if launch.Sandbox != "" {
+		if err := d.checkSandbox(runID, agentName, launch.Sandbox, sandboxRoots(workDir, extraDirs)); err != nil {
+			return nil, err
+		}
+	}
+	sandboxHome, err := d.withSandboxHome(agentName, &launch)
+	if err != nil {
+		return nil, err
+	}
 
 	if len(launch.Command) == 0 {
 		return nil, fmt.Errorf("agent %q has an empty command", agentName)
@@ -148,15 +165,29 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 		return nil, fmt.Errorf("agent %q does not support one-shot prompts", agentName)
 	}
 
-	runDir, err := config.RunDir(d.dir)
-	if err != nil {
-		return nil, err
+	var box *sandbox.Spec
+	var tempDir string
+	if launch.Sandbox != "" {
+		spec, removeTemp, err := d.newSandbox(runID, agentName, launch.Sandbox, sandboxRoots(workDir, extraDirs), sandboxHome, &launch.Launch)
+		if err != nil {
+			return nil, err
+		}
+		defer removeTemp()
+		box, tempDir = spec, spec.Temp
+		if agentName == "codex" {
+			launch.Command = codex.WithoutOwnSandboxTopLevel(launch.Command)
+		}
+	} else {
+		runDir, err := config.RunDir(d.dir)
+		if err != nil {
+			return nil, err
+		}
+		tempDir, err = os.MkdirTemp(runDir, "oneshot-*")
+		if err != nil {
+			return nil, err
+		}
+		defer os.RemoveAll(tempDir)
 	}
-	tempDir, err := os.MkdirTemp(runDir, "oneshot-*")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(tempDir)
 
 	prep, err := osDriver.PrepareOneShot(&launch.Launch, agent.OneShotRequest{
 		Prompt:     req.GetPrompt(),
@@ -168,6 +199,11 @@ func (d *Daemon) runAgentPromptWith(ctx context.Context, req *protocol.RunAgentP
 	}
 	if prep.Cleanup != nil {
 		defer prep.Cleanup()
+	}
+	if box != nil {
+		if launch.Command, err = sandbox.Command(*box, launch.Command); err != nil {
+			return nil, err
+		}
 	}
 
 	runCtx := ctx
