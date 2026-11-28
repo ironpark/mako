@@ -126,6 +126,7 @@ type model struct {
 	AccessNote  *ggui.StateValue[string] // the last access change's outcome
 	AccessKey   *ggui.StateValue[string] // a key being let in, as typed
 	asked       map[string]ui.ToastID    // requests told of, by their toasts; UI goroutine only
+	hooksNoted  map[string]time.Time     // command files told of as skipped, when; see worktreehooks.go
 	ws          *wsState                 // how the workspace is kept and written down; see wsstate.go
 	prefsWriter *fileWriter              // writes gui.json
 	titleCache  *titleCache              // titles.json; see titlecache.go
@@ -891,6 +892,7 @@ func (m *model) startSession(tab string, f newSession) {
 		}
 		sessions := slices.Clone(ggui.Peek(m.Sessions))
 		m.Sessions.Set(append(sessions, info))
+		m.noteSkippedHooks(info)
 		inMain := slices.Contains(ggui.Peek(m.Tabs), tab)
 		otherKey := ""
 		if tab != "" && !inMain {

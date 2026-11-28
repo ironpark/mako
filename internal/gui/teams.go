@@ -110,6 +110,7 @@ func (m *model) startTeam(parent string, team agentTeam, task string) {
 			if _, known := m.session(info.GetId()); !known {
 				m.Sessions.Set(append(slices.Clone(ggui.Peek(m.Sessions)), info))
 			}
+			m.noteSkippedHooks(info)
 		})
 	}
 }

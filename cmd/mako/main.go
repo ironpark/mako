@@ -528,7 +528,24 @@ func runAgent(ctx context.Context, c *client.Client, nodeID, project string, use
 		return err
 	}
 	fmt.Fprintf(os.Stderr, "[mako] session %s on %s\r\n", info.GetId(), short(info.GetNodeId()))
+	fmt.Fprint(os.Stderr, skippedHooksNotice(nodeID, info.GetWorktree()))
 	return c.Attach(ctx, &protocol.Attach{SessionId: info.GetId(), NodeId: nodeID, Replay: false})
+}
+
+// skippedHooksNotice says, for a worktree made without its repository's
+// setup_cmd, which file was not trusted and how to trust it; "" for any
+// other.
+func skippedHooksNotice(nodeID string, w *protocol.Worktree) string {
+	f := protocol.Printable(w.GetSkippedHooks())
+	if f == "" {
+		return ""
+	}
+	node := ""
+	if nodeID != "" {
+		node = "-node " + nodeID + " "
+	}
+	return fmt.Sprintf("[mako] the setup_cmd of %s did not run: the file is not trusted as it reads\r\n"+
+		"[mako] review it and trust it with: mako %srepo-trust allow %s\r\n", f, node, f)
 }
 
 func short(id string) string {

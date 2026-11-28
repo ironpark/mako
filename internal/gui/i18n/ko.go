@@ -2054,4 +2054,8 @@ var catalogKo = map[string]string{
 	// Worktree isolation
 	"Isolate each member in its own worktree":                                               "각 팀원을 별도 워크트리로 격리",
 	"Gives every teammate a fresh git worktree and branch so parallel edits never collide.": "팀원마다 새 Git 워크트리와 브랜치를 만들어 병렬 수정 시 파일 충돌을 방지합니다.",
+	"Worktree setup skipped":                                                                "워크트리 설정 명령을 건너뜀",
+	"Review…":                                                                               "검토…",
+	"%s is not trusted, so its setup_cmd did not run.":                                      "%s 파일을 신뢰하지 않아 setup_cmd를 실행하지 않았습니다.",
+	"Mako made the worktree but did not run the setup_cmd this file gives, since you have not trusted the file as it reads. Once you trust it, it runs for the worktrees made after.": "Mako가 워크트리는 만들었지만, 이 파일을 지금 내용 그대로 신뢰하지 않았기 때문에 파일에 적힌 setup_cmd는 실행하지 않았습니다. 신뢰하면 이후에 만드는 워크트리부터 실행합니다.",
 }
