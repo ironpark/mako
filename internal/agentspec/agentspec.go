@@ -48,6 +48,9 @@ type Agent struct {
 	Model string `json:"model,omitempty"`
 	// Effort is the default reasoning effort its sessions start with; "" leaves the agent's own default.
 	Effort string `json:"effort,omitempty"`
+	// Fast sets the default startup fast mode when non-nil (true turns fast
+	// mode on, false explicitly turns it off; nil leaves the agent's own default).
+	Fast *bool `json:"fast,omitempty"`
 	// Permission is the startup permission mode ("", "manual", "acceptEdits",
 	// "auto", "plan", "dontAsk", "readOnly", or "yolo").
 	Permission string `json:"permission,omitempty"`
@@ -116,6 +119,9 @@ type Profile struct {
 	// Effort is the reasoning effort its sessions start with; "" leaves the
 	// agent's default. An agent without agent.EffortFlag ignores it.
 	Effort string `json:"effort,omitempty"`
+	// Fast overrides the agent's startup fast mode when non-nil (true turns
+	// fast mode on, false explicitly turns it off; nil inherits from the agent).
+	Fast *bool `json:"fast,omitempty"`
 	// Permission overrides the agent's startup permission mode when non-empty
 	// ("default" resets to the agent's built-in default without YOLO; "yolo"
 	// enables YOLO; driver modes select that mode).
@@ -295,11 +301,12 @@ type Launch struct {
 	Shown []string
 }
 
-// ResolveOptions overrides a profile's or agent's model, effort, and YOLO
-// settings for a single launch.
+// ResolveOptions overrides a profile's or agent's model, effort, fast mode,
+// and YOLO settings for a single launch.
 type ResolveOptions struct {
 	Model  string
 	Effort string
+	Fast   *bool
 	Yolo   *bool
 }
 
@@ -371,6 +378,7 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 	var yoloDriver agent.YoloFlag
 	var permDriver agent.PermissionFlag
 	var commitSigDriver agent.CommitSignatureFlag
+	var fastDriver agent.FastFlag
 	if e, ok := agents.Native(name, path); ok {
 		if norm, ok := e.Driver.(agent.ModelEffortNormalizer); ok {
 			effectiveModel, effectiveEffort = norm.NormalizeModelEffort(effectiveModel, effectiveEffort)
@@ -383,6 +391,9 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 		}
 		if csf, ok := e.Driver.(agent.CommitSignatureFlag); ok {
 			commitSigDriver = csf
+		}
+		if ff, ok := e.Driver.(agent.FastFlag); ok {
+			fastDriver = ff
 		}
 	}
 	agentArgs, profileArgs := a.Args, p.Args
@@ -433,6 +444,18 @@ func ResolveWith(name, profile string, args []string, env map[string]string, opt
 			commitSig = p.Claude.CommitSignature
 		}
 		commitSigDriver.WithCommitSignature(&launch.Launch, commitSig)
+	}
+	if fastDriver != nil {
+		effectiveFast := a.Fast
+		if profile != "" && p.Fast != nil {
+			effectiveFast = p.Fast
+		}
+		if opts.Fast != nil {
+			effectiveFast = opts.Fast
+		}
+		if effectiveFast != nil {
+			fastDriver.WithFast(&launch.Launch, *effectiveFast)
+		}
 	}
 	launch.Command = append(launch.Command, args...)
 	return launch, nil

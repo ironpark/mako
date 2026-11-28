@@ -176,6 +176,10 @@ func TestAgentAndMCPSanitizationPreservesLocalEnv(t *testing.T) {
 	if IsDefaultAgent("claude", agentspec.Agent{Command: []string{"claude"}, Claude: agentspec.ClaudeSettings{CommitSignature: true}}) {
 		t.Fatal("built-in with custom claude settings should not count as default")
 	}
+	fastOn := true
+	if IsDefaultAgent("codex", agentspec.Agent{Command: []string{"codex"}, Fast: &fastOn}) {
+		t.Fatal("built-in with custom fast setting should not count as default")
+	}
 	if IsDefaultAgent("claude", orig) {
 		t.Fatal("customized built-in should not count as default")
 	}

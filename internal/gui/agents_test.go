@@ -696,3 +696,76 @@ func TestClaudeCommitSignatureSettings(t *testing.T) {
 		t.Fatal("codex profile should not show Claude commit signature switch")
 	}
 }
+
+func TestFastModeAgentAndProfileSettings(t *testing.T) {
+	t.Setenv("MAKO_HOME", t.TempDir())
+	on, off := true, false
+	in := map[string]agentspec.Agent{
+		"claude": {
+			Fast: &on,
+			Profiles: []agentspec.Profile{
+				{Name: "inherit"},
+				{Name: "off", Fast: &off},
+				{Name: "on", Fast: &on},
+			},
+		},
+		"codex": {
+			Fast: &off,
+			Profiles: []agentspec.Profile{
+				{Name: "fast", Fast: &on},
+			},
+		},
+	}
+	got, err := applyAgents(draftAgents(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["claude"].Fast == nil || !*got["claude"].Fast {
+		t.Fatalf("claude agent Fast = %v, want true", got["claude"].Fast)
+	}
+	cp := got["claude"].Profiles
+	if len(cp) != 3 || cp[0].Fast != nil || cp[1].Fast == nil || *cp[1].Fast || cp[2].Fast == nil || !*cp[2].Fast {
+		t.Fatalf("claude profiles Fast round-trip = %+v", cp)
+	}
+	if got["codex"].Fast == nil || *got["codex"].Fast {
+		t.Fatalf("codex agent Fast = %v, want false", got["codex"].Fast)
+	}
+	if xp := got["codex"].Profiles; len(xp) != 1 || xp[0].Fast == nil || !*xp[0].Fast {
+		t.Fatalf("codex profiles Fast round-trip = %+v", xp)
+	}
+
+	// Both claude and codex render fast mode selectors on agent and profile cards; agy does not.
+	m := newModel(&config.Config{Agents: map[string]agentspec.Agent{
+		"claude": {Profiles: []agentspec.Profile{{Name: "work"}}},
+		"codex":  {Profiles: []agentspec.Profile{{Name: "turbo"}}},
+		"agy":    {Profiles: []agentspec.Profile{{Name: "p"}}},
+	}}, "")
+	findRow := func(agentName string, isProfile bool) agentDraft {
+		for _, r := range ggui.Peek(m.AgentDraft) {
+			if r.Agent == agentName && r.IsProfile == isProfile {
+				return r
+			}
+		}
+		t.Fatalf("missing row agent=%s profile=%v", agentName, isProfile)
+		return agentDraft{}
+	}
+	for _, tc := range []struct {
+		agent, profile string
+		want           bool
+	}{
+		{"claude", "work", true},
+		{"codex", "turbo", true},
+		{"agy", "p", false},
+	} {
+		row := findRow(tc.agent, false)
+		prof := findRow(tc.agent, true)
+		p := ggui.ProbeBuilder(func() ggui.Widget { return widget.Scroll(agentEditor(m, row, []agentDraft{prof})) }, ggui.Sz(700, 1800))
+		p.Frame()
+		_, hasAgent := p.Find(Tf("%s fast mode", tc.agent))
+		_, hasProf := p.Find(Tf("%s fast mode", tc.agent+":"+tc.profile))
+		p.Close()
+		if hasAgent != tc.want || hasProf != tc.want {
+			t.Errorf("%s: fast mode selector agent=%v profile=%v, want %v", tc.agent, hasAgent, hasProf, tc.want)
+		}
+	}
+}

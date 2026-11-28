@@ -563,6 +563,11 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	d.seedDynamicModels(s)
 	if codexBridge != nil {
 		d.attachCodexBridge(s, codexBridge)
+	} else if fmr, ok := agents.As[agent.FastModeReader](req.GetAgent()); ok {
+		if fast, ok := fmr.InitialFastMode(launch.Launch); ok {
+			s.ReportFastMode(fast)
+			s.Report(&protocol.Usage{FastMode: proto.Bool(fast)})
+		}
 	}
 	if peer := d.projectAgents.activate(s); peer != nil {
 		go d.deliverAgentMessages(peer)

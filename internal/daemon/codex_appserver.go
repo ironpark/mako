@@ -1322,6 +1322,10 @@ func (d *Daemon) prepareCodexAppServer(
 			initUsage.FastMode = proto.Bool(initFastMode)
 		}
 	}
+	if split.ServiceTier != "" {
+		initFastMode = codex.IsFastServiceTier(split.ServiceTier)
+		initUsage.FastMode = proto.Bool(initFastMode)
+	}
 
 	cwd := cmp.Or(split.Cwd, project)
 	targetID := cmp.Or(*conversationID, split.ResumeID)
@@ -1332,6 +1336,7 @@ func (d *Daemon) prepareCodexAppServer(
 			ExcludeTurns:   true,
 			Cwd:            cwd,
 			Model:          split.Model,
+			ServiceTier:    split.ServiceTier,
 			ApprovalPolicy: split.ApprovalPolicy,
 			Sandbox:        split.Sandbox,
 		})
@@ -1355,6 +1360,9 @@ func (d *Daemon) prepareCodexAppServer(
 		bridge.subscribed = true
 		bridge.initFastMode = initFastMode
 		bridge.fastMode = initFastMode
+		if split.ServiceTier != "" {
+			bridge.serviceTierOverride = split.ServiceTier
+		}
 		if !initUsage.IsZero() {
 			bridge.initUsage = initUsage
 		}
@@ -1379,6 +1387,9 @@ func (d *Daemon) prepareCodexAppServer(
 		bridge.mu.Lock()
 		bridge.initFastMode = initFastMode
 		bridge.fastMode = initFastMode
+		if split.ServiceTier != "" {
+			bridge.serviceTierOverride = split.ServiceTier
+		}
 		if !initUsage.IsZero() {
 			bridge.initUsage = initUsage
 		}
