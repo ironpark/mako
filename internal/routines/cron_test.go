@@ -203,3 +203,45 @@ func TestFindRefusesAnAmbiguousName(t *testing.T) {
 		t.Fatalf("Find by ID = %d, %v", i, ok)
 	}
 }
+
+func TestSeenIsBoundedAndKeepsTheHighest(t *testing.T) {
+	var s Seen
+	for id := int64(1); id <= maxSeenRuns+10; id++ {
+		s.Add(id)
+	}
+	if len(s.IDs) != maxSeenRuns || s.Floor != 10 {
+		t.Fatalf("%d IDs, floor %d; want %d and 10", len(s.IDs), s.Floor, maxSeenRuns)
+	}
+	for _, id := range []int64{1, 10, 11, maxSeenRuns + 10} {
+		if !s.Has(id) {
+			t.Errorf("%d is not seen", id)
+		}
+	}
+	if s.Has(maxSeenRuns + 11) {
+		t.Error("an ID never added is seen")
+	}
+	// Out of order, as runs that fail late come.
+	s.Add(5)
+	if len(s.IDs) != maxSeenRuns || s.Floor != 10 {
+		t.Fatal("an ID below the floor was kept")
+	}
+}
+
+func TestTriggerStateSurvivesASaveAndStartsAfreshForAnotherSource(t *testing.T) {
+	dir := t.TempDir()
+	st := TriggerState{Source: "forge_pr_opened /p", LastCronMinute: 7, Baselined: true, PRWatermark: 42, LastForgeRun: 100}
+	st.FailedRuns.Add(9)
+	if err := SaveState(dir, map[string]TriggerState{"rtn-a": st}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadState(dir)
+	if err != nil || got["rtn-a"].PRWatermark != 42 || !got["rtn-a"].FailedRuns.Has(9) || !got["rtn-a"].Baselined {
+		t.Fatalf("state = %+v, %v", got, err)
+	}
+	if same := got["rtn-a"].For("forge_pr_opened /p"); same.PRWatermark != 42 {
+		t.Fatal("the same source lost its cursors")
+	}
+	if other := got["rtn-a"].For("forge_pr_opened /q"); other.Baselined || other.PRWatermark != 0 || other.LastCronMinute != 7 {
+		t.Fatalf("another source = %+v; want its cursors afresh and the cron minute kept", other)
+	}
+}

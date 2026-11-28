@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -42,10 +43,9 @@ type routineRunner struct {
 	cronEvery, forgeEvery time.Duration
 	forgeList             func(context.Context, *protocol.ForgeList) (*protocol.ForgeItems, error)
 
-	lastFired map[string]int64 // routine ID: the unix minute it last ran by its schedule; the cron ticks'
-	// What each Forge routine's polls have seen, by routine ID; the poll's
-	// alone, which never runs twice at once.
-	seenPRs, seenFailed map[string]map[int64]bool
+	// state is the routines' trigger states, by routine ID, as
+	// routines-state.json keeps them; nil until first read. Guarded by mu.
+	state map[string]routines.TriggerState
 }
 
 func (rr *routineRunner) list(ctx context.Context, req *protocol.ForgeList) (*protocol.ForgeItems, error) {
@@ -156,98 +156,175 @@ func (d *Daemon) tickCronRoutines(ctx context.Context, now time.Time) {
 		d.log.Warn("routines: load failed", "err", err)
 		return
 	}
-	rr := &d.routines
-	if rr.lastFired == nil {
-		rr.lastFired = map[string]int64{}
-	}
+	d.forgetRemovedRoutines(list)
 	minKey := now.Unix() / 60
 	for _, r := range list {
 		if !r.Enabled || r.Trigger != routines.TriggerCron {
 			continue
 		}
-		if rr.lastFired[r.ID] == minKey {
-			continue
-		}
 		sched, err := routines.ParseSchedule(r.Schedule)
-		if err != nil {
+		if err != nil || !sched.Matches(now) {
 			continue
 		}
-		if !sched.Matches(now) {
-			continue
+		// Once a minute, however many ticks, or restarts, fall in it.
+		due := false
+		d.changeRoutineState(func(st map[string]routines.TriggerState) bool {
+			s := st[r.ID]
+			if s.LastCronMinute == minKey {
+				return false
+			}
+			s.LastCronMinute, due = minKey, true
+			st[r.ID] = s
+			return true
+		})
+		if due {
+			d.routines.start(func() { _, _ = d.executeRoutine(ctx, r, "cron:"+r.Schedule, "") })
 		}
-		rr.lastFired[r.ID] = minKey
-		rr.start(func() { _, _ = d.executeRoutine(ctx, r, "cron:"+r.Schedule, "") })
 	}
 }
 
+// routinePollMax is how many of the latest pull requests or runs a poll
+// reads.
+const routinePollMax = 20
+
 func (d *Daemon) tickForgeRoutines(ctx context.Context, list []routines.Routine) {
-	rr := &d.routines
-	if rr.seenPRs == nil {
-		rr.seenPRs, rr.seenFailed = map[string]map[int64]bool{}, map[string]map[int64]bool{}
-	}
-	seenPRs, seenFailed := rr.seenPRs, rr.seenFailed
 	for _, r := range list {
-		if !r.Enabled || r.Project == "" {
+		if !r.Enabled {
+			// Enabled again, it runs for what comes after, not for what
+			// came while it was off.
+			d.changeRoutineState(func(st map[string]routines.TriggerState) bool {
+				s, ok := st[r.ID]
+				if !ok || s.Source == "" {
+					return false
+				}
+				st[r.ID] = s.For("")
+				return true
+			})
 			continue
 		}
+		var req *protocol.ForgeList
 		switch r.Trigger {
 		case routines.TriggerForgePR:
-			pollCtx, cancel := context.WithTimeout(ctx, routineForgeTimeout)
-			items, err := rr.list(pollCtx, &protocol.ForgeList{Root: r.Project, Kind: protocol.ForgePR, State: "open", Max: 20})
-			cancel()
-			if err != nil {
-				continue
-			}
-			known, initialized := seenPRs[r.ID]
-			if !initialized {
-				known = map[int64]bool{}
-				for _, it := range items.GetItems() {
-					known[it.GetNumber()] = true
-				}
-				seenPRs[r.ID] = known
-				continue
-			}
-			for _, it := range items.GetItems() {
-				num := it.GetNumber()
-				if known[num] {
-					continue
-				}
-				known[num] = true
-				extra := fmt.Sprintf("Triggered by newly opened PR #%d: %s (%s)", num, it.GetTitle(), it.GetUrl())
-				rr.start(func() { _, _ = d.executeRoutine(ctx, r, fmt.Sprintf("pr:#%d", num), extra) })
-			}
+			// All of them, the newest opened first, so a pull request opened
+			// and merged between two polls still moves the watermark on.
+			req = &protocol.ForgeList{Root: r.Project, Kind: protocol.ForgePR, State: "all", Order: protocol.ForgeOrderCreated, Max: routinePollMax}
 		case routines.TriggerForgeCIFail:
-			pollCtx, cancel := context.WithTimeout(ctx, routineForgeTimeout)
-			items, err := rr.list(pollCtx, &protocol.ForgeList{Root: r.Project, Kind: protocol.ForgeRuns, Max: 20})
-			cancel()
-			if err != nil {
-				continue
+			req = &protocol.ForgeList{Root: r.Project, Kind: protocol.ForgeRuns, Max: routinePollMax}
+		default:
+			continue
+		}
+		pollCtx, cancel := context.WithTimeout(ctx, routineForgeTimeout)
+		items, err := d.routines.list(pollCtx, req)
+		cancel()
+		if err != nil {
+			d.log.Debug("routines: forge poll failed", "routine", r.Name, "err", err)
+			continue
+		}
+		var fresh []*protocol.ForgeItem
+		d.changeRoutineState(func(st map[string]routines.TriggerState) bool {
+			s := st[r.ID].For(routineSource(r))
+			if r.Trigger == routines.TriggerForgePR {
+				fresh = newPullRequests(&s, items.GetItems())
+			} else {
+				fresh = newFailedRuns(&s, items.GetItems())
 			}
-			known, initialized := seenFailed[r.ID]
-			if !initialized {
-				known = map[int64]bool{}
-				for _, it := range items.GetItems() {
-					if strings.EqualFold(it.GetChecks(), "failure") {
-						known[it.GetNumber()] = true
-					}
-				}
-				seenFailed[r.ID] = known
-				continue
-			}
-			for _, it := range items.GetItems() {
-				if !strings.EqualFold(it.GetChecks(), "failure") {
-					continue
-				}
-				num := it.GetNumber()
-				if known[num] {
-					continue
-				}
-				known[num] = true
+			st[r.ID] = s
+			return true
+		})
+		for _, it := range fresh {
+			num := it.GetNumber()
+			if r.Trigger == routines.TriggerForgePR {
+				extra := fmt.Sprintf("Triggered by newly opened PR #%d: %s (%s)", num, it.GetTitle(), it.GetUrl())
+				d.routines.start(func() { _, _ = d.executeRoutine(ctx, r, fmt.Sprintf("pr:#%d", num), extra) })
+			} else {
 				extra := fmt.Sprintf("Triggered by failed CI run #%d: %s (%s)", num, it.GetTitle(), it.GetUrl())
-				rr.start(func() { _, _ = d.executeRoutine(ctx, r, fmt.Sprintf("ci:#%d", num), extra) })
+				d.routines.start(func() { _, _ = d.executeRoutine(ctx, r, fmt.Sprintf("ci:#%d", num), extra) })
 			}
 		}
 	}
+}
+
+// routineSource is what a routine's Forge cursors are of: its trigger and
+// its project.
+func routineSource(r routines.Routine) string { return string(r.Trigger) + " " + r.Project }
+
+// newPullRequests are the open pull requests of items numbered above st's
+// watermark, oldest first, and moves the watermark past every number in
+// items. Numbers only grow, so a pull request that is only active again,
+// commented on or pushed to, is not new. The first poll of a source sets
+// the watermark alone.
+func newPullRequests(st *routines.TriggerState, items []*protocol.ForgeItem) []*protocol.ForgeItem {
+	var fresh []*protocol.ForgeItem
+	top := st.PRWatermark
+	for _, it := range items {
+		n := it.GetNumber()
+		if st.Baselined && n > st.PRWatermark && strings.EqualFold(it.GetState(), "OPEN") {
+			fresh = append(fresh, it)
+		}
+		top = max(top, n)
+	}
+	st.PRWatermark, st.Baselined = top, true
+	slices.SortFunc(fresh, func(a, b *protocol.ForgeItem) int { return cmp.Compare(a.GetNumber(), b.GetNumber()) })
+	return fresh
+}
+
+// newFailedRuns are the failed runs of items st has not seen, oldest
+// first, which it now has. A run failed by any conclusion protocol.Failed
+// names counts: timed out, cancelled, a startup failure and the like. The
+// first poll of a source sees the runs failed already, and runs nothing.
+func newFailedRuns(st *routines.TriggerState, items []*protocol.ForgeItem) []*protocol.ForgeItem {
+	var fresh []*protocol.ForgeItem
+	for _, it := range items {
+		n := it.GetNumber()
+		if !protocol.Failed(it.GetChecks()) || st.FailedRuns.Has(n) {
+			continue
+		}
+		st.FailedRuns.Add(n)
+		if st.Baselined {
+			fresh = append(fresh, it)
+		}
+	}
+	st.Baselined = true
+	slices.SortFunc(fresh, func(a, b *protocol.ForgeItem) int { return cmp.Compare(a.GetNumber(), b.GetNumber()) })
+	return fresh
+}
+
+// changeRoutineState lets change read and change the routines' trigger
+// states, under the runner's lock, and saves them when it reports a
+// change. They are read from routines-state.json once; one that cannot be
+// read is started afresh, which runs nothing until the polls after next.
+func (d *Daemon) changeRoutineState(change func(map[string]routines.TriggerState) bool) {
+	rr := &d.routines
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	if rr.state == nil {
+		st, err := routines.LoadState(d.dir)
+		if err != nil {
+			d.log.Warn("routines: trigger state unreadable, starting it afresh", "err", err)
+			st = map[string]routines.TriggerState{}
+		}
+		rr.state = st
+	}
+	if change(rr.state) {
+		if err := routines.SaveState(d.dir, rr.state); err != nil {
+			d.log.Warn("routines: trigger state not saved", "err", err)
+		}
+	}
+}
+
+// forgetRemovedRoutines drops the trigger states of routines list no
+// longer has.
+func (d *Daemon) forgetRemovedRoutines(list []routines.Routine) {
+	d.changeRoutineState(func(st map[string]routines.TriggerState) bool {
+		changed := false
+		for id := range st {
+			if !slices.ContainsFunc(list, func(r routines.Routine) bool { return r.ID == id }) {
+				delete(st, id)
+				changed = true
+			}
+		}
+		return changed
+	})
 }
 
 // executeRoutine starts an agent session for routine r and records the run:
