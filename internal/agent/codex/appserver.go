@@ -1278,14 +1278,22 @@ func RewindThread(ctx context.Context, client *AppServerClient, opts RewindThrea
 
 // RewindThreadStdio runs a short-lived `codex app-server --stdio` subprocess to
 // rewind a thread when no live per-session app-server bridge is attached.
-func RewindThreadStdio(ctx context.Context, program string, env map[string]string, opts RewindThreadOptions) (RewindThreadResult, error) {
+// wrap, when not nil, gives the command that runs it, in a sandbox say.
+func RewindThreadStdio(ctx context.Context, program string, env map[string]string, opts RewindThreadOptions, wrap func([]string) ([]string, error)) (RewindThreadResult, error) {
 	if opts.UserTurnIndex == 0 {
 		return RewindThreadResult{ZeroTurns: true}, nil
 	}
 	if program == "" {
 		return RewindThreadResult{}, errors.New("codex rewind: empty program")
 	}
-	cmd := exec.CommandContext(ctx, program, "app-server", "--stdio")
+	argv := []string{program, "app-server", "--stdio"}
+	if wrap != nil {
+		var err error
+		if argv, err = wrap(argv); err != nil {
+			return RewindThreadResult{}, err
+		}
+	}
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Env = mergeProcessEnv(os.Environ(), env)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

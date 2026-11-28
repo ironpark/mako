@@ -15,11 +15,13 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/agent/codex"
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
 	"github.com/ironpark/mako/internal/gitstat"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/sandbox"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/skills"
 	"github.com/ironpark/mako/internal/transcript"
@@ -38,6 +40,11 @@ type savedSession struct {
 	ParentID       string
 	ParentNodeID   string
 	PluginID       string
+	// Sandbox is the sandbox the session ran in, which it runs in again
+	// whatever its agent's configuration says now: its agent's settings
+	// and conversations are in its sandbox home, and those of what it
+	// starts are in its sandbox too.
+	Sandbox string
 }
 
 // savedJSON is a savedSession as sessions.json has it. The messages are in
@@ -50,6 +57,7 @@ type savedJSON struct {
 	ParentID       string          `json:"parent_session,omitempty"`
 	ParentNodeID   string          `json:"parent_node,omitempty"`
 	PluginID       string          `json:"plugin_id,omitempty"`
+	Sandbox        string          `json:"sandbox,omitempty"`
 }
 
 var (
@@ -66,7 +74,7 @@ func (e savedSession) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return json.Marshal(savedJSON{Info: info, Request: req, TranscriptPath: e.TranscriptPath, ParentID: e.ParentID, ParentNodeID: e.ParentNodeID, PluginID: e.PluginID})
+	return json.Marshal(savedJSON{Info: info, Request: req, TranscriptPath: e.TranscriptPath, ParentID: e.ParentID, ParentNodeID: e.ParentNodeID, PluginID: e.PluginID, Sandbox: e.Sandbox})
 }
 
 func (e *savedSession) UnmarshalJSON(data []byte) error {
@@ -78,6 +86,7 @@ func (e *savedSession) UnmarshalJSON(data []byte) error {
 	e.ParentID = raw.ParentID
 	e.ParentNodeID = raw.ParentNodeID
 	e.PluginID = raw.PluginID
+	e.Sandbox = raw.Sandbox
 	if len(raw.Info) > 0 {
 		if err := savedUnmarshal.Unmarshal(raw.Info, e.Info); err != nil {
 			return fmt.Errorf("info: %w", err)
@@ -396,10 +405,22 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	if err != nil {
 		return nil, err
 	}
-	if d.isolateHome() {
-		if err := agentspec.ApplyIsolatedHome(req.GetAgent(), &launch); err != nil {
-			return nil, err
+	// A session that ran in the sandbox, or that one in it starts, runs
+	// in it whatever its agent's configuration says.
+	d.sessionMu.Lock()
+	prior := d.saved[id]
+	if prior.Sandbox != "" || d.sandboxedLocked(cmp.Or(prior.ParentID, parent)) {
+		launch.Sandbox = agentspec.SandboxWorkspace
+	}
+	d.sessionMu.Unlock()
+	if launch.Sandbox != "" {
+		if err := sandbox.Supported(); err != nil {
+			return nil, fmt.Errorf("agent %q runs in the workspace sandbox: %w", agentspec.Target(req.GetAgent(), req.GetProfile()), err)
 		}
+	}
+	sandboxHome, err := d.withSandboxHome(req.GetAgent(), &launch)
+	if err != nil {
+		return nil, err
 	}
 	if req.GetProject() == "" {
 		req.Project, err = os.UserHomeDir()
@@ -507,15 +528,41 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		d.log.Warn("failed to sync mako built-in skills", "agent", req.GetAgent(), "err", err)
 	}
 	d.trustLaunchDirs(req.GetAgent(), req.GetProject(), extraDirs, &launch.Launch)
+	var box *sandbox.Spec
+	if launch.Sandbox != "" {
+		spec, removeTemp, err := d.newSandbox(id, req.GetAgent(), sandboxRoots(req.GetProject(), extraDirs), sandboxHome, &launch.Launch)
+		if err != nil {
+			cleanup()
+			return nil, err
+		}
+		box = spec
+		prevCleanup := cleanup
+		cleanup = func() {
+			prevCleanup()
+			removeTemp()
+		}
+		if req.GetAgent() == "codex" && len(launch.Command) > 0 && isNative("codex", launch.Command[0]) {
+			launch.Command = codex.WithoutOwnSandboxTUI(launch.Command)
+			d.withCodexSocket(box, id)
+		}
+	}
 	var codexBridge *codexBridge
 	if req.GetAgent() == "codex" {
 		var stopCodex func()
-		codexBridge, stopCodex = d.prepareCodexAppServer(ctx, id, req.GetProject(), &launch, &conversationID, &transcriptPath)
+		codexBridge, stopCodex = d.prepareCodexAppServer(ctx, id, req.GetProject(), &launch, box, &conversationID, &transcriptPath)
 		prevCleanup := cleanup
 		cleanup = func() {
 			stopCodex()
 			prevCleanup()
 		}
+	}
+	if box != nil {
+		wrapped, err := sandbox.Command(*box, launch.Command)
+		if err != nil {
+			cleanup()
+			return nil, err
+		}
+		launch.Command = wrapped
 	}
 
 	d.sessionMu.Lock()
@@ -548,7 +595,7 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 	info := s.Info()
 	// Commands can embed ephemeral MCP config and secrets; only persist inputs.
 	info.Command = nil
-	d.saved[id] = savedSession{Info: info, Request: req, TranscriptPath: transcriptPath, ParentID: parent, ParentNodeID: parentNode, PluginID: pluginID}
+	d.saved[id] = savedSession{Info: info, Request: req, TranscriptPath: transcriptPath, ParentID: parent, ParentNodeID: parentNode, PluginID: pluginID, Sandbox: launch.Sandbox}
 	if err := d.saveSessionsLocked(); err != nil {
 		if existed {
 			d.saved[id] = previous

@@ -16,6 +16,7 @@ import (
 	"github.com/ironpark/mako/internal/agents"
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/protocol"
+	"github.com/ironpark/mako/internal/sandbox"
 	"github.com/ironpark/mako/internal/session"
 	"github.com/ironpark/mako/internal/transcript"
 	"github.com/ironpark/mako/internal/transport"
@@ -126,7 +127,9 @@ func (d *Daemon) rewindSession(ctx context.Context, req *protocol.RewindSession)
 		return d.withHead(s.Info()), nil
 	}
 
-	s, err := d.openForkedSession(ctx, nextReq, forkedName, forkedID, forkedPath)
+	// The forked conversation is in the sandbox home of a sandboxed
+	// session, where only a session in the sandbox finds it.
+	s, err := d.openForkedSession(ctx, nextReq, forkedName, forkedID, forkedPath, saved.Sandbox)
 	if err != nil {
 		return nil, err
 	}
@@ -179,16 +182,35 @@ func (d *Daemon) rewindCodexSession(
 	if err != nil {
 		return "", "", false, fmt.Errorf("codex rewind: resolve launch: %w", err)
 	}
-	if d.isolateHome() {
-		if err := agentspec.ApplyIsolatedHome("codex", &launch); err != nil {
-			return "", "", false, fmt.Errorf("codex rewind: isolated home: %w", err)
-		}
+	d.sessionMu.Lock()
+	if d.sandboxedLocked(sessionID) {
+		launch.Sandbox = agentspec.SandboxWorkspace
+	}
+	d.sessionMu.Unlock()
+	sandboxHome, err := d.withSandboxHome("codex", &launch)
+	if err != nil {
+		return "", "", false, fmt.Errorf("codex rewind: agent home: %w", err)
 	}
 	if len(launch.Command) == 0 {
 		return "", "", false, errors.New("codex rewind: missing codex command")
 	}
 	if _, native := agents.Native("codex", launch.Command[0]); !native {
 		return "", "", false, errors.New("codex rewind: requires native codex CLI")
+	}
+	// The app-server a rewind starts reads the session's Codex
+	// configuration, which a sandboxed session wrote: it runs in the
+	// sandbox too.
+	var wrap func([]string) ([]string, error)
+	if launch.Sandbox != "" {
+		box, removeTemp, err := d.newSandbox("rewind-"+newSessionID(), "codex", sandboxRoots(info.GetProject(), d.projectDirs(info.GetProject())), sandboxHome, &launch.Launch)
+		if err != nil {
+			return "", "", false, fmt.Errorf("codex rewind: %w", err)
+		}
+		defer removeTemp()
+		launch.Command = codex.WithoutOwnSandbox(launch.Command)
+		wrap = func(argv []string) ([]string, error) {
+			return sandbox.Command(*box, codex.WithoutOwnSandbox(argv))
+		}
 	}
 	split := codex.SplitRemoteLaunch(launch.Command)
 
@@ -215,7 +237,7 @@ func (d *Daemon) rewindCodexSession(
 		opts.ServerUserAgent = b.userAgent()
 		res, err = codex.RewindThread(ctx, client, opts)
 	} else {
-		res, err = codex.RewindThreadStdio(ctx, split.Program, launch.Env, opts)
+		res, err = codex.RewindThreadStdio(ctx, split.Program, launch.Env, opts, wrap)
 	}
 	if err != nil {
 		return "", "", false, err
@@ -228,7 +250,7 @@ func (d *Daemon) rewindCodexSession(
 func (d *Daemon) openForkedSession(
 	ctx context.Context,
 	req *protocol.OpenSession,
-	name, conversationID, transcriptPath string,
+	name, conversationID, transcriptPath, sandboxOf string,
 ) (*session.Session, error) {
 	if conversationID == "" {
 		return nil, errors.New("rewind: forked conversation ID is empty")
@@ -249,6 +271,7 @@ func (d *Daemon) openForkedSession(
 		},
 		Request:        proto.CloneOf(req),
 		TranscriptPath: transcriptPath,
+		Sandbox:        sandboxOf,
 	}
 
 	d.sessionMu.Lock()

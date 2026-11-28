@@ -368,6 +368,12 @@ func (d *Daemon) serveAgentCLI(ctx context.Context, conn net.Conn) {
 			writeResp(agentCLIResponse{Error: err.Error()})
 			return
 		}
+		// Adding a project clones it wherever the caller says, which
+		// for a session in the sandbox would be outside it.
+		if d.sandboxed(peer.id) {
+			writeResp(agentCLIResponse{Error: "a sandboxed session cannot add projects"})
+			return
+		}
 		res, err := d.addProjectFromCLI(reqCtx, s.Info().GetProject(), req.Target, req.Name, req.BaseDir, req.Folder, req.Space)
 		if err != nil {
 			writeResp(agentCLIResponse{Error: err.Error()})

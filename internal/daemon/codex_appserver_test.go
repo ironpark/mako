@@ -684,7 +684,7 @@ func TestCodexLiveAppServerSmoke(t *testing.T) {
 		},
 	}
 	var convID, transcriptPath string
-	b, stop := d.prepareCodexAppServer(t.Context(), "smoke-1", projDir, &launch, &convID, &transcriptPath)
+	b, stop := d.prepareCodexAppServer(t.Context(), "smoke-1", projDir, &launch, nil, &convID, &transcriptPath)
 	if b == nil {
 		t.Fatal("prepareCodexAppServer returned nil bridge (unexpected fallback)")
 	}

@@ -302,6 +302,9 @@ func (d *Daemon) spawnProjectAgent(ctx context.Context, peer *agentPeer, in spaw
 			return agentSummary{}, err
 		}
 		if !pn.Local {
+			if d.sandboxed(peer.id) {
+				return agentSummary{}, errSandboxRemote
+			}
 			return d.spawnRemoteProjectAgent(ctx, peer, caller, scope, pn, rawNode, in)
 		}
 	}

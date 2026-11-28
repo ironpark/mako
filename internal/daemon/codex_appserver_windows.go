@@ -33,6 +33,10 @@ type codexAppServerTransport struct {
 	extraTUIEnv     map[string]string
 }
 
+// codexSocketPath is where session sessionID's codex app-server listens:
+// nowhere on Windows, where it listens on loopback.
+func codexSocketPath(_, _ string) string { return "" }
+
 func newCodexAppServerTransport(runDir, sessionID string) (*codexAppServerTransport, error) {
 	if err := os.MkdirAll(runDir, 0o700); err != nil {
 		return nil, err

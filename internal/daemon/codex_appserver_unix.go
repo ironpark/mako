@@ -29,6 +29,18 @@ func newCodexAppServerTransport(runDir, sessionID string) (*codexAppServerTransp
 	if err := os.MkdirAll(runDir, 0o700); err != nil {
 		return nil, err
 	}
+	sockPath := codexSocketPath(runDir, sessionID)
+	_ = os.Remove(sockPath)
+	uri := "unix://" + sockPath
+	return &codexAppServerTransport{
+		sockPath:  sockPath,
+		listenArg: uri,
+		remoteArg: uri,
+	}, nil
+}
+
+// codexSocketPath is where session sessionID's codex app-server listens.
+func codexSocketPath(runDir, sessionID string) string {
 	sockPath := filepath.Join(runDir, "codex-"+sessionID+".sock")
 	// Unix domain socket paths are limited to 104 bytes on macOS and 108 on Linux.
 	if len(sockPath) > 96 {
@@ -37,13 +49,7 @@ func newCodexAppServerTransport(runDir, sessionID string) (*codexAppServerTransp
 	if len(sockPath) > 96 {
 		sockPath = filepath.Join("/tmp", "mako-codex-"+sessionID+".sock")
 	}
-	_ = os.Remove(sockPath)
-	uri := "unix://" + sockPath
-	return &codexAppServerTransport{
-		sockPath:  sockPath,
-		listenArg: uri,
-		remoteArg: uri,
-	}, nil
+	return sockPath
 }
 
 func (t *codexAppServerTransport) waitReady(ctx context.Context, procDone <-chan struct{}, stderr io.Reader, tail *stderrTail) (*codex.AppServerClient, string, error) {
