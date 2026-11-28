@@ -45,8 +45,12 @@ Projects:
 Routines (self-hosted scheduled & event-triggered agent runs):
   mako routines [list]              list configured routines
   mako routines add -name <name> -project <dir> -agent <target> (-schedule <cron> | -trigger forge_pr_opened|forge_ci_failed) -prompt <text> [-worktree] [-branch-prefix <prefix>]
+                    [-allow-external] [-max-concurrent N] [-max-per-poll N] [-cooldown 10m]
                                      add a scheduled or Forge-triggered routine; the prompt is
-                                     typed into the agent as it is (//template calls are not expanded)
+                                     typed into the agent as it is (//template calls are not expanded).
+                                     Forge triggers run for the repository's own branches and members
+                                     unless -allow-external, and give the event after the prompt as
+                                     untrusted data
   mako routines remove <id|name>    remove a routine
   mako routines enable|disable <id|name>
                                      enable or disable a routine

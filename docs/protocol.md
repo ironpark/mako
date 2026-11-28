@@ -886,7 +886,10 @@ their latest runs in `routines-history.json`, in its configuration
 directory, and changes them one request at a time, so front-ends never
 write those files themselves. A run started from a Forge event is given
 the routine's prompt first and the event after it, fenced as untrusted
-data. Revision 53.
+data. A Forge trigger runs for the repository's own branches and members
+only, unless `allow_external`; `max_concurrent`, `max_per_poll` and
+`cooldown` hold its runs back, and a trigger held back is recorded as a
+run of status `skipped`. Revision 53.
 
 | Request | Payload | Reply | |
 |---|---|---|---|

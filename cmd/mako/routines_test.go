@@ -54,6 +54,8 @@ func TestRoutinesCLIAsksTheDaemon(t *testing.T) {
 		"-schedule", "0 3 * * *",
 		"-worktree",
 		"-prompt", "Run golangci-lint and summarize warnings.",
+		"-max-concurrent", "2",
+		"-cooldown", "30m",
 	}, &buf); err != nil {
 		t.Fatalf("routines add: %v", err)
 	}
@@ -62,7 +64,8 @@ func TestRoutinesCLIAsksTheDaemon(t *testing.T) {
 	}
 	add := f.actions[0]
 	if add.GetOp() != "add" || add.GetNodeId() != "node-b" || add.GetSpec().GetProject() != dir ||
-		add.GetSpec().GetSchedule() != "0 3 * * *" || !add.GetSpec().GetWorktree() || !add.GetSpec().GetEnabled() {
+		add.GetSpec().GetSchedule() != "0 3 * * *" || !add.GetSpec().GetWorktree() || !add.GetSpec().GetEnabled() ||
+		add.GetSpec().GetMaxConcurrent() != 2 || add.GetSpec().GetCooldown() != "30m" || add.GetSpec().GetAllowExternal() {
 		t.Fatalf("add asked %v", add)
 	}
 
@@ -112,6 +115,9 @@ func TestRoutinesAddChecksBeforeAsking(t *testing.T) {
 	err := routinesCmd(t.Context(), f, "", []string{"add", "-name", "x", "-project", t.TempDir(), "-schedule", "@every 90s", "-prompt", "p"}, &buf)
 	if err == nil || len(f.actions) != 0 {
 		t.Fatalf("add of @every 90s = %v, asked %d times", err, len(f.actions))
+	}
+	if err := routinesCmd(t.Context(), f, "", []string{"add", "-name", "x", "-project", t.TempDir(), "-trigger", "forge_pr_opened", "-prompt", "p", "-max-per-poll", "11"}, &buf); err == nil {
+		t.Fatal("add took a per-poll limit over the most")
 	}
 	if err := routinesCmd(t.Context(), f, "", []string{"frobnicate"}, &buf); err == nil {
 		t.Fatal("an unknown subcommand was taken")

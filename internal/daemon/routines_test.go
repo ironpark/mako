@@ -4,7 +4,9 @@ package daemon
 
 import (
 	"log/slog"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/config"
@@ -12,7 +14,9 @@ import (
 	"github.com/ironpark/mako/internal/routines"
 )
 
-func TestDaemonExecuteRoutineRecordsHistory(t *testing.T) {
+// agentDaemon is a daemon whose claude is the fake agent.
+func agentDaemon(t *testing.T) *Daemon {
+	t.Helper()
 	t.Setenv("MAKO_HOME", t.TempDir())
 	command, root := fakeAgent(t, "claude")
 	cfg := &config.Config{
@@ -34,7 +38,11 @@ func TestDaemonExecuteRoutineRecordsHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(d.sessions.closeAll)
+	return d
+}
 
+func TestDaemonExecuteRoutineRecordsHistory(t *testing.T) {
+	d := agentDaemon(t)
 	proj := t.TempDir()
 	r := routines.Routine{
 		ID:       "rtn-test",
@@ -46,7 +54,7 @@ func TestDaemonExecuteRoutineRecordsHistory(t *testing.T) {
 		Agent:    "claude",
 		Prompt:   "Run tests and report",
 	}
-	info, err := d.executeRoutine(t.Context(), r, "cron:0 9 * * *", "")
+	info, err := d.executeRoutine(t.Context(), r, "cron:0 9 * * *", r.Prompt)
 	if err != nil {
 		t.Fatalf("executeRoutine: %v", err)
 	}
@@ -75,5 +83,26 @@ func TestDaemonExecuteRoutineRecordsHistory(t *testing.T) {
 	if ran.GetSession().GetName() != "Routine: Daily checks" || len(ran.GetRuns()) != 2 ||
 		ran.GetRuns()[0].GetTrigger() != "manual" || ran.GetRuns()[0].GetSessionId() != ran.GetSession().GetId() {
 		t.Fatalf("run action replied %v", ran)
+	}
+}
+
+// A routine's session still new, or at work, holds back its next run past
+// its limit of sessions at work at once.
+func TestALiveRoutineSessionHoldsBackTheNext(t *testing.T) {
+	d := agentDaemon(t)
+	r := routines.Routine{ID: "rtn-live", Name: "Live", Enabled: true, Trigger: routines.TriggerCron, Schedule: "* * * * *",
+		Project: t.TempDir(), Agent: "claude", Prompt: "Run the tests."}
+	saveRoutines(t, d, r)
+	if _, err := d.executeRoutine(t.Context(), r, "manual", r.Prompt); err != nil {
+		t.Fatal(err)
+	}
+	d.tickCronRoutines(t.Context(), time.Now())
+	d.routines.runs.Wait()
+	hist, err := routines.LoadHistory(d.dir)
+	if err != nil || len(hist) != 2 {
+		t.Fatalf("history = %+v, %v", hist, err)
+	}
+	if hist[0].Status != routineSkipped || !strings.Contains(hist[0].Error, "at work already") {
+		t.Fatalf("the scheduled run was not held back: %+v", hist[0])
 	}
 }

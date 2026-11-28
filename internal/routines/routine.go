@@ -1,11 +1,13 @@
 package routines
 
 import (
+	"cmp"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -30,6 +32,48 @@ type Routine struct {
 	Worktree     bool        `json:"worktree,omitempty"`
 	BranchPrefix string      `json:"branch_prefix,omitempty"`
 	Prompt       string      `json:"prompt"`
+	// AllowExternal lets a Forge trigger run for a pull request or a CI
+	// run from a fork, or by an author without write access to the
+	// repository. Without it only the repository's own branches and
+	// members run the routine.
+	AllowExternal bool `json:"allow_external,omitempty"`
+	// MaxConcurrent caps the routine's sessions at work at once, its
+	// schedule's and its Forge triggers'; 0 is DefaultMaxConcurrent.
+	MaxConcurrent int `json:"max_concurrent,omitempty"`
+	// MaxPerPoll caps the runs one poll of the forge starts; 0 is
+	// DefaultMaxPerPoll.
+	MaxPerPoll int `json:"max_per_poll,omitempty"`
+	// Cooldown is the least time between two Forge-triggered runs, as
+	// time.ParseDuration reads it: "" is DefaultCooldown, "0" none.
+	Cooldown string `json:"cooldown,omitempty"`
+}
+
+// The limits a routine has when it sets none, and the most it may set.
+const (
+	DefaultMaxConcurrent = 1
+	DefaultMaxPerPoll    = 1
+	DefaultCooldown      = 10 * time.Minute
+	MaxLimit             = 10
+	MaxCooldown          = 24 * time.Hour
+)
+
+// ConcurrencyCap is how many of the routine's sessions may be at work at
+// once.
+func (r Routine) ConcurrencyCap() int { return cmp.Or(r.MaxConcurrent, DefaultMaxConcurrent) }
+
+// PollCap is how many runs one poll of the forge may start.
+func (r Routine) PollCap() int { return cmp.Or(r.MaxPerPoll, DefaultMaxPerPoll) }
+
+// CooldownPeriod is the least time between two Forge-triggered runs.
+func (r Routine) CooldownPeriod() time.Duration {
+	if r.Cooldown == "" {
+		return DefaultCooldown
+	}
+	d, err := time.ParseDuration(r.Cooldown)
+	if err != nil {
+		return DefaultCooldown
+	}
+	return d
 }
 
 // RunRecord captures one execution attempt of a routine.
@@ -39,7 +83,7 @@ type RunRecord struct {
 	RoutineName string `json:"routine_name"`
 	Trigger     string `json:"trigger"`
 	SessionID   string `json:"session_id,omitempty"`
-	Status      string `json:"status"` // "started" or "error"
+	Status      string `json:"status"` // "started", "error", or "skipped" for a trigger its limits held back
 	Error       string `json:"error,omitempty"`
 	StartedAt   int64  `json:"started_at"` // unix seconds
 }
@@ -68,6 +112,18 @@ func (r Routine) Validate() error {
 	if err := ValidBranchPrefix(r.BranchPrefix); err != nil {
 		return err
 	}
+	if r.MaxConcurrent < 0 || r.MaxConcurrent > MaxLimit {
+		return fmt.Errorf("max concurrent sessions must be between 1 and %d", MaxLimit)
+	}
+	if r.MaxPerPoll < 0 || r.MaxPerPoll > MaxLimit {
+		return fmt.Errorf("max runs per poll must be between 1 and %d", MaxLimit)
+	}
+	if r.Cooldown != "" {
+		d, err := time.ParseDuration(r.Cooldown)
+		if err != nil || d < 0 || d > MaxCooldown {
+			return fmt.Errorf("invalid cooldown %q: a duration such as 10m, from 0 to %s", r.Cooldown, MaxCooldown)
+		}
+	}
 	switch r.Trigger {
 	case "", TriggerCron:
 		if _, err := ParseSchedule(r.Schedule); err != nil {
@@ -93,10 +149,21 @@ func (r Routine) Normalized() Routine {
 	r.Schedule = strings.TrimSpace(r.Schedule)
 	r.BranchPrefix = strings.TrimSpace(r.BranchPrefix)
 	r.Prompt = strings.TrimSpace(r.Prompt)
+	r.Cooldown = strings.TrimSpace(r.Cooldown)
 	if r.Trigger == "" {
 		r.Trigger = TriggerCron
 	}
 	return r
+}
+
+// BranchName is a new worktree branch for a run of r at now: its prefix,
+// the time to the second, and a random suffix, so that two runs in the
+// same second never take the same branch.
+func (r Routine) BranchName(now time.Time) string {
+	prefix := cmp.Or(r.BranchPrefix, "routine/"+r.ID)
+	var b [3]byte
+	_, _ = rand.Read(b[:])
+	return prefix + "-" + now.Format("20060102-150405") + "-" + hex.EncodeToString(b[:])
 }
 
 // ValidBranchPrefix checks a routine's worktree branch prefix: "" is the

@@ -114,7 +114,7 @@ func (d *Daemon) actOnRoutine(ctx context.Context, r *protocol.RoutineAction) (*
 		}
 		runCtx, cancel := context.WithTimeout(ctx, routineRunTimeout)
 		defer cancel()
-		if session, err = d.executeRoutine(runCtx, list[i], "manual", ""); err != nil {
+		if session, err = d.executeRoutine(runCtx, list[i], "manual", list[i].Prompt); err != nil {
 			return nil, err
 		}
 	default:
@@ -183,6 +183,7 @@ func routineProto(r routines.Routine) *protocol.Routine {
 	return &protocol.Routine{
 		Id: r.ID, Name: r.Name, Enabled: r.Enabled, Trigger: string(r.Trigger), Schedule: r.Schedule,
 		Project: r.Project, Agent: r.Agent, Worktree: r.Worktree, BranchPrefix: r.BranchPrefix, Prompt: r.Prompt,
+		AllowExternal: r.AllowExternal, MaxConcurrent: uint32(max(r.MaxConcurrent, 0)), MaxPerPoll: uint32(max(r.MaxPerPoll, 0)), Cooldown: r.Cooldown,
 	}
 }
 
@@ -190,6 +191,8 @@ func routineFromProto(p *protocol.Routine) routines.Routine {
 	return routines.Routine{
 		ID: p.GetId(), Name: p.GetName(), Enabled: p.GetEnabled(), Trigger: routines.TriggerKind(p.GetTrigger()),
 		Schedule: p.GetSchedule(), Project: p.GetProject(), Agent: p.GetAgent(), Worktree: p.GetWorktree(),
-		BranchPrefix: p.GetBranchPrefix(), Prompt: p.GetPrompt(),
+		BranchPrefix: p.GetBranchPrefix(), Prompt: p.GetPrompt(), AllowExternal: p.GetAllowExternal(),
+		MaxConcurrent: int(min(p.GetMaxConcurrent(), routines.MaxLimit+1)), MaxPerPoll: int(min(p.GetMaxPerPoll(), routines.MaxLimit+1)),
+		Cooldown: p.GetCooldown(),
 	}
 }

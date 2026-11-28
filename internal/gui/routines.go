@@ -5,6 +5,7 @@ import (
 	"context"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +53,10 @@ func routineSettings(m *model) ggui.Widget {
 	schedule := ggui.State("0 9 * * 1-5")
 	worktree := ggui.State(true)
 	prompt := ggui.State("")
+	allowExternal := ggui.State(false)
+	maxConcurrent := ggui.State(strconv.Itoa(routines.DefaultMaxConcurrent))
+	maxPerPoll := ggui.State(strconv.Itoa(routines.DefaultMaxPerPoll))
+	cooldown := ggui.State("10m")
 
 	targets := ggui.Derived(func() []string {
 		return sessionAgentTargets(nodeTargets(m.Nodes.Get(), m.Conn.Get().Self.GetId(), m.Agents.Get()))
@@ -114,18 +119,24 @@ func routineSettings(m *model) ggui.Widget {
 				proj = abs
 			}
 		}
+		concurrent, _ := strconv.Atoi(ggui.Peek(maxConcurrent))
+		perPoll, _ := strconv.Atoi(ggui.Peek(maxPerPoll))
 		r := routines.Routine{
-			Name:     ggui.Peek(name),
-			Enabled:  true,
-			Trigger:  routines.TriggerKind(ggui.Peek(trigger)),
-			Schedule: ggui.Peek(schedule),
-			Project:  proj,
-			Agent:    ggui.Peek(agentTarget),
-			Worktree: ggui.Peek(worktree),
-			Prompt:   ggui.Peek(prompt),
+			Name:          ggui.Peek(name),
+			Enabled:       true,
+			Trigger:       routines.TriggerKind(ggui.Peek(trigger)),
+			Schedule:      ggui.Peek(schedule),
+			Project:       proj,
+			Agent:         ggui.Peek(agentTarget),
+			Worktree:      ggui.Peek(worktree),
+			Prompt:        ggui.Peek(prompt),
+			MaxConcurrent: concurrent,
 		}.Normalized()
-		if r.Trigger != routines.TriggerCron {
+		if r.Trigger == routines.TriggerCron {
+			r.MaxPerPoll, r.Cooldown, r.AllowExternal = 0, "", false
+		} else {
 			r.Schedule = ""
+			r.MaxPerPoll, r.Cooldown, r.AllowExternal = perPoll, ggui.Peek(cooldown), ggui.Peek(allowExternal)
 		}
 		if err := r.Validate(); err != nil {
 			errText.Set(err.Error())
@@ -134,6 +145,7 @@ func routineSettings(m *model) ggui.Widget {
 		spec := &protocol.Routine{
 			Name: r.Name, Enabled: r.Enabled, Trigger: string(r.Trigger), Schedule: r.Schedule,
 			Project: r.Project, Agent: r.Agent, Worktree: r.Worktree, Prompt: r.Prompt,
+			AllowExternal: r.AllowExternal, MaxConcurrent: uint32(r.MaxConcurrent), MaxPerPoll: uint32(r.MaxPerPoll), Cooldown: r.Cooldown,
 		}
 		act(&protocol.RoutineAction{Op: "add", Spec: spec}, func(_ *protocol.Routines, err error) {
 			if err == nil {
@@ -192,9 +204,22 @@ func routineSettings(m *model) ggui.Widget {
 	// The trigger's fields are built again only when the trigger changes:
 	// the schedule's field is not rebuilt as it is typed in, which would
 	// lose its focus, caret and composition; only its hint reads it.
+	limits := []string{"1", "2", "3", "5", "10"}
 	triggerFields := ggui.Reactive(func() ggui.Widget {
 		if trigger.Get() != string(routines.TriggerCron) {
-			return widget.Box()
+			return widget.Column(
+				widget.Row(
+					widget.Box(ui.Select(maxPerPoll).Options(limits).Format(func(v string) string { return Tf("Runs per poll: %s", v) }).Name(T("Runs per poll"))).Width(200),
+					widget.Box(ui.Select(cooldown).Options([]string{"0", "5m", "10m", "30m", "1h"}).Format(func(v string) string {
+						if v == "0" {
+							return T("No cooldown")
+						}
+						return Tf("Cooldown %s", v)
+					}).Name(T("Cooldown"))).Width(200),
+				).Gap(10).Align(widget.AlignCenter),
+				ui.Switch(allowExternal, T("Also run for pull requests and CI runs from forks or outside contributors")),
+				muted(widget.Text(T("The event's title, branch and author are given to the agent after the prompt, marked as untrusted.")).Size(12)),
+			).Gap(8).Stretch()
 		}
 		hint := ggui.Reactive(func() ggui.Widget {
 			sched, err := routines.ParseSchedule(schedule.Get())
@@ -233,7 +258,11 @@ func routineSettings(m *model) ggui.Widget {
 				}).Name(T("Trigger"))).Width(200),
 				widget.Expanded(triggerFields),
 			).Gap(10).Align(widget.AlignStart),
-			ui.Switch(worktree, T("Run in a new isolated worktree")),
+			widget.Row(
+				widget.Expanded(ui.Switch(worktree, T("Run in a new isolated worktree"))),
+				widget.Box(ui.Select(maxConcurrent).Options(limits).Format(func(v string) string { return Tf("Sessions at work at once: %s", v) }).
+					Name(T("Sessions at work at once"))).Width(240),
+			).Gap(10).Align(widget.AlignCenter),
 			ui.TextField(prompt).Lines(3).Placeholder(T("Prompt to run when triggered")).Name(T("Prompt")),
 			ggui.Reactive(func() ggui.Widget {
 				if e := errText.Get(); e != "" {
@@ -257,7 +286,13 @@ func routineSettings(m *model) ggui.Widget {
 		rows = append(rows, widget.Box(widget.Text(T("Recent runs")).Size(13).Weight(ggui.WeightSemibold)).Pad(10, 16))
 		for _, rec := range list {
 			ts := rec.GetStarted().AsTime().Local().Format("01-02 15:04")
-			statusCol := pick(rec.GetStatus() == "started", skin.DotRunning, skin.DotDown)
+			statusCol := skin.DotDown
+			switch rec.GetStatus() {
+			case "started":
+				statusCol = skin.DotRunning
+			case "skipped":
+				statusCol = skin.DotWaiting
+			}
 			detail := rec.GetTrigger()
 			if rec.GetError() != "" {
 				detail += " · " + rec.GetError()

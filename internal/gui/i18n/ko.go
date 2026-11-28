@@ -2063,4 +2063,13 @@ var catalogKo = map[string]string{
 	"Self-hosted scheduled and Forge-triggered agent runs executed by this node's daemon.": "이 노드의 데몬에서 직접 실행하는 스케줄 및 Forge 이벤트 기반 에이전트 자동화입니다.",
 	"Reading this node's routines…":         "이 노드의 루틴을 읽는 중…",
 	"Could not read the routines' runs: %s": "루틴 실행 기록을 읽을 수 없음: %s",
+	"Runs per poll: %s":                     "폴링당 실행 수: %s",
+	"Runs per poll":                         "폴링당 실행 수",
+	"No cooldown":                           "쿨다운 없음",
+	"Cooldown %s":                           "쿨다운 %s",
+	"Cooldown":                              "쿨다운",
+	"Sessions at work at once: %s":          "동시에 작업하는 세션 수: %s",
+	"Sessions at work at once":              "동시에 작업하는 세션 수",
+	"Also run for pull requests and CI runs from forks or outside contributors":                          "포크나 외부 기여자의 풀 리퀘스트와 CI 실행에도 실행",
+	"The event's title, branch and author are given to the agent after the prompt, marked as untrusted.": "이벤트의 제목, 브랜치, 작성자는 프롬프트 뒤에 신뢰할 수 없는 데이터로 표시되어 에이전트에 전달됩니다.",
 }

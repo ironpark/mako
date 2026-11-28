@@ -128,6 +128,10 @@ func routineSpec(args []string) (*protocol.Routine, error) {
 	worktree := fs.Bool("worktree", false, "run each execution in a new git worktree")
 	branchPrefix := fs.String("branch-prefix", "", "optional worktree branch prefix")
 	disabled := fs.Bool("disabled", false, "create the routine disabled")
+	allowExternal := fs.Bool("allow-external", false, "let Forge triggers run for forks and authors without write access")
+	maxConcurrent := fs.Int("max-concurrent", 0, "its sessions at work at once (default 1)")
+	maxPerPoll := fs.Int("max-per-poll", 0, "runs one Forge poll may start (default 1)")
+	cooldown := fs.String("cooldown", "", "least time between Forge-triggered runs, such as 30m; 0 for none (default 10m)")
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
@@ -144,15 +148,19 @@ func routineSpec(args []string) (*protocol.Routine, error) {
 		return nil, err
 	}
 	r := routines.Routine{
-		Name:         *name,
-		Enabled:      !*disabled,
-		Trigger:      routines.TriggerKind(strings.TrimSpace(*trigger)),
-		Schedule:     *schedule,
-		Project:      abs,
-		Agent:        *agent,
-		Worktree:     *worktree,
-		BranchPrefix: *branchPrefix,
-		Prompt:       *prompt,
+		Name:          *name,
+		Enabled:       !*disabled,
+		Trigger:       routines.TriggerKind(strings.TrimSpace(*trigger)),
+		Schedule:      *schedule,
+		Project:       abs,
+		Agent:         *agent,
+		Worktree:      *worktree,
+		BranchPrefix:  *branchPrefix,
+		Prompt:        *prompt,
+		AllowExternal: *allowExternal,
+		MaxConcurrent: *maxConcurrent,
+		MaxPerPoll:    *maxPerPoll,
+		Cooldown:      *cooldown,
 	}.Normalized()
 	// Checked here too, so a mistake is told before the daemon is asked.
 	if err := r.Validate(); err != nil {
@@ -161,6 +169,7 @@ func routineSpec(args []string) (*protocol.Routine, error) {
 	return &protocol.Routine{
 		Name: r.Name, Enabled: r.Enabled, Trigger: string(r.Trigger), Schedule: r.Schedule, Project: r.Project,
 		Agent: r.Agent, Worktree: r.Worktree, BranchPrefix: r.BranchPrefix, Prompt: r.Prompt,
+		AllowExternal: r.AllowExternal, MaxConcurrent: uint32(r.MaxConcurrent), MaxPerPoll: uint32(r.MaxPerPoll), Cooldown: r.Cooldown,
 	}, nil
 }
 
