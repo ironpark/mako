@@ -2054,5 +2054,9 @@ var catalogKo = map[string]string{
 	"Agents (empty = all)":                       "에이전트 (비워두면 전체)",
 	"Add rule":                                   "규칙 추가",
 	"Policy audit log":                           "정책 감사 로그",
+	"Deny message":                               "거부 메시지",
+	"What the agent is told when this rule denies a call (optional)": "이 규칙이 호출을 거부할 때 에이전트에게 전달할 메시지 (선택)",
+	"Loading policies…": "정책을 불러오는 중…",
+	"Connect to this node's daemon to manage its policies.":     "정책을 관리하려면 이 노드의 데몬에 연결하세요.",
 	"Cross-agent permission rules and the decisions they made.": "모든 에이전트에 공통 적용되는 권한 규칙과 그 규칙이 내린 결정입니다.",
 }
