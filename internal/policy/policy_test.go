@@ -3,7 +3,9 @@ package policy
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -249,5 +251,32 @@ func TestRulesMatchToolsByKindAcrossAgents(t *testing.T) {
 	write := []Rule{{ID: "w", Enabled: true, Action: ActionDeny, Tool: "Write"}}
 	if d := EvaluateRules(write, Call{Agent: "agy", Tool: "edit_file", Kind: protocol.ToolEdit, Input: env}); d.Matched {
 		t.Errorf("Write matched an edit: %+v", d)
+	}
+}
+
+// Verdicts recorded at once, as approval hooks served at once record them,
+// are all kept.
+func TestAppendAuditKeepsConcurrentEntries(t *testing.T) {
+	dir := t.TempDir()
+	const n = 64
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Go(func() {
+			if err := AppendAudit(dir, AuditEntry{Session: strconv.Itoa(i), Action: ActionAllow, RuleID: "r"}); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	list, err := LoadAudit(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, e := range list {
+		seen[e.Session] = true
+	}
+	if len(list) != n || len(seen) != n {
+		t.Fatalf("audit kept %d entries (%d sessions), want %d", len(list), len(seen), n)
 	}
 }

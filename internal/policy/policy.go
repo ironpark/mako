@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -289,6 +290,10 @@ func LoadAudit(configDir string) ([]AuditEntry, error) {
 	return list, nil
 }
 
+// auditMu serializes AppendAudit's read, prepend and write: approval hooks
+// are served at once, and two that wrote over each other would lose one.
+var auditMu sync.Mutex
+
 // AppendAudit records one policy verdict into configDir/policies-audit.json.
 func AppendAudit(configDir string, entry AuditEntry) error {
 	if strings.TrimSpace(configDir) == "" {
@@ -297,6 +302,8 @@ func AppendAudit(configDir string, entry AuditEntry) error {
 	if entry.Time == 0 {
 		entry.Time = time.Now().Unix()
 	}
+	auditMu.Lock()
+	defer auditMu.Unlock()
 	list, _ := LoadAudit(configDir)
 	next := append([]AuditEntry{entry}, list...)
 	if len(next) > maxAuditEntries {
