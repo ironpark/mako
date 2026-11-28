@@ -43,6 +43,10 @@ func TestACopyInASessionReachesItsViewers(t *testing.T) {
 	}
 	t.Setenv("PATH", strings.Join([]string{d.clipTools, native, "/bin", "/usr/bin"}, string(os.PathListSeparator)))
 	t.Setenv("MAKO_SESSION", "copier")
+	// Started as the daemon starts it, with its hook token.
+	if err := d.giveHookToken("copier"); err != nil {
+		t.Fatal(err)
+	}
 	var stderr strings.Builder
 	if code := runClip([]string{filepath.Join(run, "hooks.sock"), filepath.Join(d.clipTools, "pbcopy")}, strings.NewReader("hello, 세계"), os.Stdout, &stderr); code != 0 {
 		t.Fatalf("exit %d: %s", code, stderr.String())

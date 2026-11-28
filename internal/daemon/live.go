@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -798,9 +796,7 @@ func (d *Daemon) serveLive(w http.ResponseWriter, r *http.Request) {
 // liveToken is what session's posts carry: its own, of this daemon's
 // secret, so a process of another session cannot post as it.
 func (d *Daemon) liveToken(session string) string {
-	mac := hmac.New(sha256.New, d.liveSecret)
-	mac.Write([]byte(session))
-	return hex.EncodeToString(mac.Sum(nil))
+	return sessionMAC(d.liveSecret, session)
 }
 
 // withLive has session id's launch of an agent that streams its replies

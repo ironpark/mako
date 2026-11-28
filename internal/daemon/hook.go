@@ -3,13 +3,19 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
@@ -79,14 +85,128 @@ func HookMain() bool {
 // hookLimit bounds what one hook may send.
 const hookLimit = 1 << 20
 
-// hookMessage is what a hook passes on: the session it runs in, when it ran,
-// and the agent's own input to it. Kind is statusArg for a status line's
-// input, and "" for a hook's.
+// hookTokenDir is the folder, beside the hook socket, of the files that
+// give each session its hook token, which the hooks, status lines and
+// clipboard tools its programs run carry to the socket to be taken as its
+// own. A file, only the user's to read, and not the session's environment:
+// a process of the same user reads another's environment on macOS even in
+// a sandbox, but a sandbox can hide the run directory but for the
+// session's own file.
+const hookTokenDir = "hook-tokens"
+
+// hookTokenFile is the file of session's hook token, for the hook socket
+// in the folder run: named for the session, whatever its ID holds.
+func hookTokenFile(run, session string) string {
+	sum := sha256.Sum256([]byte(session))
+	return filepath.Join(run, hookTokenDir, hex.EncodeToString(sum[:16]))
+}
+
+// readHookToken is session's hook token, for the hook socket at socket,
+// as the session's hooks read it; "" for none they can read.
+func readHookToken(socket, session string) string {
+	f, err := os.Open(hookTokenFile(filepath.Dir(socket), session))
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	b, _ := io.ReadAll(io.LimitReader(f, 256))
+	return strings.TrimSpace(string(b))
+}
+
+// hookMessage is what a hook passes on: the session it runs in, its proof
+// that it runs there, when it ran, and the agent's own input to it. Kind
+// is statusArg for a status line's input, and "" for a hook's.
 type hookMessage struct {
 	Session string          `json:"session"`
+	Token   string          `json:"token,omitempty"`
 	Seq     int64           `json:"seq"`
 	Kind    string          `json:"kind,omitempty"`
 	Input   json.RawMessage `json:"input"`
+}
+
+// sessionMAC is session's token under secret: what only a holder of the
+// secret, the daemon, makes, and what differs from session to session.
+func sessionMAC(secret []byte, session string) string {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte(session))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+// hookToken is what session's hook connections carry, given to it in its
+// hookTokenFile: of this daemon's secret, made new each time it starts, so
+// a process that cannot read that file, as a sandboxed one of another
+// session cannot, cannot report for the session.
+func (d *Daemon) hookToken(session string) string {
+	return sessionMAC(d.hookSecret, session)
+}
+
+// giveHookToken writes session's hook token to its file, for the hook
+// socket in d.hookRun, before the session starts. The token stays the same
+// for as long as the daemon runs, so a session started again finds it.
+func (d *Daemon) giveHookToken(session string) error {
+	path := hookTokenFile(d.hookRun, session)
+	f, err := os.CreateTemp(filepath.Dir(path), ".token-*") // only the user's to read
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString(d.hookToken(session))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(f.Name())
+	}
+	return err
+}
+
+// hookProven reports whether msg carries its session's own token.
+func (d *Daemon) hookProven(msg hookMessage) bool {
+	return msg.Session != "" && msg.Token != "" && len(d.hookSecret) > 0 &&
+		hmac.Equal([]byte(msg.Token), []byte(d.hookToken(msg.Session)))
+}
+
+// hookRefusalEvery is how often a refused hook connection is logged at
+// most, so a process that keeps trying does not fill the log.
+const hookRefusalEvery = time.Minute
+
+// hookRefusals logs the hook connections refused, at most once every
+// hookRefusalEvery, with how many went unlogged since the last.
+type hookRefusals struct {
+	mu       sync.Mutex
+	last     time.Time
+	unlogged int
+}
+
+func (r *hookRefusals) note(log *slog.Logger, msg hookMessage) {
+	r.mu.Lock()
+	now := time.Now()
+	if !r.last.IsZero() && now.Sub(r.last) < hookRefusalEvery {
+		r.unlogged++
+		r.mu.Unlock()
+		return
+	}
+	unlogged := r.unlogged
+	r.last, r.unlogged = now, 0
+	r.mu.Unlock()
+	why := "wrong token"
+	if msg.Token == "" {
+		why = "no token"
+	}
+	// What the sender chose goes to the log only in part.
+	log.Warn("hooks: refused a connection without its session's token",
+		"session", clipped(msg.Session), "kind", clipped(msg.Kind), "why", why, "unlogged", unlogged)
+}
+
+// clipped is s, cut short when it is long.
+func clipped(s string) string {
+	const most = 64
+	if len(s) <= most {
+		return s
+	}
+	return strings.ToValidUTF8(s[:most], "") + "..."
 }
 
 // hookReply answers a hook that asks for an approval: allow or deny, or ""
@@ -101,7 +221,8 @@ type hookReply struct {
 
 // runHook is an agent's hook, run by the daemon's own program with the
 // daemon's hook socket as args[0]. It passes the agent's input on for the
-// session in MAKO_SESSION. The agent waits on it, so it gives up quickly,
+// session in MAKO_SESSION, with the token in its hookTokenFile that proves
+// it runs there. The agent waits on it, so it gives up quickly,
 // and it never fails: the daemon falls back to watching the agent's open
 // files. An approval waits for the daemon's answer, which it writes to out
 // as the agent's decision. An agent whose input does not name its event,
@@ -134,7 +255,7 @@ func runHook(args []string, stdin io.Reader, out io.Writer) {
 	if produced, err := strconv.ParseInt(ev.Seq, 10, 64); err == nil && produced > 0 {
 		seq = produced
 	}
-	conn, err := sendHook(args[0], hookMessage{Session: session, Seq: seq, Input: input})
+	conn, err := sendHook(args[0], hookMessage{Session: session, Token: readHookToken(args[0], session), Seq: seq, Input: input})
 	if err != nil {
 		return
 	}
@@ -212,7 +333,7 @@ func runStatusLine(args []string, stdin io.Reader, out io.Writer) {
 		if len(args) != 1 || session == "" || !json.Valid(input) {
 			return
 		}
-		if conn, err := sendHook(args[0], hookMessage{Session: session, Seq: time.Now().UnixNano(), Kind: statusArg, Input: input}); err == nil {
+		if conn, err := sendHook(args[0], hookMessage{Session: session, Token: readHookToken(args[0], session), Seq: time.Now().UnixNano(), Kind: statusArg, Input: input}); err == nil {
 			_ = conn.Close()
 		}
 	}()
@@ -237,7 +358,8 @@ func userStatusLine(agentName string, input []byte) string {
 // listenHooks serves the hook socket in dir until ctx ends, setting
 // hookCommand once it listens; Run calls it before it serves any session.
 // The socket sits in the private run directory, so only this user's
-// processes reach it.
+// processes reach it; of those, serveHook takes a connection only as the
+// session whose token it carries.
 func (d *Daemon) listenHooks(ctx context.Context, dir string) {
 	if d.hookBinary == "" {
 		return
@@ -248,6 +370,16 @@ func (d *Daemon) listenHooks(ctx context.Context, dir string) {
 		return
 	}
 	context.AfterFunc(ctx, func() { _ = ln.Close() })
+	// The tokens a daemon that ran before gave are of its secret, which
+	// is gone: no session can use them.
+	tokens := filepath.Join(dir, hookTokenDir)
+	_ = os.RemoveAll(tokens)
+	if err := os.Mkdir(tokens, 0o700); err != nil {
+		d.log.Warn("hooks: no folder for the sessions' tokens", "err", err)
+		_ = ln.Close()
+		return
+	}
+	d.hookRun = dir
 	d.hookCommand = agentspec.CommandLine([]string{d.hookBinary, hookArg, path})
 	d.statusCommand = agentspec.CommandLine([]string{d.hookBinary, statusArg, path})
 	if d.clipTools, err = writeClipTools(dir, d.hookBinary, path); err != nil {
@@ -285,6 +417,12 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 	var msg hookMessage
 	if err := json.NewDecoder(io.LimitReader(conn, hookLimit+4096)).Decode(&msg); err != nil {
+		return
+	}
+	// Any process of the user's reaches the socket: only one of the
+	// session's own, given its token, speaks for it.
+	if !d.hookProven(msg) {
+		d.hookRefusals.note(d.log, msg)
 		return
 	}
 	s, ok := d.sessions.get(msg.Session)

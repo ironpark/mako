@@ -542,6 +542,14 @@ func (d *Daemon) startSessionWithParent(ctx context.Context, id string, req *pro
 		mode = "subagent"
 	}
 	launch.SetEnv("AGENT_MAKO_SESSION", id)
+	if d.hookCommand != "" {
+		// What the session's hooks, status line and clipboard tools prove
+		// to the hook socket they are its own with; without it they are
+		// refused, and the daemon watches the agent's files alone.
+		if err := d.giveHookToken(id); err != nil {
+			d.log.Warn("hooks: no token for the session", "id", id, "err", err)
+		}
+	}
 	launch.SetEnv("AGENT_MAKO_PROJECT", req.GetProject())
 	launch.SetEnv("AGENT_MAKO_MODE", mode)
 	if nodeID := d.config().NodeID; nodeID != "" {

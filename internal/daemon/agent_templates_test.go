@@ -228,7 +228,7 @@ func TestSaveTemplateSurvivesStatusLineHeartbeats(t *testing.T) {
 			defer close(srvDone)
 			d.serveHook(t.Context(), server)
 		}()
-		if err := json.NewEncoder(client).Encode(hookMessage{Kind: statusArg, Session: s.ID(), Seq: seq, Input: json.RawMessage(payload)}); err != nil {
+		if err := json.NewEncoder(client).Encode(hookMessage{Kind: statusArg, Session: s.ID(), Token: d.hookToken(s.ID()), Seq: seq, Input: json.RawMessage(payload)}); err != nil {
 			t.Fatal(err)
 		}
 		_, _ = io.Copy(io.Discard, client)
