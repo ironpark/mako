@@ -44,4 +44,7 @@ func TestRepoHooksNotice(t *testing.T) {
 	if got := repoHooksNotice(t.Context(), answer(untrusted, nil), "", &protocol.SessionInfo{Project: "/tmp"}); got != "" || len(asked) != n {
 		t.Fatalf("a session outside a repository: %q, asked %d", got, len(asked)-n)
 	}
+	if got := repoHooksNotice(t.Context(), answer(untrusted, nil), "", &protocol.SessionInfo{Agent: "shell", Repo: "/src/app", Project: "/src/app"}); got != "" || len(asked) != n {
+		t.Fatalf("a shell's session, which runs no hooks: %q, asked %d", got, len(asked)-n)
+	}
 }

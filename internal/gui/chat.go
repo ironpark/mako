@@ -999,6 +999,7 @@ func (m *model) rewindSession(id string, info *protocol.SessionInfo, messageID s
 		if newID == "" {
 			return
 		}
+		m.noteRepoHooks(newInfo)
 		if _, exists := m.session(newID); !exists {
 			sessions := slices.Clone(ggui.Peek(m.Sessions))
 			m.Sessions.Set(append(sessions, newInfo))

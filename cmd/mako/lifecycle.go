@@ -5,16 +5,18 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ironpark/mako/internal/agentspec"
 	"github.com/ironpark/mako/internal/lifecycle"
 	"github.com/ironpark/mako/internal/protocol"
 )
 
-// repoHooksNotice says, for a session in a repository whose
+// repoHooksNotice says, for an agent's session in a repository whose
 // .mako/hooks.toml the user does not trust as it reads, that its hooks do
 // not run, and the command that trusts it on the session's node; "" for
-// any other, or when the node cannot say.
+// any other, a shell's that runs no hooks among them, or when the node
+// cannot say.
 func repoHooksNotice(ctx context.Context, ask repoTrustAsker, nodeID string, info *protocol.SessionInfo) string {
-	if info.GetRepo() == "" {
+	if info.GetRepo() == "" || info.GetAgent() == agentspec.ShellName {
 		return ""
 	}
 	file := lifecycle.ProjectFileIn(info.GetRepo())

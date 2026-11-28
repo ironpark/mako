@@ -217,9 +217,11 @@ type model struct {
 	RepoTrust   *ggui.StateValue[repoTrustAsk]
 	AgentsSplit *ggui.StateValue[float64] // the agents panel's agents over its messages
 
-	// repoHooksNoted are the repositories' hooks files told of as not
-	// trusted, by node and file, when; see repohooks.go. UI goroutine only.
-	repoHooksNoted map[string]time.Time
+	// repoHooksNoted are the repositories' hooks files the node answered
+	// for, by node and file, when; repoHooksAsking those it is asked of
+	// now. See repohooks.go. UI goroutine only.
+	repoHooksNoted  map[string]time.Time
+	repoHooksAsking map[string]bool
 
 	SidebarOpen *ggui.StateValue[bool]
 	SidebarPage *ggui.StateValue[string] // "" for Projects/Agents, or "plugin:<id>/<block>" for a sidebar plugin page

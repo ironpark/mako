@@ -82,4 +82,24 @@ func TestUntrustedRepoHooksToastOpensTheTrustDialog(t *testing.T) {
 	if n := m.toaster.Len(); n != answered {
 		t.Fatalf("%d toasts for a repository without hooks, want %d", n, answered)
 	}
+
+	// The node failing to answer, there being no file then, does not begin
+	// the minute: the next session, once the file is there, is told of it.
+	otherFile := filepath.Join(other, ".mako", "hooks.toml")
+	if err := os.MkdirAll(filepath.Dir(otherFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(otherFile, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// A shell's session runs no hooks, and is not asked about.
+	m.noteRepoHooks(&protocol.SessionInfo{Id: "sh", Agent: "shell", Repo: other, Project: other})
+	if len(m.repoHooksAsking) != 0 {
+		t.Fatal("a shell's session was asked about")
+	}
+	m.noteRepoHooks(&protocol.SessionInfo{Id: "s3", Agent: "claude", Repo: other, Project: other})
+	runPosted(t, posted)
+	if n := m.toaster.Len(); n != answered+1 {
+		t.Fatalf("%d toasts once the file is there, want %d", n, answered+1)
+	}
 }
