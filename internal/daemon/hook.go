@@ -371,11 +371,10 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		// files on this turn, enabling file-inclusive rewind later.
 		if proj := s.Info().GetProject(); proj != "" {
 			sid := msg.Session
-			key := fmt.Sprintf("turn-%d", time.Now().UnixMilli())
 			go func() {
 				snapCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 				defer cancel()
-				_, _ = gitstat.CaptureSnapshot(snapCtx, proj, sid, key)
+				_, _ = gitstat.CaptureSnapshot(snapCtx, proj, gitstat.Checkpoint{Kind: gitstat.CheckpointTurn, Session: sid})
 			}()
 		}
 		// Only a prompt of this turn makes the suggestion stale, not a

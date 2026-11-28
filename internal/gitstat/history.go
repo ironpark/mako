@@ -37,7 +37,12 @@ var hashPattern = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
 // gitOut runs git in root and returns what it wrote to stdout; a failure's
 // error carries what it wrote to stderr.
 func gitOut(ctx context.Context, root string, stdin []byte, args ...string) ([]byte, error) {
-	cmd := gitCommand(ctx, root, stdin, args)
+	return outputOf(gitCommand(ctx, root, stdin, args))
+}
+
+// outputOf runs a git command and returns what it wrote to stdout; a
+// failure's error carries what it wrote to stderr.
+func outputOf(cmd *exec.Cmd) ([]byte, error) {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := safeexec.Output(cmd)
@@ -322,9 +327,8 @@ func Run(ctx context.Context, r *protocol.GitRun) (string, error) {
 			return "", errors.New("a discard is of one file")
 		}
 		return "", DiscardHunk(r.GetRoot(), r.GetPaths()[0], r.GetHunk())
-	case protocol.GitOpCheckpoint, protocol.GitOpRestoreCheckpoint, protocol.GitOpListCheckpoints:
-		out, _, err := runCheckpointOp(ctx, r.GetOp(), r.GetRoot(), r.GetCommit(), r.GetMessage())
-		return out, err
+	case protocol.GitOpRestoreCheckpoint, protocol.GitOpListCheckpoints:
+		return runCheckpointOp(ctx, r.GetOp(), r.GetRoot(), r.GetCommit(), strings.TrimSpace(r.GetMessage()))
 	case protocol.GitOpMerge, protocol.GitOpRemoveWT:
 		if r.GetWorktree() == nil {
 			return "", errors.New("no worktree named")
