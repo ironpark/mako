@@ -21,6 +21,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ironpark/mako/internal/homefs"
 	"github.com/ironpark/mako/pkg/fsutil"
 )
 
@@ -431,6 +432,9 @@ func AgentSkillsDirs(agentName string, env map[string]string) []string {
 		}
 		return []string{filepath.Join(home, ".omo", "agent", "skills")}
 	case "opencode":
+		if dir := get("XDG_CONFIG_HOME"); dir != "" {
+			return []string{filepath.Join(dir, "opencode", "skills")}
+		}
 		if home == "" {
 			return nil
 		}
@@ -469,7 +473,7 @@ func SyncFromOverridesDir(overridesDir, skillsRoot string) error {
 		for _, f := range sk.Files {
 			dst := filepath.Join(skillsRoot, sk.Name, filepath.FromSlash(f.Path))
 			desired := ensureManagedContent(f.Content)
-			existing, err := os.ReadFile(dst)
+			existing, err := homefs.ReadFile(dst)
 			if err == nil {
 				if bytes.Equal(existing, desired) {
 					continue
@@ -480,10 +484,10 @@ func SyncFromOverridesDir(overridesDir, skillsRoot string) error {
 			} else if !os.IsNotExist(err) {
 				return fmt.Errorf("read %s: %w", dst, err)
 			}
-			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			if err := homefs.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 				return fmt.Errorf("mkdir %s: %w", filepath.Dir(dst), err)
 			}
-			if err := fsutil.Write(dst, desired); err != nil {
+			if err := homefs.Write(dst, desired); err != nil {
 				return fmt.Errorf("write %s: %w", dst, err)
 			}
 		}
@@ -495,12 +499,12 @@ func SyncFromOverridesDir(overridesDir, skillsRoot string) error {
 			continue
 		}
 		legacyFile := filepath.Join(skillsRoot, legacy, "SKILL.md")
-		existing, err := os.ReadFile(legacyFile)
+		existing, err := homefs.ReadFile(legacyFile)
 		if err != nil || !bytes.Contains(existing, []byte(ManagedMarker)) {
 			continue
 		}
-		if os.Remove(legacyFile) == nil {
-			_ = os.Remove(filepath.Dir(legacyFile))
+		if homefs.Remove(legacyFile) == nil {
+			_ = homefs.Remove(filepath.Dir(legacyFile))
 		}
 	}
 	return nil

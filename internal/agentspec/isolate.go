@@ -10,6 +10,7 @@ import (
 
 	"github.com/ironpark/mako/internal/agent"
 	"github.com/ironpark/mako/internal/agents"
+	"github.com/ironpark/mako/internal/homefs"
 	"github.com/ironpark/mako/internal/skills"
 )
 
@@ -101,12 +102,14 @@ func AgentDataDir(name string, isolate bool) (string, error) {
 // while symlinking all other top-level entries from the real HOME so tools like
 // git, ssh, and cloud CLIs continue to work normally.
 func EnsureAgyIsolatedHome(isolatedDir string) error {
+	// A sandbox home is the agent's to write: what is made in it is made
+	// through homefs, which follows no link of the agent's out of it.
 	for _, sub := range []string{
 		isolatedDir,
 		filepath.Join(isolatedDir, ".gemini", "antigravity-cli"),
 		filepath.Join(isolatedDir, ".gemini", "config"),
 	} {
-		if err := os.MkdirAll(sub, 0o700); err != nil {
+		if err := homefs.MkdirAll(sub, 0o700); err != nil {
 			return err
 		}
 	}
@@ -120,21 +123,24 @@ func EnsureAgyIsolatedHome(isolatedDir string) error {
 	}
 
 	// Clean up dangling symlinks in isolatedDir that pointed into realHome.
-	if existing, err := os.ReadDir(isolatedDir); err == nil {
+	if existing, err := homefs.ReadDir(isolatedDir); err == nil {
 		prefix := realHome + string(filepath.Separator)
 		for _, entry := range existing {
 			if entry.Type()&os.ModeSymlink == 0 {
 				continue
 			}
 			linkPath := filepath.Join(isolatedDir, entry.Name())
-			target, err := os.Readlink(linkPath)
+			target, err := homefs.Readlink(linkPath)
 			if err != nil {
 				continue
 			}
 			cleanTarget := filepath.Clean(target)
 			if strings.HasPrefix(cleanTarget, prefix) || cleanTarget == realHome {
-				if _, err := os.Stat(linkPath); os.IsNotExist(err) {
-					_ = os.Remove(linkPath)
+				// The target, in the real home, is looked at, not the
+				// link, which homefs would not follow out of a sandbox
+				// home.
+				if _, err := os.Stat(cleanTarget); os.IsNotExist(err) {
+					_ = homefs.Remove(linkPath)
 				}
 			}
 		}
@@ -154,10 +160,10 @@ func EnsureAgyIsolatedHome(isolatedDir string) error {
 			continue
 		}
 		dst := filepath.Join(isolatedDir, name)
-		if _, err := os.Lstat(dst); err == nil {
+		if _, err := homefs.Lstat(dst); err == nil {
 			continue
 		}
-		if err := os.Symlink(src, dst); err != nil && !os.IsExist(err) {
+		if err := homefs.Symlink(src, dst); err != nil && !os.IsExist(err) {
 			return err
 		}
 	}
@@ -242,32 +248,50 @@ func IsolatedHomeEnvForAgent(name string, isolate bool, agents map[string]Agent)
 // sessions use: $MAKO_HOME/sandbox when MAKO_HOME is set, otherwise
 // ~/.mako/sandbox.
 func SandboxHomeBase() (string, error) {
-	if custom := os.Getenv("MAKO_HOME"); custom != "" {
-		return filepath.Join(custom, "sandbox"), nil
+	return homefs.SandboxBase()
+}
+
+// SandboxHomeEnv is the environment that points agent name's settings and
+// conversation data at its sandbox home, under SandboxHomeBase, and that
+// home; nil and "" for an agent whose home Mako cannot move. It makes
+// nothing: a reader of a sandboxed session's conversation uses it as it is.
+func SandboxHomeEnv(name string) (map[string]string, string, error) {
+	if !SupportsHomeIsolation(name) {
+		return nil, "", nil
 	}
-	home, err := os.UserHomeDir()
+	base, err := SandboxHomeBase()
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
-	return filepath.Join(home, ".mako", "sandbox"), nil
+	dir := filepath.Join(base, name)
+	if name == "agy" {
+		return map[string]string{"HOME": dir}, dir, nil
+	}
+	entry, _ := agents.Lookup(name)
+	env := map[string]string{entry.Driver.(agent.Logs).Place().RootEnv: dir}
+	if name == "opencode" {
+		// OpenCode keeps its settings, and what it remembers between
+		// sessions, in the XDG folders of its configuration and state as
+		// well as of its data, which outside the sandbox are not
+		// writable and are those of the sessions outside it.
+		env["XDG_CONFIG_HOME"] = filepath.Join(dir, ".config")
+		env["XDG_STATE_HOME"] = filepath.Join(dir, ".local", "state")
+	}
+	return env, dir, nil
 }
 
 // ApplySandboxHome points agent name's settings and conversation data at
-// its sandbox home, under SandboxHomeBase, in place of the user's or the
-// isolated one, and returns that home; "" for an agent whose home Mako
+// its sandbox home (SandboxHomeEnv), in place of the user's or the
+// isolated one, makes it, and returns it; "" for an agent whose home Mako
 // cannot move. Only sandboxed sessions use it, so the settings, hooks and
 // MCP servers an agent writes there never run outside the sandbox. It
 // takes the place of a home the profile's environment names, as that one
 // may be what unsandboxed sessions use.
 func ApplySandboxHome(name string, l *Launch) (string, error) {
-	if !SupportsHomeIsolation(name) {
-		return "", nil
-	}
-	base, err := SandboxHomeBase()
-	if err != nil {
+	env, dir, err := SandboxHomeEnv(name)
+	if err != nil || dir == "" {
 		return "", err
 	}
-	dir := filepath.Join(base, name)
 	if l.Env == nil {
 		l.Env = map[string]string{}
 	}
@@ -275,14 +299,12 @@ func ApplySandboxHome(name string, l *Launch) (string, error) {
 		if err := EnsureAgyIsolatedHome(dir); err != nil {
 			return "", fmt.Errorf("agent %q sandbox home: %w", name, err)
 		}
-		l.Env["HOME"] = dir
-		return dir, nil
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	} else if err := homefs.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("agent %q sandbox home: %w", name, err)
 	}
-	entry, _ := agents.Lookup(name)
-	l.Env[entry.Driver.(agent.Logs).Place().RootEnv] = dir
-	_ = skills.EnsureAgentSkills(name, l.Env)
+	maps.Copy(l.Env, env)
+	if name != "agy" {
+		_ = skills.EnsureAgentSkills(name, l.Env)
+	}
 	return dir, nil
 }

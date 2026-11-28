@@ -11,7 +11,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/ironpark/mako/internal/agent"
-	"github.com/ironpark/mako/pkg/fsutil"
+	"github.com/ironpark/mako/internal/homefs"
 )
 
 var trustMu sync.Mutex
@@ -59,7 +59,7 @@ func writeTrustedProjects(path string, dirs []string) error {
 	trustMu.Lock()
 	defer trustMu.Unlock()
 
-	body, err := os.ReadFile(path)
+	body, err := homefs.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -136,10 +136,10 @@ func writeTrustedProjects(path string, dirs []string) error {
 		out = append(out, bom...)
 	}
 	out = append(out, updated...)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := homefs.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return fsutil.Write(path, out)
+	return homefs.Write(path, out)
 }
 
 // updateExistingProjectTrust updates an existing project entry for dir to

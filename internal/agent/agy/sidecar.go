@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/ironpark/mako/internal/agent"
+	"github.com/ironpark/mako/internal/homefs"
 	"github.com/ironpark/mako/internal/safeexec"
-	"github.com/ironpark/mako/pkg/fsutil"
 )
 
 const deliverTimeout = 10 * time.Second
@@ -109,7 +109,7 @@ func EnsureSidecar(env map[string]string, command string, args []string) error {
 	if err != nil {
 		return err
 	}
-	if existing, err := os.ReadFile(path); err == nil {
+	if existing, err := homefs.ReadFile(path); err == nil {
 		var was bytes.Buffer
 		if json.Compact(&was, bytes.TrimPrefix(existing, []byte("\xef\xbb\xbf"))) == nil && bytes.Equal(was.Bytes(), encoded) {
 			return enableSidecarConfig(filepath.Dir(filepath.Dir(filepath.Dir(path))), "mako-bridge")
@@ -119,10 +119,10 @@ func EnsureSidecar(env map[string]string, command string, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := homefs.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	if err := fsutil.Write(path, append(pretty, '\n')); err != nil {
+	if err := homefs.Write(path, append(pretty, '\n')); err != nil {
 		return err
 	}
 	return enableSidecarConfig(filepath.Dir(filepath.Dir(filepath.Dir(path))), "mako-bridge")
@@ -133,7 +133,7 @@ func EnsureSidecar(env map[string]string, command string, args []string) error {
 func enableSidecarConfig(configDir, sidecarID string) error {
 	path := filepath.Join(configDir, "config.json")
 	doc := map[string]any{}
-	if existing, err := os.ReadFile(path); err == nil {
+	if existing, err := homefs.ReadFile(path); err == nil {
 		trimmed := bytes.TrimSpace(bytes.TrimPrefix(existing, []byte("\xef\xbb\xbf")))
 		if len(trimmed) > 0 {
 			if err := json.Unmarshal(trimmed, &doc); err != nil {
@@ -154,5 +154,5 @@ func enableSidecarConfig(configDir, sidecarID string) error {
 	if err != nil {
 		return err
 	}
-	return fsutil.Write(path, append(pretty, '\n'))
+	return homefs.Write(path, append(pretty, '\n'))
 }
