@@ -14,20 +14,10 @@ import (
 	"github.com/ironpark/mako/internal/policy"
 )
 
-var hookEventLabels = map[string]string{
-	policy.EventSessionStart: "Session start",
-	policy.EventTurnDone:     "Turn finished",
-	policy.EventSessionEnd:   "Session end",
-}
-
 func policySettings(m *model) ggui.Widget {
 	dir, _ := config.Dir()
 	loadRules := func() []policy.Rule {
 		list, _ := policy.LoadRules(dir)
-		return list
-	}
-	loadHooks := func() []policy.Hook {
-		list, _ := policy.LoadHooks(dir)
 		return list
 	}
 	loadAudit := func() []policy.AuditEntry {
@@ -36,10 +26,8 @@ func policySettings(m *model) ggui.Widget {
 	}
 
 	rules := ggui.State(loadRules())
-	hooks := ggui.State(loadHooks())
 	audit := ggui.State(loadAudit())
 	ruleErr := ggui.State("")
-	hookErr := ggui.State("")
 
 	// Rule form state
 	rName := ggui.State("")
@@ -49,11 +37,6 @@ func policySettings(m *model) ggui.Widget {
 	rAgents := ggui.State("")
 	rMessage := ggui.State("")
 
-	// Hook form state
-	hName := ggui.State("")
-	hEvent := ggui.State(policy.EventTurnDone)
-	hCommand := ggui.State("")
-
 	saveRules := func(next []policy.Rule) bool {
 		if err := policy.SaveRules(dir, next); err != nil {
 			ruleErr.Set(err.Error())
@@ -61,16 +44,6 @@ func policySettings(m *model) ggui.Widget {
 		}
 		ruleErr.Set("")
 		rules.Set(loadRules())
-		return true
-	}
-
-	saveHooks := func(next []policy.Hook) bool {
-		if err := policy.SaveHooks(dir, next); err != nil {
-			hookErr.Set(err.Error())
-			return false
-		}
-		hookErr.Set("")
-		hooks.Set(loadHooks())
 		return true
 	}
 
@@ -99,24 +72,6 @@ func policySettings(m *model) ggui.Widget {
 			rName.Set("")
 			rPattern.Set("")
 			rMessage.Set("")
-		}
-	}
-
-	addHook := func() {
-		h := policy.Hook{
-			Name:    ggui.Peek(hName),
-			Enabled: true,
-			Event:   ggui.Peek(hEvent),
-			Command: ggui.Peek(hCommand),
-		}.Normalized()
-		if err := h.Validate(); err != nil {
-			hookErr.Set(err.Error())
-			return
-		}
-		next := append(slices.Clone(ggui.Peek(hooks)), h)
-		if saveHooks(next) {
-			hName.Set("")
-			hCommand.Set("")
 		}
 	}
 
@@ -195,77 +150,6 @@ func policySettings(m *model) ggui.Widget {
 		return card(rows...)
 	})
 
-	hooksSection := ggui.Reactive(func() ggui.Widget {
-		list := hooks.Get()
-		rows := []ggui.Widget{
-			widget.Box(widget.Column(
-				widget.Text(T("Lifecycle hooks")).Size(13.5).Weight(ggui.WeightSemibold),
-				muted(widget.Text(T("Deterministic shell commands run across all agents on session start, turn completion, or session exit.")).Size(12)),
-			).Gap(2).Stretch()).Pad(12, 16),
-		}
-		if len(list) == 0 {
-			rows = append(rows, widget.Box(muted(widget.Text(T("No lifecycle hooks configured yet.")).Size(12.5))).Pad(10, 16))
-		}
-		for i, item := range list {
-			idx := i
-			h := item
-			evLabel := h.Event
-			if l, ok := hookEventLabels[h.Event]; ok {
-				evLabel = T(l)
-			}
-			title := h.Name
-			if title == "" {
-				title = evLabel
-			}
-			rows = append(rows, widget.Box(widget.Row(
-				dot(pick(h.Enabled, skin.DotRunning, skin.ExtraMuted)),
-				widget.Expanded(widget.Column(
-					widget.Text(title+" · "+evLabel).Size(13).Weight(ggui.WeightMedium),
-					muted(widget.Text(h.Command).Size(12).Font(ggui.DefaultMonoFont()).NoWrap().Ellipsis()),
-				).Gap(2).Stretch()),
-				ui.Button(pick(h.Enabled, T("Disable"), T("Enable")), func() {
-					cur := slices.Clone(ggui.Peek(hooks))
-					if idx < len(cur) {
-						cur[idx].Enabled = !cur[idx].Enabled
-						saveHooks(cur)
-					}
-				}).Ghost().Pad(4, 8).Radius(6),
-				iconButton("x", T("Delete hook"), func() {
-					cur := slices.Clone(ggui.Peek(hooks))
-					if idx < len(cur) {
-						saveHooks(slices.Delete(cur, idx, idx+1))
-					}
-				}),
-			).Gap(8).Align(widget.AlignCenter)).Pad(10, 16))
-		}
-		rows = append(rows, widget.Box(widget.Column(
-			widget.Row(
-				widget.Box(ui.Select(hEvent).Options([]string{
-					policy.EventSessionStart,
-					policy.EventTurnDone,
-					policy.EventSessionEnd,
-				}).Format(func(v string) string {
-					if l, ok := hookEventLabels[v]; ok {
-						return T(l)
-					}
-					return v
-				}).Name(T("Event"))).Width(160),
-				widget.Expanded(ui.TextField(hName).Placeholder(T("Hook name (optional)")).Name(T("Hook name"))),
-			).Gap(8).Align(widget.AlignCenter),
-			widget.Row(
-				widget.Expanded(ui.TextField(hCommand).Placeholder(T("Shell command (e.g. gofmt -w .)")).Name(T("Command"))),
-				ui.Button(T("Add hook"), addHook),
-			).Gap(8).Align(widget.AlignCenter),
-			ggui.Reactive(func() ggui.Widget {
-				if e := hookErr.Get(); e != "" {
-					return widget.Text(e).Size(12).Color(skin.DotDown)
-				}
-				return widget.Box()
-			}),
-		).Gap(8).Stretch()).Pad(12, 16))
-		return card(rows...)
-	})
-
 	auditSection := ggui.Reactive(func() ggui.Widget {
 		list := audit.Get()
 		if len(list) == 0 {
@@ -290,6 +174,6 @@ func policySettings(m *model) ggui.Widget {
 		return card(rows...)
 	})
 
-	return page(T("Policies & hooks"), T("Cross-agent permission rules and deterministic lifecycle hooks."),
-		widget.Column(rulesSection, hooksSection, auditSection).Gap(16).Stretch())
+	return page(T("Policies"), T("Cross-agent permission rules and the decisions they made."),
+		widget.Column(rulesSection, auditSection).Gap(16).Stretch())
 }

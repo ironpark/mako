@@ -2019,6 +2019,7 @@ var catalogKo = map[string]string{
 	"Install makod to ~/.mako/bin/makod on the remote host for full chat, hooks, approvals, MCP, and persistent sessions.": "원격 호스트의 ~/.mako/bin/makod에 makod를 설치하면 챗, 훅, 승인, MCP 및 영구 세션을 모두 사용할 수 있습니다.",
 	"Probing remote host…": "원격 호스트를 확인하는 중…",
 	"Installed %s at %s":   "%[2]s에 %[1]s 설치 완료",
+
 	// mako-git plugin settings
 	"Auto-fix pull requests by default":                                                  "풀 리퀘스트 자동 수정 기본으로 켜기",
 	"Turn on Auto-fix automatically for open pull requests you have not configured yet.": "아직 설정하지 않은 열린 풀 리퀘스트에 자동 수정을 자동으로 켭니다.",
@@ -2040,11 +2041,8 @@ var catalogKo = map[string]string{
 	"Send a quick reply…":                                      "빠른 답장 보내기…",
 	"Quick reply":                                              "빠른 답장",
 
-	// Policies & hooks
-	"Policies & hooks": "정책 및 훅",
-	"Session start":    "세션 시작",
-	"Turn finished":    "턴 완료",
-	"Session end":      "세션 종료",
+	// Policies
+	"Policies":         "정책",
 	"Permission rules": "권한 규칙",
 	"Evaluated before approvals are shown across every agent. Deny rules always take precedence over allow rules.": "모든 에이전트의 승인 요청이 표시되기 전에 평가됩니다. 거부 규칙은 항상 허용 규칙보다 우선합니다.",
 	"No permission rules configured yet.": "아직 설정된 권한 규칙이 없습니다.",
@@ -2055,15 +2053,6 @@ var catalogKo = map[string]string{
 	"Rule name":                                  "규칙 이름",
 	"Agents (empty = all)":                       "에이전트 (비워두면 전체)",
 	"Add rule":                                   "규칙 추가",
-	"Lifecycle hooks":                            "라이프사이클 훅",
-	"Deterministic shell commands run across all agents on session start, turn completion, or session exit.": "세션 시작, 턴 완료, 세션 종료 시 모든 에이전트에 공통으로 실행되는 셸 명령입니다.",
-	"No lifecycle hooks configured yet.": "아직 설정된 라이프사이클 훅이 없습니다.",
-	"Delete hook":                        "훅 삭제",
-	"Event":                              "이벤트",
-	"Hook name (optional)":               "훅 이름 (선택)",
-	"Hook name":                          "훅 이름",
-	"Shell command (e.g. gofmt -w .)":    "셸 명령 (예: gofmt -w .)",
-	"Add hook":                           "훅 추가",
-	"Policy audit log":                   "정책 감사 로그",
-	"Cross-agent permission rules and deterministic lifecycle hooks.": "모든 에이전트에 공통 적용되는 권한 규칙과 결정론적 라이프사이클 훅입니다.",
+	"Policy audit log":                           "정책 감사 로그",
+	"Cross-agent permission rules and the decisions they made.": "모든 에이전트에 공통 적용되는 권한 규칙과 그 규칙이 내린 결정입니다.",
 }

@@ -70,7 +70,7 @@ type projectPolicyDoc struct {
 	Rules []Rule `toml:"rule"`
 }
 
-// NewID generates a short random identifier for a rule or hook.
+// NewID generates a short random identifier for a rule.
 func NewID(prefix string) string {
 	var b [5]byte
 	_, _ = rand.Read(b[:])

@@ -1,10 +1,8 @@
 package policy
 
 import (
-	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"github.com/ironpark/mako/internal/protocol"
@@ -66,36 +64,5 @@ pattern = "*.env*"
 	rules := LoadProjectDenyRules(proj)
 	if len(rules) != 1 || rules[0].Action != ActionDeny || rules[0].Name != "Protect .env" {
 		t.Fatalf("expected only deny rule from project policy, got %+v", rules)
-	}
-}
-
-func TestLifecycleHooksExecution(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("shell test is unix-only")
-	}
-	cfgDir := t.TempDir()
-	proj := t.TempDir()
-	marker := filepath.Join(proj, "hook.out")
-	hooks := []Hook{{
-		ID:      "hk-1",
-		Name:    "Record turn",
-		Enabled: true,
-		Event:   EventTurnDone,
-		Command: `printf '%s|%s|%s' "$AGENT_MAKO_SESSION" "$AGENT_MAKO_AGENT" "$AGENT_MAKO_EVENT" > hook.out`,
-	}}
-	if err := SaveHooks(cfgDir, hooks); err != nil {
-		t.Fatal(err)
-	}
-	if err := RunHooks(context.Background(), cfgDir, HookContext{
-		SessionID: "s-42",
-		Agent:     "claude",
-		Project:   proj,
-		Event:     EventTurnDone,
-	}); err != nil {
-		t.Fatalf("RunHooks: %v", err)
-	}
-	data, err := os.ReadFile(marker)
-	if err != nil || string(data) != "s-42|claude|on_turn_done" {
-		t.Fatalf("marker = %q, err=%v", data, err)
 	}
 }

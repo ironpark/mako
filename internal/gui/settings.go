@@ -49,7 +49,7 @@ var settingsNav = []settingsGroup{
 		{"templates", "Templates", "file-text"},
 		{"skills", "Skills", "sparkles"},
 		{"extensions", "Extensions", "layers"},
-		{"policies", "Policies & hooks", "shield"},
+		{"policies", "Policies", "shield"},
 	}},
 	{title: "Node & mesh", sections: []settingsSection{
 		{"daemon", "Daemon", "server"},

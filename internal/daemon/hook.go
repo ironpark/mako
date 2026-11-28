@@ -387,20 +387,6 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 	case agent.Stopped:
 		d.refreshActivity(s)
 		s.ReportStatus(protocol.AgentDone, msg.Seq)
-		if info := s.Info(); info != nil {
-			hctx := policy.HookContext{
-				SessionID: msg.Session,
-				Agent:     info.GetAgent(),
-				Project:   info.GetProject(),
-				Branch:    info.GetBranch(),
-				Event:     policy.EventTurnDone,
-			}
-			go func() {
-				if err := policy.RunHooks(context.Background(), d.dir, hctx); err != nil {
-					d.log.Warn("hooks: on_turn_done failed", "session", hctx.SessionID, "err", err)
-				}
-			}()
-		}
 	case agent.Ended, agent.Idle:
 		if ev.Kind == agent.Ended || ev.AuthError != nil {
 			d.live.clearSuggestion(msg.Session)
@@ -408,22 +394,6 @@ func (d *Daemon) serveHook(ctx context.Context, conn net.Conn) {
 		s.ReportStatus(protocol.AgentIdle, msg.Seq)
 		if ev.AuthError != nil {
 			s.ReportAuthError(ev.AuthError, msg.Seq)
-		}
-		if ev.Kind == agent.Ended {
-			if info := s.Info(); info != nil {
-				hctx := policy.HookContext{
-					SessionID: msg.Session,
-					Agent:     info.GetAgent(),
-					Project:   info.GetProject(),
-					Branch:    info.GetBranch(),
-					Event:     policy.EventSessionEnd,
-				}
-				go func() {
-					if err := policy.RunHooks(context.Background(), d.dir, hctx); err != nil {
-						d.log.Warn("hooks: on_session_end failed", "session", hctx.SessionID, "err", err)
-					}
-				}()
-			}
 		}
 	case agent.ChildStarted, agent.ChildStopped:
 		s.ReportSubagent(ev.SessionID, ev.AgentID, ev.Kind == agent.ChildStarted, msg.Seq)
